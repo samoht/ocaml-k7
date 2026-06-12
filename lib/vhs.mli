@@ -71,9 +71,9 @@ type item = Value.item =
 type t = Value.t = Tape of item list node
 
 val tape : ?meta:Meta.t -> item list -> t
-(** [tape items] is a VHS tape with [items] in output order. Put [Output],
-    [Require], and [Set] items before commands to match VHS' own expectations.
-*)
+(** [tape items] is a VHS tape with [items] in output order. Put
+    {!constructor-Output}, {!constructor-Require}, and {!constructor-Set} items
+    before commands to match VHS' own expectations. *)
 
 val comment : ?meta:Meta.t -> string -> item
 (** [comment s] emits [# s]. *)
@@ -115,7 +115,7 @@ val key : ?meta:Meta.t -> key -> item
     accepting prompts, cancelling with [Ctrl "c"], or navigating TUIs. *)
 
 val enter : ?meta:Meta.t -> unit -> item
-(** [enter ()] emits [Enter]. *)
+(** [enter ()] emits {!constructor-Enter}. *)
 
 val sleep : ?meta:Meta.t -> duration -> item
 (** [sleep d] pauses the recording timeline for [d]. Use sleeps for deliberate
@@ -133,7 +133,8 @@ val show : ?meta:Meta.t -> unit -> item
 (** [show ()] ends a hidden region started by {!val-hide}. *)
 
 val screenshot : ?meta:Meta.t -> ?path:string -> unit -> item
-(** [screenshot ?path ()] emits [Screenshot], optionally with an output path. *)
+(** [screenshot ?path ()] emits {!constructor-Screenshot}, optionally with an
+    output path. *)
 
 val source : ?meta:Meta.t -> string -> item
 (** [source path] includes another tape. Use it for shared settings or setup
