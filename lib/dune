@@ -1,0 +1,9 @@
+(library
+ (name vhs)
+ (public_name vhs)
+ (libraries eio nox-loc fmt))
+
+(mdx
+ (package vhs)
+ (files vhs.mli value.mli)
+ (libraries vhs))
