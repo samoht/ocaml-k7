@@ -82,7 +82,13 @@ let add_hex_escape b code =
   Buffer.add_char b hex.[code lsr 4];
   Buffer.add_char b hex.[code land 0xf]
 
-let escape_string s =
+let contains s needle =
+  let rec loop i =
+    i < String.length s && (Char.equal s.[i] needle || loop (i + 1))
+  in
+  loop 0
+
+let escape_double_quoted s =
   let b = Buffer.create (String.length s + 8) in
   Buffer.add_char b '"';
   String.iter
@@ -100,7 +106,17 @@ let escape_string s =
   Buffer.add_char b '"';
   Buffer.contents b
 
-let pp_quoted ppf s = Fmt.string ppf (escape_string s)
+let single_quoted s = "'" ^ s ^ "'"
+
+let quote_string s =
+  if contains s '"' then
+    if contains s '\'' then
+      invalid_arg
+        "Vhs.Value.quote_string: VHS strings cannot contain both quote styles"
+    else single_quoted s
+  else escape_double_quoted s
+
+let pp_quoted ppf s = Fmt.string ppf (quote_string s)
 
 let pp_duration ppf = function
   | Ms n -> Fmt.pf ppf "%dms" n
@@ -155,7 +171,7 @@ let pp_item ppf = function
   | Comment (s, _) -> Fmt.pf ppf "# %s" s
   | Blank _ -> ()
   | Require (s, _) -> Fmt.pf ppf "Require %s" s
-  | Output (path, _) -> Fmt.pf ppf "Output %s" path
+  | Output (path, _) -> Fmt.pf ppf "Output %a" pp_quoted path
   | Env ((key, value), _) -> Fmt.pf ppf "Env %s %a" key pp_quoted value
   | Set (setting, _) -> Fmt.pf ppf "Set %a" pp_setting setting
   | Command (command, _) -> pp_command ppf command

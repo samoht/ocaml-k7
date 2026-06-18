@@ -13,7 +13,12 @@ let test_top_level_constructors () =
       ]
   in
   expect "top level constructors"
-    "Output demo.gif\nSet TypingSpeed 25ms\nHide\nType \"clear\"\nEnter\nShow\n"
+    "Output \"demo.gif\"\n\
+     Set TypingSpeed 25ms\n\
+     Hide\n\
+     Type \"clear\"\n\
+     Enter\n\
+     Show\n"
     (Vhs.to_string tape)
 
 let test_write_file () =
@@ -29,7 +34,7 @@ let test_write_file () =
           ~finally:(fun () -> close_in_noerr ic)
           (fun () -> really_input_string ic (in_channel_length ic))
       in
-      expect "file content" "Output demo.gif\nSleep 2s\n" content)
+      expect "file content" "Output \"demo.gif\"\nSleep 2s\n" content)
 
 let suite =
   ( "vhs",

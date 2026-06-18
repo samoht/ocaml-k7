@@ -20,7 +20,7 @@ let test_basic_tape () =
   in
   expect "tape"
     {|# render from repo root
-Output demo.gif
+Output "demo.gif"
 
 Set Shell "bash"
 Set FontSize 18
@@ -44,8 +44,8 @@ let test_escaping () =
       ]
   in
   expect "escaping"
-    "Type \"printf \\\"hello\\\\n\\\" && echo \\\\done\"\n\
-     Env PROMPT \"a \\\"quoted\\\" value\"\n\
+    "Type 'printf \"hello\\n\" && echo \\done'\n\
+     Env PROMPT 'a \"quoted\" value'\n\
      Type \"bad\\x01byte\"\n"
     (to_string tape)
 
