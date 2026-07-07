@@ -29,3 +29,22 @@ match Vhs.render ~proc ~path:"demo.tape" tape with
 | Ok () -> ()
 | Error e -> Fmt.epr "%a@." Vhs.pp_error e
 ```
+
+## Installation
+
+Install with opam:
+
+<!-- $MDX skip -->
+```sh
+$ opam install vhs
+```
+
+If opam cannot find the package, it may not yet be released in the public
+`opam-repository`. Add the overlay repository, then install it:
+
+<!-- $MDX skip -->
+```sh
+$ opam repo add samoht https://tangled.org/gazagnaire.org/opam-overlay.git
+$ opam update
+$ opam install vhs
+```
