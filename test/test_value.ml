@@ -49,6 +49,18 @@ let test_escaping () =
      Type \"bad\\x01byte\"\n"
     (to_string tape)
 
+(* A backslash in a double-quoted string is typed verbatim by VHS, so it must
+   not be doubled: a docker format string forces double quotes (it contains a
+   single quote) and its [\t] must reach the shell as one backslash. *)
+let test_backslash_verbatim () =
+  let open Vhs.Value in
+  let tape =
+    tape [ type' {|docker ps --format 'table {{.Names}}\t{{.Image}}'|} ]
+  in
+  expect "backslash"
+    "Type \"docker ps --format 'table {{.Names}}\\t{{.Image}}'\"\n"
+    (to_string tape)
+
 let test_keys_and_waits () =
   let open Vhs.Value in
   let tape =
@@ -74,5 +86,6 @@ let suite =
     [
       Alcotest.test_case "basic tape" `Quick test_basic_tape;
       Alcotest.test_case "escaping" `Quick test_escaping;
+      Alcotest.test_case "backslash verbatim" `Quick test_backslash_verbatim;
       Alcotest.test_case "keys and waits" `Quick test_keys_and_waits;
     ] )
