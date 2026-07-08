@@ -1,6 +1,7 @@
 module Loc = Loc
 module Meta = Loc.Meta
 module Value = Value
+module Cram = Cram
 
 type 'a node = 'a Value.node
 type duration = Value.duration = Ms of int | S of float
