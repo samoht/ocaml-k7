@@ -36,3 +36,8 @@ build: [
 ]
 dev-repo: "git+https://tangled.org/gazagnaire.org/ocaml-vhs"
 x-maintenance-intent: ["(latest)"]
+pin-depends: [
+  ["eio.dev" "git+https://github.com/ocaml-multicore/eio.git#e7e6cf38a643ff0665c96d9ef6e68a998663a246"]
+  ["eio_main.dev" "git+https://github.com/ocaml-multicore/eio.git#e7e6cf38a643ff0665c96d9ef6e68a998663a246"]
+  ["eio_posix.dev" "git+https://github.com/ocaml-multicore/eio.git#e7e6cf38a643ff0665c96d9ef6e68a998663a246"]
+]
