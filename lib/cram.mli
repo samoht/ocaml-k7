@@ -30,6 +30,7 @@ val to_tape :
   ?settings:Value.setting list ->
   ?setup_scripts:string list ->
   ?pause:Value.duration ->
+  ?final_pause:Value.duration ->
   output:string ->
   t ->
   Value.t
@@ -45,7 +46,8 @@ val to_tape :
     [settings] become [Set] lines, emitted after [Output] and before the first
     command. [setup_scripts] are sourced, in order, inside a hidden block that
     also clears the screen, so their output never reaches the recording. [pause]
-    is the reading pause after each command (default one second). *)
+    is the reading pause after each command (default one second), while
+    [final_pause] holds the last screen before exit (default three seconds). *)
 
 val pp : t Fmt.t
 (** [pp] formats a parsed cram test as its commands and expected output. *)

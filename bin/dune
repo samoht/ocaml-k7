@@ -1,0 +1,5 @@
+(executable
+ (name vhs_cram)
+ (public_name vhs-cram)
+ (package vhs)
+ (libraries vhs eio eio_main fmt))

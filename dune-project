@@ -21,7 +21,7 @@
  (depends
   (ocaml (>= 5.1))
   eio
-  (eio_main :with-test)
+  eio_main
   nox-loc
   fmt
   (alcotest :with-test)

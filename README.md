@@ -30,6 +30,20 @@ match Vhs.render ~proc ~path:"demo.tape" tape with
 | Error e -> Fmt.epr "%a@." Vhs.pp_error e
 ```
 
+## Record a cram test
+
+`vhs-cram` turns the commands and checked output in a cram transcript into a
+recording. A setup script can start the program under test without showing that
+setup in the GIF:
+
+<!-- $MDX skip -->
+```sh
+$ vhs-cram --setup setup.sh --output demo.gif demo.t
+```
+
+This keeps the executable documentation and its animated demonstration driven
+by the same source. Use `--width` for unusually wide terminal output.
+
 ## Installation
 
 Install with opam:

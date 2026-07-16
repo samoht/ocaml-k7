@@ -10,7 +10,7 @@ let test_minimal () =
 Type "./main.exe"
 Enter
 Wait+Screen /\+hello, world/
-Sleep 1s
+Sleep 3s
 |}
     (Vhs.to_string tape)
 
@@ -49,7 +49,7 @@ Sleep 1s
 Type "echo done"
 Enter
 Wait+Screen /done/
-Sleep 1s
+Sleep 3s
 |}
     (Vhs.to_string tape)
 

@@ -99,12 +99,18 @@ let step_items ~pause step =
     | None -> [])
   @ [ sleep pause ]
 
-let to_tape ?(settings = []) ?(setup_scripts = []) ?(pause = Value.S 1.) ~output
-    (steps : t) =
+let to_tape ?(settings = []) ?(setup_scripts = []) ?(pause = Value.S 1.)
+    ?(final_pause = Value.S 3.) ~output (steps : t) =
+  let last = List.length steps - 1 in
   let items =
     (Value.output output :: List.map Value.set settings)
     @ setup_block setup_scripts
-    @ List.concat_map (step_items ~pause) steps
+    @ List.concat
+        (List.mapi
+           (fun index step ->
+             let pause = if index = last then final_pause else pause in
+             step_items ~pause step)
+           steps)
   in
   Value.tape items
 
