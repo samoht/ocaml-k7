@@ -70,16 +70,13 @@ type setting =
   | Custom of string * string
       (** Setting name and raw value for VHS features not yet modelled here. *)
 
-type wait =
-  | Wait of string
-  | Wait_screen of string
-  | Wait_line of string
-      (** Wait conditions. The string is the VHS regular-expression payload
-          without surrounding slashes.
+(** Wait conditions. The string is the VHS regular-expression payload without
+    surrounding slashes.
 
-          [Wait] waits for output, [Wait_screen] waits for the whole screen, and
-          [Wait_line] waits for a matching line. Prefer waits to fixed sleeps
-          when a command has variable runtime. *)
+    {!constructor-Wait} waits for output, {!constructor-Wait_screen} waits for
+    the whole screen, and {!constructor-Wait_line} waits for a matching line.
+    Prefer waits to fixed sleeps when a command has variable runtime. *)
+type wait = Wait of string | Wait_screen of string | Wait_line of string
 
 type command =
   | Type of string node
@@ -119,7 +116,8 @@ type item =
   | Raw_line of string node
       (** A raw tape line for syntax this library does not model yet. *)
 
-type t = Tape of item list node  (** A complete VHS tape. *)
+(** A complete VHS tape. *)
+type t = Tape of item list node
 
 val node : ?meta:Meta.t -> 'a -> 'a node
 (** [node ?meta v] wraps [v] with [meta], defaulting to {!Meta.none}. *)
