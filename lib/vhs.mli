@@ -1,21 +1,27 @@
 (** Generate and run Charmbracelet VHS terminal tapes.
 
-    This is the ergonomic entry point. It re-exports the tape value type and
+    [Vhs] is the ergonomic entry point: it re-exports the tape value type and
     constructors from {!Value}, plus a small Eio runner for the external [vhs]
     executable.
 
-    The library does not implement terminal rendering itself. It writes
-    reviewable [*.tape] files and delegates rendering or publishing to the
-    installed VHS command-line tool. *)
+    [Vhs] does not implement terminal rendering itself. It writes reviewable
+    [*.tape] files and delegates rendering and publishing to the installed VHS
+    command-line tool. *)
 
 module Loc = Loc
 module Meta = Loc.Meta
 module Value = Value
 module Cram = Cram
 
+(** {1:values Tape values} *)
+
 type 'a node = 'a Value.node
+(** See {!Value.node}. *)
+
+(** See {!Value.duration}. *)
 type duration = Value.duration = Ms of int | S of float
 
+(** See {!Value.key}. *)
 type key = Value.key =
   | Enter
   | Tab
@@ -31,6 +37,7 @@ type key = Value.key =
   | Ctrl_alt of string
   | Raw_key of string
 
+(** See {!Value.setting}. *)
 type setting = Value.setting =
   | Shell of string
   | Font_size of int
@@ -43,11 +50,13 @@ type setting = Value.setting =
   | Framerate of int
   | Custom of string * string
 
+(** See {!Value.wait}. *)
 type wait = Value.wait =
   | Wait of string
   | Wait_screen of string
   | Wait_line of string
 
+(** See {!Value.command}. *)
 type command = Value.command =
   | Type of string node
   | Key of key node
@@ -59,6 +68,7 @@ type command = Value.command =
   | Source of string node
   | Raw_command of string node
 
+(** See {!Value.item}. *)
 type item = Value.item =
   | Comment of string node
   | Blank of unit node
@@ -69,7 +79,10 @@ type item = Value.item =
   | Command of command node
   | Raw_line of string node
 
+(** See {!Value.t}. *)
 type t = Value.t = Tape of item list node
+
+(** {1:items Items} *)
 
 val tape : ?meta:Meta.t -> item list -> t
 (** [tape items] is a VHS tape with [items] in output order. Put
@@ -84,7 +97,7 @@ val blank : ?meta:Meta.t -> unit -> item
 
 val require : ?meta:Meta.t -> string -> item
 (** [require program] declares that [program] must be available before VHS runs
-    the tape. Use it for demo dependencies such as [dune], [gum], or your CLI
+    the tape. Use it for demo dependencies such as [dune], [gum], or the CLI
     under test. *)
 
 val output : ?meta:Meta.t -> string -> item
@@ -134,8 +147,8 @@ val show : ?meta:Meta.t -> unit -> item
 (** [show ()] ends a hidden region started by {!val-hide}. *)
 
 val screenshot : ?meta:Meta.t -> ?path:string -> unit -> item
-(** [screenshot ?path ()] emits {!constructor-Screenshot}, optionally with an
-    output path. *)
+(** [screenshot ~path ()] emits {!constructor-Screenshot}, writing to [path]
+    when it is given. *)
 
 val source : ?meta:Meta.t -> string -> item
 (** [source path] includes another tape. Use it for shared settings or setup
@@ -144,6 +157,8 @@ val source : ?meta:Meta.t -> string -> item
 val raw_command : ?meta:Meta.t -> string -> item
 (** [raw_command line] emits a command line unchanged. Use this for VHS commands
     not yet modelled by {!type-command}. *)
+
+(** {1:rendering Rendering} *)
 
 val pp : t Fmt.t
 (** [pp] formats a complete tape with one line per item. *)
@@ -156,18 +171,23 @@ val write_file : path:string -> t -> unit
     [path]. This is useful when callers want to inspect or commit the generated
     tape before rendering. *)
 
+(** {1:running Running vhs} *)
+
+(** The type for why running the [vhs] executable failed. *)
 type error =
-  | Executable_not_found of string
+  | Executable_not_found of string  (** No such executable on the PATH. *)
   | Child_error of { argv : string list; status : Eio.Process.exit_status }
-  | Io of exn
+      (** The executable ran and exited non-zero. *)
+  | Io of exn  (** Any other Eio I/O failure. *)
 
 val pp_error : error Fmt.t
-(** [pp_error] formats process and filesystem errors from runner helpers. *)
+(** [pp_error] formats process and filesystem errors from the runners below. *)
 
 val render_file :
   proc:_ Eio.Process.mgr -> ?vhs:string -> string -> (unit, error) result
-(** [render_file ~proc path] runs [vhs path]. Use [?vhs] to point at a non-PATH
-    executable or wrapper script. *)
+(** [render_file ~proc ~vhs path] runs [vhs path]. [vhs] names the executable
+    and defaults to ["vhs"], so pass it to point at a non-PATH executable or a
+    wrapper script. *)
 
 val render :
   proc:_ Eio.Process.mgr ->
@@ -175,10 +195,11 @@ val render :
   path:string ->
   t ->
   (unit, error) result
-(** [render ~proc ~path tape] writes [tape] to [path], then runs [vhs path].
-    This is the one-shot helper for generated demos. *)
+(** [render ~proc ~vhs ~path tape] is [write_file ~path tape] followed by
+    [render_file ~proc ~vhs path]. This is the one-shot helper for generated
+    demos. *)
 
 val publish :
   proc:_ Eio.Process.mgr -> ?vhs:string -> string -> (string, error) result
-(** [publish ~proc file] runs [vhs publish file] and returns stdout. VHS prints
-    the share links there; this function does not parse them yet. *)
+(** [publish ~proc ~vhs file] runs [vhs publish file] and is its standard
+    output. VHS prints the share links there; they are not parsed out. *)
