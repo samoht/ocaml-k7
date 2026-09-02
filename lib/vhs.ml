@@ -83,7 +83,18 @@ let raw_command = Value.raw_command
 let pp = Value.pp
 let to_string = Value.to_string
 
+let write_path_err =
+  "Vhs.write_file: path must be a relative file path with no '.' or '..' \
+   segments"
+
+let valid_path path =
+  let p =
+    try Fpath.v path with Invalid_argument _ -> invalid_arg write_path_err
+  in
+  if List.exists Fpath.is_rel_seg (Fpath.segs p) then invalid_arg write_path_err
+
 let write_file ~path t =
+  valid_path path;
   let oc = open_out_bin path in
   Fun.protect
     ~finally:(fun () -> close_out_noerr oc)

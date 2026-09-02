@@ -24,6 +24,7 @@
   eio_main
   nox-loc
   fmt
+  fpath
   (alcotest :with-test)
   (mdx :with-test)
   (odoc :with-doc)))

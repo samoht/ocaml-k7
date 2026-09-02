@@ -169,7 +169,10 @@ val to_string : t -> string
 val write_file : path:string -> t -> unit
 (** [write_file ~path t] writes the textual [*.tape] representation of [t] to
     [path]. This is useful when callers want to inspect or commit the generated
-    tape before rendering. *)
+    tape before rendering.
+
+    @raise Invalid_argument
+      if [path] contains a relative segment such as [ "."] or [ ".."]. *)
 
 (** {1:running Running vhs} *)
 
