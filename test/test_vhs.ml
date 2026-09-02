@@ -36,10 +36,33 @@ let test_write_file () =
       in
       expect "file content" "Output \"demo.gif\"\nSleep 2s\n" content)
 
+let test_write_file_rejects_traversal () =
+  let dir = Filename.temp_file "ocaml-vhs-" "-traversal" in
+  Sys.remove dir;
+  Unix.mkdir dir 0o700;
+  let sub = Filename.concat dir "sub" in
+  Unix.mkdir sub 0o700;
+  let cwd = Unix.getcwd () in
+  Fun.protect
+    ~finally:(fun () ->
+      (try Sys.remove (Filename.concat dir "evil.txt") with Sys_error _ -> ());
+      (try Unix.rmdir sub with Unix.Unix_error _ -> ());
+      (try Unix.rmdir dir with Unix.Unix_error _ -> ());
+      Unix.chdir cwd)
+    (fun () ->
+      Unix.chdir sub;
+      let tape = Vhs.tape [] in
+      Alcotest.check_raises "traversal path rejected"
+        (Invalid_argument
+           "Vhs.write_file: path must be a relative file path with no '.' or \
+            '..' segments") (fun () -> Vhs.write_file ~path:"../evil.txt" tape))
+
 let suite =
   ( "vhs",
     [
       Alcotest.test_case "top level constructors" `Quick
         test_top_level_constructors;
       Alcotest.test_case "write file" `Quick test_write_file;
+      Alcotest.test_case "write file rejects traversal" `Quick
+        test_write_file_rejects_traversal;
     ] )
