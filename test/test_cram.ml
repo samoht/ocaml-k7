@@ -1,7 +1,5 @@
 let expect name expected got = Alcotest.(check string) name expected got
 
-(* A single command and its expected output become keystrokes plus a wait on
-   the last output line. No settings and no setup: the minimal translation. *)
 let test_minimal () =
   let src = "  $ ./main.exe\n  +hello, world\n" in
   let tape = Vhs.Cram.to_tape ~output:"demo.gif" (Vhs.Cram.parse src) in
@@ -14,9 +12,6 @@ Sleep 3s
 |}
     (Vhs.to_string tape)
 
-(* Settings become Set lines; setup scripts are sourced inside a hidden block
-   before the first command; prose, blank lines, and the [N] exit annotation
-   are dropped; the wait targets the last non-empty output line. *)
 let test_full () =
   let src =
     "Boot the demo.\n\n\
@@ -53,8 +48,6 @@ Sleep 3s
 |}
     (Vhs.to_string tape)
 
-(* parse keeps only the command blocks: their command line(s), the expected
-   output with the two-space indent removed, and any exit annotation. *)
 let test_parse () =
   let src = "prose is ignored\n\n  $ echo hi\n  hi\n  $ false\n  [1]\n" in
   let steps = Vhs.Cram.parse src in

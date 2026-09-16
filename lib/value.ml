@@ -88,13 +88,10 @@ let contains s needle =
   in
   loop 0
 
-(* VHS types the contents of a double-quoted string verbatim: a backslash is
-   typed as a backslash, not treated as an escape introducer. So we must not
-   double backslashes here -- a command such as [--format 'a\tb'] has to reach
-   the shell with a single backslash. The [invalid_arg] in {!quote_string}
-   guarantees this branch never sees a literal double quote, and single-line
-   tape commands never carry raw control bytes; those are hex-escaped
-   defensively all the same. *)
+(* VHS types a double-quoted string verbatim: a backslash is not an escape
+   introducer, so backslashes must not be doubled here. quote_string refuses a
+   string holding both quote styles, so this branch never sees a literal
+   double quote. *)
 let escape_double_quoted s =
   let b = Buffer.create (String.length s + 8) in
   Buffer.add_char b '"';

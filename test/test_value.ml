@@ -49,9 +49,8 @@ let test_escaping () =
      Type \"bad\\x01byte\"\n"
     (to_string tape)
 
-(* A backslash in a double-quoted string is typed verbatim by VHS, so it must
-   not be doubled: a docker format string forces double quotes (it contains a
-   single quote) and its [\t] must reach the shell as one backslash. *)
+(* A docker format string forces double quotes and VHS types it verbatim, so
+   the [\t] must reach the shell as one backslash. *)
 let test_backslash_verbatim () =
   let open Vhs.Value in
   let tape =
