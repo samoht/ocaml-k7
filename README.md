@@ -1,7 +1,37 @@
 # vhs
 
-Generate Charmbracelet VHS `.tape` files from OCaml and optionally run the
-`vhs` command-line tool.
+Generate Charmbracelet VHS `.tape` files from OCaml and run the `vhs`
+command-line tool on them.
+
+[VHS](https://github.com/charmbracelet/vhs) records a scripted terminal
+session as a GIF, MP4 or WebM file. Its input is a `.tape` file with one
+command per line, which is easy to write by hand and hard to keep in step with
+the tool it shows. This library models every tape line as an OCaml
+value, so a demo can come from the same code or test that checks the tool,
+and the printed tape is stable enough to review in a diff. Rendering still goes
+through the external `vhs` binary, which must be on the `PATH`.
+
+## Installation
+
+<!-- $MDX skip -->
+```sh
+$ opam install vhs
+```
+
+If opam cannot find the package, it has not reached the public
+`opam-repository` yet. Add the overlay repository first:
+
+<!-- $MDX skip -->
+```sh
+$ opam repo add samoht https://tangled.org/gazagnaire.org/opam-overlay.git
+$ opam update
+$ opam install vhs
+```
+
+## Usage
+
+A tape is a list of items in output order. Settings come before the first
+terminal action, as VHS expects:
 
 ```ocaml
 let tape =
@@ -20,7 +50,9 @@ let tape =
 let () = Vhs.write_file ~path:"demo.tape" tape
 ```
 
-Rendering is a thin wrapper around the external `vhs` binary:
+`Vhs.render` writes the tape and then runs `vhs` on it through an Eio process
+manager. A missing executable, a non-zero exit and any other I/O failure all
+come back as a `Vhs.error`:
 
 ```ocaml
 Eio_main.run @@ fun env ->
@@ -30,35 +62,24 @@ match Vhs.render ~proc ~path:"demo.tape" tape with
 | Error e -> Fmt.epr "%a@." Vhs.pp_error e
 ```
 
-## Record a cram test
+`Vhs.publish` runs `vhs publish` and returns the share links VHS prints.
 
-`vhs-cram` turns the commands and checked output in a cram transcript into a
-recording. A setup script can start the program under test without showing that
-setup in the GIF:
+## Recording a cram test
+
+The `vhs-cram` executable turns a cram transcript into a recording. Each `$`
+command is typed and submitted, and the tape waits for the last line of its
+expected output before moving on, so the GIF shows the output the test checks.
+A setup script runs hidden before the first command:
 
 <!-- $MDX skip -->
 ```sh
 $ vhs-cram --setup setup.sh --output demo.gif demo.t
 ```
 
-This keeps the executable documentation and its animated demonstration driven
-by the same source. Use `--width` for unusually wide terminal output.
+The terminal is 1100 pixels wide unless `--width` says otherwise. The same
+conversion is available as a library through `Vhs.Cram.parse` and
+`Vhs.Cram.to_tape`.
 
-## Installation
+## License
 
-Install with opam:
-
-<!-- $MDX skip -->
-```sh
-$ opam install vhs
-```
-
-If opam cannot find the package, it may not yet be released in the public
-`opam-repository`. Add the overlay repository, then install it:
-
-<!-- $MDX skip -->
-```sh
-$ opam repo add samoht https://tangled.org/gazagnaire.org/opam-overlay.git
-$ opam update
-$ opam install vhs
-```
+ISC. See [LICENSE.md](LICENSE.md).

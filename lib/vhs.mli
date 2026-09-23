@@ -7,15 +7,22 @@
 
 module Loc = Loc
 module Meta = Loc.Meta
+
 module Value = Value
+(** Tape values and their printers. *)
+
 module Cram = Cram
+(** Cram tests recorded as tapes. *)
 
 (** {1:values Tape values} *)
 
 type 'a node = 'a Value.node
+(** See {!Value.type-node}. *)
 
+(** See {!Value.type-duration}. *)
 type duration = Value.duration = Ms of int | S of float
 
+(** See {!Value.type-key}. *)
 type key = Value.key =
   | Enter
   | Tab
@@ -31,6 +38,7 @@ type key = Value.key =
   | Ctrl_alt of string
   | Raw_key of string
 
+(** See {!Value.type-setting}. *)
 type setting = Value.setting =
   | Shell of string
   | Font_size of int
@@ -43,11 +51,13 @@ type setting = Value.setting =
   | Framerate of int
   | Custom of string * string
 
+(** See {!Value.type-wait}. *)
 type wait = Value.wait =
   | Wait of string
   | Wait_screen of string
   | Wait_line of string
 
+(** See {!Value.type-command}. *)
 type command = Value.command =
   | Type of string node
   | Key of key node
@@ -59,6 +69,7 @@ type command = Value.command =
   | Source of string node
   | Raw_command of string node
 
+(** See {!Value.type-item}. *)
 type item = Value.item =
   | Comment of string node
   | Blank of unit node
@@ -69,6 +80,7 @@ type item = Value.item =
   | Command of command node
   | Raw_line of string node
 
+(** See {!Value.type-t}. *)
 type t = Value.t = Tape of item list node
 
 (** {1:items Items} *)

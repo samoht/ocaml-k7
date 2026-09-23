@@ -28,9 +28,12 @@
 module Meta = Loc.Meta
 
 type 'a node = 'a * Meta.t
+(** The type for tape values paired with their source metadata. *)
 
+(** The type for VHS durations, printed as [ms] or [s]. *)
 type duration = Ms of int | S of float
 
+(** The type for keys pressed in the virtual terminal. *)
 type key =
   | Enter
   | Tab
@@ -46,6 +49,7 @@ type key =
   | Ctrl_alt of string  (** A combined control+alt chord. *)
   | Raw_key of string  (** An already-formed VHS key token. *)
 
+(** The type for terminal and renderer settings. *)
 type setting =
   | Shell of string
   | Font_size of int
@@ -56,12 +60,15 @@ type setting =
   | Padding of int
   | Typing_speed of duration  (** Delay between typed characters. *)
   | Framerate of int
-  | Custom of string * string  (** Name and raw value for unmodelled settings. *)
+  | Custom of string * string
+      (** Name and raw value for unmodelled settings. *)
 
-(** The string is the VHS regular-expression payload without surrounding
-    slashes. Prefer waits to fixed sleeps when a command has variable runtime. *)
+(** The type for waits on terminal output. The string is the VHS
+    regular-expression payload without surrounding slashes. Prefer waits to
+    fixed sleeps when a command has variable runtime. *)
 type wait = Wait of string | Wait_screen of string | Wait_line of string
 
+(** The type for terminal actions. *)
 type command =
   | Type of string node  (** Types text without pressing return. *)
   | Key of key node
@@ -73,6 +80,7 @@ type command =
   | Source of string node  (** Includes commands from another tape file. *)
   | Raw_command of string node  (** A raw VHS command line. *)
 
+(** The type for tape lines. *)
 type item =
   | Comment of string node
   | Blank of unit node
