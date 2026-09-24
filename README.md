@@ -66,10 +66,12 @@ match Vhs.render ~proc ~path:"demo.tape" tape with
 
 ## Recording a cram test
 
-The `vhs-cram` executable turns a cram transcript into a recording. Each `$`
-command is typed and submitted, and the tape waits for the last line of its
-expected output before moving on, so the GIF shows the output the test checks.
-A setup script runs hidden before the first command:
+A cram test is a `.t` file of shell commands, each on a line starting with `  $
+`, followed by the output they are expected to print; dune replays the commands
+and diffs the output. The `vhs-cram` executable turns such a cram transcript
+into a recording. Each `$` command is typed and submitted, and the tape waits
+for the last line of its expected output before moving on, so the GIF shows the
+output the test checks. A setup script runs hidden before the first command:
 
 <!-- $MDX skip -->
 ```sh
