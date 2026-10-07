@@ -6,7 +6,9 @@ description:
 maintainer: ["Thomas Gazagnaire <thomas@gazagnaire.org>"]
 authors: ["Thomas Gazagnaire <thomas@gazagnaire.org>"]
 license: "ISC"
-tags: ["org:blacksun" "cli" "format" "eio" "area:doc_tooling"]
+tags: [
+  "org:blacksun" "command-line-utilities" "format" "eio" "area:10010913"
+]
 homepage: "https://tangled.org/gazagnaire.org/ocaml-vhs"
 bug-reports: "https://tangled.org/gazagnaire.org/ocaml-vhs/issues"
 depends: [
