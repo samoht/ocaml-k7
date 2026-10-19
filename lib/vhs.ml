@@ -217,7 +217,8 @@ let check_setting = function
   | Font_size _ | Framerate _ | Padding _ | Width _ | Height _ -> Ok ()
 
 (* VHS refuses a frame smaller than twice the padding, its defaults
-   included. *)
+   included. The padding is not negative here, and halving the size, unlike
+   doubling the padding, cannot overflow. *)
 let check_size settings =
   let last f default =
     List.fold_left (fun v s -> Option.value (f s) ~default:v) default settings
@@ -225,9 +226,10 @@ let check_size settings =
   let padding = last (function Padding n -> Some n | _ -> None) 60 in
   let width = last (function Width n -> Some n | _ -> None) 1200 in
   let height = last (function Height n -> Some n | _ -> None) 600 in
-  if width < 2 * padding then
+  let too_small size = size < 0 || padding > size / 2 in
+  if too_small width then
     err "Set Width %d: below twice the padding (%d)" width padding
-  else if height < 2 * padding then
+  else if too_small height then
     err "Set Height %d: below twice the padding (%d)" height padding
   else Ok ()
 

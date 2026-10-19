@@ -177,8 +177,9 @@ let test_hidden texts depth =
 (* Integer settings are accepted in their documented ranges, the frame size
    being at least twice the padding, defaults included. *)
 let test_sizes w h p =
-  let p' = if p < 0 then 60 else p in
-  let ok = p >= 0 && w >= 2 * p' && h >= 2 * p' in
+  (* [2 * p] overflows for large [p]; compare in a wider type. *)
+  let fits size = Int64.(compare (of_int size) (mul 2L (of_int p))) >= 0 in
+  let ok = p >= 0 && fits w && fits h in
   let settings = Vhs.[ Padding p; Width w; Height h ] in
   match lines ~settings [] with
   | Some l ->
