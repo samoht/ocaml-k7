@@ -405,9 +405,18 @@ let test_cram_setup scripts text =
       (List.length (String.split_on_char '\n' tape |> List.filter (( = ) "Show"))
       = 1))
 
+(* Cram.items has no documented exception, including for setup paths. *)
+let test_cram_setup_total setup =
+  match Vhs.Cram.parse "  $ true\n" with
+  | Error msg -> fail msg
+  | Ok cram -> ignore (str (Vhs.Cram.items ~setup cram))
+
 let suite =
   ( "vhs",
     [
+      test_case "cram items arbitrary setup does not raise"
+        [ choose [ list bytes; const [ "\000" ] ] ]
+        test_cram_setup_total;
       test_case "wait Line and Screen agree" [ bytes; int ] test_wait_agreement;
       test_case "cram setup preserves script order"
         [ list bytes; bytes ]
