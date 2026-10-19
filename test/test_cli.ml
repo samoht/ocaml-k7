@@ -64,7 +64,8 @@ let fake_vhs status =
      exit %d\n"
     status
 
-let run env ~vhs input = Cli.run env ~vhs ~setup:[] ~output:"demo.gif" input
+let run env ?(print = false) ~vhs input =
+  Cli.run env ~print ~vhs ~setup:[] ~output:"demo.gif" input
 
 let test_run () =
   with_files
@@ -118,6 +119,9 @@ let test_command () =
   (match eval [] with
   | Error _ -> ()
   | _ -> Alcotest.fail "missing required arguments accepted");
+  (match eval [ "--output"; "x.gif"; Filename.get_temp_dir_name () ] with
+  | Error _ -> ()
+  | _ -> Alcotest.fail "directory accepted as a cram test");
   (match eval [ "--help=plain" ] with
   | Ok `Help -> ()
   | _ -> Alcotest.fail "help failed");
@@ -126,7 +130,7 @@ let test_command () =
   List.iter
     (fun s ->
       if not (contains ~sub:s man) then Alcotest.failf "manual lacks %S" s)
-    [ "--vhs cat"; "PS1" ]
+    [ "--print"; "123"; "PS1" ]
 
 let suite =
   ( "cli",

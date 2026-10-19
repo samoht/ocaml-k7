@@ -90,12 +90,12 @@ Brodie Rao's [cram](https://bitheap.org/cram/) popularised and dune runs: each
 line starting with `  $ ` is a shell command, and the lines below it are the
 output it must print. The `vhs-cram` command types each command into a bash
 terminal and waits for the prompt to come back before the next one, so the
-recording shows each command with its output. It writes the tape on the
-standard input of `vhs`, so `--vhs cat` shows it:
+recording shows each command with its output. `--print` shows the tape
+instead of running `vhs`:
 
 ```sh
 $ printf '  $ echo hello\n  hello\n' > hello.t
-$ vhs-cram --vhs cat --output hello.gif hello.t
+$ vhs-cram --print --output hello.gif hello.t
 Output "hello.gif"
 Set Shell "bash"
 Type "echo hello"

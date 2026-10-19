@@ -11,9 +11,9 @@ varies across cmdliner versions.
   $ vhs-cram --setup missing.sh --output demo.gif demo.t 2> /dev/null
   [124]
 
-The tape is written to the standard input of vhs, so cat shows it.
+--print shows the tape instead of running vhs.
 
-  $ vhs-cram --vhs cat --output demo.gif demo.t
+  $ vhs-cram --print --output demo.gif demo.t
   Output "demo.gif"
   Set Shell "bash"
   Type "echo hi"
@@ -56,7 +56,7 @@ Setup and clear finish while the recording is still hidden, after
 resetting the prompt that the waits rely on.
 
   $ printf 'PS1=x\n' > setup.sh
-  $ vhs-cram --vhs cat --setup setup.sh --output demo.gif demo.t
+  $ vhs-cram --print --setup setup.sh --output demo.gif demo.t
   Output "demo.gif"
   Set Shell "bash"
   Hide
