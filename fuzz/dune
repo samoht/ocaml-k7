@@ -1,0 +1,19 @@
+(executable
+ (name fuzz)
+ (libraries vhs fmt alcobar))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (<> %{profile} afl))
+ (action
+  (run %{exe:fuzz.exe} --budget 0.1 --seed 42)))
+
+(rule
+ (alias fuzz)
+ (enabled_if
+  (= %{profile} afl))
+ (action
+  (progn
+   (run %{exe:fuzz.exe} --gen-corpus corpus)
+   (run afl-fuzz -V 60 -i corpus -o _fuzz -- %{exe:fuzz.exe} @@))))
