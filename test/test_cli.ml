@@ -101,12 +101,25 @@ let test_render () =
         (path "ko" ^ " exited with code 3\n  from stdout\n  from stderr")
         (Fmt.str "%a" Vhs.pp_error e)
   | _ -> Alcotest.fail "lost the failure");
-  match
-    Vhs.render ~vhs:(path "pwd") ~proc ~cwd:Eio.Path.(Eio.Stdenv.fs env / "/") t
-  with
+  (match
+     Vhs.render ~vhs:(path "pwd") ~proc
+       ~cwd:Eio.Path.(Eio.Stdenv.fs env / "/")
+       t
+   with
   | Error (Failed { output = "/\n"; _ }) -> ()
   | Error e -> Alcotest.failf "not run in /: %a" Vhs.pp_error e
-  | Ok () -> Alcotest.fail "pwd succeeded"
+  | Ok () -> Alcotest.fail "pwd succeeded");
+  match
+    Vhs.render ~vhs:(path "ko") ~proc
+      ~cwd:Eio.Path.(Eio.Stdenv.fs env / path "missing-dir")
+      t
+  with
+  | Error (Io msg) ->
+      expect "missing cwd"
+        (path "missing-dir" ^ ": no such file or directory")
+        msg
+  | Error e -> Alcotest.failf "unexpected %a" Vhs.pp_error e
+  | Ok () -> Alcotest.fail "ran in a missing directory"
 
 let test_command () =
   let help_buffer = Buffer.create 256 in

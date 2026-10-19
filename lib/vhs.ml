@@ -415,9 +415,18 @@ let pp_error ppf = function
       List.iteri (fun i l -> if i >= drop then Fmt.pf ppf "@\n  %s" l) lines
   | Io msg -> Fmt.string ppf msg
 
-let io_message = function
+let fs_message path = function
+  | Eio.Fs.Not_found _ -> path ^ ": no such file or directory"
+  | Eio.Fs.Permission_denied _ -> path ^ ": permission denied"
+  | Eio.Fs.Already_exists _ -> path ^ ": already exists"
+  | Eio.Fs.Not_native msg -> path ^ ": " ^ msg
+  | e -> Fmt.str "%s: %a" path Eio.Exn.pp_err (Eio.Fs.E e)
+
+let io_message ~cwd = function
   | Eio.Process.E (Permission_denied exe) -> exe ^ ": permission denied"
   | Eio.Process.E (Executable_format_error exe) -> exe ^ ": not an executable"
+  | Eio.Fs.E e ->
+      fs_message (Option.value (Eio.Path.native cwd) ~default:(snd cwd)) e
   | err -> Fmt.str "%a" Eio.Exn.pp_err err
 
 let render ?(vhs = "vhs") ~proc ~cwd t =
@@ -437,4 +446,4 @@ let render ?(vhs = "vhs") ~proc ~cwd t =
   | status -> Error (Failed { vhs; status; output = Buffer.contents output })
   | exception Eio.Io (Eio.Process.E (Executable_not_found exe), _) ->
       Error (Executable_not_found exe)
-  | exception Eio.Io (err, _) -> Error (Io (io_message err))
+  | exception Eio.Io (err, _) -> Error (Io (io_message ~cwd err))
