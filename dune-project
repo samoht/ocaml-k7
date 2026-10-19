@@ -20,8 +20,8 @@
    explicitly so generated demos are deterministic and reviewable.")
  (depends
   (ocaml (>= 5.1))
-  eio
-  eio_main
+  (eio (>= 1.0))
+  (eio_main (>= 1.0))
   fmt
   fpath
   (alcotest :with-test)

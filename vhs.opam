@@ -14,8 +14,8 @@ bug-reports: "https://github.com/samoht/ocaml-vhs/issues"
 depends: [
   "dune" {>= "3.21"}
   "ocaml" {>= "5.1"}
-  "eio"
-  "eio_main"
+  "eio" {>= "1.0"}
+  "eio_main" {>= "1.0"}
   "fmt"
   "fpath"
   "alcotest" {with-test}
