@@ -134,8 +134,8 @@ end
 let manager ?(inherited = [||])
     ?(inspect_env =
       fun env ->
-        Alcotest.(check bool) "environment inherited" true (Option.is_none env))
-    ~sw start =
+        Alcotest.(check bool) "environment given" true (Option.is_some env)) ~sw
+    start =
   Eio.Resource.T
     ( Manager.{ sw; start; inherited; inspect_env },
       Eio.Process.Pi.mgr (module Manager) )
@@ -274,12 +274,27 @@ let test_cancel () =
 let test_publish_environment () =
   Eio_mock.Backend.run @@ fun () ->
   Eio.Switch.run @@ fun sw ->
-  let inherited = [| "VHS_PUBLISH=true"; "PATH=/bin"; "TERM=dumb" |] in
+  let inherited =
+    [|
+      "VHS_PUBLISH=true";
+      "PATH=/bin";
+      "TERM=dumb";
+      "rod=show";
+      "PS1=$ ";
+      "PROMPT=% ";
+      "PROMPT_COMMAND=date";
+      "VHS_NO_SANDBOX=1";
+    |]
+  in
   let inspect_env env =
     let effective = Option.value ~default:inherited env in
     Alcotest.(check bool)
       "recording cannot silently publish" false
-      (Array.mem "VHS_PUBLISH=true" effective)
+      (Array.mem "VHS_PUBLISH=true" effective);
+    Alcotest.(check (list string))
+      "only the variables that change the recording are cleared"
+      [ "PATH=/bin"; "TERM=dumb"; "VHS_NO_SANDBOX=1" ]
+      (List.sort compare (Array.to_list effective))
   in
   let proc =
     manager ~sw ~inherited ~inspect_env (fun _ _ ->

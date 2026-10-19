@@ -20,8 +20,8 @@
    on them. The vhs-cram command records a cram test.")
  (depends
   (ocaml (>= 5.2))
-  (eio (>= 1.4))
-  (eio_main (>= 1.4))
+  (eio (>= 1.6))
+  (eio_main (>= 1.6))
   fmt
   (cmdliner (>= 2.0.0))
   (alcotest :with-test)

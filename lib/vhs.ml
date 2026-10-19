@@ -468,14 +468,25 @@ let io_message ~cwd = function
       fs_message (Option.value (Eio.Path.native cwd) ~default:(snd cwd)) e
   | err -> Fmt.str "%a" Eio.Exn.pp_err err
 
+(* The variables vhs reads that change what it does with a tape: it uploads
+   the recording if [VHS_PUBLISH] is [true]; go-rod configures the browser
+   from [rod]; and vhs gives the shell its own prompt but then the inherited
+   environment, whose [PS1], [PROMPT] or [PROMPT_COMMAND] would replace the
+   prompt that [Prompt] waits for. *)
+let cleared = [ "VHS_PUBLISH"; "rod"; "PS1"; "PROMPT"; "PROMPT_COMMAND" ]
+
 (* [run_vhs] runs protected from cancellation, so that its switch keeps
    reaping [vhs] until it exits; [cancelled] makes it send [vhs] SIGTERM,
    which [vhs] cleans up after. *)
 let run_vhs ~vhs ~proc ~cwd ~cancelled ~sink tape =
   Eio.Switch.run @@ fun sw ->
   let stdin, feed = Eio.Process.pipe ~sw proc in
+  let env =
+    Eio.Process.environment proc
+    |> Eio.Process.Env.override (List.map (fun v -> (v, None)) cleared)
+  in
   let child =
-    Eio.Process.spawn ~sw proc
+    Eio.Process.spawn ~sw proc ~env
       ~cwd:(cwd :> Eio.Fs.dir_ty Eio.Path.t)
       ~stdin ~stdout:sink ~stderr:sink [ vhs; "-q" ]
   in
