@@ -211,6 +211,14 @@ let test_cram_tab_rejected text =
   | Error _ -> ()
   | Ok _ -> fail "parsed a command containing a tab that Type cannot represent"
 
+let test_type_utf8 text =
+  match Vhs.type' text with
+  | exception Invalid_argument _ -> ()
+  | _ ->
+      if vhs_utf8 text <> text then
+        failf "accepted invalid UTF-8 %S; VHS terminal input replaces its bytes"
+          text
+
 let suite =
   ( "vhs",
     [
@@ -230,4 +238,7 @@ let suite =
         [ choose [ bytes; map [ bytes ] (fun s -> "  $ " ^ s) ] ]
         test_cram_arbitrary_commands;
       test_case "cram reports untypeable tabs" [ bytes ] test_cram_tab_rejected;
+      test_case "accepted Type payloads survive UTF-8 input"
+        [ choose [ bytes; const "\xff" ] ]
+        test_type_utf8;
     ] )
