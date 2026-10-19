@@ -173,6 +173,11 @@ let test_source_extension () =
   rejects "non-tape source must raise Invalid_argument" (fun () ->
       Vhs.source "common.txt")
 
+let test_invalid_regexp () =
+  (* [vhs validate] rejects: Wait+Line /[/ (missing closing bracket). *)
+  rejects "invalid RE2 must raise Invalid_argument" (fun () ->
+      Vhs.wait (Line "["))
+
 let suite =
   ( "vhs",
     [
@@ -188,6 +193,7 @@ let suite =
       Alcotest.test_case "vhs rules" `Quick test_vhs_rules;
       Alcotest.test_case "wait slash" `Quick test_wait_slash;
       Alcotest.test_case "keys and waits" `Quick test_keys_and_waits;
+      Alcotest.test_case "invalid regexp rejected" `Quick test_invalid_regexp;
       Alcotest.test_case "source extension rejected" `Quick
         test_source_extension;
       Alcotest.test_case "zero wait rejected" `Quick test_zero_wait;
