@@ -22,7 +22,7 @@
   (ocaml (>= 5.2))
   (eio (>= 1.6))
   (eio_main (>= 1.6))
-  fmt
+  (fmt (>= 0.8.7))
   (cmdliner (>= 2.0.0))
   (alcotest :with-test)
   (cstruct (>= 6.0.1))
