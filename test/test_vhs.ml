@@ -254,11 +254,15 @@ let validate_accepted actions =
 
 let test_raw_validation () = validate_accepted [ Vhs.raw "Sleep -1ms" ]
 
+let test_padding_overflow () =
+  rejects "padding exceeds the default frame" ~settings:[ Vhs.Padding max_int ] []
+
 let suite =
   ( "vhs",
     List.map
       (fun (name, fn) -> Alcotest.test_case name `Quick fn)
       [
+        ("padding overflow", test_padding_overflow);
         ("raw validation", test_raw_validation);
         ("basic tape", test_basic_tape);
         ("quotes", test_quotes);
