@@ -300,15 +300,24 @@ let test_validates text n =
               let oc = open_out_bin path in
               output_string oc (Vhs.to_string t);
               close_out oc;
-              if Sys.command
-                   ("vhs validate " ^ Filename.quote path ^ " > /dev/null 2>&1")
-                 <> 0
+              if
+                Sys.command
+                  ("vhs validate " ^ Filename.quote path ^ " > /dev/null 2>&1")
+                <> 0
               then failf "accepted tape rejected by VHS: %s" (Vhs.to_string t)))
     candidates
+
+let test_padding_bound padding =
+  let settings = Vhs.[ Padding padding; Width 1200; Height 600 ] in
+  let expected = padding >= 0 && padding <= 300 in
+  check (Result.is_ok (Vhs.tape ~settings ~outputs []) = expected)
 
 let suite =
   ( "vhs",
     [
+      test_case "padding fits the frame"
+        [ choose [ int; const max_int; const ((max_int / 2) + 1); const 300 ] ]
+        test_padding_bound;
       test_case "accepted tapes validate" [ bytes; int ] test_validates;
       test_case "type is exact"
         [ choose [ bytes; const "\xff"; const {|a"b'c`d|} ] ]
