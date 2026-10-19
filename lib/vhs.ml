@@ -31,7 +31,7 @@ type setting =
   | Framerate of int
   | Custom of string * string
 
-type wait = Wait of string | Wait_screen of string | Wait_line of string
+type wait = Prompt | Line of string | Screen of string
 
 type item =
   | Comment of string
@@ -43,7 +43,7 @@ type item =
   | Type of string
   | Key of key
   | Sleep of duration
-  | Wait_for of wait
+  | Wait_for of duration option * wait
   | Hide
   | Show
   | Screenshot of string
@@ -63,7 +63,7 @@ let type' s = Type s
 let key k = Key k
 let enter () = Key Enter
 let sleep d = Sleep d
-let wait w = Wait_for w
+let wait ?timeout w = Wait_for (timeout, w)
 let hide () = Hide
 let show () = Show
 let screenshot path = Screenshot path
@@ -218,10 +218,18 @@ let pp_regexp ppf re =
   loop 0;
   Fmt.pf ppf "/%a/" pp_line (Buffer.contents b)
 
-let pp_wait ppf = function
-  | Wait re -> Fmt.pf ppf "Wait %a" pp_regexp re
-  | Wait_screen re -> Fmt.pf ppf "Wait+Screen %a" pp_regexp re
-  | Wait_line re -> Fmt.pf ppf "Wait+Line %a" pp_regexp re
+let pp_wait ppf timeout w =
+  let scope, re =
+    match w with
+    | Prompt -> ("", None)
+    | Line re -> ("+Line", Some re)
+    | Screen re -> ("+Screen", Some re)
+  in
+  Fmt.pf ppf "Wait%s%a%a" scope
+    Fmt.(option (any "@" ++ pp_duration))
+    timeout
+    Fmt.(option (any " " ++ pp_regexp))
+    re
 
 let pp_item ppf = function
   | Comment "" -> Fmt.string ppf "#"
@@ -234,7 +242,7 @@ let pp_item ppf = function
   | Type s -> pp_type ppf s
   | Key k -> pp_key ppf k
   | Sleep d -> Fmt.pf ppf "Sleep %a" pp_duration d
-  | Wait_for w -> pp_wait ppf w
+  | Wait_for (timeout, w) -> pp_wait ppf timeout w
   | Hide -> Fmt.string ppf "Hide"
   | Show -> Fmt.string ppf "Show"
   | Screenshot path -> Fmt.pf ppf "Screenshot %a" pp_quoted path
@@ -353,7 +361,7 @@ module Cram = struct
   let step_items ~pause step =
     List.concat_map (fun line -> [ type' line; enter () ]) step.command
     @ (match wait_pattern step.output with
-      | Some pat -> [ wait (Wait_screen pat) ]
+      | Some pat -> [ wait (Screen pat) ]
       | None -> [])
     @ [ sleep pause ]
 

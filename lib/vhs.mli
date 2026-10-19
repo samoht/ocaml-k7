@@ -18,7 +18,7 @@
           Vhs.set (Height 560);
           Vhs.type' "dune test";
           Vhs.enter ();
-          Vhs.wait (Wait_line "OK");
+          Vhs.wait Prompt;
         ]
     ]} *)
 
@@ -67,13 +67,13 @@ type setting =
   | Custom of string * string
       (** [Custom (name, value)] is [Set name value], printed unchanged. *)
 
-(** The type for waits on terminal output. The string is an
-    {{:https://github.com/google/re2/wiki/Syntax}RE2} regular expression without
-    the surrounding slashes; a slash in it is printed as [\x2f]. *)
+(** The type for waits on terminal output. A regular expression is
+    {{:https://github.com/google/re2/wiki/Syntax}RE2} syntax without the
+    surrounding slashes. *)
 type wait =
-  | Wait of string  (** Matches in the default scope of VHS, the cursor line. *)
-  | Wait_screen of string  (** Matches anywhere on the screen. *)
-  | Wait_line of string  (** Matches the line of the cursor. *)
+  | Prompt  (** The cursor line shows the VHS shell prompt again. *)
+  | Line of string  (** The cursor line matches. *)
+  | Screen of string  (** Some line of the screen matches. *)
 
 type item
 (** The type for tape lines. *)
@@ -121,8 +121,9 @@ val enter : unit -> item
 val sleep : duration -> item
 (** [sleep d] pauses the recording for [d]. *)
 
-val wait : wait -> item
-(** [wait w] pauses the recording until [w] matches the terminal. *)
+val wait : ?timeout:duration -> wait -> item
+(** [wait ~timeout w] pauses the recording until [w] holds, and fails the
+    recording after [timeout] (defaults to the VHS [WaitTimeout] setting). *)
 
 val hide : unit -> item
 (** [hide ()] stops rendering the terminal; its actions still run. *)

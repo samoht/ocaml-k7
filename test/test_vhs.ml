@@ -122,8 +122,8 @@ let test_durations () =
 let test_wait_slash () =
   let open Vhs in
   expect "slash" "Wait+Screen /a\\x2fb\\x2fc\\\\\\x2f/\n"
-    (str (tape [ wait (Wait_screen {|a/b\/c\\/|}) ]));
-  rejects "line break" (wait (Wait_line "a\nOutput evil.gif"))
+    (str (tape [ wait (Screen {|a/b\/c\\/|}) ]));
+  rejects "line break" (wait (Line "a\nOutput evil.gif"))
 
 let test_keys_and_waits () =
   let open Vhs in
@@ -134,7 +134,10 @@ let test_keys_and_waits () =
         key (Ctrl '\\');
         key (Alt '.');
         key Page_up;
-        wait (Wait_screen "ready");
+        wait (Screen "ready");
+        wait Prompt;
+        wait ~timeout:(Ms 500) Prompt;
+        wait ~timeout:(S 2.) (Line "ok");
         screenshot "frame.png";
         source "common.tape";
       ]
@@ -145,6 +148,9 @@ let test_keys_and_waits () =
      Alt+.\n\
      PageUp\n\
      Wait+Screen /ready/\n\
+     Wait\n\
+     Wait@500ms\n\
+     Wait+Line@2s /ok/\n\
      Screenshot \"frame.png\"\n\
      Source \"common.tape\"\n"
     (str tape)
