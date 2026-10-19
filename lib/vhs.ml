@@ -382,41 +382,29 @@ module Cram = struct
 end
 
 type error =
+  | Invalid_tape of string
   | Executable_not_found of string
-  | Child_error of { argv : string list; status : Eio.Process.exit_status }
+  | Failed of { vhs : string; status : [ `Exited of int | `Signaled of int ] }
   | Io of string
 
 let pp_error ppf = function
+  | Invalid_tape msg -> Fmt.pf ppf "invalid tape: %s" msg
   | Executable_not_found exe -> Fmt.pf ppf "executable not found: %s" exe
-  | Child_error { argv; status } ->
-      Fmt.pf ppf "%a failed: %a" Eio.Process.pp_args argv Eio.Process.pp_status
-        status
+  | Failed { vhs; status = `Exited n } ->
+      Fmt.pf ppf "%s exited with code %d" vhs n
+  | Failed { vhs; status = `Signaled n } ->
+      Fmt.pf ppf "%s was killed by signal %d" vhs n
   | Io msg -> Fmt.string ppf msg
 
-let write_file ~path t =
-  let contents = Fmt.str "%a" pp t in
-  try Ok (Out_channel.with_open_bin path (fun oc -> output_string oc contents))
-  with Sys_error msg -> Error (Io msg)
-
-let process run argv =
-  try Ok (run argv) with
-  | Eio.Exn.Io (Eio.Process.E (Executable_not_found exe), _) ->
-      Error (Executable_not_found exe)
-  | Eio.Exn.Io (Eio.Process.E (Child_error status), _) ->
-      Error (Child_error { argv; status })
-  | Eio.Exn.Io _ as exn -> Error (Io (Printexc.to_string exn))
-
-(* vhs reads an argument starting with '-' as a flag. *)
-let path_arg path =
-  if String.starts_with ~prefix:"-" path then "./" ^ path else path
-
-let render_file ~proc ?(vhs = "vhs") path =
-  process (Eio.Process.run proc) [ vhs; path_arg path ]
-
-let render ~proc ?vhs ~path tape =
-  Result.bind (write_file ~path tape) (fun () -> render_file ~proc ?vhs path)
-
-let publish ~proc ?(vhs = "vhs") file =
-  process
-    (Eio.Process.parse_out proc Eio.Buf_read.take_all)
-    [ vhs; "publish"; path_arg file ]
+let render ~proc ?(vhs = "vhs") t =
+  match print t with
+  | Error msg -> Error (Invalid_tape msg)
+  | Ok tape -> (
+      try
+        Ok (Eio.Process.run proc ~stdin:(Eio.Flow.string_source tape) [ vhs ])
+      with
+      | Eio.Exn.Io (Eio.Process.E (Executable_not_found exe), _) ->
+          Error (Executable_not_found exe)
+      | Eio.Exn.Io (Eio.Process.E (Child_error status), _) ->
+          Error (Failed { vhs; status })
+      | Eio.Exn.Io _ as exn -> Error (Io (Printexc.to_string exn)))

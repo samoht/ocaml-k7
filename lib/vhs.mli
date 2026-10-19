@@ -6,8 +6,8 @@
     pressing return, waiting for output and hiding setup steps.
 
     [Vhs] builds tapes as values, prints them in the [*.tape] syntax, turns
-    {{!Cram}cram tests} into tapes and {{!running}runs} [vhs] on them. Only the
-    functions of the last section perform I/O.
+    {{!Cram}cram tests} into tapes and {{!running}runs} [vhs] on them. Only
+    {!render} performs I/O.
 
     {[
     let demo =
@@ -205,43 +205,20 @@ module Cram : sig
   (** [pp] formats a cram test as cram source, without prose. *)
 end
 
-(** {1:running Writing and running tapes}
+(** {1:running Running vhs} *)
 
-    These functions never raise for an I/O failure: they return it as an
-    {!type-error}. *)
-
-(** The type for I/O and process errors. *)
+(** The type for errors of {!render}. *)
 type error =
-  | Executable_not_found of string  (** No such executable on the PATH. *)
-  | Child_error of { argv : string list; status : Eio.Process.exit_status }
-      (** The executable ran and exited non-zero. *)
+  | Invalid_tape of string  (** The tape is not {{!validate}valid}. *)
+  | Executable_not_found of string  (** No such executable on the [PATH]. *)
+  | Failed of { vhs : string; status : [ `Exited of int | `Signaled of int ] }
+      (** The executable [vhs] ran and did not exit with [0]. *)
   | Io of string  (** Any other I/O failure, as a message. *)
 
 val pp_error : error Fmt.t
-(** [pp_error] formats errors for humans. *)
+(** [pp_error] formats an error for humans. *)
 
-val write_file : path:string -> t -> (unit, error) result
-(** [write_file ~path t] writes [to_string t] to [path].
-
-    @raise Invalid_argument if [t] is not {{!printing}printable}. *)
-
-val render_file :
-  proc:_ Eio.Process.mgr -> ?vhs:string -> string -> (unit, error) result
-(** [render_file ~proc ~vhs path] runs the executable [vhs] (defaults to
-    ["vhs"]) on [path]. *)
-
-val render :
-  proc:_ Eio.Process.mgr ->
-  ?vhs:string ->
-  path:string ->
-  t ->
-  (unit, error) result
-(** [render ~proc ?vhs ~path tape] is [write_file ~path tape] followed by
-    [render_file ~proc ?vhs path].
-
-    @raise Invalid_argument if [tape] is not {{!printing}printable}. *)
-
-val publish :
-  proc:_ Eio.Process.mgr -> ?vhs:string -> string -> (string, error) result
-(** [publish ~proc ?vhs file] runs [vhs publish file] and is its standard
-    output, holding the share links VHS prints there. *)
+val render : proc:_ Eio.Process.mgr -> ?vhs:string -> t -> (unit, error) result
+(** [render ~proc ~vhs t] runs the executable [vhs] (defaults to ["vhs"]) with
+    [t] on its standard input. [vhs] resolves the {!val-output} and
+    {!val-source} paths of [t] against the current directory. *)

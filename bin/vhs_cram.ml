@@ -11,27 +11,17 @@ let settings ~width =
     Framerate 30;
   ]
 
-let render ~proc ~vhs ~path tape =
-  match Vhs.validate tape with
-  | Error _ as e -> e
-  | Ok () ->
-      Vhs.render ~proc ~vhs ~path tape
-      |> Result.map_error (Fmt.to_to_string Vhs.pp_error)
-
 let record ~vhs ~width ~setup_scripts ~output input =
-  match In_channel.with_open_bin input In_channel.input_all with
-  | exception Sys_error msg -> Error msg
+  Eio_main.run @@ fun env ->
+  match Eio.Path.(load (Eio.Stdenv.fs env / input)) with
+  | exception (Eio.Io _ as exn) -> Error (Printexc.to_string exn)
   | src ->
       let settings = settings ~width in
       let tape =
         Vhs.Cram.to_tape ~settings ~setup_scripts ~output (Vhs.Cram.parse src)
       in
-      Eio_main.run @@ fun env ->
-      let proc = Eio.Stdenv.process_mgr env in
-      let path = Filename.temp_file "vhs-cram-" ".tape" in
-      Fun.protect
-        ~finally:(fun () -> try Sys.remove path with Sys_error _ -> ())
-        (fun () -> render ~proc ~vhs ~path tape)
+      Vhs.render ~proc:(Eio.Stdenv.process_mgr env) ~vhs tape
+      |> Result.map_error (Fmt.to_to_string Vhs.pp_error)
 
 let run vhs width setup_scripts output input =
   match record ~vhs ~width ~setup_scripts ~output input with

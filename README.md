@@ -51,8 +51,7 @@ let tape =
     ]
 ```
 
-`Vhs.pp` prints the tape in the format VHS reads, and `Vhs.write_file`
-saves it:
+`Vhs.pp` prints the tape in the format VHS reads:
 
 ```ocaml
 # Fmt.pr "%a" Vhs.pp tape;;
@@ -67,13 +66,13 @@ Sleep 2s
 - : unit = ()
 ```
 
-`Vhs.render` saves the tape and runs `vhs` on it. It returns an error,
-rather than raising, when `vhs` is not installed or fails:
+`Vhs.render` runs `vhs` on the tape. It returns an error, rather than
+raising, when the tape is not valid or when `vhs` is not installed or fails:
 
 ```ocaml
 let make_gif env =
   let proc = Eio.Stdenv.process_mgr env in
-  match Vhs.render ~proc ~path:"demo.tape" tape with
+  match Vhs.render ~proc tape with
   | Ok () -> ()
   | Error e -> Fmt.epr "%a@." Vhs.pp_error e
 ```

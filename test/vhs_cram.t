@@ -11,15 +11,12 @@ A command the tape cannot type is an error, not an exception.
 
   $ printf '  $ echo \001\n' > bad.t
   $ vhs-cram --output demo.gif bad.t
-  vhs-cram: Type "echo \001" holds a control character
+  vhs-cram: invalid tape: Type "echo \001" holds a control character
   [1]
 
-A failing vhs is reported, and the temporary tape is removed.
+A failing vhs is reported.
 
   $ printf '  $ echo hi\n  hi\n' > demo.t
-  $ mkdir tmp
-  $ TMPDIR=$PWD/tmp vhs-cram --vhs false --output demo.gif demo.t 2> err
+  $ vhs-cram --vhs false --output demo.gif demo.t
+  vhs-cram: false exited with code 1
   [1]
-  $ sed 's/vhs-cram-.*\.tape/TAPE/' err
-  vhs-cram: false $TESTCASE_ROOT/tmp/TAPE failed: Exited (code 1)
-  $ ls tmp
