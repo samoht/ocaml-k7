@@ -96,6 +96,46 @@ let test_run () =
     "missing input" 123
     (run env ~vhs:(path "ok") (path "missing.t"))
 
+(* [redirect fd target fn] runs [fn] with [fd] replaced by [target], or
+   closed if [target] is [None]. *)
+let redirect fd target fn =
+  let saved = Unix.dup fd in
+  (match target with Some t -> Unix.dup2 t fd | None -> Unix.close fd);
+  Fun.protect
+    ~finally:(fun () ->
+      Unix.dup2 saved fd;
+      Unix.close saved)
+    fn
+
+(* Where [run] writes cannot fail with an exception: a reader that stops
+   reading the tape is not an error, and another write error is reported in
+   one line. *)
+let test_write_errors () =
+  with_files [ ("demo.t", 0o644, "  $ echo hi\n"); ("err", 0o644, "") ]
+  @@ fun env path ->
+  let stderr () = In_channel.with_open_bin (path "err") In_channel.input_all in
+  let cli ~stdout () =
+    let err = Unix.openfile (path "err") [ O_WRONLY; O_TRUNC ] 0 in
+    Fun.protect ~finally:(fun () -> Unix.close err) @@ fun () ->
+    redirect Unix.stderr (Some err) @@ fun () ->
+    redirect Unix.stdout stdout @@ fun () ->
+    run env ~print:true ~vhs:"vhs" (path "demo.t")
+  in
+  let r, w = Unix.pipe ~cloexec:true () in
+  Unix.close r;
+  let code = cli ~stdout:(Some w) () in
+  Unix.close w;
+  Alcotest.(check (pair int string)) "closed pipe" (0, "") (code, stderr ());
+  let code = cli ~stdout:None () in
+  Alcotest.(check (pair int string))
+    "closed standard output"
+    (123, "vhs-cram: standard output: Bad file descriptor\n")
+    (code, stderr ());
+  Alcotest.(check int)
+    "closed standard error" 123
+    ( redirect Unix.stderr None @@ fun () ->
+      run env ~print:true ~vhs:"vhs" (path "missing.t") )
+
 let test_render () =
   with_files
     [
@@ -276,6 +316,7 @@ let suite =
       ([
          ("tape", test_tape);
          ("run", test_run);
+         ("write errors", test_write_errors);
          ("render real processes", test_render);
          ("command line", test_command);
        ]

@@ -22,6 +22,19 @@ let load_error name = function
   | Eio.Fs.E (Permission_denied _) -> Fmt.str "%s: permission denied" name
   | err -> Fmt.str "%s: %a" name Eio.Exn.pp_err err
 
+(* [write flow s] writes [s] to [flow]. It is [Error None] if the reader
+   closed the pipe, and [Error (Some msg)] on another failure. *)
+let write flow s =
+  match Eio.Flow.copy_string s flow with
+  | () -> Ok ()
+  | exception
+      Eio.Io
+        (Eio.Net.E (Connection_reset (Eio_unix.Unix_error (EPIPE, _, _))), _) ->
+      Error None
+  | exception Eio.Io (Eio.Exn.X (Eio_unix.Unix_error (code, _, _)), _) ->
+      Error (Some (Unix.error_message code))
+  | exception Eio.Io (err, _) -> Error (Some (Fmt.str "%a" Eio.Exn.pp_err err))
+
 let record env ~print ~vhs ~setup ~output input =
   let* src =
     match Eio.Path.(load (Eio.Stdenv.fs env / input)) with
@@ -30,7 +43,11 @@ let record env ~print ~vhs ~setup ~output input =
   in
   let* tape = tape ~setup ~output ~name:input src in
   if print then
-    Ok (Eio.Flow.copy_string (Vhs.to_string tape) (Eio.Stdenv.stdout env))
+    (* Like a process killed by SIGPIPE, which Eio ignores, [--print] stops
+       quietly when the reader goes away, as in [vhs-cram --print | head]. *)
+    match write (Eio.Stdenv.stdout env) (Vhs.to_string tape) with
+    | Ok () | Error None -> Ok ()
+    | Error (Some msg) -> Fmt.error "standard output: %s" msg
   else
     Vhs.render ~vhs
       ~proc:(Eio.Stdenv.process_mgr env)
@@ -41,9 +58,8 @@ let run env ~print ~vhs ~setup ~output input =
   match record env ~print ~vhs ~setup ~output input with
   | Ok () -> 0
   | Error msg ->
-      Eio.Flow.copy_string
-        (Fmt.str "vhs-cram: %s\n" msg)
-        (Eio.Stdenv.stderr env);
+      (* A closed standard error leaves the exit code to report. *)
+      ignore (write (Eio.Stdenv.stderr env) (Fmt.str "vhs-cram: %s\n" msg));
       Cmdliner.Cmd.Exit.some_error
 
 open Cmdliner
@@ -95,7 +111,10 @@ let man =
 let exits =
   Cmd.Exit.
     [
-      info ok ~doc:"on success.";
+      info ok
+        ~doc:
+          "on success, also when the reader of $(b,--print) closes the pipe \
+           early.";
       info some_error
         ~doc:
           "on a cram test that cannot be recorded, or when $(b,vhs) cannot run \

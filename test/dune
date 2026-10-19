@@ -1,7 +1,17 @@
 (test
  (name test)
  (deps regexp_cases.txt tape_cases.txt)
- (libraries vhs vhs_cram fmt alcotest cstruct eio eio_main eio.mock cmdliner))
+ (libraries
+  vhs
+  vhs_cram
+  fmt
+  alcotest
+  cstruct
+  eio
+  eio_main
+  eio.mock
+  cmdliner
+  unix))
 
 ; The oracle alias also runs the tests that record with the real vhs.
 

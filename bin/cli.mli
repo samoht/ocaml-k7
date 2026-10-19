@@ -27,8 +27,9 @@ val run :
   int
 (** [run env ~print ~vhs ~setup ~output input] records the cram test in the file
     [input] with the executable [vhs], or prints its tape on standard output if
-    [print] is [true]. It is the exit code: [0] on success, [123] after printing
-    an error on standard error. *)
+    [print] is [true]. It is the exit code: [0] on success, also when the reader
+    of the printed tape closes the pipe early, and [123] after printing an error
+    on standard error, if standard error can be written. *)
 
 val cmd : int Cmdliner.Cmd.t
 (** [cmd] is the [vhs-cram] command. *)

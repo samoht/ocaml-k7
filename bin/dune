@@ -4,7 +4,7 @@
 (library
  (name vhs_cram)
  (modules cram cli)
- (libraries vhs cmdliner eio eio.unix eio_main fmt))
+ (libraries vhs cmdliner eio eio.unix eio_main fmt unix))
 
 (executable
  (name main)
