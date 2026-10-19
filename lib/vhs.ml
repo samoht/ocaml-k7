@@ -217,10 +217,10 @@ let rec raw_outputs actions =
       | Type _ | Key _ | Sleep _ | Wait _ -> [])
     actions
 
-(* The constructor that writes each setting [Set] can also write. *)
+(* The constructor that writes each setting [Set] can also write, but
+   [Shell], which VHS applies wherever it is. *)
 let constructors =
   [
-    ("Shell", "Shell");
     ("FontSize", "Font_size");
     ("FontFamily", "Font_family");
     ("Width", "Width");
@@ -230,7 +230,8 @@ let constructors =
     ("Framerate", "Framerate");
   ]
 
-(* VHS applies [Set] and [Require] only before the first other command. *)
+(* VHS applies [Set], but [Set Shell], and [Require] only before the first
+   other command. *)
 let check_raw ~started line =
   if has_control line then err "raw line %S: holds a control character" line
   else
@@ -242,6 +243,7 @@ let check_raw ~started line =
         match output_problem path with
         | None -> Ok started
         | Some why -> err "raw line %S: %s" line why)
+    | Ok (Set "Shell") -> err "raw line %S: use the setting Shell instead" line
     | Ok (Set _ | Require) when started ->
         err "raw line %S: VHS ignores it after the first action" line
     | Ok (Set name) when List.mem_assoc name constructors ->

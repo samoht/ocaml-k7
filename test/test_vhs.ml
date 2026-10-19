@@ -126,6 +126,10 @@ let test_raw () =
     {|raw line "Set Width 320": VHS ignores it after the first action|}
     [ type' "x"; raw "Set Width 320" ];
   rejects "late require" [ sleep (Ms 1); raw "Require dune" ];
+  (* VHS applies a Set Shell anywhere, and warns after the first action. *)
+  error "late shell"
+    {|raw line "Set Shell fish": use the setting Shell instead|}
+    [ key Enter; raw "Set Shell fish" ];
   rejects "setting after env" [ raw "Env A b"; raw "Set Margin 2" ];
   rejects "setting in hidden" [ hidden [ raw "Set Margin 2" ] ];
   (* An action that prints nothing does not end the settings. *)
