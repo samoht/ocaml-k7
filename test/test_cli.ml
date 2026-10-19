@@ -101,6 +101,7 @@ let test_render () =
         "#!/bin/sh\n\
          trap 'echo > \"$0.stopped\"; exit 7' TERM\n\
          cat > /dev/null\n\
+         echo > \"$0.ready\"\n\
          while :; do sleep 0.05; done\n" );
     ]
   @@ fun env path ->
@@ -149,7 +150,10 @@ let test_render () =
      Eio.Fiber.first
        (fun () -> `Rendered (Vhs.render ~vhs:(path "slow") ~proc ~cwd t))
        (fun () ->
-         Eio.Time.sleep clock 0.5;
+         Eio.Time.with_timeout_exn clock 10. (fun () ->
+             while not (Sys.file_exists (path "slow.ready")) do
+               Eio.Time.sleep clock 0.01
+             done);
          `Timeout)
    with
   | `Timeout -> ()
@@ -191,7 +195,24 @@ let test_output_order () =
   let src =
     "  $ printf 'decoy>'; sleep 3; echo FIRST_DONE\n  $ echo SECOND_DONE\n"
   in
-  let t = Result.get_ok (Cli.tape ~setup:[] ~output ~name:"order.t" src) in
+  let cram = Result.get_ok (Cram.parse src) in
+  let t =
+    Result.get_ok
+      (Vhs.tape
+         ~settings:
+           Vhs.
+             [
+               Shell Bash;
+               Width 480;
+               Height 240;
+               Padding 0;
+               Font_size 12;
+               Framerate 5;
+               Typing_speed (Ms 5);
+             ]
+         ~outputs:[ output ]
+         (Cram.actions ~setup:[] cram @ [ Vhs.sleep (Ms 3500) ]))
+  in
   let result =
     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 30. (fun () ->
         Vhs.render ~vhs:(path "recorder")
