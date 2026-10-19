@@ -55,10 +55,11 @@ type key =
 (** The type for conditions on the terminal. *)
 type wait =
   | Prompt
-      (** The line under the cursor ends with [>]. VHS starts each shell with
-          the prompt ["> "], so this holds when the shell is ready for the next
-          command. It never holds once something changes the prompt, such as a
-          sourced script that sets [PS1], and it holds early when a command
+      (** The line under the cursor ends with [>], or matches the pattern of a
+          {!raw} [Set WaitPattern] if the tape has one. VHS starts each shell
+          with the prompt ["> "], so this holds when the shell is ready for the
+          next command. It never holds once something changes the prompt, such
+          as a sourced script that sets [PS1], and it holds early when a command
           prints a line ending with [>] and waits. *)
   | Line of string
       (** The line under the cursor, without its trailing spaces, matches the
@@ -83,7 +84,8 @@ val sleep : duration -> action
 
 val wait : ?timeout:duration -> wait -> action
 (** [wait ~timeout w] pauses until [w] holds and fails the recording if it does
-    not hold within [timeout] (defaults to 15 seconds, VHS's [WaitTimeout]). *)
+    not hold within [timeout] (defaults to 15 seconds, or to the duration of a
+    {!raw} [Set WaitTimeout] if the tape has one). *)
 
 val hidden : action list -> action
 (** [hidden actions] runs [actions] without recording them. A [hidden] inside
