@@ -90,6 +90,22 @@ let test_three_quotes () =
     (to_string (tape [ type' {|a"b'c`d|} ]));
   rejects "output" (output {|a"b'c`d|})
 
+let test_unquoted () =
+  let open Vhs.Value in
+  let evil = "x\nOutput evil.gif" in
+  rejects "comment" (comment evil);
+  rejects "require" (require evil);
+  rejects "require word" (require "git Output e.gif");
+  rejects "env key" (env evil "v");
+  rejects "custom name" (set (Custom ("A B", "1")));
+  rejects "custom value" (set (Custom ("A", "1\r")));
+  rejects "ctrl" (key (Ctrl "c Enter"));
+  rejects "raw key" (key (Raw_key evil));
+  rejects "raw command" (raw_command evil);
+  rejects "raw line" (raw_line evil);
+  expect "raw line kept" "Set Margin 20\n"
+    (to_string (tape [ set (Custom ("Margin", "20")) ]))
+
 let test_keys_and_waits () =
   let open Vhs.Value in
   let tape =
@@ -120,5 +136,6 @@ let suite =
       Alcotest.test_case "three quotes" `Quick test_three_quotes;
       Alcotest.test_case "type control" `Quick test_type_control;
       Alcotest.test_case "quoted control" `Quick test_quoted_control;
+      Alcotest.test_case "unquoted payloads" `Quick test_unquoted;
       Alcotest.test_case "keys and waits" `Quick test_keys_and_waits;
     ] )

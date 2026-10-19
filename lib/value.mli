@@ -169,7 +169,14 @@ val raw_command : string -> item
     - a quoted payload other than a {!constructor-Type} one holds a control
       character or all three quote characters.
     - a {!constructor-Type} payload holds a control character other than a
-      newline or a tab. *)
+      newline or a tab.
+    - a {!constructor-Require} program, an {!constructor-Env} name, a
+      {!constructor-Custom} setting name or a {!constructor-Ctrl},
+      {!constructor-Alt} or {!constructor-Ctrl_alt} key is empty or holds a
+      space or a control character.
+    - a {!constructor-Comment}, a {!constructor-Custom} setting value, a
+      {!constructor-Raw_key}, a {!constructor-Raw_command} or a
+      {!constructor-Raw_line} holds a newline or a carriage return. *)
 
 val pp_duration : duration Fmt.t
 (** [pp_duration] formats a VHS duration. *)

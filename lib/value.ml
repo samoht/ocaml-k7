@@ -88,6 +88,16 @@ let quote_string s =
 
 let pp_quoted ppf s = Fmt.string ppf (quote_string s)
 
+let pp_line ppf s =
+  if String.exists (fun c -> c = '\n' || c = '\r') s then
+    Fmt.invalid_arg "Vhs.Value: %S holds a line break" s;
+  Fmt.string ppf s
+
+let pp_word ppf s =
+  if s = "" || String.exists (fun c -> c = ' ' || is_control c) s then
+    Fmt.invalid_arg "Vhs.Value: %S is not a single word" s;
+  Fmt.string ppf s
+
 (* [quotable_chunks s] cuts [s] so that no chunk holds all three quotes. *)
 let quotable_chunks s =
   let chunks = ref [] and start = ref 0 and seen = ref [] in
@@ -142,10 +152,10 @@ let pp_key ppf = function
   | Right -> Fmt.string ppf "Right"
   | Up -> Fmt.string ppf "Up"
   | Down -> Fmt.string ppf "Down"
-  | Ctrl key -> Fmt.pf ppf "Ctrl+%s" key
-  | Alt key -> Fmt.pf ppf "Alt+%s" key
-  | Ctrl_alt key -> Fmt.pf ppf "Ctrl+Alt+%s" key
-  | Raw_key key -> Fmt.string ppf key
+  | Ctrl key -> Fmt.pf ppf "Ctrl+%a" pp_word key
+  | Alt key -> Fmt.pf ppf "Alt+%a" pp_word key
+  | Ctrl_alt key -> Fmt.pf ppf "Ctrl+Alt+%a" pp_word key
+  | Raw_key key -> pp_line ppf key
 
 let pp_setting ppf = function
   | Shell shell -> Fmt.pf ppf "Shell %a" pp_quoted shell
@@ -157,7 +167,7 @@ let pp_setting ppf = function
   | Padding n -> Fmt.pf ppf "Padding %d" n
   | Typing_speed d -> Fmt.pf ppf "TypingSpeed %a" pp_duration d
   | Framerate n -> Fmt.pf ppf "Framerate %d" n
-  | Custom (name, value) -> Fmt.pf ppf "%s %s" name value
+  | Custom (name, value) -> Fmt.pf ppf "%a %a" pp_word name pp_line value
 
 let pp_wait ppf = function
   | Wait pattern -> Fmt.pf ppf "Wait /%s/" pattern
@@ -174,18 +184,18 @@ let pp_command ppf = function
   | Screenshot None -> Fmt.string ppf "Screenshot"
   | Screenshot (Some path) -> Fmt.pf ppf "Screenshot %a" pp_quoted path
   | Source path -> Fmt.pf ppf "Source %a" pp_quoted path
-  | Raw_command line -> Fmt.string ppf line
+  | Raw_command line -> pp_line ppf line
 
 let pp_item ppf = function
   | Comment "" -> Fmt.string ppf "#"
-  | Comment s -> Fmt.pf ppf "# %s" s
+  | Comment s -> Fmt.pf ppf "# %a" pp_line s
   | Blank -> ()
-  | Require s -> Fmt.pf ppf "Require %s" s
+  | Require s -> Fmt.pf ppf "Require %a" pp_word s
   | Output path -> Fmt.pf ppf "Output %a" pp_quoted path
-  | Env (key, value) -> Fmt.pf ppf "Env %s %a" key pp_quoted value
+  | Env (key, value) -> Fmt.pf ppf "Env %a %a" pp_word key pp_quoted value
   | Set setting -> Fmt.pf ppf "Set %a" pp_setting setting
   | Command command -> pp_command ppf command
-  | Raw_line line -> Fmt.string ppf line
+  | Raw_line line -> pp_line ppf line
 
 let pp ppf items = List.iter (fun item -> Fmt.pf ppf "%a\n" pp_item item) items
 let to_string t = Fmt.str "%a" pp t
