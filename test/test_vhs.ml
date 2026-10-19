@@ -12,14 +12,14 @@ let test_basic_tape () =
     [
       comment "render from repo root";
       output "demo.gif";
-      blank ();
+      blank;
       set (Shell "bash");
       set (Font_size 18);
       set (Width 1000);
       set (Height 560);
       set (Theme "Builtin Dark");
       type' "dune test";
-      enter ();
+      key Enter;
       sleep (S 1.5);
     ]
   in
@@ -53,11 +53,8 @@ let test_escaping () =
 
 let test_type_control () =
   let open Vhs in
-  expect "newline is Enter"
-    "Type 'echo \"a\"'\nEnter\nType \"Output evil.gif\"\n"
-    (str [ type' "echo \"a\"\nOutput evil.gif" ]);
-  expect "tab is Tab" "Type \"a\"\nTab\nType \"b\"\nEnter\n"
-    (str [ type' "a\tb\n" ]);
+  rejects "newline" (fun () -> type' "echo a\nOutput evil.gif");
+  rejects "tab" (fun () -> type' "a\tb");
   expect "empty" "Type \"\"\n" (str [ type' "" ]);
   rejects "control byte" (fun () -> type' "bad\x01byte")
 
@@ -90,13 +87,10 @@ let test_unquoted () =
   rejects "comment" (fun () -> comment evil);
   rejects "require" (fun () -> require evil);
   rejects "env key" (fun () -> env evil "v");
-  rejects "custom name" (fun () -> set (Custom ("A B", "1")));
-  rejects "custom value" (fun () -> set (Custom ("A", "1\r")));
   rejects "ctrl digit" (fun () -> key (Ctrl '1'));
   rejects "alt backslash" (fun () -> key (Alt '\\'));
   rejects "raw" (fun () -> raw evil);
-  expect "raw line kept" "Set Margin 20\n"
-    (str [ set (Custom ("Margin", "20")) ])
+  expect "raw line kept" "Set Margin 20\n" (str [ raw "Set Margin 20" ])
 
 let test_durations () =
   let open Vhs in

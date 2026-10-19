@@ -45,7 +45,7 @@ let tape =
     Vhs.set (Width 1000);
     Vhs.set (Height 560);
     Vhs.type' "dune test";
-    Vhs.enter ();
+    Vhs.key Enter;
     Vhs.sleep (S 2.);
   ]
 ```

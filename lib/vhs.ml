@@ -29,7 +29,6 @@ type setting =
   | Padding of int
   | Typing_speed of duration
   | Framerate of int
-  | Custom of string * string
 
 type wait = Prompt | Line of string | Screen of string
 type item = string
@@ -42,18 +41,16 @@ let is_quote c = List.mem c quotes
 let is_control c = Char.code c < 0x20 || Char.code c = 0x7f
 
 (* A VHS string has no escapes and ends at a newline. *)
+let has_control s = String.exists is_control s
+
 let line fn s =
-  if String.exists is_control s then invalid fn "%S holds a control character" s;
+  if has_control s then invalid fn "%S holds a control character" s;
   s
 
 let quoted fn s =
   match List.find_opt (fun q -> not (String.contains s q)) quotes with
   | Some q -> Fmt.str "%c%s%c" q (line fn s) q
   | None -> invalid fn "%S holds all three VHS quote characters" s
-
-let word fn s =
-  if s = "" || String.contains s ' ' then invalid fn "%S is not a single word" s;
-  line fn s
 
 let natural fn n =
   if n < 0 then invalid fn "%d is negative" n;
@@ -73,32 +70,6 @@ let quotable_chunks s =
         else seen := c :: !seen)
     s;
   List.rev (String.sub s !start (String.length s - !start) :: !chunks)
-
-let typeable s =
-  not (String.exists (fun c -> is_control c && c <> '\n' && c <> '\t') s)
-
-(* [type_lines s] are the VHS commands typing [s]: text runs become [Type]
-   commands and newlines and tabs become key presses. *)
-let type_lines s =
-  if not (typeable s) then invalid "type'" "%S holds a control character" s;
-  let lines = ref [] and start = ref 0 in
-  let text stop =
-    if stop > !start then
-      let chunks = quotable_chunks (String.sub s !start (stop - !start)) in
-      List.iter
-        (fun c -> lines := ("Type " ^ quoted "type'" c) :: !lines)
-        chunks
-  in
-  String.iteri
-    (fun i c ->
-      if c = '\n' || c = '\t' then begin
-        text i;
-        lines := (if c = '\n' then "Enter" else "Tab") :: !lines;
-        start := i + 1
-      end)
-    s;
-  text (String.length s);
-  match !lines with [] -> [ {|Type ""|} ] | lines -> List.rev lines
 
 (* VHS reads a plain decimal: no exponent, no sign. *)
 let decimal s =
@@ -150,7 +121,6 @@ let setting = function
   | Padding n -> "Padding " ^ natural "set" n
   | Typing_speed d -> "TypingSpeed " ^ duration "set" d
   | Framerate n -> "Framerate " ^ natural "set" n
-  | Custom (name, value) -> word "set" name ^ " " ^ line "set" value
 
 (* A slash ends a VHS regexp and only VHS 0.11 and later read [\/] as an
    escape, so a slash, escaped or not, is written as RE2's [\x2f]. *)
@@ -184,7 +154,7 @@ let has_extension path =
   | None -> false
 
 let comment s = if s = "" then "#" else "# " ^ line "comment" s
-let blank () = ""
+let blank = ""
 let require program = "Require " ^ quoted "require" program
 
 let output path =
@@ -206,9 +176,13 @@ let env name value =
   "Env " ^ name ^ " " ^ quoted "env" value
 
 let set s = "Set " ^ setting s
-let type' s = String.concat "\n" (type_lines s)
+
+let type' s =
+  quotable_chunks (line "type'" s)
+  |> List.map (fun c -> "Type " ^ quoted "type'" c)
+  |> String.concat "\n"
+
 let key k = key_name k
-let enter () = "Enter"
 let sleep d = "Sleep " ^ duration "sleep" d
 
 let wait ?timeout w =
@@ -220,8 +194,8 @@ let wait ?timeout w =
   | Line re -> "Wait+Line" ^ timeout ^ " " ^ regexp re
   | Screen re -> "Wait+Screen" ^ timeout ^ " " ^ regexp re
 
-let hide () = "Hide"
-let show () = "Show"
+let hide = "Hide"
+let show = "Show"
 
 let screenshot path =
   if not (String.ends_with ~suffix:".png" path) then
@@ -264,7 +238,7 @@ module Cram = struct
       lines;
     flush ();
     let steps = List.rev !steps in
-    match List.find_opt (fun l -> not (typeable l)) (List.concat steps) with
+    match List.find_opt has_control (List.concat steps) with
     | None -> Ok steps
     | Some l -> err_control l
 
@@ -274,14 +248,14 @@ module Cram = struct
   let setup_block = function
     | [] -> []
     | scripts ->
-        hide ()
+        hide
         :: List.concat_map
-             (fun s -> [ type' ("source " ^ Filename.quote s); enter () ])
+             (fun s -> [ type' ("source " ^ Filename.quote s); key Enter ])
              scripts
-        @ [ type' "clear"; enter (); show () ]
+        @ [ type' "clear"; key Enter; show ]
 
   let step_items ~pause step =
-    List.concat_map (fun line -> [ type' line; enter () ]) step
+    List.concat_map (fun line -> [ type' line; key Enter ]) step
     @ [ wait Prompt; sleep pause ]
 
   let items ?(setup = []) ?(pause = S 1.) steps =

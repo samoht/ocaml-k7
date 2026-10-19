@@ -16,7 +16,7 @@
         Vhs.set (Width 1000);
         Vhs.set (Height 560);
         Vhs.type' "dune test";
-        Vhs.enter ();
+        Vhs.key Enter;
         Vhs.wait Prompt;
       ]
     ]} *)
@@ -63,8 +63,6 @@ type setting =
   | Padding of int
   | Typing_speed of duration  (** Delay between typed characters. *)
   | Framerate of int
-  | Custom of string * string
-      (** [Custom (name, value)] is [Set name value], printed unchanged. *)
 
 (** The type for waits on terminal output. A regular expression is
     {{:https://github.com/google/re2/wiki/Syntax}RE2} syntax without the
@@ -86,8 +84,8 @@ type item
 val comment : string -> item
 (** [comment s] is the line [# s], or [#] if [s] is empty. *)
 
-val blank : unit -> item
-(** [blank ()] is an empty line. *)
+val blank : item
+(** [blank] is an empty line. *)
 
 val require : string -> item
 (** [require program] makes VHS fail before running the tape if [program] is not
@@ -106,15 +104,11 @@ val set : setting -> item
 (** [set s] applies the setting [s]. Integers must not be negative. *)
 
 val type' : string -> item
-(** [type' s] types [s] without pressing return; newlines and tabs in [s] are
-    typed as {!constructor-Enter} and {!constructor-Tab}. [s] can hold all three
-    quote characters. *)
+(** [type' s] types [s]; use {!key} to press {!constructor-Enter} or
+    {!constructor-Tab}. [s] can hold all three quote characters. *)
 
 val key : key -> item
 (** [key k] presses [k]. *)
-
-val enter : unit -> item
-(** [enter ()] is [key Enter]. *)
 
 val sleep : duration -> item
 (** [sleep d] pauses the recording for [d]. *)
@@ -123,11 +117,11 @@ val wait : ?timeout:duration -> wait -> item
 (** [wait ~timeout w] pauses the recording until [w] holds, and fails the
     recording after [timeout] (defaults to the VHS [WaitTimeout] setting). *)
 
-val hide : unit -> item
-(** [hide ()] stops rendering the terminal; its actions still run. *)
+val hide : item
+(** [hide] stops rendering the terminal; its actions still run. *)
 
-val show : unit -> item
-(** [show ()] resumes rendering after {!val-hide}. *)
+val show : item
+(** [show] resumes rendering after {!val-hide}. *)
 
 val screenshot : string -> item
 (** [screenshot path] saves the current frame to the PNG file [path], which ends
@@ -137,7 +131,8 @@ val source : string -> item
 (** [source path] runs the tape file [path]. *)
 
 val raw : string -> item
-(** [raw line] is [line], printed unchanged. *)
+(** [raw line] is [line], printed unchanged, for VHS commands and settings that
+    have no function here. *)
 
 (** {1:printing Printing} *)
 
@@ -157,10 +152,9 @@ module Cram : sig
 
   val parse : string -> (t, string) result
   (** [parse src] is the cram test of source [src], or [Error msg] if a command
-      holds a control character other than a tab. A line [  $ cmd] starts a
-      command and the [  > ] lines right after it continue it. Other lines,
-      expected output and exit codes included, are dropped. Lines may end with
-      ["\r\n"]. *)
+      holds a control character. A line [  $ cmd] starts a command and the
+      [  > ] lines right after it continue it. Other lines, expected output and
+      exit codes included, are dropped. Lines may end with ["\r\n"]. *)
 
   val items : ?setup:string list -> ?pause:duration -> t -> item list
   (** [items ~setup ~pause t] are the tape lines that record [t]. They source
