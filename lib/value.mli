@@ -25,6 +25,8 @@
         ]
     ]} *)
 
+(** {1:tapes Tapes} *)
+
 (** The type for VHS durations, in milliseconds or seconds. Seconds are printed
     as a decimal with at most nine fractional digits. *)
 type duration = Ms of int | S of float
@@ -73,7 +75,7 @@ type command =
   | Sleep of duration  (** Pauses the recording timeline. *)
   | Wait_for of wait
   | Hide  (** Hides subsequent input/output from the recording. *)
-  | Show  (** Resumes rendering after {!Hide}. *)
+  | Show  (** Resumes rendering after {!constructor-Hide}. *)
   | Screenshot of string option  (** Captures the current frame. *)
   | Source of string  (** Includes commands from another tape file. *)
   | Raw_command of string  (** A raw VHS command line. *)
@@ -101,11 +103,13 @@ val tape : item list -> t
 val items : t -> item list
 (** [items t] are the items of [t] in output order. *)
 
+(** {1:items Items} *)
+
 val comment : string -> item
-(** [comment s] emits [# s], or a bare [#] when [s] is empty. *)
+(** [comment s] is the comment line [# s], or [#] if [s] is empty. *)
 
 val blank : unit -> item
-(** [blank ()] emits an empty line. *)
+(** [blank ()] is {!constructor-Blank}, an empty line. *)
 
 val require : string -> item
 (** [require program] declares that [program] must be available before VHS runs
@@ -116,27 +120,28 @@ val output : string -> item
     extension. *)
 
 val env : string -> string -> item
-(** [env key value] emits [Env key "value"]. *)
+(** [env name value] is [Env (name, value)]. *)
 
 val set : setting -> item
 (** [set setting] changes the virtual terminal or renderer. Emit it before the
     first terminal action. *)
 
 val command : command -> item
-(** [command c] lifts [c] into a tape item. *)
+(** [command c] is [Command c]. *)
 
 val raw_line : string -> item
-(** [raw_line line] emits [line] unchanged, for VHS syntax not modelled here. *)
+(** [raw_line line] is the tape line [line], printed unchanged, for VHS syntax
+    not modelled here. *)
 
 val type' : string -> item
-(** [type' s] types [s] without pressing return, so a shell command is usually
-    [type' "..."; enter ()]. *)
+(** [type' s] is [Command (Type s)]: it types [s] without pressing return, so a
+    shell command is usually [type' "..."; enter ()]. *)
 
 val key : key -> item
 (** [key k] presses [k] in the virtual terminal. *)
 
 val enter : unit -> item
-(** [enter ()] emits {!constructor-Enter}. *)
+(** [enter ()] is [key Enter]. *)
 
 val sleep : duration -> item
 (** [sleep d] pauses the recording timeline for [d]. Use {!val-wait} to
@@ -152,14 +157,14 @@ val show : unit -> item
 (** [show ()] ends a hidden region started by {!val-hide}. *)
 
 val screenshot : ?path:string -> unit -> item
-(** [screenshot ?path ()] emits {!constructor-Screenshot}. *)
+(** [screenshot ~path ()] is [Command (Screenshot path)]. *)
 
 val source : string -> item
 (** [source path] includes another tape. *)
 
 val raw_command : string -> item
-(** [raw_command line] emits a command line unchanged, for VHS commands not
-    modelled here. *)
+(** [raw_command line] is the command [line], printed unchanged, for VHS
+    commands not modelled here. *)
 
 (** {1:printing Printing}
 
@@ -208,6 +213,3 @@ val to_string : t -> string
 (** [to_string t] is the textual [*.tape] representation of [t].
 
     @raise Invalid_argument if [t] is not {{!printing}printable}. *)
-
-val equal : t -> t -> bool
-(** [equal a b] compares tapes by their generated textual representation. *)

@@ -233,4 +233,3 @@ let pp_item ppf = function
 
 let pp ppf items = List.iter (fun item -> Fmt.pf ppf "%a\n" pp_item item) items
 let to_string t = Fmt.str "%a" pp t
-let equal a b = String.equal (to_string a) (to_string b)

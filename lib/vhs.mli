@@ -88,10 +88,10 @@ val items : t -> item list
 (** [items t] are the items of [t] in output order. *)
 
 val comment : string -> item
-(** [comment s] emits [# s], or a bare [#] when [s] is empty. *)
+(** [comment s] is the comment line [# s], or [#] if [s] is empty. *)
 
 val blank : unit -> item
-(** [blank ()] emits an empty line. *)
+(** [blank ()] is {!constructor-Blank}, an empty line. *)
 
 val require : string -> item
 (** [require program] declares that [program] must be available before VHS runs
@@ -102,27 +102,28 @@ val output : string -> item
     extension. *)
 
 val env : string -> string -> item
-(** [env key value] emits [Env key "value"]. *)
+(** [env name value] is [Env (name, value)]. *)
 
 val set : setting -> item
 (** [set setting] changes the virtual terminal or renderer. Emit it before the
     first terminal action. *)
 
 val command : command -> item
-(** [command c] lifts [c] into a tape item. *)
+(** [command c] is [Command c]. *)
 
 val raw_line : string -> item
-(** [raw_line line] emits [line] unchanged, for VHS syntax not modelled here. *)
+(** [raw_line line] is the tape line [line], printed unchanged, for VHS syntax
+    not modelled here. *)
 
 val type' : string -> item
-(** [type' s] types [s] without pressing return, so a shell command is usually
-    [type' "..."; enter ()]. *)
+(** [type' s] is [Command (Type s)]: it types [s] without pressing return, so a
+    shell command is usually [type' "..."; enter ()]. *)
 
 val key : key -> item
 (** [key k] presses [k] in the virtual terminal. *)
 
 val enter : unit -> item
-(** [enter ()] emits {!constructor-Enter}. *)
+(** [enter ()] is [key Enter]. *)
 
 val sleep : duration -> item
 (** [sleep d] pauses the recording timeline for [d]. Use {!val-wait} to
@@ -138,14 +139,14 @@ val show : unit -> item
 (** [show ()] ends a hidden region started by {!val-hide}. *)
 
 val screenshot : ?path:string -> unit -> item
-(** [screenshot ?path ()] emits {!constructor-Screenshot}. *)
+(** [screenshot ~path ()] is [Command (Screenshot path)]. *)
 
 val source : string -> item
 (** [source path] includes another tape. *)
 
 val raw_command : string -> item
-(** [raw_command line] emits a command line unchanged, for VHS commands not
-    modelled here. *)
+(** [raw_command line] is the command [line], printed unchanged, for VHS
+    commands not modelled here. *)
 
 (** {1:printing Printing} *)
 
