@@ -5,7 +5,6 @@ let settings ~width =
     Width width;
     Height 660;
     Font_size 18;
-    Font_family "Menlo";
     Theme "Dracula";
     Padding 22;
     Typing_speed (Ms 24);
