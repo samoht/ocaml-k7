@@ -183,6 +183,39 @@ let test_command () =
       if not (contains ~sub:s man) then Alcotest.failf "manual lacks %S" s)
     [ "--print"; "123"; "PS1" ]
 
+let test_output_order () =
+  with_files
+    [ ("recorder", 0o755, "#!/bin/sh\nunset VHS_PUBLISH\nexec vhs \"$@\"\n") ]
+  @@ fun env path ->
+  let output = path "order.txt" in
+  let src =
+    "  $ printf 'decoy>'; sleep 3; echo FIRST_DONE\n  $ echo SECOND_DONE\n"
+  in
+  let t = Result.get_ok (Cli.tape ~setup:[] ~output ~name:"order.t" src) in
+  let result =
+    Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 30. (fun () ->
+        Vhs.render ~vhs:(path "recorder")
+          ~proc:(Eio.Stdenv.process_mgr env)
+          ~cwd:(Eio.Stdenv.cwd env) t)
+  in
+  (match result with
+  | Ok () -> ()
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+  let screen = Eio.Path.load Eio.Path.(Eio.Stdenv.fs env / output) in
+  let position sub =
+    let rec scan i =
+      if i + String.length sub > String.length screen then None
+      else if String.sub screen i (String.length sub) = sub then Some i
+      else scan (i + 1)
+    in
+    scan 0
+  in
+  match (position "\nFIRST_DONE\n", position "echo SECOND_DONE") with
+  | Some first, Some second ->
+      Alcotest.(check bool)
+        "first output precedes typing the second command" true (first < second)
+  | _ -> Alcotest.failf "recording did not show both commands: %s" screen
+
 let suite =
   ( "cli",
     List.map
@@ -192,4 +225,5 @@ let suite =
         ("run", test_run);
         ("render real processes", test_render);
         ("command line", test_command);
+        ("output order", test_output_order);
       ] )
