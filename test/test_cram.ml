@@ -81,6 +81,13 @@ let test_parse () =
       Alcotest.(check (option int)) "exit b" (Some 1) b.Vhs.Cram.exit_code
   | _ -> Alcotest.fail "expected two steps"
 
+let test_crlf () =
+  let steps = Vhs.Cram.parse "  $ echo hi\r\n  hi\r\n" in
+  let tape = Vhs.Cram.to_tape ~output:"demo.gif" steps in
+  expect "crlf"
+    "Output \"demo.gif\"\nType \"echo hi\"\nEnter\nWait+Screen /hi/\nSleep 3s\n"
+    (Vhs.to_string tape)
+
 let suite =
   ( "cram",
     [
@@ -89,4 +96,5 @@ let suite =
       Alcotest.test_case "slash" `Quick test_slash;
       Alcotest.test_case "setup quoted" `Quick test_setup_quoted;
       Alcotest.test_case "parse" `Quick test_parse;
+      Alcotest.test_case "crlf" `Quick test_crlf;
     ] )

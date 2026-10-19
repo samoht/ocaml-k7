@@ -22,7 +22,11 @@ let exit_code_of_output line =
   else None
 
 let parse src =
-  let lines = String.split_on_char '\n' src in
+  let chomp l =
+    let n = String.length l in
+    if n > 0 && l.[n - 1] = '\r' then String.sub l 0 (n - 1) else l
+  in
+  let lines = List.map chomp (String.split_on_char '\n' src) in
   let steps = ref [] in
   let cmd = ref [] and out = ref [] and exit = ref None and open_ = ref false in
   let flush () =

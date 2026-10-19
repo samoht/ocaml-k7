@@ -20,7 +20,7 @@ type t = step list
 
 val parse : string -> t
 (** [parse src] is the command blocks of cram source [src] in order. Prose and
-    blank lines are dropped. *)
+    blank lines are dropped, and lines may end with ["\r\n"]. *)
 
 val to_tape :
   ?settings:Value.setting list ->
