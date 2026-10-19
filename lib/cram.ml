@@ -88,7 +88,9 @@ let setup_block = function
   | scripts ->
       let open Value in
       hide ()
-      :: List.concat_map (fun s -> [ type' ("source " ^ s); enter () ]) scripts
+      :: List.concat_map
+           (fun s -> [ type' ("source " ^ Filename.quote s); enter () ])
+           scripts
       @ [ type' "clear"; enter (); show () ]
 
 let step_items ~pause step =

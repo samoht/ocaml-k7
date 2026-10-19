@@ -32,7 +32,7 @@ let test_full () =
 Set Shell "bash"
 Set Width 900
 Hide
-Type "source setup.sh"
+Type "source 'setup.sh'"
 Enter
 Type "clear"
 Enter
@@ -55,6 +55,20 @@ let test_slash () =
     "Output \"demo.gif\"\nType \"ls\"\nEnter\nWait+Screen /a\\x2fb/\nSleep 3s\n"
     (Vhs.to_string tape)
 
+let test_setup_quoted () =
+  let tape =
+    Vhs.Cram.to_tape ~setup_scripts:[ "my setup.sh" ] ~output:"demo.gif" []
+  in
+  expect "quoted"
+    "Output \"demo.gif\"\n\
+     Hide\n\
+     Type \"source 'my setup.sh'\"\n\
+     Enter\n\
+     Type \"clear\"\n\
+     Enter\n\
+     Show\n"
+    (Vhs.to_string tape)
+
 let test_parse () =
   let src = "prose is ignored\n\n  $ echo hi\n  hi\n  $ false\n  [1]\n" in
   let steps = Vhs.Cram.parse src in
@@ -73,5 +87,6 @@ let suite =
       Alcotest.test_case "minimal" `Quick test_minimal;
       Alcotest.test_case "full" `Quick test_full;
       Alcotest.test_case "slash" `Quick test_slash;
+      Alcotest.test_case "setup quoted" `Quick test_setup_quoted;
       Alcotest.test_case "parse" `Quick test_parse;
     ] )
