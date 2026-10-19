@@ -12,31 +12,34 @@ let check_line n line =
     Fmt.error "line %d: %S holds a control character" n line
   else Ok line
 
-let drop n s = String.sub s n (String.length s - n)
-
-let chomp l =
-  if String.ends_with ~suffix:"\r" l then String.sub l 0 (String.length l - 1)
-  else l
-
-(* [cmds] are the finished commands and [cmd] the lines of the current one,
-   both in reverse order. *)
-let rec parse_lines n cmds cmd = function
-  | [] -> Ok (List.rev (if cmd = [] then cmds else List.rev cmd :: cmds))
-  | line :: rest ->
-      let line = chomp line in
-      let flush () = if cmd = [] then cmds else List.rev cmd :: cmds in
-      let next = parse_lines (n + 1) in
-      if String.starts_with ~prefix:"  $ " line then
-        match check_line n (drop 4 line) with
-        | Ok l -> next (flush ()) [ l ] rest
+(* [parse] scans [src] once, line by line, without splitting it. *)
+let parse src =
+  let n = String.length src in
+  let marker i last c =
+    last - i >= 4
+    && src.[i] = ' '
+    && src.[i + 1] = ' '
+    && src.[i + 2] = c
+    && src.[i + 3] = ' '
+  in
+  let flush cmds = function [] -> cmds | cmd -> List.rev cmd :: cmds in
+  (* [cmds] are the finished commands and [cmd] the lines of the current one,
+     both in reverse order. *)
+  let rec line no i cmds cmd =
+    if i > n then Ok (List.rev (flush cmds cmd))
+    else
+      let stop = Option.value (String.index_from_opt src i '\n') ~default:n in
+      let last = if stop > i && src.[stop - 1] = '\r' then stop - 1 else stop in
+      let start = marker i last '$' in
+      if start || (cmd <> [] && marker i last '>') then
+        match check_line no (String.sub src (i + 4) (last - i - 4)) with
+        | Ok l when start -> line (no + 1) (stop + 1) (flush cmds cmd) [ l ]
+        | Ok l -> line (no + 1) (stop + 1) cmds (l :: cmd)
         | Error _ as e -> e
-      else if cmd <> [] && String.starts_with ~prefix:"  > " line then
-        match check_line n (drop 4 line) with
-        | Ok l -> next cmds (l :: cmd) rest
-        | Error _ as e -> e
-      else next (flush ()) [] rest
+      else line (no + 1) (stop + 1) (flush cmds cmd) []
+  in
+  line 1 0 [] []
 
-let parse src = parse_lines 1 [] [] (String.split_on_char '\n' src)
 let is_empty t = t = []
 
 let sh_quote s =

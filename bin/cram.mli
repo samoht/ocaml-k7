@@ -18,7 +18,7 @@ type t
 val parse : string -> (t, string) result
 (** [parse src] is the cram test of source [src], or [Error msg] if a command
     line holds a control character or invalid UTF-8, which a terminal cannot
-    type as such. Lines may end with ["\r\n"]. *)
+    type as such. Lines may end with ["\r\n"]. [parse] reads [src] once. *)
 
 val is_empty : t -> bool
 (** [is_empty t] is [true] iff [t] has no command. *)
