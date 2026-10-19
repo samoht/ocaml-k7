@@ -20,10 +20,10 @@
    so generated demos are deterministic and reviewable.")
  (depends
   (ocaml (>= 5.2))
-  (eio (>= 1.0))
-  (eio_main (>= 1.0))
+  (eio (>= 1.4))
+  (eio_main (>= 1.4))
   fmt
-  (cmdliner (>= 1.1.0))
+  (cmdliner (>= 2.0.0))
   (alcotest :with-test)
   (mdx :with-test)
   (odoc :with-doc)))
