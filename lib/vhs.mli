@@ -1,9 +1,8 @@
 (** Generate and run Charmbracelet VHS terminal tapes.
 
-    [Vhs] is the ergonomic entry point: it re-exports the tape value type and
-    constructors from {!Value}, plus a small Eio runner for the external [vhs]
-    executable. It writes reviewable [*.tape] files and delegates rendering and
-    publishing to the installed VHS command-line tool. *)
+    [Vhs] re-exports the tape values and constructors of {!Value} and runs the
+    external [vhs] executable with Eio. It writes [*.tape] files and leaves
+    rendering and publishing to the installed VHS command-line tool. *)
 
 module Value = Value
 (** Tape values and their printers. *)
@@ -182,8 +181,8 @@ val write_file : path:string -> t -> (unit, error) result
 
 val render_file :
   proc:_ Eio.Process.mgr -> ?vhs:string -> string -> (unit, error) result
-(** [render_file ~proc ?vhs path] runs [vhs path]. [vhs] names the executable
-    and defaults to ["vhs"]. *)
+(** [render_file ~proc ~vhs path] runs the executable [vhs] (defaults to
+    ["vhs"]) on [path]. *)
 
 val render :
   proc:_ Eio.Process.mgr ->

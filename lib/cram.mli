@@ -13,10 +13,10 @@ type step = {
   exit_code : int option;
       (** The trailing [[N]] annotation, when the command exits non-zero. *)
 }
-(** One command block of a cram test. *)
+(** The type for command blocks of a cram test. *)
 
 type t = step list
-(** A parsed cram test: its command blocks in order. *)
+(** The type for parsed cram tests: their command blocks in order. *)
 
 val parse : string -> t
 (** [parse src] is the command blocks of cram source [src] in order. Prose and
@@ -37,8 +37,8 @@ val to_tape :
     waits for the last non-empty output line before pausing, with regexp
     metacharacters escaped. [settings] become [Set] lines and [setup_scripts]
     are sourced in order inside a hidden clearing block. [pause] is the reading
-    pause after each command (default one second) and [final_pause] holds the
-    last screen before exit (default three seconds). *)
+    pause after each command (defaults to [S 1.]) and [final_pause] holds the
+    last screen before exit (defaults to [S 3.]). *)
 
 val pp : t Fmt.t
 (** [pp] formats a parsed cram test as its commands and expected output. *)
