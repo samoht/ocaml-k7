@@ -264,6 +264,17 @@ let test_pp_error_controls () =
     (Fmt.str "%a" Vhs.pp_error
        (Failed { vhs = "vhs"; status = `Exited 1; output }))
 
+(* The executable and the message come from paths, which can hold
+   anything. *)
+let test_pp_error_names () =
+  let pp e = Fmt.str "%a" Vhs.pp_error e in
+  expect "executable" "executable not found: ab"
+    (pp (Executable_not_found "a\027]0;x\007b"));
+  expect "failed" "ab exited with code 1"
+    (pp (Failed { vhs = "a\xc2\x9b2Jb"; status = `Exited 1; output = "" }));
+  expect "io" "dir x: no such file or directory"
+    (pp (Io "dir\nx\027[0m: no such file or directory"))
+
 let test_spawn_errors () =
   Eio_mock.Backend.run @@ fun () ->
   Eio.Switch.run @@ fun sw ->
@@ -361,6 +372,7 @@ let suite =
         ("signaled child", test_signal);
         ("error lines", test_pp_error);
         ("error controls", test_pp_error_controls);
+        ("error names", test_pp_error_names);
         ("spawn errors", test_spawn_errors);
         ("cancel", test_cancel);
         ("publish environment", test_publish_environment);

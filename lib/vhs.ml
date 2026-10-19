@@ -571,9 +571,14 @@ let printable s =
 
 let last_lines = 10
 
+(* [one_line s] is [printable s] with its line breaks read as spaces. *)
+let one_line s = String.concat " " (String.split_on_char '\n' (printable s))
+
 let pp_error ppf = function
-  | Executable_not_found exe -> Fmt.pf ppf "executable not found: %s" exe
+  | Executable_not_found exe ->
+      Fmt.pf ppf "executable not found: %s" (one_line exe)
   | Failed { vhs; status; output } ->
+      let vhs = one_line vhs in
       (match status with
       | `Exited n -> Fmt.pf ppf "%s exited with code %d" vhs n
       | `Signaled n -> Fmt.pf ppf "%s was killed by signal %d" vhs n);
@@ -584,7 +589,7 @@ let pp_error ppf = function
       in
       let drop = List.length lines - last_lines in
       List.iteri (fun i l -> if i >= drop then Fmt.pf ppf "@\n  %s" l) lines
-  | Io msg -> Fmt.string ppf msg
+  | Io msg -> Fmt.string ppf (one_line msg)
 
 let fs_message path = function
   | Eio.Fs.Not_found _ -> path ^ ": no such file or directory"
