@@ -1,2 +1,1 @@
-let () =
-  Alcotest.run "vhs" [ Test_value.suite; Test_vhs.suite; Test_cram.suite ]
+let () = Alcotest.run "vhs" Test_vhs.[ suite; cram_suite; run_suite ]

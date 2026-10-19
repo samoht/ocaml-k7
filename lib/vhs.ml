@@ -1,9 +1,6 @@
-module Value = Value
-module Cram = Cram
+type duration = Ms of int | S of float
 
-type duration = Value.duration = Ms of int | S of float
-
-type key = Value.key =
+type key =
   | Enter
   | Tab
   | Space
@@ -18,7 +15,7 @@ type key = Value.key =
   | Ctrl_alt of string
   | Raw_key of string
 
-type setting = Value.setting =
+type setting =
   | Shell of string
   | Font_size of int
   | Font_family of string
@@ -30,12 +27,9 @@ type setting = Value.setting =
   | Framerate of int
   | Custom of string * string
 
-type wait = Value.wait =
-  | Wait of string
-  | Wait_screen of string
-  | Wait_line of string
+type wait = Wait of string | Wait_screen of string | Wait_line of string
 
-type command = Value.command =
+type command =
   | Type of string
   | Key of key
   | Sleep of duration
@@ -46,7 +40,7 @@ type command = Value.command =
   | Source of string
   | Raw_command of string
 
-type item = Value.item =
+type item =
   | Comment of string
   | Blank
   | Require of string
@@ -56,30 +50,316 @@ type item = Value.item =
   | Command of command
   | Raw_line of string
 
-type t = Value.t
+type t = item list
 
-let tape = Value.tape
-let items = Value.items
-let comment = Value.comment
-let blank = Value.blank
-let require = Value.require
-let output = Value.output
-let env = Value.env
-let set = Value.set
-let command = Value.command
-let raw_line = Value.raw_line
-let type' = Value.type'
-let key = Value.key
-let enter = Value.enter
-let sleep = Value.sleep
-let wait = Value.wait
-let hide = Value.hide
-let show = Value.show
-let screenshot = Value.screenshot
-let source = Value.source
-let raw_command = Value.raw_command
-let pp = Value.pp
-let to_string = Value.to_string
+let tape items = items
+let items t = t
+let comment s = Comment s
+let blank () = Blank
+let require s = Require s
+let output s = Output s
+let env k v = Env (k, v)
+let set s = Set s
+let command c = Command c
+let raw_line s = Raw_line s
+let type' s = Command (Type s)
+let key k = Command (Key k)
+let enter () = key Enter
+let sleep d = Command (Sleep d)
+let wait w = Command (Wait_for w)
+let hide () = Command Hide
+let show () = Command Show
+let screenshot path = Command (Screenshot path)
+let source path = Command (Source path)
+let raw_command s = Command (Raw_command s)
+let quotes = [ '"'; '\''; '`' ]
+let is_quote c = List.mem c quotes
+let is_control c = Char.code c < 0x20 || Char.code c = 0x7f
+
+(* A VHS string has no escapes and ends at a newline, so it is delimited by
+   a quote it lacks and cannot hold a control character. *)
+let quote_string s =
+  if String.exists is_control s then
+    Fmt.invalid_arg "Vhs: %S holds a control character" s;
+  match List.find_opt (fun q -> not (String.contains s q)) quotes with
+  | Some q -> Fmt.str "%c%s%c" q s q
+  | None -> Fmt.invalid_arg "Vhs: %S holds all three VHS quote characters" s
+
+let pp_quoted ppf s = Fmt.string ppf (quote_string s)
+
+let pp_line ppf s =
+  if String.exists (fun c -> c = '\n' || c = '\r') s then
+    Fmt.invalid_arg "Vhs: %S holds a line break" s;
+  Fmt.string ppf s
+
+let pp_word ppf s =
+  if s = "" || String.exists (fun c -> c = ' ' || is_control c) s then
+    Fmt.invalid_arg "Vhs: %S is not a single word" s;
+  Fmt.string ppf s
+
+(* [quotable_chunks s] cuts [s] so that no chunk holds all three quotes. *)
+let quotable_chunks s =
+  let chunks = ref [] and start = ref 0 and seen = ref [] in
+  String.iteri
+    (fun i c ->
+      if is_quote c && not (List.mem c !seen) then
+        if List.length !seen = 2 then begin
+          chunks := String.sub s !start (i - !start) :: !chunks;
+          start := i;
+          seen := [ c ]
+        end
+        else seen := c :: !seen)
+    s;
+  List.rev (String.sub s !start (String.length s - !start) :: !chunks)
+
+(* [type_lines s] are the VHS commands typing [s]: text runs become [Type]
+   commands and newlines and tabs become key presses. *)
+let type_lines s =
+  let lines = ref [] and start = ref 0 in
+  let text stop =
+    if stop > !start then
+      let chunks = quotable_chunks (String.sub s !start (stop - !start)) in
+      List.iter (fun c -> lines := ("Type " ^ quote_string c) :: !lines) chunks
+  in
+  String.iteri
+    (fun i c ->
+      match c with
+      | '\n' | '\t' ->
+          text i;
+          lines := (if c = '\n' then "Enter" else "Tab") :: !lines;
+          start := i + 1
+      | c when is_control c ->
+          Fmt.invalid_arg "Vhs: Type %S holds a control character" s
+      | _ -> ())
+    s;
+  text (String.length s);
+  match !lines with [] -> [ {|Type ""|} ] | lines -> List.rev lines
+
+let pp_type ppf s = Fmt.(list ~sep:(any "\n") string) ppf (type_lines s)
+
+(* VHS reads a plain decimal: no exponent, no sign. *)
+let decimal s =
+  let s = Fmt.str "%.9f" (Float.abs s) in
+  let rec last i =
+    match s.[i] with '0' -> last (i - 1) | '.' -> i - 1 | _ -> i
+  in
+  String.sub s 0 (last (String.length s - 1) + 1)
+
+let pp_duration ppf = function
+  | Ms n when n < 0 -> Fmt.invalid_arg "Vhs: negative duration %dms" n
+  | Ms n -> Fmt.pf ppf "%dms" n
+  | S s when Float.is_nan s || s < 0. || s = Float.infinity ->
+      Fmt.invalid_arg "Vhs: invalid duration %gs" s
+  | S s -> Fmt.pf ppf "%ss" (decimal s)
+
+let pp_key ppf = function
+  | Enter -> Fmt.string ppf "Enter"
+  | Tab -> Fmt.string ppf "Tab"
+  | Space -> Fmt.string ppf "Space"
+  | Backspace -> Fmt.string ppf "Backspace"
+  | Escape -> Fmt.string ppf "Escape"
+  | Left -> Fmt.string ppf "Left"
+  | Right -> Fmt.string ppf "Right"
+  | Up -> Fmt.string ppf "Up"
+  | Down -> Fmt.string ppf "Down"
+  | Ctrl key -> Fmt.pf ppf "Ctrl+%a" pp_word key
+  | Alt key -> Fmt.pf ppf "Alt+%a" pp_word key
+  | Ctrl_alt key -> Fmt.pf ppf "Ctrl+Alt+%a" pp_word key
+  | Raw_key key -> pp_line ppf key
+
+let pp_setting ppf = function
+  | Shell shell -> Fmt.pf ppf "Shell %a" pp_quoted shell
+  | Font_size n -> Fmt.pf ppf "FontSize %d" n
+  | Font_family font -> Fmt.pf ppf "FontFamily %a" pp_quoted font
+  | Width n -> Fmt.pf ppf "Width %d" n
+  | Height n -> Fmt.pf ppf "Height %d" n
+  | Theme theme -> Fmt.pf ppf "Theme %a" pp_quoted theme
+  | Padding n -> Fmt.pf ppf "Padding %d" n
+  | Typing_speed d -> Fmt.pf ppf "TypingSpeed %a" pp_duration d
+  | Framerate n -> Fmt.pf ppf "Framerate %d" n
+  | Custom (name, value) -> Fmt.pf ppf "%a %a" pp_word name pp_line value
+
+(* A slash ends a VHS regexp and only VHS 0.11 and later read [\/] as an
+   escape, so a slash, escaped or not, is written as RE2's [\x2f]. *)
+let pp_regexp ppf re =
+  let b = Buffer.create (String.length re + 8) in
+  let rec loop i =
+    if i < String.length re then
+      match re.[i] with
+      | '/' ->
+          Buffer.add_string b {|\x2f|};
+          loop (i + 1)
+      | '\\' when i + 1 < String.length re && re.[i + 1] = '/' ->
+          Buffer.add_string b {|\x2f|};
+          loop (i + 2)
+      | '\\' when i + 1 < String.length re ->
+          Buffer.add_string b (String.sub re i 2);
+          loop (i + 2)
+      | c ->
+          Buffer.add_char b c;
+          loop (i + 1)
+  in
+  loop 0;
+  Fmt.pf ppf "/%a/" pp_line (Buffer.contents b)
+
+let pp_wait ppf = function
+  | Wait re -> Fmt.pf ppf "Wait %a" pp_regexp re
+  | Wait_screen re -> Fmt.pf ppf "Wait+Screen %a" pp_regexp re
+  | Wait_line re -> Fmt.pf ppf "Wait+Line %a" pp_regexp re
+
+let pp_command ppf = function
+  | Type s -> pp_type ppf s
+  | Key k -> pp_key ppf k
+  | Sleep d -> Fmt.pf ppf "Sleep %a" pp_duration d
+  | Wait_for w -> pp_wait ppf w
+  | Hide -> Fmt.string ppf "Hide"
+  | Show -> Fmt.string ppf "Show"
+  | Screenshot path -> Fmt.pf ppf "Screenshot %a" pp_quoted path
+  | Source path -> Fmt.pf ppf "Source %a" pp_quoted path
+  | Raw_command line -> pp_line ppf line
+
+let pp_item ppf = function
+  | Comment "" -> Fmt.string ppf "#"
+  | Comment s -> Fmt.pf ppf "# %a" pp_line s
+  | Blank -> ()
+  | Require s -> Fmt.pf ppf "Require %a" pp_word s
+  | Output path -> Fmt.pf ppf "Output %a" pp_quoted path
+  | Env (key, value) -> Fmt.pf ppf "Env %a %a" pp_word key pp_quoted value
+  | Set setting -> Fmt.pf ppf "Set %a" pp_setting setting
+  | Command command -> pp_command ppf command
+  | Raw_line line -> pp_line ppf line
+
+let pp ppf items = List.iter (fun item -> Fmt.pf ppf "%a\n" pp_item item) items
+let to_string t = Fmt.str "%a" pp t
+
+module Cram = struct
+  type step = {
+    command : string list;
+    output : string list;
+    exit_code : int option;
+  }
+
+  type t = step list
+
+  let drop n s = String.sub s n (String.length s - n)
+
+  (* [  [N]] exit-code annotation: two-space indent, then [N] on its own. *)
+  let exit_code_of_output line =
+    if
+      String.length line >= 3
+      && Char.equal line.[0] '['
+      && Char.equal line.[String.length line - 1] ']'
+    then int_of_string_opt (String.sub line 1 (String.length line - 2))
+    else None
+
+  let parse src =
+    let chomp l =
+      let n = String.length l in
+      if n > 0 && l.[n - 1] = '\r' then String.sub l 0 (n - 1) else l
+    in
+    let lines = List.map chomp (String.split_on_char '\n' src) in
+    let steps = ref [] in
+    let cmd = ref []
+    and out = ref []
+    and exit = ref None
+    and open_ = ref false in
+    let flush () =
+      if !open_ then
+        steps :=
+          { command = List.rev !cmd; output = List.rev !out; exit_code = !exit }
+          :: !steps;
+      cmd := [];
+      out := [];
+      exit := None;
+      open_ := false
+    in
+    List.iter
+      (fun line ->
+        if String.starts_with ~prefix:"  $ " line then begin
+          flush ();
+          open_ := true;
+          cmd := [ drop 4 line ]
+        end
+        else if !open_ && String.starts_with ~prefix:"  > " line then
+          cmd := drop 4 line :: !cmd
+        else if !open_ && String.starts_with ~prefix:"  " line then begin
+          let content = drop 2 line in
+          match exit_code_of_output content with
+          | Some _ as code -> exit := code
+          | None -> out := content :: !out
+        end
+        else flush ())
+      lines;
+    flush ();
+    List.rev !steps
+
+  let regexp_meta = function
+    | '\\' | '.' | '+' | '*' | '?' | '(' | ')' | '[' | ']' | '{' | '}' | '^'
+    | '$' | '|' ->
+        true
+    | _ -> false
+
+  let escape_regexp s =
+    let b = Buffer.create (String.length s + 8) in
+    String.iter
+      (fun c ->
+        if regexp_meta c then Buffer.add_char b '\\';
+        Buffer.add_char b c)
+      s;
+    Buffer.contents b
+
+  (* The last non-empty output line is the one nearest the returned prompt, so
+     it is the safest "everything has rendered" marker to wait on. *)
+  let wait_pattern output =
+    let nonempty =
+      List.filter (fun l -> not (String.equal (String.trim l) "")) output
+    in
+    match List.rev nonempty with
+    | last :: _ -> Some (escape_regexp (String.trim last))
+    | [] -> None
+
+  (* Source the setup scripts, then clear, all hidden: the [clear] must come
+     after the [source] lines so their echoes are wiped from the scrollback
+     before [Show] resumes capture, otherwise they leak into the recording. *)
+  let setup_block = function
+    | [] -> []
+    | scripts ->
+        hide ()
+        :: List.concat_map
+             (fun s -> [ type' ("source " ^ Filename.quote s); enter () ])
+             scripts
+        @ [ type' "clear"; enter (); show () ]
+
+  let step_items ~pause step =
+    List.concat_map (fun line -> [ type' line; enter () ]) step.command
+    @ (match wait_pattern step.output with
+      | Some pat -> [ wait (Wait_screen pat) ]
+      | None -> [])
+    @ [ sleep pause ]
+
+  let to_tape ?(settings = []) ?(setup_scripts = []) ?(pause = S 1.)
+      ?(final_pause = S 3.) ~output (steps : t) =
+    let last = List.length steps - 1 in
+    let items =
+      (Output output :: List.map set settings)
+      @ setup_block setup_scripts
+      @ List.concat
+          (List.mapi
+             (fun index step ->
+               let pause = if index = last then final_pause else pause in
+               step_items ~pause step)
+             steps)
+    in
+    tape items
+
+  let pp ppf steps =
+    List.iter
+      (fun { command; output; exit_code } ->
+        List.iter (Fmt.pf ppf "$ %s@\n") command;
+        List.iter (Fmt.pf ppf "%s@\n") output;
+        Option.iter (Fmt.pf ppf "[%d]@\n") exit_code)
+      steps
+end
 
 type error =
   | Executable_not_found of string

@@ -5,5 +5,5 @@
 
 (mdx
  (package vhs)
- (files vhs.mli value.mli)
+ (files vhs.mli)
  (libraries vhs))
