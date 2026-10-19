@@ -6,12 +6,113 @@
 open Alcobar
 open Vhs_cram
 
-(* [parse] and [actions] are total. *)
+let is_control c = Char.code c < 0x20 || c = '\x7f'
+
+let printed ?(setup = []) cram =
+  match Vhs.tape ~outputs:[ "x.gif" ] (Cram.actions ~setup cram) with
+  | Ok t -> Fmt.str "%a" Vhs.pp t
+  | Error e -> failf "rejected actions: %s" e
+
+(* The text the printed tape types, one string per [Enter]. *)
+let submitted tape =
+  let decode line =
+    let n = String.length line in
+    String.sub line 6 (n - 7)
+  in
+  let rec go pending acc = function
+    | [] -> List.rev acc
+    | "Enter" :: rest -> go "" (pending :: acc) rest
+    | line :: rest when String.starts_with ~prefix:"Type " line ->
+        go (pending ^ decode line) acc rest
+    | _ :: rest -> go pending acc rest
+  in
+  go "" [] (String.split_on_char '\n' tape)
+
+(* Make arbitrary bytes a typeable command: valid UTF-8, no control
+   characters. *)
+let typeable s =
+  let b = Buffer.create (String.length s) in
+  let rec go i =
+    if i < String.length s then (
+      let d = String.get_utf_8_uchar s i in
+      let u =
+        if Uchar.utf_decode_is_valid d then Uchar.utf_decode_uchar d
+        else Uchar.rep
+      in
+      if Uchar.is_char u && is_control (Uchar.to_char u) then
+        Buffer.add_char b ' '
+      else Buffer.add_utf_8_uchar b u;
+      go
+        (i
+        + if Uchar.utf_decode_is_valid d then Uchar.utf_decode_length d else 1))
+  in
+  go 0;
+  Buffer.contents b
+
+(* [parse] is total, and fails iff a command line holds a control character
+   or invalid UTF-8. *)
 let test_parse src =
+  let command_lines =
+    String.split_on_char '\n' src
+    |> List.map (fun l ->
+        if String.ends_with ~suffix:"\r" l then
+          String.sub l 0 (String.length l - 1)
+        else l)
+    |> List.filter (String.starts_with ~prefix:"  $ ")
+    |> List.map (fun l -> String.sub l 4 (String.length l - 4))
+  in
+  let bad l = (not (String.is_valid_utf_8 l)) || String.exists is_control l in
   match Cram.parse src with
-  | Error _ -> ()
   | Ok cram ->
-      ignore (Vhs.tape ~outputs:[ "x.gif" ] (Cram.actions ~setup:[] cram))
+      if List.exists bad command_lines then failf "accepted %S" src;
+      ignore (printed cram)
+  | Error _ ->
+      (* A rejected line may also be a continuation. *)
+      ()
+
+(* Commands and continuations are typed in order, each line submitted;
+   prose, output and orphan continuations are not; CRLF reads as LF. *)
+let test_commands commands eol =
+  let commands = List.map typeable commands in
+  let src =
+    "prose" ^ eol ^ "  > orphan" ^ eol
+    ^ String.concat ""
+        (List.map
+           (fun c ->
+             "  $ " ^ c ^ eol ^ "  > " ^ c ^ eol ^ "  output" ^ eol
+             ^ "  > not a continuation" ^ eol)
+           commands)
+  in
+  match Cram.parse src with
+  | Error e -> failf "typeable commands rejected: %s" e
+  | Ok cram ->
+      let got = submitted (printed cram) in
+      let expected = List.concat_map (fun c -> [ c; c ]) commands in
+      if got <> expected then
+        failf "%S submitted %d lines, not %d" src (List.length got)
+          (List.length expected);
+      check (Cram.is_empty cram = (commands = []))
+
+(* A setup is sourced hidden, in order, with the prompt reset, then cleared,
+   before the first command. *)
+let test_setup scripts command =
+  let scripts = List.map typeable scripts and command = typeable command in
+  let cram = Result.get_ok (Cram.parse ("  $ " ^ command)) in
+  let tape = printed ~setup:scripts cram in
+  let lines = String.split_on_char '\n' tape in
+  let count l = List.length (List.filter (String.equal l) lines) in
+  match scripts with
+  | [] ->
+      check
+        (count "Hide" = 0
+        && List.equal String.equal (submitted tape) [ command ])
+  | _ -> (
+      check (count "Hide" = 1 && count "Show" = 1);
+      match submitted tape with
+      | [ setup; "clear"; c ] ->
+          check (String.equal c command);
+          check (String.starts_with ~prefix:"source " setup)
+      | l -> failf "setup submitted %d lines" (List.length l))
 
 let suite =
   ( "cram",
@@ -19,4 +120,8 @@ let suite =
       test_case "parse"
         [ choose [ bytes; map [ bytes ] (fun s -> "  $ " ^ s) ] ]
         test_parse;
+      test_case "commands"
+        [ list bytes; choose [ const "\n"; const "\r\n" ] ]
+        test_commands;
+      test_case "setup" [ list bytes; bytes ] test_setup;
     ] )
