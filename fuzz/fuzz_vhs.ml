@@ -273,9 +273,43 @@ let test_order path text =
           check (String.equal set "Set Width 1000")
       | _ -> fail "missing lines")
 
+(* Check against the real parser, rather than a second tape lexer. *)
+let test_validates text n =
+  let open Vhs in
+  let candidates =
+    [
+      ([], [ type' text ]);
+      ([], [ wait (Screen text) ]);
+      ([], [ raw text ]);
+      ([], [ raw (Fmt.str "Sleep -%dms" (1 + (n land 255))) ]);
+      ([ Theme text ], []);
+      ([ Font_family text ], []);
+      ([ Padding n; Width 1200; Height 600 ], []);
+      ([], [ hidden [ type' text ]; key Enter; sleep (Ms n) ]);
+    ]
+  in
+  List.iter
+    (fun (settings, actions) ->
+      match Vhs.tape ~settings ~outputs:[ "demo.gif" ] actions with
+      | Error _ -> ()
+      | Ok t ->
+          let path = Filename.temp_file "vhs-property" ".tape" in
+          Fun.protect
+            ~finally:(fun () -> Sys.remove path)
+            (fun () ->
+              let oc = open_out_bin path in
+              output_string oc (Vhs.to_string t);
+              close_out oc;
+              if Sys.command
+                   ("vhs validate " ^ Filename.quote path ^ " > /dev/null 2>&1")
+                 <> 0
+              then failf "accepted tape rejected by VHS: %s" (Vhs.to_string t)))
+    candidates
+
 let suite =
   ( "vhs",
     [
+      test_case "accepted tapes validate" [ bytes; int ] test_validates;
       test_case "type is exact"
         [ choose [ bytes; const "\xff"; const {|a"b'c`d|} ] ]
         test_type;
