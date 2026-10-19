@@ -11,7 +11,14 @@ A command the tape cannot type is an error, not an exception.
 
   $ printf '  $ echo \001\n' > bad.t
   $ vhs-cram --output demo.gif bad.t
-  vhs-cram: invalid tape: Type "echo \001" holds a control character
+  vhs-cram: "echo \001" holds a control character
+  [1]
+
+So is an output path VHS cannot read.
+
+  $ printf '  $ echo hi\n' > demo.t
+  $ vhs-cram --output demo demo.t
+  vhs-cram: Vhs.output: "demo" has no extension and does not end with a slash
   [1]
 
 A failing vhs is reported.

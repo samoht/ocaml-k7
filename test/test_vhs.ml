@@ -2,13 +2,9 @@ let expect name expected got = Alcotest.(check string) name expected got
 let str = Fmt.str "%a" Vhs.pp
 
 let rejects name item =
-  let t = Vhs.tape [ item ] in
-  match Vhs.validate t with
-  | Ok () -> Alcotest.failf "%s: accepted" name
-  | Error _ -> (
-      match str t with
-      | s -> Alcotest.failf "%s: printed %S" name s
-      | exception Invalid_argument _ -> ())
+  match item () with
+  | _ -> Alcotest.failf "%s: accepted" name
+  | exception Invalid_argument _ -> ()
 
 let test_basic_tape () =
   let open Vhs in
@@ -65,13 +61,13 @@ let test_type_control () =
   expect "tab is Tab" "Type \"a\"\nTab\nType \"b\"\nEnter\n"
     (str (tape [ type' "a\tb\n" ]));
   expect "empty" "Type \"\"\n" (str (tape [ type' "" ]));
-  rejects "control byte" (type' "bad\x01byte")
+  rejects "control byte" (fun () -> type' "bad\x01byte")
 
 let test_quoted_control () =
   let open Vhs in
-  rejects "output" (output "a.gif\nOutput evil.gif");
-  rejects "env value" (env "A" "x\ry");
-  rejects "theme" (set (Theme "a\x00"))
+  rejects "output" (fun () -> output "a.gif\nOutput evil.gif");
+  rejects "env value" (fun () -> env "A" "x\ry");
+  rejects "theme" (fun () -> set (Theme "a\x00"))
 
 (* A docker format string forces double quotes and VHS types it verbatim, so
    the [\t] must reach the shell as one backslash. *)
@@ -92,20 +88,19 @@ let test_three_quotes () =
   let open Vhs in
   expect "split type" "Type `a\"b'c`\nType \"`d\"\n"
     (str (tape [ type' {|a"b'c`d|} ]));
-  rejects "output" (output {|a"b'c`d|})
+  rejects "output" (fun () -> output {|a"b'c`d|})
 
 let test_unquoted () =
   let open Vhs in
   let evil = "x\nOutput evil.gif" in
-  rejects "comment" (comment evil);
-  rejects "require" (require evil);
-  rejects "require word" (require "git Output e.gif");
-  rejects "env key" (env evil "v");
-  rejects "custom name" (set (Custom ("A B", "1")));
-  rejects "custom value" (set (Custom ("A", "1\r")));
-  rejects "ctrl digit" (key (Ctrl '1'));
-  rejects "alt backslash" (key (Alt '\\'));
-  rejects "raw" (raw evil);
+  rejects "comment" (fun () -> comment evil);
+  rejects "require" (fun () -> require evil);
+  rejects "env key" (fun () -> env evil "v");
+  rejects "custom name" (fun () -> set (Custom ("A B", "1")));
+  rejects "custom value" (fun () -> set (Custom ("A", "1\r")));
+  rejects "ctrl digit" (fun () -> key (Ctrl '1'));
+  rejects "alt backslash" (fun () -> key (Alt '\\'));
+  rejects "raw" (fun () -> raw evil);
   expect "raw line kept" "Set Margin 20\n"
     (str (tape [ set (Custom ("Margin", "20")) ]))
 
@@ -114,16 +109,28 @@ let test_durations () =
   expect "decimal" "Sleep 0.00001s\nSleep 2s\nSleep 0s\nSleep 25ms\n"
     (str
        (tape [ sleep (S 1e-5); sleep (S 2.); sleep (S (-0.)); sleep (Ms 25) ]));
-  rejects "negative" (sleep (S (-1.)));
-  rejects "nan" (sleep (S Float.nan));
-  rejects "infinity" (set (Typing_speed (S Float.infinity)));
-  rejects "negative ms" (sleep (Ms (-1)))
+  rejects "negative" (fun () -> sleep (S (-1.)));
+  rejects "nan" (fun () -> sleep (S Float.nan));
+  rejects "infinity" (fun () -> set (Typing_speed (S Float.infinity)));
+  rejects "negative ms" (fun () -> sleep (Ms (-1)))
+
+let test_vhs_rules () =
+  let open Vhs in
+  rejects "negative width" (fun () -> set (Width (-5)));
+  rejects "output without extension" (fun () -> output "demo");
+  expect "output dir" "Output \"frames/\"\n" (str (tape [ output "frames/" ]));
+  rejects "dotted dir" (fun () -> output "a.b/c");
+  rejects "screenshot gif" (fun () -> screenshot "x.gif");
+  rejects "env name" (fun () -> env "A=B" "x");
+  rejects "env digit" (fun () -> env "1A" "x");
+  rejects "trailing backslash" (fun () -> wait (Line {|a\|}));
+  expect "require quoted" "Require \"dune\"\n" (str (tape [ require "dune" ]))
 
 let test_wait_slash () =
   let open Vhs in
   expect "slash" "Wait+Screen /a\\x2fb\\x2fc\\\\\\x2f/\n"
     (str (tape [ wait (Screen {|a/b\/c\\/|}) ]));
-  rejects "line break" (wait (Line "a\nOutput evil.gif"))
+  rejects "line break" (fun () -> wait (Line "a\nOutput evil.gif"))
 
 let test_keys_and_waits () =
   let open Vhs in
@@ -167,13 +174,17 @@ let suite =
       Alcotest.test_case "quoted control" `Quick test_quoted_control;
       Alcotest.test_case "unquoted payloads" `Quick test_unquoted;
       Alcotest.test_case "durations" `Quick test_durations;
+      Alcotest.test_case "vhs rules" `Quick test_vhs_rules;
       Alcotest.test_case "wait slash" `Quick test_wait_slash;
       Alcotest.test_case "keys and waits" `Quick test_keys_and_waits;
     ] )
 
+let cram src =
+  match Vhs.Cram.parse src with Ok t -> t | Error msg -> Alcotest.fail msg
+
 let test_minimal () =
   let src = "  $ ./main.exe\n  +hello, world\n" in
-  let tape = Vhs.Cram.to_tape ~output:"demo.gif" (Vhs.Cram.parse src) in
+  let tape = Vhs.Cram.to_tape ~output:"demo.gif" (cram src) in
   expect "minimal" {|Output "demo.gif"
 Type "./main.exe"
 Enter
@@ -195,7 +206,7 @@ let test_full () =
     let open Vhs in
     Cram.to_tape
       ~settings:[ Shell "bash"; Width 900 ]
-      ~setup_scripts:[ "setup.sh" ] ~output:"demo.gif" (Cram.parse src)
+      ~setup_scripts:[ "setup.sh" ] ~output:"demo.gif" (cram src)
   in
   expect "full"
     {|Output "demo.gif"
@@ -221,7 +232,7 @@ Sleep 3s
 let test_setup_quoted () =
   let tape =
     Vhs.Cram.to_tape ~setup_scripts:[ "my setup.sh" ] ~output:"demo.gif"
-      (Vhs.Cram.parse "")
+      (cram "")
   in
   expect "quoted"
     "Output \"demo.gif\"\n\
@@ -244,10 +255,15 @@ let test_parse () =
     \  [1]\n"
   in
   expect "cram" "  $ echo hi\n  hi\n  $ printf a\\\n  > b\n  ab\n  [1]\n"
-    (Fmt.str "%a" Vhs.Cram.pp (Vhs.Cram.parse src))
+    (Fmt.str "%a" Vhs.Cram.pp (cram src))
+
+let test_parse_control () =
+  match Vhs.Cram.parse "  $ echo \x01\n" with
+  | Ok _ -> Alcotest.fail "parsed an untypeable command"
+  | Error _ -> ()
 
 let test_crlf () =
-  let steps = Vhs.Cram.parse "  $ echo hi\r\n  hi\r\n" in
+  let steps = cram "  $ echo hi\r\n  hi\r\n" in
   let tape = Vhs.Cram.to_tape ~output:"demo.gif" steps in
   expect "crlf" "Output \"demo.gif\"\nType \"echo hi\"\nEnter\nWait\nSleep 3s\n"
     (str tape)
@@ -259,6 +275,7 @@ let cram_suite =
       Alcotest.test_case "full" `Quick test_full;
       Alcotest.test_case "setup quoted" `Quick test_setup_quoted;
       Alcotest.test_case "parse" `Quick test_parse;
+      Alcotest.test_case "parse control" `Quick test_parse_control;
       Alcotest.test_case "crlf" `Quick test_crlf;
     ] )
 
@@ -272,12 +289,6 @@ let test_render_stdin () =
   | Ok () -> Alcotest.fail "sh did not read the tape"
   | Error e -> Alcotest.failf "unexpected %a" Vhs.pp_error e
 
-let test_render_invalid () =
-  match render ~vhs:"true" (Vhs.tape [ Vhs.output "a\nb" ]) with
-  | Error (Invalid_tape _) -> ()
-  | Ok () -> Alcotest.fail "rendered an invalid tape"
-  | Error e -> Alcotest.failf "unexpected %a" Vhs.pp_error e
-
 let test_render_not_found () =
   match render ~vhs:"vhs-no-such-executable" (Vhs.tape []) with
   | Error (Executable_not_found _) -> ()
@@ -288,6 +299,5 @@ let run_suite =
   ( "run",
     [
       Alcotest.test_case "render stdin" `Quick test_render_stdin;
-      Alcotest.test_case "render invalid" `Quick test_render_invalid;
       Alcotest.test_case "render not found" `Quick test_render_not_found;
     ] )

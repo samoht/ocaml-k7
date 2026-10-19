@@ -82,11 +82,13 @@ type t
 (** The type for VHS tapes. *)
 
 val tape : item list -> t
-(** [tape items] is the tape of [items], one line each, in order. VHS expects
-    {!val-output}, {!val-require} and {!val-set} lines before the first terminal
-    action. *)
+(** [tape items] is the tape of [items], one line each, in order. *)
 
-(** {1:items Items} *)
+(** {1:items Items}
+
+    These functions raise [Invalid_argument] if VHS cannot read the line they
+    make, for instance from a string that holds a control character or all three
+    VHS quote characters (["\""], ['\''] and [`]). *)
 
 val comment : string -> item
 (** [comment s] is the line [# s], or [#] if [s] is empty. *)
@@ -99,18 +101,21 @@ val require : string -> item
     on the [PATH]. *)
 
 val output : string -> item
-(** [output path] makes VHS render to [path], in the format of its extension. *)
+(** [output path] makes VHS render to [path], in the format of its extension, or
+    to a directory of frames if [path] ends with a slash. *)
 
 val env : string -> string -> item
 (** [env name value] sets the environment variable [name] to [value] in the
-    virtual terminal. *)
+    virtual terminal. [name] is letters, digits and underscores, not starting
+    with a digit. *)
 
 val set : setting -> item
-(** [set s] applies the setting [s]. *)
+(** [set s] applies the setting [s]. Integers must not be negative. *)
 
 val type' : string -> item
 (** [type' s] types [s] without pressing return; newlines and tabs in [s] are
-    typed as {!constructor-Enter} and {!constructor-Tab}. *)
+    typed as {!constructor-Enter} and {!constructor-Tab}. [s] can hold all three
+    quote characters. *)
 
 val key : key -> item
 (** [key k] presses [k]. *)
@@ -132,7 +137,8 @@ val show : unit -> item
 (** [show ()] resumes rendering after {!val-hide}. *)
 
 val screenshot : string -> item
-(** [screenshot path] saves the current frame to the PNG file [path]. *)
+(** [screenshot path] saves the current frame to the PNG file [path], which ends
+    with [.png]. *)
 
 val source : string -> item
 (** [source path] runs the tape file [path]. *)
@@ -140,31 +146,10 @@ val source : string -> item
 val raw : string -> item
 (** [raw line] is [line], printed unchanged. *)
 
-(** {1:printing Printing}
-
-    VHS strings have no escape sequences and end at a newline. A quoted string
-    is printed between a quote character (["\""], ['\''] or [`]) it does not
-    hold, and {!val-type'} cuts its text into several lines where needed. A tape
-    is {e valid} unless:
-    - a string other than the text of {!val-type'} holds a control character, or
-      all three quote characters if it is quoted.
-    - the text of {!val-type'} holds a control character other than a newline or
-      a tab.
-    - a {!val-require} program, an {!val-env} name or a {!constructor-Custom}
-      setting name is empty or holds a space.
-    - a {!constructor-Ctrl} or {!constructor-Alt} key is not one VHS accepts.
-    - a duration is negative or not finite. *)
-
-val validate : t -> (unit, string) result
-(** [validate t] is [Ok ()] if [t] is valid and [Error msg] with [msg] naming
-    the first invalid string otherwise. *)
+(** {1:printing Printing} *)
 
 val pp : t Fmt.t
-(** [pp] formats a tape in the [*.tape] syntax, one line per item.
-
-    @raise Invalid_argument
-      if the tape is not valid, that is exactly when {!validate} is [Error _].
-      Nothing is printed then. *)
+(** [pp] formats a tape in the [*.tape] syntax, one line per item. *)
 
 (** {1:cram Cram tests} *)
 
@@ -180,8 +165,9 @@ module Cram : sig
   (** The type for cram tests: a sequence of commands, each with its expected
       output and exit code. *)
 
-  val parse : string -> t
-  (** [parse src] is the cram test of source [src]. A line [  $ cmd] starts a
+  val parse : string -> (t, string) result
+  (** [parse src] is the cram test of source [src], or [Error msg] if a command
+      holds a control character other than a tab. A line [  $ cmd] starts a
       command, the [  > ] lines after it continue it, the other lines indented
       by two spaces are its expected output except an [[N]] line, which is its
       exit code. Other lines are dropped and lines may end with ["\r\n"]. *)
@@ -212,7 +198,6 @@ end
 
 (** The type for errors of {!render}. *)
 type error =
-  | Invalid_tape of string  (** The tape is not {{!validate}valid}. *)
   | Executable_not_found of string  (** No such executable on the [PATH]. *)
   | Failed of { vhs : string; status : [ `Exited of int | `Signaled of int ] }
       (** The executable [vhs] ran and did not exit with [0]. *)

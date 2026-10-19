@@ -66,8 +66,9 @@ Sleep 2s
 - : unit = ()
 ```
 
-`Vhs.render` runs `vhs` on the tape. It returns an error, rather than
-raising, when the tape is not valid or when `vhs` is not installed or fails:
+Each step raises `Invalid_argument` if VHS could not read it, for instance a
+string holding a newline. `Vhs.render` runs `vhs` on the tape, and returns
+an error when `vhs` is not installed or fails:
 
 ```ocaml
 let make_gif env =
@@ -86,7 +87,7 @@ waits for the shell prompt to come back before moving on, so the GIF shows
 the output the command prints:
 
 ```ocaml
-# let test = Vhs.Cram.parse "  $ echo hello\n  hello\n" in
+# let test = Result.get_ok (Vhs.Cram.parse "  $ echo hello\n  hello\n") in
   Fmt.pr "%a" Vhs.pp (Vhs.Cram.to_tape ~output:"hello.gif" test);;
 Output "hello.gif"
 Type "echo hello"

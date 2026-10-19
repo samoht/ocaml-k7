@@ -11,15 +11,21 @@ let settings ~width =
     Framerate 30;
   ]
 
+(* The output and setup paths come from the command line, so the
+   [Invalid_argument] of a path VHS cannot read is a user error. *)
+let tape ~width ~setup_scripts ~output src =
+  let settings = settings ~width in
+  Result.bind (Vhs.Cram.parse src) @@ fun cram ->
+  match Vhs.Cram.to_tape ~settings ~setup_scripts ~output cram with
+  | tape -> Ok tape
+  | exception Invalid_argument msg -> Error msg
+
 let record ~vhs ~width ~setup_scripts ~output input =
   Eio_main.run @@ fun env ->
   match Eio.Path.(load (Eio.Stdenv.fs env / input)) with
   | exception (Eio.Io _ as exn) -> Error (Printexc.to_string exn)
   | src ->
-      let settings = settings ~width in
-      let tape =
-        Vhs.Cram.to_tape ~settings ~setup_scripts ~output (Vhs.Cram.parse src)
-      in
+      Result.bind (tape ~width ~setup_scripts ~output src) @@ fun tape ->
       Vhs.render ~proc:(Eio.Stdenv.process_mgr env) ~vhs tape
       |> Result.map_error (Fmt.to_to_string Vhs.pp_error)
 

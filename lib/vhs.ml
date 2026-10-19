@@ -32,75 +32,35 @@ type setting =
   | Custom of string * string
 
 type wait = Prompt | Line of string | Screen of string
-
-type item =
-  | Comment of string
-  | Blank
-  | Require of string
-  | Output of string
-  | Env of string * string
-  | Set of setting
-  | Type of string
-  | Key of key
-  | Sleep of duration
-  | Wait_for of duration option * wait
-  | Hide
-  | Show
-  | Screenshot of string
-  | Source of string
-  | Raw of string
-
+type item = string
 type t = item list
 
 let tape items = items
-let comment s = Comment s
-let blank () = Blank
-let require s = Require s
-let output s = Output s
-let env k v = Env (k, v)
-let set s = Set s
-let type' s = Type s
-let key k = Key k
-let enter () = Key Enter
-let sleep d = Sleep d
-let wait ?timeout w = Wait_for (timeout, w)
-let hide () = Hide
-let show () = Show
-let screenshot path = Screenshot path
-let source path = Source path
-let raw s = Raw s
 
-(* Raised by the printers on an invalid tape; [pp] and [validate] turn it
-   into [Invalid_argument] and [Error]. *)
-exception Invalid of string
+let invalid fn fmt =
+  Fmt.kstr (fun msg -> invalid_arg ("Vhs." ^ fn ^ ": " ^ msg)) fmt
 
-let fail_invalid fmt = Fmt.kstr (fun msg -> raise (Invalid msg)) fmt
 let quotes = [ '"'; '\''; '`' ]
 let is_quote c = List.mem c quotes
 let is_control c = Char.code c < 0x20 || Char.code c = 0x7f
 
-(* A VHS string has no escapes and ends at a newline, so it is delimited by
-   a quote it lacks and cannot hold a control character. *)
-let check_controls s =
-  if String.exists is_control s then
-    fail_invalid "%S holds a control character" s
+(* A VHS string has no escapes and ends at a newline. *)
+let line fn s =
+  if String.exists is_control s then invalid fn "%S holds a control character" s;
+  s
 
-let quote_string s =
-  check_controls s;
+let quoted fn s =
   match List.find_opt (fun q -> not (String.contains s q)) quotes with
-  | Some q -> Fmt.str "%c%s%c" q s q
-  | None -> fail_invalid "%S holds all three VHS quote characters" s
+  | Some q -> Fmt.str "%c%s%c" q (line fn s) q
+  | None -> invalid fn "%S holds all three VHS quote characters" s
 
-let pp_quoted ppf s = Fmt.string ppf (quote_string s)
+let word fn s =
+  if s = "" || String.contains s ' ' then invalid fn "%S is not a single word" s;
+  line fn s
 
-let pp_line ppf s =
-  check_controls s;
-  Fmt.string ppf s
-
-let pp_word ppf s =
-  if s = "" || String.exists (fun c -> c = ' ' || is_control c) s then
-    fail_invalid "%S is not a single word" s;
-  Fmt.string ppf s
+let natural fn n =
+  if n < 0 then invalid fn "%d is negative" n;
+  string_of_int n
 
 (* [quotable_chunks s] cuts [s] so that no chunk holds all three quotes. *)
 let quotable_chunks s =
@@ -117,30 +77,31 @@ let quotable_chunks s =
     s;
   List.rev (String.sub s !start (String.length s - !start) :: !chunks)
 
+let typeable s =
+  not (String.exists (fun c -> is_control c && c <> '\n' && c <> '\t') s)
+
 (* [type_lines s] are the VHS commands typing [s]: text runs become [Type]
    commands and newlines and tabs become key presses. *)
 let type_lines s =
+  if not (typeable s) then invalid "type'" "%S holds a control character" s;
   let lines = ref [] and start = ref 0 in
   let text stop =
     if stop > !start then
       let chunks = quotable_chunks (String.sub s !start (stop - !start)) in
-      List.iter (fun c -> lines := ("Type " ^ quote_string c) :: !lines) chunks
+      List.iter
+        (fun c -> lines := ("Type " ^ quoted "type'" c) :: !lines)
+        chunks
   in
   String.iteri
     (fun i c ->
-      match c with
-      | '\n' | '\t' ->
-          text i;
-          lines := (if c = '\n' then "Enter" else "Tab") :: !lines;
-          start := i + 1
-      | c when is_control c ->
-          fail_invalid "Type %S holds a control character" s
-      | _ -> ())
+      if c = '\n' || c = '\t' then begin
+        text i;
+        lines := (if c = '\n' then "Enter" else "Tab") :: !lines;
+        start := i + 1
+      end)
     s;
   text (String.length s);
   match !lines with [] -> [ {|Type ""|} ] | lines -> List.rev lines
-
-let pp_type ppf s = Fmt.(list ~sep:(any "\n") string) ppf (type_lines s)
 
 (* VHS reads a plain decimal: no exponent, no sign. *)
 let decimal s =
@@ -150,115 +111,129 @@ let decimal s =
   in
   String.sub s 0 (last (String.length s - 1) + 1)
 
-let pp_duration ppf = function
-  | Ms n when n < 0 -> fail_invalid "negative duration %dms" n
-  | Ms n -> Fmt.pf ppf "%dms" n
+let duration fn = function
+  | Ms n -> natural fn n ^ "ms"
   | S s when Float.is_nan s || s < 0. || s = Float.infinity ->
-      fail_invalid "invalid duration %gs" s
-  | S s -> Fmt.pf ppf "%ss" (decimal s)
+      invalid fn "invalid duration %gs" s
+  | S s -> decimal s ^ "s"
 
 let is_letter = function 'a' .. 'z' | 'A' .. 'Z' -> true | _ -> false
 
-let pp_chord name valid ppf c =
+let chord name valid c =
   if not (is_letter c || String.contains valid c) then
-    fail_invalid "%s+%C is not a VHS key" name c;
-  Fmt.pf ppf "%s+%c" name c
+    invalid "key" "%s+%C is not a VHS key" name c;
+  Fmt.str "%s+%c" name c
 
-let pp_key ppf = function
-  | Enter -> Fmt.string ppf "Enter"
-  | Tab -> Fmt.string ppf "Tab"
-  | Space -> Fmt.string ppf "Space"
-  | Backspace -> Fmt.string ppf "Backspace"
-  | Delete -> Fmt.string ppf "Delete"
-  | Insert -> Fmt.string ppf "Insert"
-  | Escape -> Fmt.string ppf "Escape"
-  | Up -> Fmt.string ppf "Up"
-  | Down -> Fmt.string ppf "Down"
-  | Left -> Fmt.string ppf "Left"
-  | Right -> Fmt.string ppf "Right"
-  | Page_up -> Fmt.string ppf "PageUp"
-  | Page_down -> Fmt.string ppf "PageDown"
-  | Scroll_up -> Fmt.string ppf "ScrollUp"
-  | Scroll_down -> Fmt.string ppf "ScrollDown"
-  | Ctrl c -> pp_chord "Ctrl" {|@[\]^-.|} ppf c
-  | Alt c -> pp_chord "Alt" "[]." ppf c
+let key_name = function
+  | Enter -> "Enter"
+  | Tab -> "Tab"
+  | Space -> "Space"
+  | Backspace -> "Backspace"
+  | Delete -> "Delete"
+  | Insert -> "Insert"
+  | Escape -> "Escape"
+  | Up -> "Up"
+  | Down -> "Down"
+  | Left -> "Left"
+  | Right -> "Right"
+  | Page_up -> "PageUp"
+  | Page_down -> "PageDown"
+  | Scroll_up -> "ScrollUp"
+  | Scroll_down -> "ScrollDown"
+  | Ctrl c -> chord "Ctrl" {|@[\]^-.|} c
+  | Alt c -> chord "Alt" "[]." c
 
-let pp_setting ppf = function
-  | Shell shell -> Fmt.pf ppf "Shell %a" pp_quoted shell
-  | Font_size n -> Fmt.pf ppf "FontSize %d" n
-  | Font_family font -> Fmt.pf ppf "FontFamily %a" pp_quoted font
-  | Width n -> Fmt.pf ppf "Width %d" n
-  | Height n -> Fmt.pf ppf "Height %d" n
-  | Theme theme -> Fmt.pf ppf "Theme %a" pp_quoted theme
-  | Padding n -> Fmt.pf ppf "Padding %d" n
-  | Typing_speed d -> Fmt.pf ppf "TypingSpeed %a" pp_duration d
-  | Framerate n -> Fmt.pf ppf "Framerate %d" n
-  | Custom (name, value) -> Fmt.pf ppf "%a %a" pp_word name pp_line value
+let setting = function
+  | Shell shell -> "Shell " ^ quoted "set" shell
+  | Font_size n -> "FontSize " ^ natural "set" n
+  | Font_family font -> "FontFamily " ^ quoted "set" font
+  | Width n -> "Width " ^ natural "set" n
+  | Height n -> "Height " ^ natural "set" n
+  | Theme theme -> "Theme " ^ quoted "set" theme
+  | Padding n -> "Padding " ^ natural "set" n
+  | Typing_speed d -> "TypingSpeed " ^ duration "set" d
+  | Framerate n -> "Framerate " ^ natural "set" n
+  | Custom (name, value) -> word "set" name ^ " " ^ line "set" value
 
 (* A slash ends a VHS regexp and only VHS 0.11 and later read [\/] as an
    escape, so a slash, escaped or not, is written as RE2's [\x2f]. *)
-let pp_regexp ppf re =
-  let b = Buffer.create (String.length re + 8) in
-  let rec loop i =
-    if i < String.length re then
+let regexp re =
+  let n = String.length re in
+  let b = Buffer.create (n + 8) in
+  let rec go i =
+    if i < n then
       match re.[i] with
       | '/' ->
           Buffer.add_string b {|\x2f|};
-          loop (i + 1)
-      | '\\' when i + 1 < String.length re && re.[i + 1] = '/' ->
+          go (i + 1)
+      | '\\' when i + 1 = n -> invalid "wait" "%S ends with a backslash" re
+      | '\\' when re.[i + 1] = '/' ->
           Buffer.add_string b {|\x2f|};
-          loop (i + 2)
-      | '\\' when i + 1 < String.length re ->
+          go (i + 2)
+      | '\\' ->
           Buffer.add_string b (String.sub re i 2);
-          loop (i + 2)
+          go (i + 2)
       | c ->
           Buffer.add_char b c;
-          loop (i + 1)
+          go (i + 1)
   in
-  loop 0;
-  Fmt.pf ppf "/%a/" pp_line (Buffer.contents b)
+  go 0;
+  "/" ^ line "wait" (Buffer.contents b) ^ "/"
 
-let pp_wait ppf timeout w =
-  let scope, re =
-    match w with
-    | Prompt -> ("", None)
-    | Line re -> ("+Line", Some re)
-    | Screen re -> ("+Screen", Some re)
+let has_extension path =
+  match String.rindex_opt path '.' with
+  | Some i ->
+      i < String.length path - 1 && not (String.contains_from path i '/')
+  | None -> false
+
+let comment s = if s = "" then "#" else "# " ^ line "comment" s
+let blank () = ""
+let require program = "Require " ^ quoted "require" program
+
+let output path =
+  if not (has_extension path || String.ends_with ~suffix:"/" path) then
+    invalid "output" "%S has no extension and does not end with a slash" path;
+  "Output " ^ quoted "output" path
+
+let is_env_name s =
+  s <> ""
+  && (not (s.[0] >= '0' && s.[0] <= '9'))
+  && String.for_all
+       (function
+         | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' -> true | _ -> false)
+       s
+
+let env name value =
+  if not (is_env_name name) then
+    invalid "env" "%S is not an environment variable name" name;
+  "Env " ^ name ^ " " ^ quoted "env" value
+
+let set s = "Set " ^ setting s
+let type' s = String.concat "\n" (type_lines s)
+let key k = key_name k
+let enter () = "Enter"
+let sleep d = "Sleep " ^ duration "sleep" d
+
+let wait ?timeout w =
+  let timeout =
+    Option.fold ~none:"" ~some:(fun d -> "@" ^ duration "wait" d) timeout
   in
-  Fmt.pf ppf "Wait%s%a%a" scope
-    Fmt.(option (any "@" ++ pp_duration))
-    timeout
-    Fmt.(option (any " " ++ pp_regexp))
-    re
+  match w with
+  | Prompt -> "Wait" ^ timeout
+  | Line re -> "Wait+Line" ^ timeout ^ " " ^ regexp re
+  | Screen re -> "Wait+Screen" ^ timeout ^ " " ^ regexp re
 
-let pp_item ppf = function
-  | Comment "" -> Fmt.string ppf "#"
-  | Comment s -> Fmt.pf ppf "# %a" pp_line s
-  | Blank -> ()
-  | Require s -> Fmt.pf ppf "Require %a" pp_word s
-  | Output path -> Fmt.pf ppf "Output %a" pp_quoted path
-  | Env (key, value) -> Fmt.pf ppf "Env %a %a" pp_word key pp_quoted value
-  | Set setting -> Fmt.pf ppf "Set %a" pp_setting setting
-  | Type s -> pp_type ppf s
-  | Key k -> pp_key ppf k
-  | Sleep d -> Fmt.pf ppf "Sleep %a" pp_duration d
-  | Wait_for (timeout, w) -> pp_wait ppf timeout w
-  | Hide -> Fmt.string ppf "Hide"
-  | Show -> Fmt.string ppf "Show"
-  | Screenshot path -> Fmt.pf ppf "Screenshot %a" pp_quoted path
-  | Source path -> Fmt.pf ppf "Source %a" pp_quoted path
-  | Raw line -> pp_line ppf line
+let hide () = "Hide"
+let show () = "Show"
 
-let print t =
-  try Ok (String.concat "" (List.map (Fmt.str "%a\n" pp_item) t))
-  with Invalid msg -> Error msg
+let screenshot path =
+  if not (String.ends_with ~suffix:".png" path) then
+    invalid "screenshot" "%S does not end with .png" path;
+  "Screenshot " ^ quoted "screenshot" path
 
-let validate t = Result.map ignore (print t)
-
-let pp ppf t =
-  match print t with
-  | Ok s -> Fmt.string ppf s
-  | Error msg -> invalid_arg ("Vhs.pp: " ^ msg)
+let source path = "Source " ^ quoted "source" path
+let raw s = line "raw" s
+let pp = Fmt.(list ~sep:nop (string ++ any "\n"))
 
 module Cram = struct
   type step = {
@@ -268,6 +243,9 @@ module Cram = struct
   }
 
   type t = step list
+
+  let err_control l =
+    Fmt.kstr (fun e -> Error e) "%S holds a control character" l
 
   let drop n s = String.sub s n (String.length s - n)
 
@@ -319,7 +297,14 @@ module Cram = struct
         else flush ())
       lines;
     flush ();
-    List.rev !steps
+    let steps = List.rev !steps in
+    match
+      List.find_opt
+        (fun l -> not (typeable l))
+        (List.concat_map (fun s -> s.command) steps)
+    with
+    | None -> Ok steps
+    | Some l -> err_control l
 
   (* Source the setup scripts, then clear, all hidden: the [clear] must come
      after the [source] lines so their echoes are wiped from the scrollback
@@ -338,10 +323,10 @@ module Cram = struct
     @ [ wait Prompt; sleep pause ]
 
   let to_tape ?(settings = []) ?(setup_scripts = []) ?(pause = S 1.)
-      ?(final_pause = S 3.) ~output (steps : t) =
+      ?(final_pause = S 3.) ~output:output_path (steps : t) =
     let last = List.length steps - 1 in
     let items =
-      (Output output :: List.map set settings)
+      (output output_path :: List.map set settings)
       @ setup_block setup_scripts
       @ List.concat
           (List.mapi
@@ -364,13 +349,11 @@ module Cram = struct
 end
 
 type error =
-  | Invalid_tape of string
   | Executable_not_found of string
   | Failed of { vhs : string; status : [ `Exited of int | `Signaled of int ] }
   | Io of string
 
 let pp_error ppf = function
-  | Invalid_tape msg -> Fmt.pf ppf "invalid tape: %s" msg
   | Executable_not_found exe -> Fmt.pf ppf "executable not found: %s" exe
   | Failed { vhs; status = `Exited n } ->
       Fmt.pf ppf "%s exited with code %d" vhs n
@@ -379,14 +362,10 @@ let pp_error ppf = function
   | Io msg -> Fmt.string ppf msg
 
 let render ~proc ?(vhs = "vhs") t =
-  match print t with
-  | Error msg -> Error (Invalid_tape msg)
-  | Ok tape -> (
-      try
-        Ok (Eio.Process.run proc ~stdin:(Eio.Flow.string_source tape) [ vhs ])
-      with
-      | Eio.Exn.Io (Eio.Process.E (Executable_not_found exe), _) ->
-          Error (Executable_not_found exe)
-      | Eio.Exn.Io (Eio.Process.E (Child_error status), _) ->
-          Error (Failed { vhs; status })
-      | Eio.Exn.Io _ as exn -> Error (Io (Printexc.to_string exn)))
+  let stdin = Fmt.kstr Eio.Flow.string_source "%a" pp t in
+  try Ok (Eio.Process.run proc ~stdin [ vhs ]) with
+  | Eio.Exn.Io (Eio.Process.E (Executable_not_found exe), _) ->
+      Error (Executable_not_found exe)
+  | Eio.Exn.Io (Eio.Process.E (Child_error status), _) ->
+      Error (Failed { vhs; status })
+  | Eio.Exn.Io _ as exn -> Error (Io (Printexc.to_string exn))
