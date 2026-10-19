@@ -371,14 +371,19 @@ let io_message = function
 let render ?(vhs = "vhs") ~proc ~cwd t =
   let stderr = Buffer.create 256 in
   let stdin = Eio.Flow.string_source (to_string t) in
+  (* Awaiting the child rather than raising on its status lets the switch
+     copy all its standard error first. *)
   match
-    Eio.Process.run proc ~cwd ~stdin
+    Eio.Switch.run @@ fun sw ->
+    Eio.Process.spawn ~sw proc
+      ~cwd:(cwd :> Eio.Fs.dir_ty Eio.Path.t)
+      ~stdin
       ~stderr:(Eio.Flow.buffer_sink stderr)
       [ vhs ]
+    |> Eio.Process.await
   with
-  | () -> Ok ()
+  | `Exited 0 -> Ok ()
+  | status -> Error (Failed { vhs; status; stderr = Buffer.contents stderr })
   | exception Eio.Io (Eio.Process.E (Executable_not_found exe), _) ->
       Error (Executable_not_found exe)
-  | exception Eio.Io (Eio.Process.E (Child_error status), _) ->
-      Error (Failed { vhs; status; stderr = Buffer.contents stderr })
   | exception Eio.Io (err, _) -> Error (Io (io_message err))
