@@ -1,5 +1,6 @@
 (test
  (name test)
+ (deps regexp_cases.txt)
  (libraries vhs vhs_cram fmt alcotest cstruct eio eio_main eio.mock cmdliner))
 
 (cram

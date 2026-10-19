@@ -183,9 +183,8 @@ let test_waits () =
          wait ~timeout:(Ms 500) Prompt;
          wait ~timeout:(Ms 2000) (Screen "ok$");
        ]);
-  expect "slashes" "Wait+Screen /a\\x2fb\\x2fc\\\\\\x2f[\\x2f]/\n"
-    (body [ wait (Screen {|a/b\/c\\/[/]|}) ]);
-  rejects "trailing backslash" [ wait (Screen {|a\|}) ];
+  error "invalid" {|Wait+Screen "[": missing closing ]: `[`|}
+    [ wait (Screen "[") ];
   rejects "line break" [ wait (Screen "a\nb") ]
 
 let suite =

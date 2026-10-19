@@ -113,12 +113,6 @@ let check_key = function
   | Alt c -> check_chord "Alt" "[]." c
   | _ -> Ok ()
 
-let trailing_backslashes s =
-  let rec count i =
-    if i > 0 && s.[i - 1] = '\\' then 1 + count (i - 1) else 0
-  in
-  count (String.length s)
-
 let check_wait timeout w =
   let* () =
     match timeout with None -> Ok () | Some (Ms n) -> check_ms "Wait@" n
@@ -127,9 +121,9 @@ let check_wait timeout w =
   | Prompt -> Ok ()
   | Screen re when String.exists is_control re ->
       err "Wait+Screen %S: holds a control character" re
-  | Screen re when trailing_backslashes re mod 2 = 1 ->
-      err "Wait+Screen %S: ends with a backslash" re
-  | Screen _ -> Ok ()
+  | Screen re ->
+      Regexp_syntax.check re
+      |> Result.map_error (Fmt.str "Wait+Screen %S: %s" re)
 
 let rec check_action = function
   | Type s -> check_type s
@@ -260,30 +254,6 @@ let rec is_empty = function
   | Type s -> s = ""
   | Key _ | Sleep _ | Wait _ | Raw _ -> false
 
-(* A slash ends a VHS regexp and only VHS 0.11 and later read [\/] as an
-   escape, so a slash, escaped or not, is written as RE2's [\x2f]. *)
-let write_regexp b re =
-  let n = String.length re in
-  let rec go i =
-    if i < n then
-      match re.[i] with
-      | '/' ->
-          Buffer.add_string b {|\x2f|};
-          go (i + 1)
-      | '\\' when i + 1 < n && re.[i + 1] = '/' ->
-          Buffer.add_string b {|\x2f|};
-          go (i + 2)
-      | '\\' when i + 1 < n ->
-          Buffer.add_substring b re i 2;
-          go (i + 2)
-      | c ->
-          Buffer.add_char b c;
-          go (i + 1)
-  in
-  Buffer.add_char b '/';
-  go 0;
-  Buffer.add_char b '/'
-
 let rec add_action ~hidden b = function
   | Type s -> add_type b s
   | Key k -> add_line b "%s" (key_name k)
@@ -296,7 +266,7 @@ let rec add_action ~hidden b = function
       | Prompt -> ()
       | Screen re ->
           Buffer.add_char b ' ';
-          write_regexp b re);
+          Regexp_syntax.write b re);
       Buffer.add_char b '\n'
   | Hidden actions when hidden -> List.iter (add_action ~hidden b) actions
   | Hidden actions when List.for_all is_empty actions -> ()

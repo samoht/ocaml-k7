@@ -139,7 +139,7 @@ val tape :
       aside), or all three quote characters (['"'], ['\''] and ['`']) where VHS
       quotes it;
     - a duration is negative;
-    - a {!Screen} pattern ends with an unescaped backslash;
+    - a {!Screen} pattern is not valid Go regular expression syntax;
     - a key or a setting breaks the condition its documentation states. *)
 
 val pp : t Fmt.t
