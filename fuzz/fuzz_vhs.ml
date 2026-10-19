@@ -99,6 +99,28 @@ let test_items_single_line s t n =
             failf "%s accepted %S and emitted multiple lines: %S" name s tape)
     (builders s t n)
 
+(* Independent decoder for the Type subset of VHS: no backslash escapes,
+   and the matching quote ends the string. Concatenate split Type chunks. *)
+let decode_type line =
+  let n = String.length line in
+  if n < 7 || not (String.starts_with ~prefix:"Type " line) then
+    failf "not a Type line: %S" line;
+  let quote = line.[5] in
+  check (List.mem quote [ '"'; '\''; '`' ]);
+  check (line.[n - 1] = quote);
+  let payload = String.sub line 6 (n - 7) in
+  check (not (String.contains payload quote));
+  payload
+
+let test_type_roundtrip text =
+  match Vhs.type' text with
+  | exception Invalid_argument _ -> ()
+  | item ->
+      let lines = String.split_on_char '\n' (str [ item ]) in
+      let lines = List.filter (fun s -> s <> "") lines in
+      let decoded = String.concat "" (List.map decode_type lines) in
+      if decoded <> text then failf "Type roundtrip: %S became %S" text decoded
+
 let suite =
   ( "vhs",
     [
@@ -108,4 +130,7 @@ let suite =
       test_case "accepted items are single lines"
         [ choose [ bytes; const {|a"b'c`d|} ]; bytes; int ]
         test_items_single_line;
+      test_case "accepted Type text roundtrips"
+        [ choose [ bytes; const "\xff"; const {|a"b'c`d|} ] ]
+        test_type_roundtrip;
     ] )
