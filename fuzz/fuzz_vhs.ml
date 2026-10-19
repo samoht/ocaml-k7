@@ -231,7 +231,7 @@ let test_output path suffix =
   check (Result.is_ok (tape ~outputs:[ path ] []) = ok)
 
 (* [pp_error] never raises; [Io] prints its message and [Failed] at most ten
-   lines of output under one header line. *)
+   lines of output, without control characters, under one header line. *)
 let test_pp_error s n =
   let pp e = Fmt.str "%a" Vhs.pp_error e in
   check (pp (Vhs.Io s) = s);
@@ -239,6 +239,8 @@ let test_pp_error s n =
   List.iter
     (fun status ->
       let printed = pp (Failed { vhs = "vhs"; status; output = s }) in
+      if has_control ~except:"\n" printed then
+        failf "control character in %S" printed;
       let lines = String.split_on_char '\n' printed in
       check (List.length lines <= 11))
     [ `Exited n; `Signaled n ]

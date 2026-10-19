@@ -474,21 +474,75 @@ type error =
     }
   | Io of string
 
-(* VHS styles its messages with ANSI escapes when it thinks it can. *)
-let strip_ansi s =
+(* [utf_8 s] is [s] with each invalid byte replaced by U+FFFD, and without
+   C1 controls, which dropping a byte between a lead byte and a continuation
+   byte can create. *)
+let utf_8 s =
   let b = Buffer.create (String.length s) in
-  let n = String.length s in
   let rec go i =
-    if i < n then
-      if s.[i] = '\027' && i + 1 < n && s.[i + 1] = '[' then skip (i + 2)
-      else (
-        Buffer.add_char b s.[i];
-        go (i + 1))
-  and skip i =
-    if i < n then match s.[i] with '@' .. '~' -> go (i + 1) | _ -> skip (i + 1)
+    if i < String.length s then (
+      let d = String.get_utf_8_uchar s i in
+      let u = Uchar.utf_decode_uchar d in
+      if Uchar.to_int u < 0x80 || Uchar.to_int u > 0x9f then
+        Buffer.add_utf_8_uchar b u;
+      go (i + Uchar.utf_decode_length d))
   in
   go 0;
   Buffer.contents b
+
+(* [printable s] is [s] without its escape sequences (CSI, OSC, DCS and the
+   other ECMA-48 strings, two-byte ESC sequences, and their C1 forms) and
+   control characters, as valid UTF-8, a carriage return read as a newline
+   and a tab as a space. VHS styles its messages when it thinks it can, and a terminal
+   would run what the report prints. *)
+let printable s =
+  let n = String.length s in
+  let b = Buffer.create n in
+  (* [c1 i] is the C1 control encoded at [i], as its ESC final byte. *)
+  let c1 i =
+    if s.[i] = '\xc2' && i + 1 < n && Char.code s.[i + 1] land 0xe0 = 0x80 then
+      Some (Char.chr (Char.code s.[i + 1] - 0x40))
+    else None
+  in
+  let rec text i =
+    if i < n then
+      match (s.[i], c1 i) with
+      | '\027', _ when i + 1 < n -> escape s.[i + 1] (i + 2)
+      | _, Some f -> escape f (i + 2)
+      | ('\r' | '\n'), _ ->
+          Buffer.add_char b '\n';
+          text (i + 1)
+      | '\t', _ ->
+          Buffer.add_char b ' ';
+          text (i + 1)
+      | c, _ when c < ' ' || c = '\x7f' -> text (i + 1)
+      | c, _ ->
+          Buffer.add_char b c;
+          text (i + 1)
+  (* [escape f i] skips the sequence that ESC [f] starts, [i] after [f]. *)
+  and escape f i =
+    match f with
+    | '[' -> csi i
+    | ']' | 'P' | 'X' | '^' | '_' -> control_string i
+    | ' ' .. '/' -> escape_final i
+    | _ -> text i
+  and csi i =
+    if i < n then
+      match s.[i] with '@' .. '~' -> text (i + 1) | _ -> csi (i + 1)
+  and escape_final i =
+    if i < n then
+      match s.[i] with ' ' .. '/' -> escape_final (i + 1) | _ -> text (i + 1)
+  (* A control string ends with BEL or ST: ESC \ or its C1 form. *)
+  and control_string i =
+    if i < n then
+      match (s.[i], c1 i) with
+      | '\007', _ -> text (i + 1)
+      | '\027', _ when i + 1 < n && s.[i + 1] = '\\' -> text (i + 2)
+      | _, Some '\\' -> text (i + 2)
+      | _ -> control_string (i + 1)
+  in
+  text 0;
+  utf_8 (Buffer.contents b)
 
 let last_lines = 10
 
@@ -499,7 +553,7 @@ let pp_error ppf = function
       | `Exited n -> Fmt.pf ppf "%s exited with code %d" vhs n
       | `Signaled n -> Fmt.pf ppf "%s was killed by signal %d" vhs n);
       let lines =
-        String.split_on_char '\n' (strip_ansi output)
+        String.split_on_char '\n' (printable output)
         |> List.map String.trim
         |> List.filter (( <> ) "")
       in

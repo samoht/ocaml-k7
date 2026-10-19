@@ -188,7 +188,8 @@ type error =
 
 val pp_error : error Fmt.t
 (** [pp_error] formats an error for humans: one line, followed for {!Failed} by
-    the last lines [vhs] printed, indented. *)
+    the last ten lines [vhs] printed, indented, without escape sequences or
+    control characters and with invalid UTF-8 replaced by U+FFFD. *)
 
 val render :
   ?vhs:string ->

@@ -239,6 +239,31 @@ let test_pp_error () =
     (Fmt.str "%a" Vhs.pp_error
        (Failed { vhs = "vhs"; status = `Exited 1; output = output ^ "\n\n" }))
 
+(* No escape sequence or control character of what vhs prints reaches the
+   report: a terminal would run them. *)
+let test_pp_error_controls () =
+  let output =
+    "\027]8;;https://x\027\\link\027]8;;\027\\ end\n\
+     \027]0;title\007a\027Pq#0\027\\b\027(Bc\027=d\n\
+     bell\007 back\bspace\ttab\n\
+     \xc2\x9b31mred\xc2\x9b0m \xc2\x9d0;t\xc2\x9cu \xc2\x85v\n\
+     10%\r50%\rdone\n\
+     \xc2\007\x9b\xff\n\
+     \027"
+  in
+  expect "printable"
+    "vhs exited with code 1\n\
+    \  link end\n\
+    \  abcd\n\
+    \  bell backspace tab\n\
+    \  red u v\n\
+    \  10%\n\
+    \  50%\n\
+    \  done\n\
+    \  \xef\xbf\xbd"
+    (Fmt.str "%a" Vhs.pp_error
+       (Failed { vhs = "vhs"; status = `Exited 1; output }))
+
 let test_spawn_errors () =
   Eio_mock.Backend.run @@ fun () ->
   Eio.Switch.run @@ fun sw ->
@@ -335,6 +360,7 @@ let suite =
         ("success and explicit executable", test_success);
         ("signaled child", test_signal);
         ("error lines", test_pp_error);
+        ("error controls", test_pp_error_controls);
         ("spawn errors", test_spawn_errors);
         ("cancel", test_cancel);
         ("publish environment", test_publish_environment);
