@@ -318,9 +318,31 @@ let test_no_injection text =
      setting, output, visibility change or executable tape command. *)
   test_type hostile
 
+let test_error_item n =
+  let bad = Fmt.str "item-%d\001" (n land 65535) in
+  let check_error prefix result =
+    match result with
+    | Ok _ -> failf "accepted invalid item %S" bad
+    | Error message ->
+        if not (String.starts_with ~prefix message) then
+          failf "error does not identify %S: %s" bad message
+  in
+  check_error
+    (Fmt.str "Output %S:" (bad ^ ".gif"))
+    (Vhs.tape ~outputs:[ "good.gif"; bad ^ ".gif" ] []);
+  check_error (Fmt.str "Type %S:" bad)
+    (Vhs.tape ~outputs [ Vhs.type' "good"; Vhs.hidden [ Vhs.type' bad ] ]);
+  check_error
+    (Fmt.str "Set FontFamily %S:" bad)
+    (Vhs.tape ~settings:[ Vhs.Font_family bad ] ~outputs []);
+  check_error
+    (Fmt.str "Wait+Screen %S:" bad)
+    (Vhs.tape ~outputs [ Vhs.wait (Screen bad) ])
+
 let suite =
   ( "vhs",
     [
+      test_case "errors identify the invalid item" [ int ] test_error_item;
       test_case "typed text cannot inject commands"
         [
           choose [ bytes; const ""; const "λ中文👩🏽‍💻é"; const "\000"; const "\xff" ];
