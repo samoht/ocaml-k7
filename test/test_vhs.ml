@@ -291,6 +291,27 @@ let test_crlf () =
   expect "crlf" "Type \"echo hi\"\nEnter\nWait\nSleep 1000ms\n"
     (cram "  $ echo hi\r\n  hi\r\n")
 
+let test_setup_waits () =
+  (* Each source and clear must finish before proceeding; [Show] otherwise
+     records setup output and can race a slow shell prompt. *)
+  expect "wait for setup and clear before showing"
+    "Hide\n\
+     Type \"source 'slow.sh'\"\n\
+     Enter\n\
+     Wait\n\
+     Type \"source 'next.sh'\"\n\
+     Enter\n\
+     Wait\n\
+     Type \"clear\"\n\
+     Enter\n\
+     Wait\n\
+     Show\n\
+     Type \"echo ready\"\n\
+     Enter\n\
+     Wait\n\
+     Sleep 1000ms\n"
+    (cram ~setup:[ "slow.sh"; "next.sh" ] "  $ echo ready\n")
+
 let cram_suite =
   ( "cram",
     [
@@ -300,6 +321,7 @@ let cram_suite =
       Alcotest.test_case "parse" `Quick test_parse;
       Alcotest.test_case "parse control" `Quick test_parse_control;
       Alcotest.test_case "crlf" `Quick test_crlf;
+      Alcotest.test_case "setup waits before show" `Quick test_setup_waits;
     ] )
 
 let render ?vhs ?(cwd = ".") tape =

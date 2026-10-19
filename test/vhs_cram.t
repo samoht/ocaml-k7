@@ -44,3 +44,22 @@ A failing vhs is reported.
   $ vhs-cram --vhs false --output demo.gif demo.t
   vhs-cram: false exited with code 1
   [123]
+
+Setup and clear must finish while recording is still hidden.
+
+  $ printf ':\n' > setup.sh
+  $ vhs-cram --vhs cat --setup setup.sh --output demo.gif demo.t
+  Output "demo.gif"
+  Set Shell "bash"
+  Hide
+  Type "source 'setup.sh'"
+  Enter
+  Wait
+  Type "clear"
+  Enter
+  Wait
+  Show
+  Type "echo hi"
+  Enter
+  Wait
+  Sleep 1000ms
