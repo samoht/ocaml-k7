@@ -58,18 +58,16 @@ let natural fn n =
 
 (* [quotable_chunks s] cuts [s] so that no chunk holds all three quotes. *)
 let quotable_chunks s =
-  let chunks = ref [] and start = ref 0 and seen = ref [] in
-  String.iteri
-    (fun i c ->
-      if is_quote c && not (List.mem c !seen) then
-        if List.length !seen = 2 then begin
-          chunks := String.sub s !start (i - !start) :: !chunks;
-          start := i;
-          seen := [ c ]
-        end
-        else seen := c :: !seen)
-    s;
-  List.rev (String.sub s !start (String.length s - !start) :: !chunks)
+  let rec cut chunks start seen i =
+    let chunk () = String.sub s start (i - start) in
+    if i = String.length s then List.rev (chunk () :: chunks)
+    else
+      let c = s.[i] in
+      if (not (is_quote c)) || List.mem c seen then cut chunks start seen (i + 1)
+      else if List.length seen = 2 then cut (chunk () :: chunks) i [ c ] (i + 1)
+      else cut chunks start (c :: seen) (i + 1)
+  in
+  cut [] 0 [] 0
 
 (* VHS reads a plain decimal: no exponent, no sign. *)
 let decimal s =
@@ -214,30 +212,23 @@ module Cram = struct
 
   let drop n s = String.sub s n (String.length s - n)
 
+  let chomp l =
+    if String.ends_with ~suffix:"\r" l then String.sub l 0 (String.length l - 1)
+    else l
+
+  let flush steps = function [] -> steps | cmd -> List.rev cmd :: steps
+
+  let add (steps, cmd) line =
+    if String.starts_with ~prefix:"  $ " line then
+      (flush steps cmd, [ drop 4 line ])
+    else if cmd <> [] && String.starts_with ~prefix:"  > " line then
+      (steps, drop 4 line :: cmd)
+    else (flush steps cmd, [])
+
   let parse src =
-    let chomp l =
-      let n = String.length l in
-      if n > 0 && l.[n - 1] = '\r' then String.sub l 0 (n - 1) else l
-    in
     let lines = List.map chomp (String.split_on_char '\n' src) in
-    let steps = ref [] in
-    let cmd = ref [] in
-    let flush () =
-      if !cmd <> [] then steps := List.rev !cmd :: !steps;
-      cmd := []
-    in
-    List.iter
-      (fun line ->
-        if String.starts_with ~prefix:"  $ " line then begin
-          flush ();
-          cmd := [ drop 4 line ]
-        end
-        else if !cmd <> [] && String.starts_with ~prefix:"  > " line then
-          cmd := drop 4 line :: !cmd
-        else flush ())
-      lines;
-    flush ();
-    let steps = List.rev !steps in
+    let steps, cmd = List.fold_left add ([], []) lines in
+    let steps = List.rev (flush steps cmd) in
     match List.find_opt has_control (List.concat steps) with
     | None -> Ok steps
     | Some l -> err_control l
