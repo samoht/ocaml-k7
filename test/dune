@@ -1,6 +1,14 @@
 (test
  (name test)
- (libraries vhs fmt alcotest eio eio_main))
+ (libraries vhs fmt alcotest eio eio_main eio.mock cmdliner))
+
+; Compile the exact CLI functions, omitting only the process-wide exit.
+(rule
+ (targets vhs_cram_subject.ml)
+ (deps ../bin/vhs_cram.ml)
+ (action
+  (with-stdout-to %{targets}
+   (run sed "/^let () = exit /d" %{deps}))))
 
 (cram
  (deps %{bin:vhs-cram}))
