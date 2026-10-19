@@ -6,10 +6,6 @@ type step = {
 
 type t = step list
 
-let starts_with ~prefix s =
-  String.length s >= String.length prefix
-  && String.equal (String.sub s 0 (String.length prefix)) prefix
-
 let drop n s = String.sub s n (String.length s - n)
 
 (* [  [N]] exit-code annotation: two-space indent, then [N] on its own. *)
@@ -41,14 +37,14 @@ let parse src =
   in
   List.iter
     (fun line ->
-      if starts_with ~prefix:"  $ " line then begin
+      if String.starts_with ~prefix:"  $ " line then begin
         flush ();
         open_ := true;
         cmd := [ drop 4 line ]
       end
-      else if !open_ && starts_with ~prefix:"  > " line then
+      else if !open_ && String.starts_with ~prefix:"  > " line then
         cmd := drop 4 line :: !cmd
-      else if !open_ && starts_with ~prefix:"  " line then begin
+      else if !open_ && String.starts_with ~prefix:"  " line then begin
         let content = drop 2 line in
         match exit_code_of_output content with
         | Some _ as code -> exit := code
