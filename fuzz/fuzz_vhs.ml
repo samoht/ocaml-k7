@@ -41,10 +41,8 @@ let builders s t n =
 
 let test_builders_no_exception s t n =
   List.iter
-    (fun (name, build) ->
-      try ignore (str [ build () ]) with
-      | Invalid_argument _ -> ()
-      | exn -> failf "%s raised %s" name (Printexc.to_string exn))
+    (fun (_, build) ->
+      try ignore (str [ build () ]) with Invalid_argument _ -> ())
     (builders s t n);
   List.iter
     (fun key -> ignore (str [ Vhs.key key ]))
@@ -69,9 +67,8 @@ let test_builders_no_exception s t n =
   match Vhs.Cram.parse s with
   | Error _ -> ()
   | Ok cram -> (
-      try ignore (str (Vhs.Cram.items ~setup:[ t ] ~pause:(Ms n) cram)) with
-      | Invalid_argument _ -> ()
-      | exn -> failf "Cram.items raised %s" (Printexc.to_string exn))
+      try ignore (str (Vhs.Cram.items ~setup:[ t ] ~pause:(Ms n) cram))
+      with Invalid_argument _ -> ())
 
 let test_items_single_line s t n =
   List.iter
@@ -155,9 +152,8 @@ let submitted_commands tape =
         Buffer.clear pending));
   List.rev !commands
 
-let test_cram_commands commands crlf final_newline =
+let test_cram_commands commands eol final_newline =
   let commands = List.map command_text commands in
-  let eol = if crlf then "\r\n" else "\n" in
   (* Empty output, prose, orphan continuations, and trailing spaces must
      never swallow the next command. Preserve empty commands too. *)
   let src =
@@ -232,7 +228,7 @@ let suite =
         [ choose [ bytes; const "\xff"; const {|a"b'c`d|} ] ]
         test_type_roundtrip;
       test_case "cram preserves commands and continuations"
-        [ list bytes; bool; bool ]
+        [ list bytes; choose [ const "\n"; const "\r\n" ]; bool ]
         test_cram_commands;
       test_case "cram never loses an accepted command"
         [ choose [ bytes; map [ bytes ] (fun s -> "  $ " ^ s) ] ]
