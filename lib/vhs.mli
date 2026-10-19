@@ -88,9 +88,12 @@ val hidden : action list -> action
 
 val raw : string -> action
 (** [raw line] is the tape line [line], printed as is, for the VHS commands
-    without a builder here, such as [Require], [Env], [Source], [Screenshot] and
-    the settings missing from {!setting}. Quoting the arguments of [line] is the
-    caller's task. *)
+    without a builder here, such as [Require], [Env], [Source], [Screenshot],
+    [Set TypingSpeed] between actions and the settings missing from {!setting}.
+    Quoting the arguments of [line] is the caller's task; {!val-tape} checks
+    [line] with VHS's own lexer and parser. VHS checks the values of settings,
+    such as the number of [Set Margin], and reads the tape of a [Source] line,
+    only when it runs. *)
 
 (** {1:tapes Tapes} *)
 
@@ -147,9 +150,13 @@ val tape :
     - a duration is out of range, or a wait timeout is [Ms 0];
     - a {!Screen} pattern is not valid Go regular expression syntax;
     - a key or a setting breaks the condition its documentation states;
-    - a {!raw} line is [Hide] or [Show] (use {!hidden}), or is [Require] or
-      [Set], other than [Set TypingSpeed], after an action, where VHS ignores
-      it. *)
+    - a {!raw} line is not exactly one command VHS's parser accepts, ends inside
+      a string, a regular expression or a JSON value, or lacks the argument of
+      its command;
+    - a {!raw} line is [Hide] or [Show] (use {!hidden}), [Set] for a setting of
+      {!setting} other than [TypingSpeed] (use the setting), an [Output] that
+      breaks the rules of [outputs], or is [Require] or [Set], other than
+      [Set TypingSpeed], after an action, where VHS ignores it. *)
 
 val to_string : t -> string
 (** [to_string t] is [t] in the [.tape] syntax: the [Output] lines, then the

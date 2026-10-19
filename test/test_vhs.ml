@@ -121,6 +121,75 @@ let test_raw () =
   error "hide" {|raw line "Hide": use hidden instead|} [ raw "Hide" ];
   rejects "show" [ raw "  Show" ]
 
+(* A raw line is one command VHS's parser reads without error, and that
+   takes nothing from the line after it. *)
+let test_raw_syntax () =
+  let open Vhs in
+  List.iter
+    (fun line -> ignore (body [ raw line ]))
+    [
+      "Ctrl+Alt+c";
+      "Ctrl+[";
+      "Alt+Enter";
+      "Shift+Tab";
+      "Enter@10ms 3 # three times";
+      {|Wait+Line /x\\/|};
+      {|Wait+Screen@2s /a\/b/|};
+      "Screenshot shot.png";
+      {|Copy "a" 'b'|};
+      "Paste";
+      "Sleep .5";
+      "Sleep 1.5m";
+      "Output frames/";
+      "Set WindowBar Colorful";
+      {|Set MarginFill "#ff00ff"|};
+      "Set CursorBlink false";
+      "Set LoopOffset 20%";
+      "Set WaitPattern /ready/";
+      "Set LetterSpacing 1.2";
+    ];
+  let fails name line msg =
+    error name (Fmt.str "raw line %S: %s" line msg) [ raw line ]
+  in
+  fails "negative sleep" "Sleep -1ms" "Expected time after Sleep";
+  fails "bad duration" "Sleep 1.2.3" "time 1.2.3s: not a Go duration";
+  fails "zero wait" "Wait@0ms" "Wait expects positive duration";
+  fails "two commands" "Enter Hide" "more than one command";
+  fails "unterminated JSON" "Set MarginFill {" "unterminated JSON value";
+  fails "unterminated string" {|Type "abc|} "unterminated string";
+  fails "unterminated regex" {|Wait /abc\/|} "unterminated regular expression";
+  fails "missing argument" "Set Margin" "Margin expects an argument";
+  fails "env without value" "Env A" "A expects string";
+  fails "unknown command" "Run x" "Invalid command: Run";
+  fails "unknown setting" "Set Colour red" "Unknown setting: Colour";
+  fails "bad bar" "Set WindowBar Square" "Square is not a valid bar style.";
+  fails "bad color" {|Set MarginFill "#zz0000"|}
+    {|"#zz0000" is not a valid color.|};
+  fails "ctrl word" "Ctrl+ab" "Invalid control argument: ab";
+  fails "late modifier" "Ctrl+c+Alt"
+    "Modifiers must come before other characters";
+  fails "screenshot" "Screenshot a.gif" "Expected file with .png extension";
+  fails "source" "Source a.txt" "Expected file with .tape extension";
+  fails "regex" "Wait /[/"
+    "Invalid regular expression '[': missing closing ]: `[`";
+  fails "font family" {|Set FontFamily "x'"|}
+    "use the setting Font_family instead";
+  fails "padding" "Set Padding 400" "use the setting Padding instead";
+  fails "output" "Output x.foo"
+    {|Output "x.foo": not .gif, .mp4, .webm, .txt, .ascii, .test or .png|}
+
+(* Lines [vhs validate] judged one by one, written by tape_oracle.go: a line
+   accepted here is one VHS reads without error. *)
+let test_raw_oracle () =
+  let cases = In_channel.with_open_bin "tape_cases.txt" In_channel.input_all in
+  String.split_on_char '\n' cases
+  |> List.iter (fun l ->
+      if l <> "" then
+        let line = String.sub l 2 (String.length l - 2) in
+        match tape [ Vhs.raw line ] with
+        | Ok _ when l.[0] = '0' -> Alcotest.failf "accepted %S" line
+        | _ -> ())
+
 let test_hidden () =
   let open Vhs in
   expect "hidden" "Hide\nType \"a\"\nEnter\nShow\nType \"b\"\n"
@@ -271,6 +340,8 @@ let suite =
         ("type keys", test_type_keys);
         ("line injection", test_line_injection);
         ("raw", test_raw);
+        ("raw syntax", test_raw_syntax);
+        ("raw oracle", test_raw_oracle);
         ("hidden", test_hidden);
         ("durations", test_durations);
         ("settings", test_settings);

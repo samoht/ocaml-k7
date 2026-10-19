@@ -1,0 +1,3000 @@
+0	Require
+0	Delete +abTheme
+0	Insert Width Width+[
+0	Tab x "
+0	Copy /a\\/ "
+1	Escape
+0	Delete +Shift "Line"false
+0	Home TypingSpeed x
+0	Shift CursorBlink
+0	Delete \ 1.5 MarginFill
+1	ScrollUp
+0	Up WindowBar /a\\/"Line"
+0	Screenshot1 false
+0	Show +ab A[
+0	Space .5 =
+0	PageDown x.gif
+0	Sleep
+0	Backspace@5msLoopOffset
+0	Wait@1s+- +c +-
+0	Screenshot +Enter
+1	Wait@1s
+0	Insert ^ out/
+0	Type \ s
+0	Backspace@5ms 1LoopOffset
+1	Require Screen
+0	Require +[
+0	Wait@1s"
+0	Screenshot 1.5
+1	Wait+Screen
+1	Copy s.png #ff00ff
+0	Wait99999999999999999999FontSize -
+0	Wait+Screen@0ms10'b c'
+0	ms +c
+0	Wait+Screens bash 1.2.3
+0	Wait+Screen@0ms'b c' /a\\/
+0	Screenshot "
+0	Require 1.2.3CursorBlink
+0	PageDown s /a\\/
+0	Wait+Line 10 \-
+0	Type@10ms { true
+0	Backspace@5ms 0 a.tape
+1	Wait@1s
+1	Backspace@5ms
+0	Env 1.5 ^ WindowBar
+1	Hide
+0	Tab {
+0	Output MarginFill +c x
+0	Wait@1s ] ]
+0	PageDown '0 Type
+0	Require #zz
+0	ShowWindowBar
+0	Sleep 10TypeScreen
+0	Shift :
+0	ShiftShell
+0	Home #zz 1.5
+0	Escape ^
+0	ms LoopOffset 1.5LoopOffset
+0	Backspace@5ms A
+0	Wait +- 1
+0	Shift 1 +Shift
+0	Wait@1s Rings+-
+0	Backspace@5ms Margin s.png
+0	Wait+Line .5 s.png WindowBar
+0	ScrollUp Bogus"Line"
+0	Wait \ Shell
+1	Up
+0	ms+Alt
+0	ScrollUp WaitTimeout/a\/b/
+0	Sleep s.png10 "x.gif"
+0	Backspace@5ms /re/
+0	Wait bash'b c'`d`
+0	Tab+\
+1	Wait+Line
+0	Env LoopOffset m "a"
+1	Escape
+0	Sleep Colorful
+0	PageDown % +
+0	Copy +c
+0	Output #c
+1	Show
+0	Tab false
+1	Escape
+0	ScrollUp LoopOffset Theme "Line"
+1	#
+0	ScrollUp +- A
+0	Tab +sLoopOffset
+1	Paste
+0	Hide /a\/b/ Margin
+0	Alt +Shift false
+0	Wait+Screen@0ms
+0	Wait+Screen@0ms
+0	Set x Screen
+0	Env
+0	Wait out/@0
+0	Screenshot
+0	Up WaitTimeoutWidth WaitPattern
+1	Env .5 a.tapeLine
+0	Sleep .5 Screen Rings
+1	Copy " .5 +[
+0	Shift {"k": 1}Line
+0	Ctrl
+0	Output+Shift
+0	Shift.5 /a\/b/ ]
+1	Output" a.tape
+0	Wait+Screen@0msWaitPattern Rings
+1	Require Bogus#c WaitTimeout
+0	Require
+0	Insert:: \
+1	Paste
+0	Type - +[99999999999999999999
+0	Home Shell"Line"
+0	InsertMargin "
+0	Env
+0	Wait+Line ]
+1	Enter
+0	Alt Rings
+0	Copy Hide= +-
+0	Delete Rings `d`
+0	Env a.tape
+0	Delete Bogus"Line" +Shift
+0	Up +-= 0
+1	Hide
+0	Wait+Screen FontSize ms
+0	Hide é TypingSpeed "a"
+0	Require+c Shell Bogus
+0	ScrollUp +c+
+1	Space
+0	Up +Shift: 'b c'
+0	Source Widthtrue
+0	msout/ Linefalse
+1	Up 99999999999999999999
+1	Type@10ms x.gif Screen
+0	Ctrl
+0	Delete "Line" Theme x
+0	Shift [ -
+0	Wait+Screen@0ms \ #zz
+0	Escape: 9223372036 ms
+0	Enter /a\\/ 10
+1	PageDown
+1	Sleep .5
+0	Wait+Screen@0ms
+0	End
+0	Paste x WaitTimeout+Alt
+0	Wait+Screen@0ms +Shift MarginFill
+0	Wait+Screen é 10
+1	# BogusLine
+1	Wait+Screen
+0	msLoopOffset'b c' Type
+0	Output bash Theme
+0	Paste+[ Screen
+0	Sleep A 1 s
+1	Wait+Line #c
+0	Ctrl bash ] ^
+0	TabLineMargin
+0	Wait+Screen0 '
+0	Env "a"é
+0	Require
+0	Require CursorBlink
+1	Insert
+0	Tab /re/ Hide \
+0	PageDowna.tape A
+1	Wait
+0	Shift .5 CursorBlinkm
+1	Hide
+0	Sleep
+1	#
+0	SpaceLoopOffset Width WindowBar
+0	ScrollUp Width "a" CursorBlink
+1	Space
+1	ScrollUp
+1	Hide
+0	Delete WaitPattern^
+0	Alt
+0	Shift + /[/
+0	End 0 ]
+1	Tab
+0	WaitType
+1	Paste#c +ab
+1	Escape
+0	End +ab
+0	Sleep99999999999999999999 out/
+0	Wait+Screen@0ms10 out/ Bogus
+0	Set
+0	Insert `d` Screen
+1	Backspace@5ms
+0	Wait+Screen =
+0	Sleep ms
+1	Wait+Screen
+0	Upé /a\\/
+0	Type@10ms /re/
+0	Screenshot#ff00ff
+0	Ctrl
+0	Env @0 +A #zz
+0	Space+ +- 10
+0	Space : TypingSpeed é
+0	Tab FontSize
+0	Wait+Screen { Bogus
+0	Enter 1.2.3 "
+0	Type@10ms
+0	Env
+0	Screenshot
+0	Alt
+0	Env + @10ms
+0	Alt
+0	Alt bash #zz
+1	PageDown
+0	ScrollUp A
+0	End { ^ LoopOffset
+0	Type@10ms #zz Rings
+1	Show
+1	Delete
+0	Wait+Screen@0ms
+0	Tab \
+0	Screenshot " /a\/b/
+1	Escape
+0	Escape bash
+0	Up false 10
+0	Wait+Screen A +Shift
+0	Set /a\\/bash
+1	# Rings
+0	Type @0 é Screen
+0	Enter @ A
+0	Paste" Hide
+0	Type
+0	PageDown Margin Margin +Alt
+0	Output/re/ m1
+0	Insert +Enter +Enter
+1	Escape
+0	Type@10ms false -false
+0	Space +ab"x.gif" Enter
+0	Sleep /a\/b/
+0	Paste1.5
+0	ScrollUp +Enter
+0	Source
+0	PageDown @0 Hide 1
+0	TypeLinex.gif
+0	Env"Line" - Shell
+1	PageDown
+0	Wait+Screen@0ms
+0	Wait@1s Margin @0 x
+1	Insert
+0	Screenshot#zzBogus +-
+0	Copy ]
+0	Insert {"k": 1} +Shift
+1	#
+0	Insert +c
+0	ScrollUp TypingSpeed out/a.tape
+0	End
+0	Space FontSize 99999999999999999999 FontSize
+0	Wait@1s x.gif
+1	Insert
+0	Wait+Screen@0msCursorBlinkCursorBlink
+0	Alt { true
+0	Type@10ms /re/ @0 #c
+0	Delete{"k": 1}
+0	End Shell
+0	Alt+ab true A
+0	Show@ m ]
+0	Type@10ms +c
+0	Source +Alt 'b c'
+0	Sleepéms
+0	Enter true ' Line
+0	HideShell
+1	Enter
+0	Wait+Screen A
+1	Paste
+1	Wait
+0	Enter +Alt{"k": 1}+
+0	Copy FontSize A {"k": 1}
+0	Wait@1s @10ms #zz
+0	Alt #c
+1	#Enter WaitTimeout
+0	EnvRings Rings s.png
+0	Output Shell A Hide
+0	Home
+0	Tab @
+0	Typex.gif 0
+0	End
+0	Show ' WaitPattern
+0	Space FontSize @0
+0	UpHide+[ +c
+0	Alt] x
+1	Delete
+0	ms /[/ + /a\\/
+0	Wait+Screen Theme
+0	Copy+- Bogus
+0	Show WindowBarMargin
+0	Shift "Line"
+0	Show LoopOffsetLoopOffset
+0	ShowType
+0	Wait+Line Shell ms]
+0	Copy
+1	Space
+0	Sleep /[/
+0	End+@0
+1	Hide
+1	Enter
+0	Source
+0	Sleep out/
+1	Show
+1	Space 1
+1	Space
+0	Hide +A+Shift 1
+0	Output -
+0	Wait+Screen@0ms
+0	Sleep false WaitTimeout
+0	Enter /re/ = /a\/b/
+0	Set
+0	Shift.5 MarginFill
+0	ScrollUp \
+0	Output
+0	Sleep Screen \ Enter
+0	Alt ^
+1	Space
+0	ScrollUp WindowBar 'b c' /re/
+0	Insert 1.2.3 {"k": 1} /a\/b/
+1	Space 1
+0	Source+Enter
+0	Copyms
+0	Output -
+0	Output WidthMargin
+0	Type@10ms Margin
+0	Insert Rings
+0	Alt - [
+0	Ctrl : false
+1	# CursorBlink @
+0	Ctrl
+0	Copy #ff00ff @
+0	Home /[/
+0	PageDown +Alt "a"
+0	Env
+1	# s.png"Line"
+1	Insert Enter
+0	Alt m
+0	Wait+Screen {"k": 1}TypeCursorBlink
+0	Up WindowBar WaitTimeout
+0	Insert FontSize +Shift
+0	Require +-
+0	HomeLoopOffsetColorful
+0	Wait+Line-1
+0	HideWaitPattern \
+1	Wait+Line #c {"k": 1} "Line"
+1	Escape
+1	#
+0	Type@10ms
+0	Paste Rings +ab
+1	Env s.png'b c'
+0	ScrollUp WaitPattern
+1	#@0 Line
+0	Ctrl +[ s #c
+0	Shift \Bogus a.tape
+0	Type@10ms +Alt `d`
+0	Type
+0	Wait 10 @0 '
+0	Set +c 9223372036 Shell
+0	Ctrl Margin
+1	PageDown
+1	Hide
+0	Spacefalseé {
+0	Wait+Screen TypingSpeed
+1	Enter
+0	Type@10ms -1 0 A
+0	Sleep LoopOffset
+0	Home .5
+0	HomeMarginFillTheme
+0	Type Hide +A s
+0	Type
+0	Alt
+0	Tabout/ /[/bash
+0	ScrollUp1.5 Shell
+0	Shift 1.2.3
+0	EndFontSize ^
+0	Up Screen true
+0	Output +Alt
+0	Wait out/é WaitTimeout
+0	Wait@1s 'b c'
+1	Wait
+1	Wait@1s
+0	Set s/a\/b/ +Shift
+0	Wait 0
+0	Show MarginFill
+0	Type Shell " :
+0	End +abShell
+0	Set
+0	Insert1 Width
+0	Backspace@5ms out/
+0	Space @0 "x.gif"
+0	Taba.tape +[
+0	Screenshot FontSize { '
+0	Shift"
+0	PageDown s.png 0
+0	Hide Bogus
+1	#
+0	EnvWaitPattern 1.2.3[
+0	InsertScreen -1
+0	Screenshot 1
+0	Wait+Screen@0ms 10 {
+0	Sleep
+0	Show "a" Colorful
+0	Ctrl Margin 99999999999999999999
+1	PageDown
+1	Wait
+0	Require Width @10ms
+0	InsertWindowBar
+0	Set é
+0	Tab "
+1	# @0
+0	Source /[/
+0	Copy @10ms
+0	Type@10ms\ Hide
+1	Wait@1s
+0	Set
+0	Env
+1	Wait+Line
+0	Type@10ms
+0	Shift
+0	Wait@1s MarginFill
+0	Source \ +-{"k": 1}
+0	Backspace@5msTypingSpeed
+0	Paste Margin -1
+0	Escape{"k": 1} a.tape
+0	Delete 10 +Enter Width
+0	Backspace@5ms ms Bogus
+1	Set MarginFill
+0	Wait+Screen@0ms Hide
+0	Ctrl Width
+0	Alt+Enter 1.2.3
+1	Delete
+0	Screenshot x #c +c
+0	Output ^ A @
+0	Type@10ms
+0	Wait+Screen sa.tape@0
+0	ms +Enter
+1	#
+0	Set 9223372036]
+0	ShiftType s /[/
+0	Output/re/Theme bash
+0	Up /[/
+0	End
+0	Type#c]
+1	Delete
+0	Hide+A
+0	Type@10ms : WaitPattern +
+1	Backspace@5ms
+0	End/a\\/ Width
+0	End
+0	ms
+0	Set +
+0	Sourceout//[/ Colorful
+0	Show +[ -
+0	Wait@1sfalse
+1	Wait+Line
+0	Ctrl A
+1	# +Alt
+0	End +ab:
+0	Hide CursorBlink = MarginFill
+0	Screenshot
+0	End
+0	Enterfalse
+0	CopyBogus
+0	Requireout/ Type
+0	Wait+Screen x .5 LoopOffset
+0	Wait+Screen Enter /[/MarginFill
+0	Set HideShell
+0	Outputsbash x.gif
+0	Env LoopOffsets.png
+0	Screenshot
+1	# 0 -1
+0	Wait+Screen@0ms x "x.gif"
+1	Delete
+0	Wait+Screen é" \
+0	Sleep /re/ LoopOffset"
+0	Env
+0	Wait+Screen@0ms ms /a\/b/
+0	Wait MarginFill "a" +
+0	Up +Enter 99999999999999999999
+0	Wait+Screen@0ms1.5 x.gif '
+0	Env
+1	# Width
+0	Insert'
+1	Delete
+0	Source{ CursorBlink =
+0	ShiftTypingSpeed
+0	Wait+Screen@0mss.png x.gif out/
+1	Wait@1s
+0	Enter Colorful#c +[
+0	Output \ % WaitTimeout
+1	PageDown
+0	Wait+Line s.png
+0	ms Margin
+1	Enter 0
+0	Delete{
+1	Paste
+1	Escape
+0	Set .5
+0	InsertMargin false #zz
+0	Env
+0	Type@10ms false
+1	Tab
+0	Alt FontSize -
+0	Type@10ms WaitTimeout
+0	Typeout//[/
+0	Alt Bogus@
+0	Output+Enter -1
+0	Wait+Screen +A +Shift
+0	Up+Shift- FontSize
+0	Copy 0 LoopOffset
+0	Screenshot +ab x.gif /a\\/
+0	InsertHide '
+0	Backspace@5ms1.5 +ab WaitTimeout
+0	Home #zzLoopOffset
+0	Source
+0	Show' 99999999999999999999@10ms
+0	ms A s.png 0
+0	Backspace@5ms /a\\/
+0	Type +A
+1	Delete @10ms
+0	Insert m
+0	Sleep ms #c WindowBar
+0	Wait@1s +Alt 10
+0	Ctrl 'b c'
+1	Space
+0	Space {
+0	Hide %
+0	Require 0 #c s.png
+1	Shift +ShiftLine
+0	Enter s -
+0	Copy /a\/b/ @0 1.5
+0	PageDowns.png
+0	Tab x
+0	SetHide"Line" 10
+0	Wait@1s TypingSpeed %
+0	Wait+Screen@0ms
+1	# "
+0	Home Bogus
+0	Spacea.tape
+0	Home s {^
+0	PageDown 10@10ms
+0	Wait+Screen@0ms#zz [
+0	ScrollUp "x.gif"Colorful
+1	Wait#zz
+0	Insert\
+0	Wait@1s m true
+0	Tab+[ + m
+0	Screenshot
+1	Delete
+0	Insert m
+0	Home {
+0	ScrollUpEnter
+1	PageDown
+0	Screenshot
+0	Wait+Screen/re/
+0	Output #c
+0	Backspace@5ms Theme- Colorful
+0	Require{"k": 1} "x.gif"
+1	Hide #c.5
+0	PageDown +
+1	Escape
+0	Source]
+1	Tab
+1	Space
+0	Source
+0	Screenshot"
+0	RequireScreen
+0	End xfalse +ab
+0	Copy @
+1	Set Width
+0	Shiftx.gif
+0	TabLine =
+0	Source
+0	Up-1x.gif
+0	Require"x.gif" +Shift#ff00ff
+0	Up1.5 1.5 +Shift
+0	Wait@1sWindowBar Hide Margin
+1	Wait+Screen
+0	Alt #zz
+0	Paste Margin /a\\/
+0	Hide %
+0	Set m
+0	PageDownTheme :
+0	Wait `d`
+0	Wait 10 WaitTimeout
+0	Insert 9223372036 A
+0	Screenshot Margin +Alt -
+0	Set
+0	Wait+LineWindowBar
+0	Requireout/ "a"
+0	Alt
+1	Up#ff00ff WaitPattern A
+0	Set out/9223372036
+0	PageDown "Line" WaitTimeout
+0	Wait+Screen@0ms+Shift +[
+0	Shift
+0	PageDownHide
+0	Output /a\/b/ TypingSpeed /[/
+0	Env
+0	ms ScreenHides.png
+0	PageDown Type
+0	Envm /a\\/Theme
+0	Shiftm
+0	Backspace@5ms /a\\/
+0	Type /a\\//a\\/out/
+0	Escape/[/
+0	Require Type WindowBar Screen
+0	Up : .5"
+0	Require +
+0	Wait+Screen@0ms ]
+0	Typeout/ "Line"
+1	Wait+Screen
+1	Delete
+0	Delete @10ms :
+0	ms:+ 'b c'
+0	Paste = A
+0	Backspace@5ms s.png ^ =
+0	Backspace@5ms A Width
+1	# x.gif
+1	Wait+Line
+0	ms +c ms
+0	Type@10ms CursorBlink Line
+0	Backspace@5ms CursorBlink Width FontSize
+1	Hide
+0	ScrollUp Bogus
+1	Up
+0	Backspace@5ms x `d` LoopOffset
+0	Type@10ms +
+0	SpaceLine ms
+0	Wait+Line :Rings
+1	Backspace@5ms
+0	PageDown+[ '
+1	Require out/
+0	Tab+abCursorBlink
+1	Wait
+0	SetRings
+0	Paste 0
+0	Output Colorful ' WaitTimeout
+0	Sleep.5 : false
+0	ms Type /[/
+0	Ctrl ] 1.5
+0	Homem 'b c'
+0	Delete [
+0	Wait+Screen@0ms WaitTimeout
+1	# #c +A {
+0	End+Enter '
+0	Require[
+0	EndTheme +Enter
+0	Wait+Line1@
+0	SpaceWaitPattern
+0	Alt: +Shift
+0	Wait@1s Bogus
+0	Ctrl "Line"
+1	PageDown 1.2.3
+0	Wait+Screen WaitPattern -1 x
+0	Wait@1sMargin /re/ 99999999999999999999
+0	ms
+0	Tab'b c'
+1	Space @10ms
+0	Ctrl
+0	Sleep Shell
+0	Env true#ff00ff :
+0	ms CursorBlink +Shift
+1	Copy A
+1	Space
+0	Wait+Screen - 1.2.3
+0	Home
+0	Space ] Shell+A
+0	Wait WindowBar +Enter
+1	Enter
+0	Show "a"LoopOffset +Alt
+0	Hide WaitPatternMargin
+0	Alt Enter out/
+0	Delete x.gif -
+0	Source Hide
+0	Screenshot
+0	Wait+Screen @10ms ^ WaitPattern
+1	Wait+Line
+0	Require Enter
+1	Escape
+0	Alt 9223372036 'b c'
+0	AltWindowBar +[ LoopOffset
+0	Env\ "Line"CursorBlink
+0	Enter /[/
+1	#
+0	Require
+0	Output A Colorful
+0	Output Type
+1	Backspace@5ms
+1	Type@10msfalseColorful
+0	Require Theme
+0	DeleteRings
+1	#
+1	Insert
+0	Ctrl `d`
+1	Wait+Screen
+0	Wait+Screen /re/"Line" :
+0	Output ] /a\\/
+1	Type@10ms "Line"
+0	Type@10ms +[ 9223372036 /re/
+0	Env#ff00ff
+1	Wait+Line #ff00ff [
+0	PageDown Bogus
+0	Delete WindowBar +Alt +[
+0	Escape 9223372036 TypingSpeed
+0	Wait+Screen@0msLoopOffset +A
+0	Wait+Line false
+1	Space
+1	# \ A
+0	Enter" CursorBlink0
+0	End
+0	Backspace@5msCursorBlink
+1	Delete
+1	Space#zz Enter {
+0	PageDownbash "x.gif"
+0	Wait+Screen@0ms WaitTimeout Shell@
+0	ScrollUp + +- +Enter
+0	Ctrl
+1	Delete
+0	Wait+Screen@0ms: WaitPatternLine
+0	Show .5 + a.tape
+0	Wait=
+0	Wait+Screen `d` bash
+0	Tab {"k": 1} Screen Colorful
+0	Type@10msCursorBlink ]
+0	Output
+0	ms1
+0	TypeWindowBar {"k": 1}
+0	Home{"k": 1}
+1	Show
+1	Type@10ms'b c'
+1	Wait
+1	Wait Enter
+0	Copy
+0	Set
+0	PageDown Rings %FontSize
+0	Wait@1s 0 m é
+0	Type`d` false
+0	Output
+0	Type@10ms
+1	Up #ff00ff
+0	Tab +abType
+0	Sleep {"x.gif"
+0	End out/ true "a"
+0	Screenshot
+0	Sleep
+1	Wait#zz a.tape 1
+0	Type /a\/b/ "a"
+0	ScrollUp A s.png
+1	Space 99999999999999999999
+0	Set^ s /[/
+0	Require +[9223372036 =
+0	Output ^@0
+0	Spaces.png +Alt 0
+0	Screenshot #ff00ffa.tape%
+0	Set ]WindowBar
+0	Enter0-
+0	Tab x.gif LoopOffset
+0	Copy +c
+0	ShiftLoopOffset@10ms/[/
+0	Backspace@5msLoopOffset"Line"
+0	Sleep #zz : #ff00ff
+1	Enter
+0	Backspace@5ms @0
+0	End +A
+0	ScrollUp @ #ff00ff
+0	Wait Theme s A
+0	Wait+Screen@0ms=
+0	Require {"k": 1} x.gif
+0	Up @0\
+0	End s.png
+0	Insert CursorBlinkout/
+0	ScrollUp 1 1
+0	Sleep Screen {"k": 1}
+0	Env CursorBlink
+0	Copy
+0	Copy
+1	Up
+0	Wait+Line "a" MarginFill WaitPattern
+1	Paste
+0	Env x+ s
+1	Space
+0	Alt @
+0	Env A
+0	Shift 0 +Enter 1.2.3
+0	Output bash Type s.png
+0	ms FontSize #zz
+1	Show
+1	Tab
+0	Hide Margin WaitTimeout
+0	Require
+0	Delete /a\/b/
+1	Enter
+0	Wait+Screen@0ms
+0	Wait+Screen@0msx out/
+1	Copy 'b c'
+0	End s.png '
+0	Type@0 +c
+0	Ctrl `d`@
+0	Wait 1.5 Shell
+0	Hide+Alt
+0	Space true
+0	Output+Alt Bogus
+0	Wait@1s " 99999999999999999999
+0	Hide[ Margin
+0	Wait+Screen@0ms
+1	Hide
+0	Set Width+-
+0	End [
+0	Source 01
+0	Paste .5
+0	Backspace@5ms MarginFillx ^
+0	Wait+Screen@0ms
+0	Copy0 /re/ true
+1	Insert
+1	Hide
+0	Screenshot Bogus0 #c
+1	# "
+1	Show
+0	Wait+Line +Shell/a\\/
+0	Space +
+0	Source
+0	Escape MarginFill
+0	Shift '
+0	Home
+0	Home MarginFill bash 0
+1	# LoopOffset 10TypingSpeed
+1	Type@10msTypingSpeed
+0	Screenshot
+0	Backspace@5ms WaitTimeout
+0	Type
+0	Alt
+0	Env Hidex true
+0	Hide WaitPattern
+0	Alt +Shift TypingSpeed :
+0	ms out/:
+0	Insert{
+1	Insert
+0	Source
+0	Ctrl Line +-
+1	Show
+0	Wait+Screens Margin
+0	Set
+1	Shift +A
+1	#
+0	UpTypingSpeed FontSize 99999999999999999999
+0	Escape Line +Alt"
+0	PageDownA
+0	Ctrl /re/ +c
+0	Home /a\/b/ +c
+1	#s Bogus `d`
+0	Altfalse #ff00ff #ff00ff
+0	ms +A
+1	Paste
+0	ms
+0	Tab 1 x.gif Line
+0	Up WaitTimeout
+0	Type@10ms% true {"k": 1}
+0	Wait+Screen Hide Rings
+0	Output%
+0	Require "a" @
+0	Tab out/
+0	Require
+1	ScrollUp
+0	Home`d`{
+0	ScrollUp" Type
+0	Type
+0	Type@10ms
+0	Shift Enter
+0	Up +[ false
+0	Copya.tape "Line"ms
+0	Insert a.tape x
+0	Paste MarginFill
+1	Show
+0	Wait+Screen@0ms10bash
+1	Show
+0	Wait+Screen@0ms+Shift
+0	Ctrl @10ms
+0	End
+0	PasteFontSize bash
+0	TabHide Theme bash
+0	Copy é
+0	Delete x
+0	Source +Alt@10ms +c
+0	Copy
+1	Backspace@5ms
+0	Wait+Screen CursorBlink +- ^
+0	Copy
+0	ScrollUp bash Theme {
+0	Wait+Line+abShell
+0	Wait@1s "x.gif" MarginFill 99999999999999999999
+0	Wait+Screen@0ms
+1	Wait+Screen
+0	Set /re//[/
+0	DeleteHide'b c' @
+0	End
+0	Wait@1s +Enter
+0	Copy
+0	Set bash
+0	Shift
+0	Require m x.gif WaitPattern
+0	Set ]
+0	Space Line
+0	EscapeScreen
+0	Insert `d` [é
+0	End
+0	End Hide 9223372036
+0	PageDown-1
+0	Escape\+ab
+0	Require CursorBlink Shell {"k": 1}
+1	Source a.tape
+0	Up CursorBlink Type ms
+0	Alt
+0	Shift
+0	Hide"
+0	WaitShell
+0	Escape bash true
+0	Show Theme ms FontSize
+1	PageDown
+1	Wait+Screen
+0	Wait+Screen@0ms "a" Shell
+0	Insert AFontSize
+0	Require [ WindowBar
+0	Ctrl false /re/ @
+0	Show @10ms ^+Enter
+0	Alt=
+0	PageDown -
+0	HomeA +abMarginFill
+0	Wait+Screen@0ms
+0	Escape CursorBlink
+0	End
+0	Set
+1	Insert Hide
+1	Wait@1s
+0	End +[1.5
+0	Output#ff00ff true /a\/b/
+0	Paste +cFontSize
+1	#x
+0	ms #zzTheme Colorful
+0	Type99999999999999999999 @10ms A
+0	Wait+Screen@0ms +A #zz^
+0	Require
+0	Insert MarginFill
+0	Shift WaitPattern
+0	Backspace@5ms x.gifLoopOffset
+0	Escape Theme #ff00ff `d`
+1	Set TypingSpeed
+0	Home @0a.tape
+0	Ctrlm WaitTimeout
+1	PageDown
+0	PageDown Line WaitTimeout +[
+0	Alt {"k": 1} Type `d`
+0	Set Theme1 {"k": 1}
+0	ScreenshotFontSize =
+1	Backspace@5ms
+0	Sleep Enter LoopOffset
+0	Copy [ -1
+0	SetWaitPattern1
+0	Tab 'b c'
+0	Sleep#ff00ff Colorful
+1	Paste
+0	Output
+1	Type A-1
+0	Home
+0	EndMarginFill /a\\/
+0	Home s.png +Alt a.tape
+1	Insert
+0	Delete {"k": 1}bash
+0	Sleep 9223372036 +- Margin
+0	Home 99999999999999999999 /re/
+0	End+ab
+0	Copy
+0	Up {"k": 1} 1 Theme
+1	Space
+0	Wait+Screen@0ms
+0	Wait+Line + WindowBar+ab
+0	Wait+Line "Line" false
+0	Copy
+0	Home x.gif é true
+0	Paste A1
+0	Wait+Screenx.gif +
+0	ShowWaitPattern .5-1
+0	Shift[
+0	Home Theme
+0	Wait@1s Width Screen =
+0	Screenshot
+0	Shift WindowBar "a"
+1	Tab
+0	Home
+1	Up
+0	Insert -1
+0	Set +Shift
+0	Output Shell
+0	Ctrl0 [
+0	Hide] bash+[
+0	Shift 9223372036
+0	Insert Line WindowBar
+0	Screenshot
+0	Alt +Shift
+0	Backspace@5msWaitTimeout Colorful bash
+1	Enter Hide
+0	Home s.png
+0	Screenshot#c
+0	Sleep0 m
+1	Wait@1s
+0	Wait+Screen@0ms
+0	Ctrl "a" @10ms
+0	ms Line @0
+0	Wait@1sWidth 10
+0	Show Rings Enter @0
+0	Wait+Screen LoopOffsettrueWaitTimeout
+0	PageDown +A
+0	Escape 99999999999999999999 +c
+0	Screenshot @ bash
+0	Hide Line ms
+1	Hide
+0	EnterHide Theme-
+0	Output
+0	Escape Width
+1	Tab
+1	Hide
+0	ShowShell ms
+1	# 10Width 9223372036
+0	PageDown @0 "Line" :
+0	Insert ms
+0	ScrollUp = [ Colorful
+0	ms s.png
+0	Insert Shell =
+0	Escape+[
+0	HideCursorBlink Colorful
+0	Escape]^
+0	ms #c
+0	Sleep Colorful false
+0	Shift
+0	Tab WaitPattern
+0	Output/re/ x.gif `d`
+0	ms %
+0	Ctrl
+0	TypeWaitPattern { ]
+0	Show A Width #zz
+0	Source
+0	Source'b c' /a\/b/ +ab
+0	Insert @ { true
+0	Show @10ms 0 1.5
+0	Insert /a\\/ .5
+1	# @ 99999999999999999999
+0	Shift Line
+0	Set:
+0	Source WaitTimeout ]
+0	Type@10ms
+0	Up = [{
+0	Enter Rings9223372036
+1	Type `d`
+0	PageDown +[
+0	Hide /a\\/ /a\/b/
+0	Wait+Screen@0ms
+1	Wait+Screen
+0	Output Screen MarginFill
+0	ScrollUp "
+0	PageDowné ms
+0	ShiftTheme -1
+1	Show #zz
+0	Ctrl FontSize-1 Hide
+0	Alt
+0	ms 10
+0	Escape @0 /re/ s.png
+0	Type é1.2.3^
+0	Wait+Line 9223372036 x +A
+0	Wait@1sType Bogus
+0	ScrollUpWindowBar
+0	Hide TypingSpeed
+0	Output
+1	Up #zz
+0	ms +- :MarginFill
+0	Hide @0/[/
+0	Hide false
+0	Wait+Screenx %
+0	Enter +c Shell :
+0	Space WaitTimeout 1 LoopOffset
+0	End
+1	Type@10ms9223372036 x
+0	Source false [
+0	Require Theme
+0	Source
+0	Space 1 ms
+1	Wait@1s#zz
+1	Wait
+0	Sleep true
+1	Wait
+0	Source
+0	End
+0	Type@10msFontSize - =
+0	Output"a" +[FontSize
+0	Wait+ScreenType Enter '
+0	ms @ +-
+0	Type
+0	ScrollUp 0 +Alt
+1	Space
+0	PageDown TypingSpeed `d`'b c'
+0	Wait+Screen @0
+1	Type@10ms bash Line
+0	Wait+Screen MarginFill `d` Screen
+0	Wait + 1.5
+0	Shift ^ m
+1	Enter #ff00ff
+0	Wait+Line /re/ `d` -1
+0	Env
+1	Space
+1	Wait+Screen
+0	ms
+0	Screenshot Line 0 "a"
+0	Outputbash Enter+
+0	Shift99999999999999999999 WaitTimeout
+0	ScrollUp /re/]
+0	ms +Shift
+0	Sleep #ff00ff
+0	PageDown+Enter +c
+0	ScreenshotFontSize/a\/b/ #c
+0	Sleep "Line"
+0	Env -1+Alt Theme
+0	Alt -
+0	Escape -
+0	Backspace@5ms x.gif
+0	PageDown /a\/b/
+0	Wait bash éLine
+0	Hide : .5 -1
+0	Wait@1s false @
+0	ScrollUp "Line"- Screen
+0	ms
+0	Type@10ms m
+0	Insert CursorBlink WaitTimeout x
+0	Paste"Line" Shell
+0	Enter TypeLoopOffset .5
+0	Copy 'b c' @
+1	Wait
+0	Escape Rings x.gif+-
+0	UpFontSize{"k": 1} Theme
+0	Type Shell
+0	Wait+Screen@0ms A
+0	Space Type
+0	Wait+Screen@0ms 1
+0	Wait m
+0	Home `d` /[/10
+0	ScrollUpWidth
+0	Insert @0 0 -
+0	TypeBogus @0 +Enter
+0	Wait+Screen /a\/b/ 1.2.3
+0	Alt /a\/b/Hide +A
+0	Wait+Screen@0ms -
+0	ScrollUp out/
+0	Source Type
+0	Space +Enter ^
+0	Copy 'b c' Theme
+1	ScrollUp
+0	Screenshot WaitTimeout a.tape
+0	Delete WindowBar bash
+0	Paste`d` LoopOffset +
+0	Show LoopOffset false+Enter
+0	Space {"k": 1} WindowBar
+0	Type@10ms0 bash WaitPattern
+0	Backspace@5msBogus
+0	Shift
+0	Hide "a" Screen
+0	Require
+0	Type +[
+0	Hide "a" 0 A
+0	Type@10ms
+0	Wait+Screen@0msWidth WaitPattern
+0	Sleep /[/ShellFontSize
+0	Up Theme Colorful
+0	Alt TypingSpeed CursorBlink
+1	ScrollUp
+1	Wait+Line
+0	Upx
+0	Screenshot
+0	Wait+Screen MarginFill@ @10ms
+0	Waits.pngWaitTimeout
+1	Wait
+0	Show +Shift
+0	Up Margin
+0	Wait@1s Shell+{
+0	Wait@1sLoopOffset '
+0	Show WaitPattern
+0	EndFontSize
+0	Sleep
+0	Source1.2.310
+0	Type@10ms +[ /a\/b/ /re/
+0	UpWaitTimeout
+0	Hide false
+1	Wait+Screen
+0	Output +Shift
+1	Type@10ms out/
+0	CopyCursorBlink/re/
+0	Home TypingSpeed
+0	Hide /a\\/ bash +c
+0	Backspace@5ms é
+0	msWindowBar
+0	Ctrl 99999999999999999999 `d`
+0	Set
+0	Require
+0	Set"a"@ false
+0	Escape bashout/ bash
+0	Type@10ms MarginFill Margin +Alt
+0	Hide true 'b c'
+1	Wait #zz TypingSpeed'
+0	Escapex.gif
+1	Wait@1s
+0	Delete +ab x
+1	Hide
+0	Outputx "a"Margin
+0	Show `d`
+0	Set #zz@0
+0	Wait@1s @
+1	Wait
+0	Sleep
+0	Enter 9223372036 Rings
+0	Home#zz=
+1	Hide #c
+0	Wait+Screen 0 +Screen
+0	Set
+0	Wait+Screen@0ms 199999999999999999999
+0	Backspace@5ms \ Margin +
+0	Enva.tape CursorBlink
+0	Wait+Line% Type0
+0	ScrollUp Theme {"k": 1}
+0	ms@0 "a" 1.2.3
+1	Copy FontSizeScreen a.tape
+0	EndEnter/[/Margin
+0	Type@10ms +Shift10
+0	Backspace@5ms Screen+[MarginFill
+0	Space s1
+0	Type@10ms
+0	Escape WaitPattern false a.tape
+0	PageDown % #zzLine
+0	Wait+Screen: ms=
+0	Insert \ +Enter Hide
+0	Backspace@5ms[ "
+0	Home #c
+0	Ctrl /a\\/WindowBar 1
+1	Hide #zz 1.5 x
+0	Sleep
+0	Delete Screen
+0	Wait+Screen@0ms Colorful +Shift ms
+0	Wait Line
+0	Home .5
+0	Up Bogus +c Type
+0	ms
+1	#"
+0	Wait@1s +ab #c
+0	Env +A ]
+0	Enter 1.2.3 "
+0	Wait+Screen 9223372036 .5
+1	# 'b c'`d` ms
+0	Wait@1s +Alt
+0	Type
+0	Space Colorful WindowBar
+0	End +Shift out/+A
+0	Screenshot Bogus/re/
+0	Up Theme{"k": 1} 10
+0	Screenshot /a\/b/ s
+1	Wait
+1	Wait
+1	Wait+Line
+0	Copy[
+0	Require Rings = LoopOffset
+0	Delete0 x
+1	Backspace@5ms
+0	OutputLine 0=
+0	Ctrl ' ] [
+1	Hide
+1	Insert
+1	Show #c+Shift@
+0	Screenshot 99999999999999999999
+0	Set+-
+0	Sleep s.pngCursorBlink /a\/b/
+0	Sleep
+0	Require
+0	Tab MarginFill é
+0	Insert m Line
+0	Sleep
+0	Wait \99999999999999999999 +A
+0	Wait+Screen+ShiftColorful 1.5
+0	Ctrl ' Margin
+0	Output ms CursorBlink
+0	Alt
+0	Paste ms
+0	Home '
+1	Wait+Screen
+1	Space #ff00ff bash Enter
+0	Shift true :bash
+0	SetMargin
+0	Up x.gif
+1	#
+1	Space 1.5
+0	Delete ms 1 {"k": 1}
+0	Source Margin ^
+1	Type@10ms10
+0	Escape +-
+0	Alt Line /a\\/
+0	PasteShell
+1	Set TypingSpeed #cFontSize
+0	Alt WindowBar ]
+0	Sleep +- true
+0	Envx
+0	Backspace@5ms 10 m x.gif
+0	Source /a\/b/a.tape "x.gif"
+0	Wait@1s [] "Line"
+0	Show `d`+-#c
+0	Wait+Enter
+0	Wait@1s +A
+1	Copy x
+0	Delete s
+1	Wait+Screen
+1	#
+0	Env+Alt true99999999999999999999
+0	Set
+1	Show
+0	Set
+0	Ctrl
+0	Home
+0	Delete @ #zz
+0	Space1.2.3 Width @10ms
+0	Show @10ms
+0	Backspace@5ms /a\/b/ @10ms Theme
+0	Backspace@5ms FontSize +[ out/
+0	EnterRings 0#zz
+0	PageDown @#ff00ff {"k": 1}
+0	Wait 10
+0	Require
+0	Screenshot {"k": 1}
+0	Type : "Line"
+0	Tab bash
+0	Wait+Screenx @0
+0	End /[/ 'b c'
+0	ScrollUp+Alt{
+0	End +c +-
+0	Env
+1	PageDown
+0	Set /re/
+1	Wait+Screen
+0	Tab é 9223372036 /[/
+1	Up
+1	Wait+Line
+0	Sleep Theme +[
+0	Wait+Screen@0ms false
+0	Type@10ms @
+1	Delete
+1	Wait
+1	Wait@1s
+0	Delete /a\\/ -
+0	Enter +[
+0	Set 9223372036
+1	Wait #ff00fffalse
+0	PageDown {"k": 1}out/ +-
+0	PageDown"a" "Line"
+1	Delete
+0	Enter +Enter +Enter
+0	Wait+Line Screen /[/é
+0	Shift x.gif s"Line"
+0	Type@10ms
+0	Wait+Linems
+0	Paste +ab m
+0	Set
+0	Type#zz FontSize WaitPattern
+0	Screenshot +c WaitPattern
+0	Sleep RingsWaitTimeout
+0	Source
+0	Output "Line" \'
+0	Wait+Screen@0ms #zz
+0	Ctrl
+0	Home
+0	Tab x: 10
+0	Delete a.tape s.png Shell
+0	Wait+Screen = WindowBar Line
+1	Show
+0	PageDown { +Alt x.gif
+0	Copy é +Enter
+0	Backspace@5ms "a" s 9223372036
+0	Screenshot +[ Themems
+0	Enter 1.5"Line"
+0	EnvBogus
+0	Type WaitPattern
+0	Paste Shell {"k": 1} %
+0	Source
+0	CopyShell m
+0	Wait+Screen@0ms = ^ 1.2.3
+0	Wait+Screen@0ms+-
+0	Paste {"k": 1}
+0	PageDown /a\\/ 'b c'
+0	Require #zz ms
+0	Wait@1s 1.2.3 é
+0	msMarginFillFontSize Type
+0	Enter m/re/9223372036
+0	ms@
+0	Home Shell
+0	Copy
+0	Escape a.tape
+0	Wait+Screen"x.gif"
+1	Backspace@5ms
+1	Set WaitPattern
+0	Home [
+0	Wait+Line = Width
+0	Source 9223372036
+0	Alt ] Hide
+0	RequireMargin] ms
+0	Insert ms
+0	Screenshot "Line"
+0	Escape=1.2.3
+0	Tab s
+0	Type
+0	Escape x.gif
+0	Wait@1s Width s.png #c
+0	Show {"k": 1}Enter "Line"
+0	Wait"x.gif"
+0	Backspace@5ms /[/ { true
+0	Ctrl
+0	InsertRings 0@0
+1	# s.pngbash Shell
+0	Screenshot Theme/[/
+0	Output 9223372036Type
+0	Require 1.2.3Width "a"
+0	Enter TypingSpeed
+0	Wait+Screen@0ms 9223372036
+0	Paste a.tape #c
+0	Wait+ScreenWidth 0 Enter
+0	Set "Line"
+0	EndColorful
+0	Output
+0	Ctrl @0
+0	Wait@1s 1.2.3 99999999999999999999
+0	Wait@1s +
+0	Escape `d` /a\\/%
+0	Set a.tape 99999999999999999999
+0	Screenshot
+1	Hide
+0	Wait+Line Line Shell
+0	End CursorBlink@0
+0	Alt
+0	ShiftScreen
+0	Wait+Screen@0ms Screen
+0	ScrollUp99999999999999999999/a\/b/ [
+0	CopyWidthm
+1	Wait+Line #zz
+0	Insertout/] .5
+0	Backspace@5ms 1.5 false
+0	Home
+0	Type@10ms
+1	Wait+Screen
+1	PageDown 1.5
+0	Home
+1	Wait+Line
+0	ms ^
+1	Up
+1	PageDown #c "
+0	Env #zz WaitTimeout
+1	# +- Type
+0	End Width
+0	Space {"k": 1} @10ms :
+0	Show /a\/b/
+0	Hide+ab +c
+1	Delete
+0	Space é
+1	Up
+0	Home=
+0	Env +Enter
+0	Sleep "a"
+0	Require .5`d`Enter
+0	Ctrl Margin
+0	ScrollUp TypingSpeed @ 'b c'
+0	UpWaitPattern
+0	Alt
+1	Paste
+0	Hide {"k": 1} /a\\/
+0	Copy +[WaitTimeout
+0	Wait+Screen 10"x.gif" -1
+0	End bash #zz 1
+1	#+AltMargin/a\\/
+0	Shift é9223372036
+0	End
+0	Deletex.gif @ CursorBlink
+0	Wait@1s FontSize9223372036
+1	Wait@1s #c /re/ MarginFill
+0	Alt é' '
+0	Tab /a\\/
+0	Type@10ms +A % ]
+0	Wait@1s+A \ FontSize
+0	Require
+0	Backspace@5ms Width +Enter `d`
+0	Sleep "a"
+1	Wait+Screen
+1	#
+0	Output\ ^
+0	Shift
+0	Hide x "Line"out/
+0	Wait+Line {"k": 1} =
+0	PageDown Theme MarginFill out/
+0	Insert LoopOffset ' Screen
+1	Wait
+0	Type s.png/a\/b/ `d`
+0	Backspace@5ms [
+0	Alt
+0	Wait@1s " { Theme
+1	Wait@1s
+0	Wait+Screen CursorBlink [ /a\\/
+0	Screenshot bash
+0	Delete = .5 /a\/b/
+0	Sleep
+0	Env x.gif {"k": 1}9223372036
+0	Env @0Width \
+0	Wait+Screen@0ms
+1	PageDown 9223372036
+0	Shift
+1	Hide
+0	Enterms \
+0	Screenshot
+0	ScrollUp Line Margin
+0	Backspace@5ms x.gif -1
+0	Copy#zz 1.2.3
+0	Type@10ms
+1	# `d`
+0	Copy +c - @10ms
+0	PageDown "a"
+0	Source Bogus Margin
+0	Type@10ms "Line" 1.2.3
+0	Paste \ /[/
+0	Type@10ms "a" + true
+0	Up [ '+c
+1	Wait+Line
+1	Space
+0	Escape LoopOffset ' out/
+0	Delete 'b c' +Enter
+0	ScrollUp {"k": 1}
+0	Wait+Screen@0msTypingSpeed CursorBlink Colorful
+0	End "Line" 9223372036
+1	Hide
+1	Space
+1	Require FontSizes
+1	Wait+Line #ff00ff
+0	Env +EnterWaitPattern A
+0	PageDown "Width
+1	Wait
+0	End
+0	Wait+Screen \+- /a\\/
+0	Set Hide
+1	# CursorBlink Shell
+0	WaitHide %
+0	Wait Enter"x.gif"
+0	Space m
+0	Space +Enter
+1	Escape
+1	Tab
+0	Screenshots Shell
+0	Shift /a\/b/
+0	Wait Hide 1.2.3 "x.gif"
+0	Wait+Screen@0ms\ ms /a\\/
+0	End
+0	Delete s
+0	Shiftbash
+0	ms% +Enter
+0	Space s WaitPattern
+0	Output -
+0	PageDown /a\/b/ TypingSpeed Hide
+0	ms
+0	Wait@1s +c
+0	Home Bogus +cs
+1	# /re/
+0	ms 'b c'
+0	Home
+0	Insert Rings ms
+0	Escape 1 FontSize
+1	PageDown
+0	Paste + false \
+0	Wait+Line a.tape
+0	Shift
+1	Enter
+0	Home { = '
+0	Shift Bogus
+1	PageDown
+0	Env
+1	#
+0	msHide 10FontSize
+1	Hide
+0	Type
+1	Show
+0	Paste WindowBar -1
+0	Wait@1s+[.5
+0	SpaceWindowBar
+0	Home +- +c
+1	Escape
+0	Wait+Screen@0ms x WaitTimeout Enter
+0	Delete ms
+0	Copy @ +Enter#zz
+0	End s.png =
+1	Wait
+0	Set +Alt
+0	Screenshot #ff00ffWidth
+0	Space 1a.tape 10
+0	Shift 'b c' Enter
+1	Enter
+0	Home s.png
+0	Backspace@5ms /a\/b/ 1.5 +A
+0	Backspace@5ms Theme
+0	End WindowBar\
+0	Sleep#c
+1	Up
+0	Type 1.5 TypingSpeed true
+1	#+Alt .5.5
+1	Up #zz { Bogus
+1	Enter
+0	Enter+Enter + A
+1	Tab
+0	PageDown +c Theme
+0	Type@10ms +[ CursorBlink
+1	# +-false \
+0	Type
+0	Type@10ms"x.gif" -1 /a\/b/
+0	Shift' 1.2.3 #ff00ff
+0	Tab s m
+1	#
+1	Wait@1s
+0	Copybash
+0	Alt @
+0	Alt =x.gifEnter
+0	Up CursorBlink WaitPattern +Shift
+1	Enter
+0	Source +Enter #zz
+0	Shift `d`
+0	Backspace@5ms '#ff00ff
+0	Home
+0	Wait /[/
+0	Shift" `d` =
+0	Wait+Screen@0msWidth 0
+1	#1.2.3 +Alt
+0	ms CursorBlink+Enter
+0	ms ]
+0	HomeLoopOffset
+1	Insert
+1	Hide
+0	Output 0 bash
+0	PageDown{"k": 1} % @10ms
+0	ms -1
+1	Paste
+0	Backspace@5msHide
+0	Wait@1s Enter s.png ms
+0	Delete`d` WaitPattern`d`
+0	Space"x.gif"0 .5
+0	Set
+0	ms
+0	Backspace@5ms =@10ms Enter
+0	Enter +c Hide =
+0	Require
+0	Wait+Screen +-[
+0	Env = 10
+0	ms
+0	Type@10msTheme 99999999999999999999
+1	Backspace@5ms
+0	Hide /re/@false
+0	Copy
+1	#
+0	ms FontSize #ff00ffFontSize
+0	Backspace@5ms - Theme
+1	Hide Hide
+0	Hides
+1	Paste
+0	Shift +Alt Line
+0	Ctrl
+0	Type@10ms
+1	# +A
+0	Type@10ms
+0	Show+Enter 10
+1	Space
+0	Insert +A"x.gif"
+0	ms Theme
+1	Show
+1	Copy x
+0	Env + WaitTimeout @10ms
+0	PageDown CursorBlinkWaitTimeout 1.5
+0	Ctrl "x.gif" LoopOffset
+1	Hide
+1	Hide
+0	Sleep %
+0	Type@10ms Colorful +Alt false
+0	Type@10ms #zz
+0	Paste +A WaitPattern
+0	Set
+0	Home +Alt xMargin
+1	ScrollUp@ 1
+0	Insert "Line" .5
+0	Wait "Line"
+0	Backspace@5mss
+1	Hide
+0	Output
+0	Wait+Line x.gif TypingSpeed ^
+1	Show
+1	Escape #c#ff00ff s.png
+0	Wait \
+0	Backspace@5ms Type
+0	End+Alt
+0	Up ^ 99999999999999999999
+0	Copy
+0	Space +Shift Theme
+0	Delete +Alt
+0	Ctrl #ff00ff
+0	Copy"x.gif"= A
+0	Wait +Shift -1
+0	Ctrl] 99999999999999999999
+1	ScrollUp
+0	Space Width true
+0	Delete1.2.3 /a\\/bash
+0	PageDown -1 +c
+0	Backspace@5msWaitPattern ] +[
+0	Screenshot +-Shell
+0	End false
+1	Space
+0	PageDown Margin Width
+0	Space /a\/b/
+0	Env
+1	PageDown #ff00ff
+0	Backspace@5ms +[
+0	DeleteLoopOffset
+1	Wait+Line#zzHide 0
+0	Pastems
+0	Wait+Line "a"
+0	End +A
+0	Wait+Screen@0ms % CursorBlinkx
+0	Delete\ out/
+0	Backspace@5ms {
+0	PageDownA
+0	Escape `d`"Line"
+1	PageDown
+0	Type
+0	Wait+Screen@0ms
+1	Backspace@5ms
+1	Up
+0	Type
+0	Wait+Line MarginFill +- out/
+0	Ctrl 'b c' "a" +A
+0	Wait +c+ 10
+0	Wait s.pngRings
+0	ScrollUp ] \ out/
+0	Tab ]
+0	Alt
+0	Sleep
+1	Wait@1s
+1	Show
+0	Tab /a\/b/ +c
+0	Output
+0	DeleteTheme
+0	Copy
+0	Wait+Screen "
+1	Show
+0	Ctrl
+0	Env \
+0	Show /a\/b/
+0	Alt Hide
+0	ScrollUp1
+1	Up
+0	Paste ] é
+0	Wait+Screen@0ms /a\\/bash Type
+0	ms=
+0	Shift
+0	End
+0	Source% 1.2.3 Margin
+0	Backspace@5ms +A 1.5
+0	Wait+Screen@0ms `d`
+0	Screenshot +Alt
+0	Source
+0	Wait+Screen@0ms =/a\/b/ 1.2.3
+0	Enter .5 Width
+0	Wait"a" Rings Hide
+0	Screenshot
+0	Sleep Margin
+0	Type x CursorBlink %
+1	Enter
+0	ms /[/
+0	Env= % /a\/b/
+0	Type@10ms TypingSpeed [ #ff00ff
+0	Wait+Screen A @ m
+0	Sleep TypingSpeed/[/+c
+0	Waits"Line" @10ms
+1	Show
+0	Shift'ms LoopOffset
+0	PageDownLine 1.2.3
+0	ms
+0	Shift{"k": 1}
+0	Copy #c ms %
+1	Space
+0	Sleep#c #zzé
+0	Wait+ScreenFontSizex -
+0	Wait+Screen@0ms
+0	Wait s.png
+0	SourceTypingSpeed
+0	Screenshot+A
+0	Home Line s.png {"k": 1}
+1	Shift +Enter
+0	Sleep a.tape +Enter
+0	Wait+Line+Enter +Enter
+0	Screenshot
+0	Paste WidthShell A
+0	Ctrl Theme WindowBar
+0	Copy FontSize
+1	Wait+Screen
+0	Show + { =
+0	ScrollUpTheme\
+1	Delete
+0	Output +[ ] TypingSpeed
+0	Paste x WaitTimeout%
+1	# Colorful
+0	Set Type Bogus
+0	Hide @ ms+-
+0	Show -'b c' +-
+0	Enter WaitPattern
+0	Backspace@5ms -1 Shell
+0	Copy `d` 1.2.3
+0	ms/[/ 10
+0	Wait+Screen@0ms
+0	Hide "
+0	Home
+0	Sleep
+0	Output 0+Shift ms
+0	Escape % WindowBarTheme
+1	Wait
+0	Up +[
+0	Insert +[
+0	Type@10ms
+0	EnterHide+ é
+0	Up .5Width
+0	OutputWidth +A
+0	Set "true
+0	ScrollUp ^
+1	Insert
+0	Ctrl /[/ TypingSpeed @10ms
+1	Hide
+0	Space ms/re/
+0	ms
+0	Tab Screen
+0	Source
+0	End
+0	Source
+0	Type@10msCursorBlink {"k": 1} Margin
+1	Wait@1s
+0	Output x.gif -1 false
+0	Shift ms #c
+0	Shift WindowBar FontSize WaitTimeout
+0	Home 9223372036 s.png
+0	Wait+Screen@0ms
+0	Space {"k": 1} Rings/a\\/
+0	Enter ShellWaitTimeout
+0	Screenshot
+1	Wait@1s
+1	Wait+Line
+0	Ctrl [
+0	Sleep
+0	Wait+Line Screen /re/ Colorful
+0	Source Width /a\/b//a\\/
+0	Escape +
+0	Wait+Screen@0ms Margin
+0	Tab +ShiftWaitPattern
+0	ms '
+1	Insert
+0	Sleep
+0	Paste LoopOffset
+0	Type { falseout/
+1	Space
+0	Wait CursorBlink
+1	Wait+Line
+1	# Width/a\/b/99999999999999999999
+0	Wait+Screen A /a\/b/ #ff00ff
+1	Wait
+0	msBogus - #c
+1	Env 99999999999999999999 out/
+0	Paste [
+0	Home^
+0	Env
+0	Paste s ^
+1	Ctrl +Alt Enter
+0	Set = WaitTimeout
+1	ScrollUp
+0	Space +Shift x.gif
+0	Enter ms
+0	Env
+0	PageDown Margin
+0	Ctrl
+0	Alt : "Line"
+0	Wait a.tape
+1	Wait
+0	Screenshot
+0	Set
+0	Copy Margin Theme
+1	# \ #ff00ff é
+0	Hide FontSize
+0	Copy LoopOffset LoopOffset
+1	Output x.gif-
+0	Backspace@5ms Screen
+0	Showbash /a\\/ /[/
+0	Wait 1 /a\\/WaitTimeout
+1	Insert #zz #c
+0	Tab x.gif
+1	Require x
+1	Show
+0	Enter A=
+0	PageDown @0 s.png "
+1	# MarginFill
+0	Enter +ab[{
+0	Require #ff00ff= WaitTimeout
+1	# #c
+1	Wait@1s
+0	Env"a"
+0	Escape 9223372036 MarginFill
+0	Alt
+0	Wait x.gif
+0	Output
+0	Type@10ms -
+0	Ctrl ms1.2.3 /a\\/
+0	Type@10msfalse "Line" :
+0	Insert "Line" 1.2.3
+1	ScrollUp
+0	Wait+Line@ =Colorful
+1	Escape
+0	Wait+Screen@0ms .5 Type
+0	Wait ' s.png A
+0	Paste 0
+1	Insert
+0	Output
+0	EnvLine
+0	Copym
+0	Env0 "x.gif"
+0	Shift +A 9223372036 Margin
+1	# - s.pngFontSize
+0	Output1 +ab
+0	Screenshot +A #c
+1	# WindowBar
+1	Require x.gif #ff00ff m
+1	Space
+0	PageDown ms +c
+0	ms /re/ MarginFilltrue
+0	Pastebash +
+0	Shift
+0	Show Bogus s.png
+0	Paste x.gif
+0	Wait+Screen@0ms
+0	Wait+LineRings a.tape /re/
+0	Wait+Screen@0ms 0Enter
+1	Delete
+0	Type@10ms/[/ x.gif /[/
+0	Alt
+0	Wait+Line true 9223372036
+0	Env {
+1	Tab
+0	Wait+Line LoopOffsetMarginFill @0
+0	End `d`
+1	Wait+Line
+1	Wait+Screen
+1	PageDown
+0	End CursorBlink +ab
+0	Source\ x Hide
+0	Delete ShellHide
+0	Shift Line a.tape Margin
+0	End Theme+ Shell
+0	ms {"k": 1} 1.2.3 FontSize
+0	Sleep"x.gif"
+0	Wait+Screen@0ms Rings
+0	Output \ 1
+0	Env
+0	Type@10ms Type 0 "
+1	Insert
+0	Screenshot
+1	Wait
+1	Shift+ab
+0	Source /re/ +Enter
+0	Require +Enter
+0	Wait+Screen Type
+0	Set
+0	Set Bogus
+0	Output
+0	Escape Hide {-1
+0	Screenshot .5-
+0	ms +ab
+0	Wait+Line Theme Rings^
+0	Type {
+0	Ctrl
+0	Wait+Line/a\\/ 1.2.3 9223372036
+0	Sleep
+0	Sleep Line+ab
+0	PageDown +Enter
+0	Escape a.tape
+0	ms
+1	Wait@1s
+0	ms
+1	ScrollUp
+1	Hide
+0	ScrollUp falsex.gif +
+1	Wait+Line
+0	Wait+Screen@0ms
+0	Output
+0	Output
+0	Home
+0	Source m "
+1	#
+0	Paste { TypingSpeed 9223372036
+0	Wait+Screen a.tape MarginFill
+0	Screenshot 9223372036
+0	Home ms\
+1	# Rings+A
+0	ScrollUpBogus
+1	Hide
+0	Type TypingSpeed
+0	Up + 0
+0	Type +-
+0	ms
+1	Paste
+0	Backspace@5ms"Line"
+1	ScrollUp
+0	Output 1.599999999999999999999
+0	Wait+Screen@0ms WaitTimeout
+1	Set Width
+0	Type CursorBlink
+0	Wait+Screen@0ms
+0	Require 'b c' +Shift
+0	EndCursorBlink TypingSpeed /re/
+0	Backspace@5ms Screen
+1	Space
+1	Hide
+0	Backspace@5msWaitPattern FontSize "
+0	Env
+1	Wait@1s
+0	Backspace@5ms1.2.3 99999999999999999999 +Shift
+1	# 99999999999999999999
+0	Ctrl/re/
+0	Insert {"k": 1} Colorful
+0	Wait+Line +Alt
+0	Source 99999999999999999999 1.5 +Enter
+1	#{"k": 1}
+0	Endx.gif
+0	Screenshot Colorful 1.59223372036
+0	Ctrl Hide
+0	Output
+0	Hide WindowBar
+1	# Line +Alt x
+1	Require a.tape
+1	Show
+0	Set Colorful #c
+0	Screenshot /a\/b/
+0	Source"
+0	Alt
+0	Ctrl bash
+1	Hide
+0	Hide+-
+0	Escape Screen
+1	Show
+0	SourceMargin Width WaitPattern
+0	End
+0	Enter @0 Enter +[
+1	Up
+0	End FontSize `d`
+1	Hide
+0	Copy [Margin
+0	Ctrl 'b c' 'b c'
+0	Shift
+0	Space FontSize
+0	Shift
+1	Insert 10
+0	Screenshot/re/
+1	Show #c +- WaitTimeout
+0	Wait+Screen@0ms
+0	Output+c@0
+0	WaitType
+0	Alt
+0	Home out/WaitTimeout1
+0	Homexx.gif
+0	Source +Shift sé
+0	Escape +c
+0	Env @0 ^
+0	Sleep+Shift
+0	Show1.2.3Theme
+0	Wait@10ms = +-
+1	Enter
+1	ScrollUp
+0	Ctrl99999999999999999999"x.gif"
+0	Output @10ms
+1	#
+0	Space true
+0	Copy
+0	SourceBogus
+0	Wait+Screen .59223372036 out/
+0	Hide WaitTimeout
+0	PageDown ]
+0	Screenshot a.tape{ out/
+0	Require@0
+0	Screenshot '-
+0	Output @ Theme
+0	Escape Bogus FontSizeColorful
+0	Type@10ms#zz
+0	Sleep bash Screen -
+0	Type[ /[/`d`
+0	Shift'
+0	Delete [ { é
+0	Require
+0	Wait+Screen@0msHide /a\/b/
+1	Type@10ms"Line"
+0	Backspace@5ms x.gif@10ms
+0	Set +- s.png `d`
+1	Wait
+0	Require Margin
+0	Delete Line
+0	Wait "a" +- #ff00ff
+1	Enter #zz
+0	SourceType -1
+0	Enter LoopOffset Width
+0	Wait+Line s /[/ 0
+0	Show 99999999999999999999
+0	Space a.tape Rings TypingSpeed
+0	Require +Alt
+0	Type@10msHide +ab @
+0	Delete^
+0	Show A
+1	Up Enter
+0	Copy 1.2.3 @\
+0	Source ^ \`d`
+0	Type
+0	PageDown9223372036
+0	PasteMargin
+0	Home Shell'
+0	Home `d` 1Line
+1	# WindowBar Width
+0	Insert+[ % ]
+0	Set
+1	# =Hide
+1	#
+0	msms/[/
+1	# =
+0	Set
+0	Backspace@5msé false -1
+0	Escape @0x
+0	ScrollUp Margin
+0	Shift @0
+0	Sourcex WaitTimeout
+0	PageDown ] bash
+0	Copy + WindowBar /[/
+1	Tab #ff00ff #c s
+0	Tab Theme Shell
+0	PageDown Shell #zz
+0	Enter ms Rings
+1	Wait
+0	Type
+0	Wait+Linebash ms 0
+1	ScrollUp
+0	Escape /re/[ s
+0	Require /re/ WaitTimeout
+0	ScrollUp TypingSpeed
+0	Shift
+0	Ctrl 10 s+Alt
+1	Show
+0	ScrollUp .5Colorful
+0	Tabs A
+0	Insert +Shift ^ Screen
+1	Wait@1s
+0	Alt/[/ #zzx.gif
+1	Sleep 9223372036
+0	Show ms
+1	Wait
+0	ms FontSize 9223372036#zz
+0	PageDown m
+0	Source
+0	Env { `d`
+0	ms
+0	Space m
+0	Shift +A +Shift
+0	Shift Enter 'b c'
+1	Delete 99999999999999999999
+0	Require s
+0	Ctrl "x.gif" #zz
+0	Home @0 TypingSpeed WaitTimeout
+0	Wait 1
+0	TypeMargin +[
+0	Hide.5 :
+0	Wait@1s/re/ {
+0	End Type
+1	Show
+0	ms +Enter
+0	Source WaitPattern
+0	Copy ^ Screen
+0	Show.5=
+0	Source @0
+0	Insert+Enter 99999999999999999999
+0	Alt\TypingSpeed x.gif
+0	Alt 1 1.2.3 bash
+0	Set \
+0	Up /a\/b/x.gif
+1	Backspace@5ms
+1	Insert
+1	Insert
+0	Sleep @10ms #ff00ff A
+0	Wait@1s +[ WaitTimeout
+0	Source MarginFill {"k": 1}
+0	Require "Line" WaitTimeout [
+1	#
+1	Type Line
+0	Env x.gifColorfulx
+0	HomeWidth +Shift1.2.3
+0	Wait+Line 10 /a\/b/ +-
+0	Sleep
+1	Up
+1	Up@0
+0	Wait@1s A
+0	Sleep 0 Ringsms
+0	Screenshot #zz
+0	Setx.gif=
+1	#-1
+0	Type
+0	Paste +c "Line"#ff00ff
+1	Enter Type a.tapem
+0	Source
+0	Type s
+0	Tab/a\\/
+0	Up Colorful
+0	Wait+Line false #ff00ff
+1	Delete
+0	ScrollUp ms.pngHide
+0	Wait+Screen=
+0	Source @10ms WaitTimeout\
+1	Space
+0	Insert \
+1	Wait@1s
+1	#/a\\/
+0	Type@10msx.gif.5 +
+0	Output
+1	Wait+Line
+0	Wait+Screen@0ms 1.5 +Enter +[
+0	Wait+Line false
+0	Up a.tape m
+0	Wait+Screen/a\/b/ Line
+0	Env false 0 Screen
+0	Require -1
+0	Space WaitPattern
+0	Escapes
+1	Show
+0	Screenshot Lines 1
+0	ScrollUp Bogus
+0	Screenshot a.tape é
+1	Tab
+0	Sleep
+0	Require "a"[
+1	Up
+0	Insert +[: "a"
+0	Type@10ms
+0	End
+1	#Types
+0	Ctrl+m #ff00ff
+0	SleepEnter bash #zz
+1	Wait
+0	Space{"k": 1}
+0	Copy
+0	Space m CursorBlink :
+0	Enter % #ff00ff +-
+0	Backspace@5ms LoopOffset Colorful
+0	Require 1
+0	Output CursorBlink #zz \
+0	Home "x.gif"
+0	Require
+0	Hide+ab @0@0
+0	End s -1+ab
+0	Show ms 1.2.3
+0	ScrollUp true 99999999999999999999 "a"
+0	Alt `d` ' +Shift
+1	Escape
+0	Tab Screen
+1	Tab#zz /a\/b/+-
+1	Type@10ms out/
+0	Home é
+0	ScrollUp /a\\/.5 WaitTimeout
+0	DeleteTheme
+0	Shift WaitTimeout
+0	Source Line
+0	Type@10ms 10
+0	Home Shell
+1	Require s.png #c
+0	Paste /a\/b/ s Margin
+1	Up
+0	Hide@0#zz
+0	Screenshot
+0	Wait@1s 1.2.3
+0	PageDown A
+0	Escape [
+1	Insert
+0	Output
+0	ScreenshotHide =
+0	Wait@1s 1 #c -
+1	Paste
+0	Screenshota.tape
+1	PageDown
+1	Delete
+0	Wait+Line CursorBlink99999999999999999999.5
+0	Type9223372036 1.2.3
+0	SetShell
+0	Env/a\\/ #c
+0	Source 0
+0	Wait+Screens
+1	Paste
+0	Wait@1s 1RingsMarginFill
+0	EndTheme
+0	Require +Shift9223372036
+0	Set
+0	Type x +ab
+0	Escape x.gif#zz
+1	Wait
+0	Type
+0	Escape m
+0	Shiftfalse
+1	Env 10out/
+0	Delete 9223372036 "Line"
+0	Up -1a.tape
+0	Set [ Bogus
+1	Wait+Screen
+1	PageDown
+0	Delete 1.2.3 Screen
+0	Type@10msTheme 10
+0	SpaceEnter
+0	Hide %
+0	Wait Bogus +Enter
+0	Wait+Line+c 9223372036 .5
+0	Env
+0	Ctrl
+0	Show =
+0	Set +Alt#c s
+0	Set
+0	Sleep
+0	Copy1.2.3 +A
+1	Wait
+0	Ctrl a.tape
+0	Wait+Screen@0ms /re/ ' +Shift
+1	Hide
+0	Set +Enter Bogusfalse
+0	Shift true+
+0	Wait+Line Bogus
+0	Tab/a\\/+c
+1	Enter#zzRings
+0	Alt
+0	ScrollUp "a" 1.5 {
+0	Ctrl +[ x ^
+1	#Shell 1CursorBlink
+0	Screenshot 9223372036 /re/
+0	Source - +c a.tape
+0	Hide a.tape -
+0	Env Bogus +Alt
+1	Tab
+0	Delete bash Theme
+0	Space 1 -1
+0	Space A /[/
+0	Show TypingSpeed
+1	Insert
+1	Enter
+1	Wait+Screen
+0	Paste -1
+0	Output
+0	End
+0	Space 1.2.3 true+
+0	Screenshot 0 =
+0	Type@10ms
+0	Space TypingSpeed 10 #zz
+0	Env=WindowBar /re/
+0	Env Screen +Enter\
+0	Ctrls
+0	Insert +Shift +ab`d`
+0	Sleep Theme
+0	Wait+Line Rings TypingSpeed x
+0	Screenshot Hide LoopOffset
+0	Wait@1s.5
+1	Paste
+1	Type@10ms Colorful
+1	#
+0	Wait+Screen@0ms true
+0	Screenshot ms x
+0	Delete"{"k": 1} /a\/b/
+0	Shift Enter .5 ^
+0	Enter :'b c's.png
+1	Wait+Line
+0	Wait+Screen@0ms
+0	DeleteA "Line" #c
+1	Wait
+0	Home
+0	Hide +Enter s.png
+0	msLine Colorful Screen
+0	Shiftfalse Rings
+0	Source Theme 0 1.2.3
+0	Home Enter
+1	#9223372036 {
+0	Screenshot +Alt ms
+0	Tab /re/ s.png
+0	Output .5] s
+0	Escape Rings
+1	Wait+Line #ff00ff "Line" +
+0	TabLoopOffset
+0	Wait 1.5 FontSize
+0	Hide A +c é
+0	Wait@1s "Line"éA
+1	Show
+0	Deletefalse
+1	Backspace@5ms
+0	Wait+Screen +EnterHide 1.5
+0	Escape {"k": 1} +c
+0	Sleep '/a\\/
+0	ScrollUp "a" :
+0	Delete'
+0	Show 9223372036
+0	Enter] 9223372036
+0	PageDown ThemeShell s
+1	Hide
+0	PageDown/re/ out/ "Line"
+0	Alt
+0	Backspace@5ms 'b c'
+0	Insert 99999999999999999999 =
+0	Type@10ms
+1	##ff00ff
+1	Copy "a"
+0	Hide WaitTimeout
+1	Wait@1s
+1	Tab
+0	ScrollUp @
+0	Ctrl [ Width
+0	ms m #ff00ff 9223372036
+0	Shift +Alt - WaitPattern
+0	Output/a\/b/ WidthWidth
+0	Paste +- /re/ =
+0	Home
+0	Up \
+0	Sleep
+0	HideWaitTimeout+c
+0	Wait@1s 99999999999999999999
+0	Wait@1s Screen
+0	ms Type LoopOffset out/
+0	PageDown /a\\/ +Enter
+0	Home +A
+0	TabFontSize Bogus
+1	Enter
+1	Delete
+0	Require "a" RingsLoopOffset
+0	Require WindowBar
+1	# ^
+0	Delete Hide `d`
+0	Copy ms
+0	ms s
+0	Up @
+1	Paste
+0	Space @0:
+0	ms
+0	ShiftType out/ WaitPattern
+0	Enter ' x.gif ms
+0	Alt
+1	Wait@1s
+1	Type@10msfalse`d`
+1	Backspace@5ms
+0	Source /a\/b/ +ab
+0	Copys.pngé
+0	Alt WindowBar true
+0	Output: +- WaitPattern
+0	Space \ " Enter
+0	ScrollUp WaitPattern
+0	ScrollUp -1
+0	Screenshot a.tape `d`
+0	Output +c
+0	Ctrl x x.gif -
+0	Env @10ms%
+0	Screenshot:
+0	ms
+0	Type`d` [
+0	Escape WindowBar
+0	Wait+Line+c 9223372036 {"k": 1}
+0	Up false
+0	Copy s /[/
+0	Alt é 1.5 /[/
+0	Wait+Screen@0ms TypingSpeed
+0	Wait+Screen@0ms1.2.3Shell
+0	Escape +c
+0	Alt
+1	# ' + s
+0	Wait+Line {
+0	Wait+Screen x.gif @
+0	Space true"x.gif"
+1	Wait
+0	Sleep /a\/b/
+1	Show
+1	Paste
+0	Types
+0	Ctrl {"k": 1} /re/ @0
+0	ms
+1	#
+0	Set9223372036 WaitPattern
+0	Wait+Screen@0ms
+0	Wait+Screen -1true +Alt
+1	Enter
+0	Hide false
+1	Enter
+0	Wait bash
+0	Set m /[/ Type
+0	Wait@1sColorful
+0	Output 99999999999999999999 ] s
+0	Type@10ms
+1	Env +ab
+0	ms A "a"
+0	ScreenshotRings s
+0	Delete @
+0	Set 99999999999999999999 ]1.2.3
+0	Enter Margin WindowBar9223372036
+0	Screenshot Enter+A
+1	Backspace@5ms 10
+0	Wait@1s 9223372036
+0	PageDown ^ Colorful
+0	msTheme
+0	Env+Shift
+1	#
+0	EnterMarginFill
+1	Show
+0	Alt ] s.png -
+0	Screenshota.tape
+0	Home '
+0	Wait " LoopOffsetCursorBlink
+1	Hide
+0	Wait+Screen@0ms\ :TypingSpeed
+0	Ctrl
+1	# /re/bash bash
+1	Tab
+0	Wait TypingSpeed A{"k": 1}
+0	Type@10ms a.tape WaitPattern Type
+0	PageDown +- FontSizeShell
+1	Insert
+0	Ctrlé@10ms
+0	Set x.gif
+0	Set+ Colorful
+0	EscapeShellLoopOffset
+0	Wait+Screen@/a\/b/ +Alt
+0	End #zz
+0	Ctrl
+0	Sleep +ab
+0	End "x.gif" +ALine
+0	Wait@1s `d`
+0	Copy
+0	ms TypingSpeed " Rings
+0	Require
+0	ScrollUps.png /a\/b/x.gif
+0	Env 10 +[ "a"
+0	Tab -
+0	End -1
+1	Wait@1s
+0	Ctrl %WindowBar #zz
+1	Wait+Screen
+0	Home WindowBar \
+0	Require +Alt WaitTimeout
+0	Wait+Screen 'b c' \ s
+0	Escape 0 bash
+1	Backspace@5ms
+0	Screenshot @0
+0	Type
+0	Show+Enter s Hide
+0	Set basha.tape
+0	Enter 1.5 " Bogus
+1	Space
+1	Enter
+0	Env ]
+0	Type
+0	Type@10ms+Alt
+0	Homebash@10ms Shell
+0	Screenshot
+0	Output -1 /a\\/
+1	Enter
+0	Copy .5
+1	ScrollUp
+1	Up
+0	Show +abtrue
+1	Enter#ff00ff
+0	Paste +c
+0	Wait+Screen@0ms
+0	Alt +Alt 1.5
+0	Insert bash +ab+Enter
+0	Up+Shift "
+0	Shift
+0	Type @10ms true"a"
+0	Source "x.gif" LoopOffset "x.gif"
+0	Paste +-Shell "x.gif"
+0	Type@10ms é@
+1	# /a\\/
+0	Require@ %@0
+1	#
+0	Alt #zzA1.5
+0	Type/a\\/ ms m
+0	Tab 10 WaitPattern
+1	Wait+Screen
+0	ScrollUp+EnterWidth
+0	Enter `d`WaitTimeout
+0	Alt'false
+0	Set = 10 ms
+0	Output/re/
+0	Space +A
+0	EnterScreen "
+0	Space-
+0	Copy
+0	Wait+Screen@0ms
+0	Output @0
+0	Wait+Screen 99999999999999999999 Theme +-
+0	PageDown"Line"
+0	Space +Enter Bogus Line
+0	Wait@1s "Line"
+0	Wait 1.5'b c'
+0	PageDown s
+0	Wait+Screen@0ms+Shift bash #c
+0	Sleep
+0	PasteWaitPattern
+1	Escape
+0	OutputWaitPattern
+0	Type@10ms
+0	Wait+Screen@0ms +Enter `d` `d`
+0	Env /[/
+0	End`d` /a\/b/
+0	Type@10ms
+1	PageDown 0
+0	Up \
+0	Wait+Line a.tape
+0	Backspace@5ms - Colorful
+0	Require ]
+0	Tab"a"
+1	Hide
+0	Screenshot m ' +ab
+0	Type.5
+1	#
+1	Insert
+0	Delete x.gif +
+0	Set
+0	Sleep
+0	Endms-1 -1
+0	Output.5 0
+0	Screenshot Width m
+0	Type@10ms @10ms
+0	Copy s +[
+1	Backspace@5ms .5
+0	Wait+Screen@0ms #ff00ff +Alt =
+1	Delete @10ms
+0	Type@10ms
+0	Tab % Hide a.tape
+0	Output @
+0	HomeType#c
+0	Env 1
+0	Shift
+0	Source= x.gif
+0	Insert WaitTimeout
+0	Ctrl
+0	Home
+0	Home
+0	Wait+Line ms [ +[
+1	Backspace@5ms
+1	Require"a"
+1	Copy "a"
+0	Wait@1s +ab
+0	Source x.gif/a\/b/ ]
+1	Wait
+1	Wait
+0	Wait+Line 1.5 Width
+0	Type
+0	Escape s.png #ff00ff
+1	Wait+Line @10ms /a\/b/
+1	Type@10ms out/
+0	Type
+0	Wait+Screen@0ms
+0	Hide Hide % #zz
+0	Paste Shell - CursorBlink
+0	Wait+Screen Rings `d`
+0	Home Width
+0	Enter +-
+0	Tab 1.2.3bash
+0	Insert WindowBar "
+0	Output
+0	Delete " Screen
+0	Screenshot ' /a\/b/Colorful
+0	Sleep
+0	Type LoopOffset
+1	Backspace@5ms
+0	ms]
+0	Sleep
+0	Tab @10ms {
+0	Delete +-
+0	Wait+Screen m
+1	Wait@1s
+1	Space .5#zz é
+0	Escape@10ms+Shift @10ms
+0	Enter WaitPattern
+0	Tab Theme
+0	ShowShell
+1	# 9223372036+-LoopOffset
+1	Escape
+1	Enter
+0	Space /[/
+0	PageDown \ CursorBlink
+0	Up"x.gif"+ab TypingSpeed
+0	Envtrue a.tapeTypingSpeed
+1	Wait+Screen
+0	PageDown+Enter"a"
+0	ms "Line" bash
+1	Hide
+0	Sleep 10 1.2.3
+0	Enter.5x
+1	Tab
+0	Wait@1s Shell %s.png
+0	Backspace@5ms {"k": 1}99999999999999999999 true
+1	Up #zz
+0	HideFontSize
+0	Wait@1sScreen^
+0	Space % 1x
+0	Set false
+0	Shift /a\\/
+0	End10+ab `d`
+0	Env
+0	AltWindowBar
+1	Delete
+0	Backspace@5ms LoopOffset Screen
+1	Wait+Screen
+0	Sleep `d` +out/
+1	Enter
+0	Type@10ms+- Type
+0	Show x {"k": 1}
+0	Sleep "a"
+0	Wait ^[
+0	Tab10 99999999999999999999
+0	Enter -1
+0	Screenshot Theme
+0	ms[
+0	Wait+Screen@0ms
+0	Sleep Enter/a\/b/ +Enter
+1	Wait+Screen
+1	Space@0
+0	Backspace@5ms Enter`d`
+0	Wait+Screen@0ms Hide
+0	Backspace@5ms WaitPattern Width
+1	Insert #ff00ffShell @10ms
+1	#Theme x.gif
+0	Backspace@5ms + "
+0	ms
+1	Insert 1.5
+0	Screenshot Colorful m Rings
+0	Home LoopOffset
+1	Copy Screen
+0	Shift -1
+1	#x Type
+0	Wait+Line " 10
+0	Env
+0	Sleep =
+0	Escape Shell 1.5
+1	# +cWaitTimeout CursorBlink
+0	Set é "a"
+0	Output
+0	Ctrl+ab Enter true
+0	Home"@
+0	ScrollUp +[ 10 "x.gif"
+0	UpWindowBar
+0	WaitWaitTimeout -1
+0	Backspace@5ms .5 FontSize +A
+0	Wait99999999999999999999 = Rings
+0	Wait@1s+- out/ ]
+1	# A +A
+0	Wait+Screen@0ms bashRings10
+0	Copy-
+1	Set Margin #ff00ff
+0	Backspace@5ms1.5 Screen
+0	Home @0 WindowBar
+0	Type@10ms% /re/
+1	Space
+1	Show
+0	Screenshot
+0	AltColorful
+0	Hide WaitPattern {
+0	Delete "a"
+0	Spacems ' +A
+0	Output a.tapea.tape \
+0	Screenshot 'b c'
+0	Sleep @10ms -1
+0	Env Hide@ out/
+0	Wait+Screen@0ms Bogus
+1	Tab 1.2.3 Type '
+0	Paste +[ s.png
+0	Hide `d` s.png
+1	Copy bash
+0	Home 1.5 x
+0	Type@10ms=
+0	Require
+0	Enter %:
+0	Require
+1	Wait@1s
+0	Set a.tape
+0	Type
+0	Space FontSize /re/ CursorBlink
+0	Alt
+0	ms Bogusx.gif ^
+0	Output
+0	Paste"a"/re/ Margin
+0	Alt
+0	Ctrl "a"
+0	Source
+0	Copy 9223372036
+0	Home 9223372036 :
+1	# s.png
+0	Type Line FontSize 9223372036
+0	Copy 99999999999999999999
+0	Space+ab
+0	Wait@1sEnter /re/ \
+0	Set
+0	Output-1
+1	Wait@1s
+0	Wait+Line+[+A "x.gif"
+0	Screenshot /re/ ShellType
+0	Wait+Line : /a\\/
+0	Alt
+1	Tab #c a.tape
+0	Output @
+0	Wait+Screen@0ms :
+1	Delete
+1	Paste
+1	Type x.gif #ff00ff
+0	Ctrltrue Enter Hide
+0	Wait+Line '
+1	Show
+0	Insert % ms =
+0	Output
+0	ms true s.png :
+0	Type1.5true WaitPattern
+0	Home
+0	Home "x.gif"99999999999999999999 [
+1	Delete Enter
+1	Up
+0	ms %@10ms m
+0	Tab +A MarginFill
+0	Up WaitTimeoutms
+0	Wait 9223372036 1 {"k": 1}
+0	End
+0	Require
+0	Wait+Screen{"k": 1}`d`
+0	Copy WindowBar FontSize
+0	Sleep =
+1	Wait@1s #c
+0	Ctrl a.tape Enter
+1	Space
+0	Homebash Screen /a\\/
+1	PageDown 0
+0	Wait+Screen@0ms/re/"a" A
+1	Escape
+0	Wait+Line x +[
+0	Shift Hide MarginFill #zz
+0	Set Hide#c
+0	Hide 1.2.3
+0	Sleepfalse]
+0	Shift
+1	Copy s.png
+0	Ctrl `d`
+0	Backspace@5ms FontSize
+0	Shift true 1.5 LoopOffset
+0	RequireTypingSpeed Shell
+0	Require .5 Margin m
+0	Screenshot x.gif bash
+0	ShiftTheme LoopOffset
+0	Source Bogus #ff00ff
+0	Wait+Line TypingSpeed+
+0	Wait+Screen@0msWaitTimeout +c #zz
+0	Set
+0	Ctrl /[/
+0	Require
+1	Wait+Screen #zz a.tape
+0	Wait@1s /[/ true Hide
+1	Enter #c
+0	Up true
+0	Up +[ ]
+0	Screenshot =-1
+0	Wait+Screen 99999999999999999999 1.2.3 WindowBar
+0	Type
+1	Escape
+0	Set
+1	Escape
+0	Output
+0	Output Rings
+0	Wait+Screen@0ms @ WaitPattern
+0	Hide "x.gif" Width a.tape
+0	Escape RingsMarginFillm
+0	Wait@1s 'b c'+Shift
+1	ScrollUp
+0	Escape FontSize"a"
+0	Escape +A=#c
+0	Type #zz +[ #zz
+1	Escape #zz
+0	Set /[/ x.gif -
+0	PageDown @0 a.tape%
+1	Hide
+0	ms WindowBar
+0	End ]
+1	Tab
+0	ScrollUp"Line"#ff00ff Hide
+1	Space 0
+0	Screenshot +ab [
+0	Screenshot WaitTimeout
+0	Backspace@5ms x.gif /a\/b/
+0	End-1 #ff00ff
+1	Insert 99999999999999999999
+1	Hide
+1	ScrollUp
+0	Shift
+0	Wait+Screen TypingSpeed @
+0	Show A
+1	#
+0	Show"Line"
+0	TypeLine1
+0	Escape FontSize
+0	Type
+0	Wait@1s Shell MarginFill
+0	Wait+Screen@0ms
+0	Wait+Screen@0ms true
+0	SpaceColorful
+1	ScrollUp
+0	Wait+Line .5
+0	Alt
+1	PageDown
+0	Output +
+1	Space
+0	Show false false
+1	Copy A " +
+0	Wait+Screen "a" @false
+0	Sleep out/ +Enter #ff00ff
+0	Wait+Line Screen
+0	Type .5 mEnter
+0	Copy
+0	Up 10 Shell
+0	Output
+0	ShowTypingSpeed MarginFill
+0	Space +ab %
+0	Env
+0	Screenshot WaitPattern m
+0	Require [ {
+1	# #zz
+0	End Margin
+0	Up"x.gif" bash
+0	Type
+1	Space 0 #ff00ff ms
+0	Shift"a" "Line" \
+1	# #c Theme
+0	Space = out/Rings
+0	Require +Enter=]
+0	Home +
+1	Escape
+0	Ctrl WaitTimeout
+0	Backspace@5ms m 9223372036
+0	End
+0	Set: 1 [
+0	Source
+0	Home [ /a\/b/ +Alt
+0	Copy
+0	Screenshot Line/re/ ^
+0	PageDown A /re/@
+1	# m
+1	Space
+0	ms - out/
+0	Alta.tape ms {
+0	Wait+Screen@0ms ' Hide 0
+1	Insert
+0	Alt +Alt '
+0	Sleep
+0	Ctrl
+0	Insert= +ab
+0	Delete WidthRingsm
+0	Env Type
+0	Enter Rings é
+0	Wait+Screenx.gif
+0	Wait+Screen@0ms
+0	Set 10
+0	Hide +
+0	Hide ms 'b c'{"k": 1}
+0	Insert Margin
+0	Wait+Line'
+0	Wait+Line.5
+0	ScrollUp +Shift @
+1	# { Shell #zz
+1	# Rings 99999999999999999999
+0	Sleep % Screen x.gif
+0	Copy {"k": 1} 'b c'
+0	Wait+Line Margin #zz a.tape
+0	Delete 99999999999999999999"Line"
+1	Wait+Screen #ff00ff [true
+0	Set
+0	Hide+A
+0	Wait@1sHide
+0	Up Shell
+0	Alt `d` WaitPattern
+0	Type LoopOffset@
+1	Set FontSize
+1	#
+1	# Line Enter +A
+0	ms Enter true
+0	Type@10ms
+0	Ctrl Enter - 0
+0	Home #c+Enter
+0	Enter {"k": 1} /re/
+1	# Theme Hide
+0	Enters % Screen
+0	Type@10ms#c Colorfuls.png
+0	Show\ .5
+1	Wait+Line #ff00ff CursorBlink WindowBar
+0	Type +c +Shift
+0	Wait+Line -1s.png
+0	Output false false
+0	Up +A x.gifout/

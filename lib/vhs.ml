@@ -138,23 +138,56 @@ let check_wait timeout w =
       Regexp_syntax.check re
       |> Result.map_error (Fmt.str "Wait+Screen %S: %s" re)
 
-let first_word line =
-  String.split_on_char ' ' (String.trim line) |> List.filter (( <> ) "")
+(* VHS hands an unknown extension to ffmpeg as a GIF, and ffmpeg then picks
+   the format from the extension and fails. *)
+let extensions = [ ".gif"; ".mp4"; ".webm"; ".txt"; ".ascii"; ".test"; ".png" ]
+
+let check_output path =
+  let* () = check_quotable "Output" path in
+  if String.starts_with ~prefix:"-" path then
+    err "Output %S: starts with -, which ffmpeg reads as an option" path
+  else if String.ends_with ~suffix:"/" path then Ok ()
+  else
+    match Tape_syntax.extension path with
+    | "" -> err "Output %S: neither an extension nor a trailing slash" path
+    | e when List.mem e extensions -> Ok ()
+    | _ ->
+        err "Output %S: not .gif, .mp4, .webm, .txt, .ascii, .test or .png" path
+
+(* The constructor that writes each setting [Set] can also write. *)
+let constructors =
+  [
+    ("Shell", "Shell");
+    ("FontSize", "Font_size");
+    ("FontFamily", "Font_family");
+    ("Width", "Width");
+    ("Height", "Height");
+    ("Theme", "Theme");
+    ("Padding", "Padding");
+    ("Framerate", "Framerate");
+  ]
 
 (* VHS applies [Set] and [Require] only before the first other command. *)
 let check_raw ~started line =
   if String.exists is_control line then
     err "raw line %S: holds a control character" line
   else
-    match first_word line with
-    | ("Hide" | "Show") :: _ -> err "raw line %S: use hidden instead" line
-    | ("Set" :: "TypingSpeed" :: _ | "Output" :: _ | []) as _neutral ->
+    match Tape_syntax.check line with
+    | Error e -> err "raw line %S: %s" line e
+    | Ok (Hide | Show) -> err "raw line %S: use hidden instead" line
+    | Ok (Blank | Set "TypingSpeed") -> Ok started
+    | Ok (Output path) ->
+        let* () =
+          check_output path |> Result.map_error (Fmt.str "raw line %S: %s" line)
+        in
         Ok started
-    | w :: _ when w.[0] = '#' -> Ok started
-    | ("Set" | "Require") :: _ when started ->
+    | Ok (Set _ | Require) when started ->
         err "raw line %S: VHS ignores it after the first action" line
-    | ("Set" | "Require") :: _ -> Ok false
-    | _ -> Ok true
+    | Ok (Set name) when List.mem_assoc name constructors ->
+        err "raw line %S: use the setting %s instead" line
+          (List.assoc name constructors)
+    | Ok (Set _ | Require) -> Ok false
+    | Ok Other -> Ok true
 
 (* [check_actions ~started actions] is whether an action that ends the
    settings has run once [actions] have. *)
@@ -179,29 +212,6 @@ let rec check_actions ~started = function
         | Raw line -> check_raw ~started line
       in
       check_actions ~started rest
-
-(* Go's [filepath.Ext]: the suffix from the last dot of the last segment. *)
-let extension path =
-  match String.rindex_opt path '.' with
-  | Some dot when not (String.contains_from path dot '/') ->
-      Some (String.sub path dot (String.length path - dot))
-  | _ -> None
-
-(* VHS hands an unknown extension to ffmpeg as a GIF, and ffmpeg then picks
-   the format from the extension and fails. *)
-let extensions = [ ".gif"; ".mp4"; ".webm"; ".txt"; ".ascii"; ".test"; ".png" ]
-
-let check_output path =
-  let* () = check_quotable "Output" path in
-  if String.starts_with ~prefix:"-" path then
-    err "Output %S: starts with -, which ffmpeg reads as an option" path
-  else if String.ends_with ~suffix:"/" path then Ok ()
-  else
-    match extension path with
-    | None -> err "Output %S: neither an extension nor a trailing slash" path
-    | Some e when List.mem e extensions -> Ok ()
-    | Some _ ->
-        err "Output %S: not .gif, .mp4, .webm, .txt, .ascii, .test or .png" path
 
 (* VHS fonts are set by browser code that quotes the list with [']. *)
 let check_setting = function
