@@ -61,6 +61,15 @@ let test_syntax () =
       (false, "\xff");
     ]
 
+(* Classes that open with [[:] but close no name: the check reads the
+   pattern in linear time, so this takes milliseconds, not minutes. *)
+let test_linear () =
+  let n = 200_000 in
+  let re = "[" ^ String.concat "" (List.init n (fun _ -> "[:")) ^ "a]" in
+  valid "many [:" true re;
+  let re = String.concat "" (List.init n (fun _ -> "[[:a]")) in
+  valid "many classes" true re
+
 (* Cases from Go's regexp.Compile, the check VHS runs, written by
    regexp_oracle.go. *)
 let test_oracle () =
@@ -80,4 +89,5 @@ let suite =
         ("slashes", test_slashes);
         ("syntax", test_syntax);
         ("Go oracle", test_oracle);
+        ("linear", test_linear);
       ] )

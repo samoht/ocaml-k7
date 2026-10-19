@@ -194,10 +194,27 @@ let unicode_class re i =
     fail "invalid character class range: `%s`" (slice re i j);
   j
 
+(* The last search for [":]"]: the pattern, where it started and what it
+   found. A search from [from] reuses it while the answer cannot differ, so
+   the searches of one pattern scan each byte once, however many classes
+   open with [[:]. *)
+let last_close = Domain.DLS.new_key (fun () -> ("", 0, None))
+
+let close_of re from =
+  match Domain.DLS.get last_close with
+  | re', start, found
+    when re' == re && from >= start
+         && Option.fold ~none:true ~some:(fun e -> from <= e) found ->
+      found
+  | _ ->
+      let found = index_of re ~from ":]" in
+      Domain.DLS.set last_close (re, from, found);
+      found
+
 (* [parseNamedClass] for a [[:name:]] at [k], if any. *)
 let named_class re k =
   let named = String.length re - k > 2 && re.[k] = '[' && re.[k + 1] = ':' in
-  match if named then index_of re ~from:(k + 2) ":]" else None with
+  match if named then close_of re (k + 2) else None with
   | None -> None
   | Some e ->
       let name = slice re k (e + 2) in
