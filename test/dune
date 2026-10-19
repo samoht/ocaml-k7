@@ -1,3 +1,6 @@
 (test
  (name test)
  (libraries vhs fmt alcotest eio eio_main))
+
+(cram
+ (deps %{bin:vhs-cram}))

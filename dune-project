@@ -23,6 +23,7 @@
   (eio (>= 1.0))
   (eio_main (>= 1.0))
   fmt
+  (cmdliner (>= 1.1.0))
   (alcotest :with-test)
   (mdx :with-test)
   (odoc :with-doc)))

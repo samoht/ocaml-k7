@@ -1,9 +1,3 @@
-let read_file path =
-  let ic = open_in_bin path in
-  Fun.protect
-    ~finally:(fun () -> close_in_noerr ic)
-    (fun () -> really_input_string ic (in_channel_length ic))
-
 let settings ~width =
   let open Vhs in
   [
@@ -18,50 +12,64 @@ let settings ~width =
     Framerate 30;
   ]
 
-let render ~input ~output ~setup_scripts ~width ~vhs =
-  let tape =
-    Vhs.Cram.to_tape ~settings:(settings ~width) ~setup_scripts ~output
-      (Vhs.Cram.parse (read_file input))
-  in
-  Eio_main.run @@ fun env ->
-  let proc = Eio.Stdenv.process_mgr env in
-  let path = Filename.temp_file "vhs-cram-" ".tape" in
-  Fun.protect
-    ~finally:(fun () -> try Sys.remove path with Sys_error _ -> ())
-    (fun () ->
-      match Vhs.render ~proc ~vhs ~path tape with
-      | Ok () -> ()
-      | Error error ->
-          Fmt.epr "%a@." Vhs.pp_error error;
-          exit 1)
+let render ~proc ~vhs ~path tape =
+  match Vhs.render ~proc ~vhs ~path tape with
+  | Ok () -> Ok ()
+  | Error e -> Error (Fmt.to_to_string Vhs.pp_error e)
+  | exception Invalid_argument msg -> Error msg
 
-let () =
-  let input = ref None in
-  let output = ref None in
-  let setup_scripts = ref [] in
-  let width = ref 1100 in
-  let vhs = ref "vhs" in
-  let set_input path =
-    match !input with
-    | None -> input := Some path
-    | Some _ -> raise (Arg.Bad "only one cram transcript may be recorded")
+let record ~vhs ~width ~setup_scripts ~output input =
+  match In_channel.with_open_bin input In_channel.input_all with
+  | exception Sys_error msg -> Error msg
+  | src ->
+      let settings = settings ~width in
+      let tape =
+        Vhs.Cram.to_tape ~settings ~setup_scripts ~output (Vhs.Cram.parse src)
+      in
+      Eio_main.run @@ fun env ->
+      let proc = Eio.Stdenv.process_mgr env in
+      let path = Filename.temp_file "vhs-cram-" ".tape" in
+      Fun.protect
+        ~finally:(fun () -> try Sys.remove path with Sys_error _ -> ())
+        (fun () -> render ~proc ~vhs ~path tape)
+
+let run vhs width setup_scripts output input =
+  match record ~vhs ~width ~setup_scripts ~output input with
+  | Ok () -> 0
+  | Error msg ->
+      Fmt.epr "vhs-cram: %s@." msg;
+      1
+
+open Cmdliner
+
+let output =
+  let doc =
+    "Write the recording to $(docv); VHS picks the format from its extension."
   in
-  Arg.parse
-    [
-      ( "--output",
-        Arg.String (fun path -> output := Some path),
-        "PATH output GIF (or another VHS-supported format)" );
-      ( "--setup",
-        Arg.String (fun path -> setup_scripts := path :: !setup_scripts),
-        "PATH setup script to source before recording (repeatable)" );
-      ("--width", Arg.Set_int width, "PIXELS terminal width (default: 1100)");
-      ("--vhs", Arg.Set_string vhs, "PATH vhs executable (default: vhs)");
-    ]
-    set_input "vhs-cram [OPTION]... CRAM";
-  let required name = function
-    | Some value -> value
-    | None -> Fmt.invalid_arg "missing %s" name
+  Arg.(
+    required & opt (some string) None & info [ "o"; "output" ] ~docv:"FILE" ~doc)
+
+let setup_scripts =
+  let doc =
+    "Source $(docv) before the first command, without recording it. Repeatable."
   in
-  render ~input:(required "CRAM" !input)
-    ~output:(required "--output" !output)
-    ~setup_scripts:(List.rev !setup_scripts) ~width:!width ~vhs:!vhs
+  Arg.(value & opt_all string [] & info [ "setup" ] ~docv:"FILE" ~doc)
+
+let width =
+  let doc = "Terminal width in pixels." in
+  Arg.(value & opt int 1100 & info [ "width" ] ~docv:"PIXELS" ~doc)
+
+let vhs =
+  let doc = "The $(b,vhs) executable to run." in
+  Arg.(value & opt string "vhs" & info [ "vhs" ] ~docv:"PATH" ~doc)
+
+let input =
+  let doc = "The cram test to record." in
+  Arg.(required & pos 0 (some file) None & info [] ~docv:"CRAM" ~doc)
+
+let cmd =
+  let doc = "record a cram test as a VHS terminal recording" in
+  Cmd.v (Cmd.info "vhs-cram" ~doc)
+    Term.(const run $ vhs $ width $ setup_scripts $ output $ input)
+
+let () = exit (Cmd.eval' cmd)
