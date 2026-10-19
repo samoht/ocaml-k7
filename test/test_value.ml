@@ -60,6 +60,19 @@ let test_backslash_verbatim () =
     "Type \"docker ps --format 'table {{.Names}}\\t{{.Image}}'\"\n"
     (to_string tape)
 
+let test_both_quotes () =
+  let open Vhs.Value in
+  expect "backticks" "Type `echo \"it's\"`\n"
+    (to_string (tape [ type' {|echo "it's"|} ]))
+
+let test_three_quotes () =
+  let open Vhs.Value in
+  expect "split type" "Type `a\"b'c`\nType \"`d\"\n"
+    (to_string (tape [ type' {|a"b'c`d|} ]));
+  match to_string (tape [ output {|a"b'c`d|} ]) with
+  | s -> Alcotest.failf "printed %S" s
+  | exception Invalid_argument _ -> ()
+
 let test_keys_and_waits () =
   let open Vhs.Value in
   let tape =
@@ -86,5 +99,7 @@ let suite =
       Alcotest.test_case "basic tape" `Quick test_basic_tape;
       Alcotest.test_case "escaping" `Quick test_escaping;
       Alcotest.test_case "backslash verbatim" `Quick test_backslash_verbatim;
+      Alcotest.test_case "both quotes" `Quick test_both_quotes;
+      Alcotest.test_case "three quotes" `Quick test_three_quotes;
       Alcotest.test_case "keys and waits" `Quick test_keys_and_waits;
     ] )

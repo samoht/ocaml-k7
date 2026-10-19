@@ -79,16 +79,8 @@ let add_hex_escape b code =
   Buffer.add_char b hex.[code lsr 4];
   Buffer.add_char b hex.[code land 0xf]
 
-let contains s needle =
-  let rec loop i =
-    i < String.length s && (Char.equal s.[i] needle || loop (i + 1))
-  in
-  loop 0
-
 (* VHS types a double-quoted string verbatim: a backslash is not an escape
-   introducer, so backslashes must not be doubled here. quote_string refuses a
-   string holding both quote styles, so this branch never sees a literal
-   double quote. *)
+   introducer, so backslashes must not be doubled here. *)
 let escape_double_quoted s =
   let b = Buffer.create (String.length s + 8) in
   Buffer.add_char b '"';
@@ -101,17 +93,38 @@ let escape_double_quoted s =
   Buffer.add_char b '"';
   Buffer.contents b
 
-let single_quoted s = "'" ^ s ^ "'"
+let quotes = [ '"'; '\''; '`' ]
+let is_quote c = List.mem c quotes
 
+(* A VHS string has no escapes, so it is delimited by a quote it lacks. *)
 let quote_string s =
-  if contains s '"' then
-    if contains s '\'' then
-      invalid_arg
-        "Vhs.Value.quote_string: VHS strings cannot contain both quote styles"
-    else single_quoted s
-  else escape_double_quoted s
+  match List.find_opt (fun q -> not (String.contains s q)) quotes with
+  | Some '"' -> escape_double_quoted s
+  | Some q -> Fmt.str "%c%s%c" q s q
+  | None ->
+      Fmt.invalid_arg "Vhs.Value: %S holds all three VHS quote characters" s
 
 let pp_quoted ppf s = Fmt.string ppf (quote_string s)
+
+(* [quotable_chunks s] cuts [s] so that no chunk holds all three quotes. *)
+let quotable_chunks s =
+  let chunks = ref [] and start = ref 0 and seen = ref [] in
+  String.iteri
+    (fun i c ->
+      if is_quote c && not (List.mem c !seen) then
+        if List.length !seen = 2 then begin
+          chunks := String.sub s !start (i - !start) :: !chunks;
+          start := i;
+          seen := [ c ]
+        end
+        else seen := c :: !seen)
+    s;
+  List.rev (String.sub s !start (String.length s - !start) :: !chunks)
+
+let pp_type ppf s =
+  Fmt.list ~sep:(Fmt.any "\n")
+    (fun ppf chunk -> Fmt.pf ppf "Type %a" pp_quoted chunk)
+    ppf (quotable_chunks s)
 
 let pp_duration ppf = function
   | Ms n -> Fmt.pf ppf "%dms" n
@@ -150,7 +163,7 @@ let pp_wait ppf = function
   | Wait_line pattern -> Fmt.pf ppf "Wait+Line /%s/" pattern
 
 let pp_command ppf = function
-  | Type s -> Fmt.pf ppf "Type %a" pp_quoted s
+  | Type s -> pp_type ppf s
   | Key k -> pp_key ppf k
   | Sleep d -> Fmt.pf ppf "Sleep %a" pp_duration d
   | Wait_for w -> pp_wait ppf w
