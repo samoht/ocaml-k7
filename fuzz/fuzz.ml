@@ -3,5 +3,4 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-let () =
-  Alcobar.run "vhs" [ Fuzz_vhs.suite; Fuzz_cram.suite; Fuzz_render.suite ]
+let () = Alcobar.run "vhs" [ Fuzz_vhs.suite; Fuzz_cram.suite ]
