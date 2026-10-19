@@ -115,8 +115,11 @@ let check_chord name valid c =
   if is_letter c || String.contains valid c then Ok ()
   else err "%s+%s: not a VHS key" name (Char.escaped c)
 
+(* VHS lexes a bare [m] or [s] as a time unit; [Ctrl] takes them quoted, but
+   [Alt] then presses nothing. *)
 let check_key = function
   | Ctrl c -> check_chord "Ctrl" {|@[\]^-.|} c
+  | Alt (('m' | 's') as c) -> err "Alt+%c: VHS cannot press it" c
   | Alt c -> check_chord "Alt" "[]." c
   | _ -> Ok ()
 
@@ -255,6 +258,7 @@ let key_name = function
   | Page_down -> "PageDown"
   | Scroll_up -> "ScrollUp"
   | Scroll_down -> "ScrollDown"
+  | Ctrl (('m' | 's') as c) -> "Ctrl+\"" ^ String.make 1 c ^ "\""
   | Ctrl c -> "Ctrl+" ^ String.make 1 c
   | Alt c -> "Alt+" ^ String.make 1 c
 

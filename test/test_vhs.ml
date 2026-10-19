@@ -200,7 +200,12 @@ let test_keys () =
        ]);
   error "ctrl digit" "Ctrl+1: not a VHS key" [ key (Ctrl '1') ];
   error "alt backslash" {|Alt+\\: not a VHS key|} [ key (Alt '\\') ];
-  rejects "ctrl newline" [ key (Ctrl '\n') ]
+  rejects "ctrl newline" [ key (Ctrl '\n') ];
+  (* VHS lexes a bare m or s as a time unit. *)
+  expect "ctrl m and s" "Ctrl+\"m\"\nCtrl+\"s\"\nCtrl+S\n"
+    (body [ key (Ctrl 'm'); key (Ctrl 's'); key (Ctrl 'S') ]);
+  error "alt s" "Alt+s: VHS cannot press it" [ key (Alt 's') ];
+  rejects "alt m" [ key (Alt 'm') ]
 
 let test_waits () =
   let open Vhs in

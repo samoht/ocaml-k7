@@ -49,8 +49,8 @@ type key =
       (** [Ctrl c] holds control and presses [c]: an ASCII letter, [@], [^],
           [-], [.], a backslash or a square bracket. *)
   | Alt of char
-      (** [Alt c] holds alt and presses [c]: an ASCII letter, [.] or a square
-          bracket. *)
+      (** [Alt c] holds alt and presses [c]: an ASCII letter other than [m] and
+          [s], which VHS reads as time units, [.] or a square bracket. *)
 
 (** The type for conditions on the terminal. *)
 type wait =
