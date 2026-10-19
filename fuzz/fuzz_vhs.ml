@@ -73,10 +73,39 @@ let test_builders_no_exception s t n =
       | Invalid_argument _ -> ()
       | exn -> failf "Cram.items raised %s" (Printexc.to_string exn))
 
+let test_items_single_line s t n =
+  List.iter
+    (fun (name, build) ->
+      match build () with
+      | exception Invalid_argument _ -> ()
+      | item ->
+          let tape = str [ item ] in
+          let line = String.sub tape 0 (String.length tape - 1) in
+          if name = "type" then
+            (* Type explicitly permits several statements when all three
+               quotes occur. Each statement still needs a complete quoted
+               payload on one physical line. *)
+            String.split_on_char '\n' line
+            |> List.iter (fun statement ->
+                let len = String.length statement in
+                check (len >= 7 && String.starts_with ~prefix:"Type " statement);
+                let quote = statement.[5] in
+                check (List.mem quote [ '\"'; '\''; '`' ]);
+                check (statement.[len - 1] = quote);
+                let payload = String.sub statement 6 (len - 7) in
+                check (not (String.contains payload quote));
+                check (not (String.contains payload '\r')))
+          else if String.contains line '\n' || String.contains line '\r' then
+            failf "%s accepted %S and emitted multiple lines: %S" name s tape)
+    (builders s t n)
+
 let suite =
   ( "vhs",
     [
       test_case "parse arbitrary bytes" [ bytes ] test_parse_no_exception;
       test_case "builders only raise Invalid_argument" [ bytes; bytes; int ]
         test_builders_no_exception;
+      test_case "accepted items are single lines"
+        [ choose [ bytes; const {|a"b'c`d|} ]; bytes; int ]
+        test_items_single_line;
     ] )
