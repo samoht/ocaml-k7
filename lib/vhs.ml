@@ -115,10 +115,15 @@ let parse_process proc argv =
       Error (Child_error { argv; status })
   | Eio.Exn.Io _ as exn -> Error (Io exn)
 
-let render_file ~proc ?(vhs = "vhs") path = run_process proc [ vhs; path ]
+(* vhs reads an argument starting with '-' as a flag. *)
+let path_arg path =
+  if String.starts_with ~prefix:"-" path then "./" ^ path else path
+
+let render_file ~proc ?(vhs = "vhs") path =
+  run_process proc [ vhs; path_arg path ]
 
 let render ~proc ?vhs ~path tape =
   Result.bind (write_file ~path tape) (fun () -> render_file ~proc ?vhs path)
 
 let publish ~proc ?(vhs = "vhs") file =
-  parse_process proc [ vhs; "publish"; file ]
+  parse_process proc [ vhs; "publish"; path_arg file ]

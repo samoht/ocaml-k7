@@ -52,6 +52,13 @@ let test_render_io_error () =
   | Ok () -> Alcotest.fail "rendered into a missing directory"
   | Error e -> Alcotest.failf "unexpected %a" Vhs.pp_error e
 
+let test_dash_path () =
+  Eio_main.run @@ fun env ->
+  let proc = Eio.Stdenv.process_mgr env in
+  match Vhs.publish ~proc ~vhs:"echo" "-x.gif" with
+  | Ok out -> expect "argv" "publish ./-x.gif\n" out
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+
 let suite =
   ( "vhs",
     [
@@ -60,4 +67,5 @@ let suite =
       Alcotest.test_case "write file" `Quick test_write_file;
       Alcotest.test_case "write file error" `Quick test_write_file_error;
       Alcotest.test_case "render io error" `Quick test_render_io_error;
+      Alcotest.test_case "dash path" `Quick test_dash_path;
     ] )
