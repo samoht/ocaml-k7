@@ -599,15 +599,21 @@ let with_vhs =
       test_raw_validates;
   ]
 
+(* Properties that run stand-ins for vhs and vhs-cram. *)
+let with_processes =
+  [
+    test_case "documented executable exit codes" [ int16 ] test_exit_codes;
+    test_case "cancelled render reaps the child" [ int8 ] test_cancel_reaps;
+    test_case "never publish implicitly"
+      [ choose [ const "dumb"; const "xterm-256color"; const "" ] ]
+      test_no_publication;
+  ]
+
 let suite =
   ( "vhs",
     (if Option.is_some oracle then with_vhs else [])
+    @ with_processes
     @ [
-        test_case "documented executable exit codes" [ int16 ] test_exit_codes;
-        test_case "cancelled render reaps the child" [ int8 ] test_cancel_reaps;
-        test_case "never publish implicitly"
-          [ choose [ const "dumb"; const "xterm-256color"; const "" ] ]
-          test_no_publication;
         test_case "errors identify the invalid item" [ int ] test_error_item;
         test_case "typed text cannot inject commands"
           [

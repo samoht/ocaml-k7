@@ -8,6 +8,7 @@ let () =
     [
       Test_vhs.suite;
       Test_regexp_syntax.suite;
+      Test_tape_syntax.suite;
       Test_cram.suite;
       Test_eio.suite;
       Test_cli.suite;

@@ -67,139 +67,148 @@ exception Error of string
 
 let fail fmt = Fmt.kstr (fun s -> raise (Error s)) fmt
 
+let rec span line p i =
+  if i < String.length line && p line.[i] then span line p (i + 1) else i
+
+(* [delimited line q i] is the index of the [q] closing what starts at [i]. *)
+let rec delimited line q i =
+  if i >= String.length line || line.[i] = q then i else delimited line q (i + 1)
+
+(* The index of the slash closing the regular expression that starts at
+   [i]: a run of backslashes escapes the slash after it iff it is odd. *)
+let rec regex line i =
+  let n = String.length line in
+  if i >= n then i
+  else if line.[i] = '\\' then
+    let j = span line (( = ) '\\') i in
+    if j < n && line.[j] = '/' && (j - i) mod 2 = 0 then j
+    else regex line (j + 1)
+  else if line.[i] = '/' then i
+  else regex line (i + 1)
+
+let closed line i what =
+  if i >= String.length line then fail "unterminated %s" what
+
+let tok kind lit = { kind; lit }
+
+(* The token at [i], not a comment, and the index after it. *)
+let token line i =
+  let n = String.length line in
+  let sub i j = String.sub line i (j - i) in
+  let enclosed kind what j =
+    closed line j what;
+    (tok kind (sub (i + 1) j), j + 1)
+  in
+  match line.[i] with
+  | ('@' | '=' | ']' | '[' | '-' | '%' | '^' | '\\' | '+') as c ->
+      (tok (Punct c) (String.make 1 c), i + 1)
+  | '{' ->
+      let j = delimited line '}' (i + 1) in
+      closed line j "JSON value";
+      (tok Json (sub i (j + 1)), j + 1)
+  | ('"' | '\'' | '`') as q ->
+      enclosed String "string" (delimited line q (i + 1))
+  | '/' -> enclosed Regex "regular expression" (regex line (i + 1))
+  | c when is_digit c || (c = '.' && i + 1 < n && is_digit line.[i + 1]) ->
+      let j = span line (fun c -> is_digit c || c = '.') i in
+      (tok Number (sub i j), j)
+  | c when is_letter c || c = '.' ->
+      let j = span line is_ident i in
+      let lit = sub i j in
+      (tok (if List.mem lit keywords then Word else String) lit, j)
+  | c -> (tok Illegal (String.make 1 c), i + 1)
+
 (* [lex line] are the tokens of [line], ending with [Eof]. A string, regular
    expression or JSON value that [line] does not close would take the next
    lines of a tape, so it is an error here. *)
 let lex line =
   let n = String.length line in
-  let at i = if i < n then line.[i] else '\000' in
-  let closed i what = if i >= n then fail "unterminated %s" what in
-  (* [delimited q i] is the index of the [q] closing what starts at [i]. *)
-  let rec delimited q i =
-    if i >= n || line.[i] = q then i else delimited q (i + 1)
-  in
-  (* A run of backslashes escapes the slash after it iff it is odd. *)
-  let rec regex i =
-    if i >= n then i
-    else if line.[i] = '\\' then (
-      let j = ref i in
-      while !j < n && line.[!j] = '\\' do
-        incr j
-      done;
-      if !j < n && line.[!j] = '/' && (!j - i) mod 2 = 0 then !j
-      else regex (!j + 1))
-    else if line.[i] = '/' then i
-    else regex (i + 1)
-  in
-  let rec span p i = if i < n && p line.[i] then span p (i + 1) else i in
   let rec go acc i =
-    let i = span (fun c -> c = ' ' || c = '\t') i in
-    let tok kind lit = { kind; lit } in
+    let i = span line (fun c -> c = ' ' || c = '\t') i in
     if i >= n then List.rev (tok Eof "" :: acc)
+    else if line.[i] = '#' then
+      List.rev
+        (tok Eof "" :: tok Comment (String.sub line (i + 1) (n - i - 1)) :: acc)
     else
-      match line.[i] with
-      | ('@' | '=' | ']' | '[' | '-' | '%' | '^' | '\\' | '+') as c ->
-          go (tok (Punct c) (String.make 1 c) :: acc) (i + 1)
-      | '#' ->
-          List.rev
-            (tok Eof ""
-            :: tok Comment (String.sub line (i + 1) (n - i - 1))
-            :: acc)
-      | '{' ->
-          let j = delimited '}' (i + 1) in
-          closed j "JSON value";
-          go (tok Json (String.sub line i (j - i + 1)) :: acc) (j + 1)
-      | ('"' | '\'' | '`') as q ->
-          let j = delimited q (i + 1) in
-          closed j "string";
-          go (tok String (String.sub line (i + 1) (j - i - 1)) :: acc) (j + 1)
-      | '/' ->
-          let j = regex (i + 1) in
-          closed j "regular expression";
-          go (tok Regex (String.sub line (i + 1) (j - i - 1)) :: acc) (j + 1)
-      | c when is_digit c || (c = '.' && is_digit (at (i + 1))) ->
-          let j = span (fun c -> is_digit c || c = '.') i in
-          go (tok Number (String.sub line i (j - i)) :: acc) j
-      | c when is_letter c || c = '.' ->
-          let j = span is_ident i in
-          let lit = String.sub line i (j - i) in
-          go (tok (if List.mem lit keywords then Word else String) lit :: acc) j
-      | c -> go (tok Illegal (String.make 1 c) :: acc) (i + 1)
+      let t, j = token line i in
+      go (t :: acc) j
   in
   Array.of_list (go [] 0)
 
-(* Durations *)
+(* Durations: Go's time.ParseDuration, in unsigned 64-bit arithmetic. *)
 
-(* Go's time.ParseDuration, in unsigned 64-bit arithmetic. *)
+let ( >! ) a b = Int64.unsigned_compare a b > 0
+let top = Int64.min_int (* 1 lsl 63, unsigned *)
+
+let units =
+  [ ("ns", 1L); ("us", 1_000L); ("\xc2\xb5s", 1_000L); ("\xce\xbcs", 1_000L);
+    ("ms", 1_000_000L); ("s", 1_000_000_000L); ("m", 60_000_000_000L);
+    ("h", 3_600_000_000_000L) ]
+[@@ocamlformat "disable"]
+
+let digit s i = Int64.of_int (Char.code s.[i] - 48)
+
+let unsigned_float u =
+  if Int64.compare u 0L < 0 then Int64.to_float u +. 0x1p64
+  else Int64.to_float u
+
+(* [leadingInt]: the integer at [i] and the index after it. *)
+let rec leading_int s v i =
+  if i < String.length s && is_digit s.[i] then
+    let v' = Int64.(add (mul v 10L) (digit s i)) in
+    if v >! Int64.unsigned_div top 10L || v' >! top then None
+    else leading_int s v' (i + 1)
+  else Some (v, i)
+
+(* [leadingFraction]: the digits at [i] as [f / scale], those past the
+   precision of [f] dropped, and the index after them. *)
+let rec fraction s f scale i =
+  if i < String.length s && is_digit s.[i] then
+    let y = Int64.(add (mul f 10L) (digit s i)) in
+    if f >! Int64.unsigned_div Int64.max_int 10L || y >! top then
+      (f, scale, span s is_digit i)
+    else fraction s y (scale *. 10.) (i + 1)
+  else (f, scale, i)
+
+(* [v + f / scale] in [unit]s, as nanoseconds. *)
+let scaled v f scale unit =
+  if v >! Int64.unsigned_div top unit then None
+  else
+    let v = Int64.mul v unit in
+    let v =
+      if f = 0L then v
+      else
+        Int64.add v
+          (Int64.of_float (unsigned_float f *. (Int64.to_float unit /. scale)))
+    in
+    if v >! top then None else Some v
+
+(* One [number unit] term at [i]: its nanoseconds and the index after it. *)
+let term s i =
+  let is_num c = c = '.' || is_digit c in
+  match leading_int s 0L i with
+  | None -> None
+  | Some (v, j) -> (
+      let f, scale, k =
+        if j < String.length s && s.[j] = '.' then fraction s 0L 1. (j + 1)
+        else (0L, 1., j)
+      in
+      let u = span s (fun c -> not (is_num c)) k in
+      match List.assoc_opt (String.sub s k (u - k)) units with
+      | Some unit when j > i || k > j + 1 ->
+          Option.map (fun d -> (d, u)) (scaled v f scale unit)
+      | _ -> None)
+
 let duration s =
-  let ( >! ) a b = Int64.unsigned_compare a b > 0 in
-  let top =
-    Int64.min_int
-    (* 1 lsl 63 *)
-  in
-  let n = String.length s in
-  let units =
-    [ ("ns", 1L); ("us", 1_000L); ("\xc2\xb5s", 1_000L); ("\xce\xbcs", 1_000L);
-      ("ms", 1_000_000L); ("s", 1_000_000_000L); ("m", 60_000_000_000L);
-      ("h", 3_600_000_000_000L) ]
-  [@@ocamlformat "disable"]
-  in
-  let digit i = Int64.of_int (Char.code s.[i] - 48) in
-  let to_float u =
-    if Int64.compare u 0L < 0 then Int64.to_float u +. 0x1p64
-    else Int64.to_float u
-  in
-  let rec leading_int v i =
-    if i < n && is_digit s.[i] then
-      if v >! Int64.unsigned_div top 10L then None
-      else
-        let v = Int64.(add (mul v 10L) (digit i)) in
-        if v >! top then None else leading_int v (i + 1)
-    else Some (v, i)
-  in
-  let rec fraction f scale overflow i =
-    if i < n && is_digit s.[i] then
-      if overflow || f >! Int64.unsigned_div Int64.max_int 10L then
-        fraction f scale true (i + 1)
-      else
-        let y = Int64.(add (mul f 10L) (digit i)) in
-        if y >! top then fraction f scale true (i + 1)
-        else fraction y (scale *. 10.) overflow (i + 1)
-    else (f, scale, i)
-  in
   let rec terms d i =
-    if i >= n then if d >! Int64.max_int then None else Some d
+    if i >= String.length s then if d >! Int64.max_int then None else Some d
     else if not (s.[i] = '.' || is_digit s.[i]) then None
     else
-      match leading_int 0L i with
+      match term s i with
       | None -> None
-      | Some (v, j) -> (
-          let f, scale, k =
-            if j < n && s.[j] = '.' then fraction 0L 1. false (j + 1)
-            else (0L, 1., j)
-          in
-          let has_fraction = k > j + 1 in
-          let u = span_unit k in
-          if j = i && not has_fraction then None
-          else
-            match List.assoc_opt (String.sub s k (u - k)) units with
-            | None -> None
-            | Some unit ->
-                if v >! Int64.unsigned_div top unit then None
-                else
-                  let v = Int64.mul v unit in
-                  let v =
-                    if f = 0L then v
-                    else
-                      Int64.add v
-                        (Int64.of_float
-                           (to_float f *. (Int64.to_float unit /. scale)))
-                  in
-                  let d = Int64.add d v in
-                  if v >! top || d >! top then None else terms d u)
-  and span_unit i =
-    if i < n && not (s.[i] = '.' || is_digit s.[i]) then span_unit (i + 1)
-    else i
+      | Some (v, u) ->
+          let d = Int64.add d v in
+          if d >! top then None else terms d u
   in
   if s = "0" then Some 0L else if s = "" then None else terms 0L 0
 
