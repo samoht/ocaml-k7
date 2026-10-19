@@ -90,13 +90,10 @@ val hidden : action list -> action
     [actions] is the same as its own actions. *)
 
 val raw : string -> action
-(** [raw line] is the tape line [line], printed as is, for the VHS commands
-    without a builder here, such as [Require], [Env], [Source], [Screenshot],
-    [Set TypingSpeed] between actions and the settings missing from {!setting}.
-    Quoting the arguments of [line] is the caller's task; {!val-tape} checks
-    [line] with VHS's own lexer and parser. VHS checks the values of settings,
-    such as the number of [Set Margin], and reads the tape of a [Source] line,
-    only when it runs. *)
+(** [raw line] is the tape line [line], printed as is, with its arguments quoted
+    by the caller. {!val-tape} checks it as its documentation states; VHS checks
+    the rest, such as the value of a setting {!setting} has no constructor for
+    or the tape of a [Source] line, only when it runs. *)
 
 (** {1:tapes Tapes} *)
 
@@ -124,7 +121,9 @@ type setting =
   | Height of int
       (** The height in pixels, at least twice the padding (defaults to [600]).
       *)
-  | Theme of string  (** A theme name, as [vhs themes] lists them, or JSON. *)
+  | Theme of string
+      (** A theme name, as [vhs themes] lists them, or JSON, which VHS checks
+          only when it runs. *)
   | Padding of int
       (** The padding in pixels, not negative (defaults to [60]). *)
   | Typing_speed of duration
@@ -161,7 +160,8 @@ val tape :
     - a {!raw} line is [Hide] or [Show] (use {!hidden}), [Set] for a setting of
       {!setting} other than [TypingSpeed] (use the setting), an [Output] that
       breaks the rules of [outputs], or is [Require] or [Set], other than
-      [Set TypingSpeed], after an action, where VHS ignores it. *)
+      [Set TypingSpeed], after an action that prints a line, where VHS ignores
+      it. *)
 
 val to_string : t -> string
 (** [to_string t] is [t] in the [.tape] syntax: the [Output] lines, then the
@@ -206,4 +206,4 @@ val render :
     replace the prompt {!Prompt} waits for. What [vhs] prints is kept for
     {!Failed} and dropped on success. If the calling fiber is cancelled,
     [render] sends [vhs] [SIGTERM], which makes it stop the terminal and the
-    browser it started, and waits for it to exit. *)
+    browser it started, and waits for it to exit, however long that takes. *)
