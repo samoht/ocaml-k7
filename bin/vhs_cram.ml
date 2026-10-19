@@ -1,3 +1,6 @@
+let err_load input err =
+  Fmt.kstr (fun e -> Error e) "%s: %a" input Eio.Exn.pp_err err
+
 let settings ~width =
   let open Vhs in
   [
@@ -26,7 +29,7 @@ let tape ~width ~setup_scripts ~output src =
 let record ~vhs ~width ~setup_scripts ~output input =
   Eio_main.run @@ fun env ->
   match Eio.Path.(load (Eio.Stdenv.fs env / input)) with
-  | exception (Eio.Io _ as exn) -> Error (Printexc.to_string exn)
+  | exception Eio.Io (err, _) -> err_load input err
   | src ->
       Result.bind (tape ~width ~setup_scripts ~output src) @@ fun tape ->
       Vhs.render ~proc:(Eio.Stdenv.process_mgr env) ~vhs tape

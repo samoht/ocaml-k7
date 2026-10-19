@@ -266,6 +266,11 @@ let pp_error ppf = function
       Fmt.pf ppf "%s was killed by signal %d" vhs n
   | Io msg -> Fmt.string ppf msg
 
+let io_message = function
+  | Eio.Process.E (Permission_denied exe) -> exe ^ ": permission denied"
+  | Eio.Process.E (Executable_format_error exe) -> exe ^ ": not an executable"
+  | err -> Fmt.str "%a" Eio.Exn.pp_err err
+
 let render ~proc ?(vhs = "vhs") items =
   let stdin = Fmt.kstr Eio.Flow.string_source "%a" pp items in
   try Ok (Eio.Process.run proc ~stdin [ vhs ]) with
@@ -273,4 +278,4 @@ let render ~proc ?(vhs = "vhs") items =
       Error (Executable_not_found exe)
   | Eio.Exn.Io (Eio.Process.E (Child_error status), _) ->
       Error (Failed { vhs; status })
-  | Eio.Exn.Io _ as exn -> Error (Io (Printexc.to_string exn))
+  | Eio.Exn.Io (err, _) -> Error (Io (io_message err))

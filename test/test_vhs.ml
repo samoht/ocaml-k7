@@ -1,6 +1,13 @@
 let expect name expected got = Alcotest.(check string) name expected got
 let str = Fmt.str "%a" Vhs.pp
 
+let contains ~sub s =
+  let n = String.length sub in
+  let rec at i =
+    i + n <= String.length s && (String.sub s i n = sub || at (i + 1))
+  in
+  at 0
+
 let rejects name item =
   match item () with
   | _ -> Alcotest.failf "%s: accepted" name
@@ -262,9 +269,19 @@ let test_render_not_found () =
   | Ok () -> Alcotest.fail "ran a missing executable"
   | Error e -> Alcotest.failf "unexpected %a" Vhs.pp_error e
 
+let test_render_io () =
+  match render ~vhs:"/etc" [] with
+  | Error (Io msg) ->
+      Alcotest.(check bool)
+        (Fmt.str "plain message %S" msg)
+        false (contains ~sub:"Eio" msg)
+  | Ok () -> Alcotest.fail "ran a directory"
+  | Error e -> Alcotest.failf "unexpected %a" Vhs.pp_error e
+
 let run_suite =
   ( "run",
     [
       Alcotest.test_case "render stdin" `Quick test_render_stdin;
       Alcotest.test_case "render not found" `Quick test_render_not_found;
+      Alcotest.test_case "render io" `Quick test_render_io;
     ] )
