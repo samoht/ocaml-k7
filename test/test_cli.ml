@@ -246,6 +246,29 @@ let test_output_order () =
         "first output precedes typing the second command" true (first < second)
   | _ -> Alcotest.failf "recording did not show both commands: %s" screen
 
+(* VHS starts bash without history, and a typed [!] is not expanded even
+   after a setup turns history expansion back on. *)
+let test_history () =
+  with_files [ ("history.sh", 0o644, "set -o history -H\n") ] @@ fun env path ->
+  let output = path "history.txt" in
+  let src = "  $ echo one\n  $ echo \"x!!y\"\n" in
+  let t =
+    Result.get_ok
+      (Cli.tape ~setup:[ path "history.sh" ] ~output ~name:"history.t" src)
+  in
+  let result =
+    Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 60. (fun () ->
+        Vhs.render ?vhs:oracle
+          ~proc:(Eio.Stdenv.process_mgr env)
+          ~cwd:(Eio.Stdenv.cwd env) t)
+  in
+  (match result with
+  | Ok () -> ()
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+  let screen = Eio.Path.load Eio.Path.(Eio.Stdenv.fs env / output) in
+  if not (contains ~sub:"\nx!!y" screen) then
+    Alcotest.failf "history expanded: %s" screen
+
 let suite =
   ( "cli",
     List.map
@@ -257,5 +280,6 @@ let suite =
          ("command line", test_command);
        ]
       @
-      if Option.is_some oracle then [ ("output order", test_output_order) ]
+      if Option.is_some oracle then
+        [ ("output order", test_output_order); ("history", test_history) ]
       else []) )
