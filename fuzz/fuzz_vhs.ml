@@ -505,9 +505,59 @@ let test_exit_codes n =
   eval 0 [ "--help=plain" ];
   eval 124 [ "--unknown-adversarial-flag" ]
 
+let test_output_order n =
+  with_dir @@ fun env path ->
+  let executable = path "recorder" in
+  save env executable "#!/bin/sh\nunset VHS_PUBLISH\nexec vhs \"$@\"\n";
+  let output = path "order.txt" in
+  let src =
+    Fmt.str
+      "  $ printf 'progress-%d>'; sleep 3; echo FIRST_DONE\n\
+      \  $ echo SECOND_DONE\n"
+      (n land 255)
+  in
+  let cram = Result.get_ok (Vhs_cram.Cram.parse src) in
+  let t =
+    Result.get_ok
+      (Vhs.tape
+         ~settings:
+           Vhs.
+             [
+               Shell Bash;
+               Width 480;
+               Height 240;
+               Padding 0;
+               Font_size 12;
+               Framerate 5;
+               Typing_speed (Ms 5);
+             ]
+         ~outputs:[ output ]
+         (Vhs_cram.Cram.actions ~setup:[] cram @ [ Vhs.sleep (Ms 3500) ]))
+  in
+  let result =
+    Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 40. (fun () ->
+        Vhs.render ~vhs:executable
+          ~proc:(Eio.Stdenv.process_mgr env)
+          ~cwd:(Eio.Stdenv.cwd env) t)
+  in
+  (match result with Ok () -> () | Error e -> failf "%a" Vhs.pp_error e);
+  let screen = Eio.Path.load Eio.Path.(Eio.Stdenv.fs env / output) in
+  let position sub =
+    let rec scan i =
+      if i + String.length sub > String.length screen then None
+      else if String.sub screen i (String.length sub) = sub then Some i
+      else scan (i + 1)
+    in
+    scan 0
+  in
+  match (position "\nFIRST_DONE\n", position "echo SECOND_DONE") with
+  | Some first, Some second when first < second -> ()
+  | _ -> failf "next command was typed before the first output for %S" src
+
 let suite =
   ( "vhs",
     [
+      test_case "command output precedes next input" [ int8 ] test_output_order;
       test_case "documented executable exit codes" [ int16 ] test_exit_codes;
       test_case "cancelled render reaps the child" [ int8 ] test_cancel_reaps;
       test_case "never publish implicitly"
