@@ -38,17 +38,16 @@ what to type:
 
 ```ocaml
 let tape =
-  Vhs.tape
-    [
-      Vhs.output "demo.gif";
-      Vhs.set (Shell "bash");
-      Vhs.set (Font_size 18);
-      Vhs.set (Width 1000);
-      Vhs.set (Height 560);
-      Vhs.type' "dune test";
-      Vhs.enter ();
-      Vhs.sleep (S 2.);
-    ]
+  [
+    Vhs.output "demo.gif";
+    Vhs.set (Shell "bash");
+    Vhs.set (Font_size 18);
+    Vhs.set (Width 1000);
+    Vhs.set (Height 560);
+    Vhs.type' "dune test";
+    Vhs.enter ();
+    Vhs.sleep (S 2.);
+  ]
 ```
 
 `Vhs.pp` prints the tape in the format VHS reads:
@@ -82,18 +81,18 @@ let make_gif env =
 
 A cram test is a `.t` file that dune runs: each line starting with `  $ ` is
 a shell command, and the lines below it are the output it must print.
-`Vhs.Cram` turns one into a tape. Each command is typed, and the recording
-waits for the shell prompt to come back before moving on, so the GIF shows
-the output the command prints:
+`Vhs.Cram` turns one into tape steps to put after the settings. Each command
+is typed, and the recording waits for the shell prompt to come back before
+moving on, so the GIF shows the output the command prints:
 
 ```ocaml
 # let test = Result.get_ok (Vhs.Cram.parse "  $ echo hello\n  hello\n") in
-  Fmt.pr "%a" Vhs.pp (Vhs.Cram.to_tape ~output:"hello.gif" test);;
+  Fmt.pr "%a" Vhs.pp (Vhs.output "hello.gif" :: Vhs.Cram.items test);;
 Output "hello.gif"
 Type "echo hello"
 Enter
 Wait
-Sleep 3s
+Sleep 1s
 - : unit = ()
 ```
 

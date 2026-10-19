@@ -33,9 +33,6 @@ type setting =
 
 type wait = Prompt | Line of string | Screen of string
 type item = string
-type t = item list
-
-let tape items = items
 
 let invalid fn fmt =
   Fmt.kstr (fun msg -> invalid_arg ("Vhs." ^ fn ^ ": " ^ msg)) fmt
@@ -287,20 +284,8 @@ module Cram = struct
     List.concat_map (fun line -> [ type' line; enter () ]) step
     @ [ wait Prompt; sleep pause ]
 
-  let to_tape ?(settings = []) ?(setup_scripts = []) ?(pause = S 1.)
-      ?(final_pause = S 3.) ~output:output_path (steps : t) =
-    let last = List.length steps - 1 in
-    let items =
-      (output output_path :: List.map set settings)
-      @ setup_block setup_scripts
-      @ List.concat
-          (List.mapi
-             (fun index step ->
-               let pause = if index = last then final_pause else pause in
-               step_items ~pause step)
-             steps)
-    in
-    tape items
+  let items ?(setup = []) ?(pause = S 1.) steps =
+    setup_block setup @ List.concat_map (step_items ~pause) steps
 end
 
 type error =
@@ -316,8 +301,8 @@ let pp_error ppf = function
       Fmt.pf ppf "%s was killed by signal %d" vhs n
   | Io msg -> Fmt.string ppf msg
 
-let render ~proc ?(vhs = "vhs") t =
-  let stdin = Fmt.kstr Eio.Flow.string_source "%a" pp t in
+let render ~proc ?(vhs = "vhs") items =
+  let stdin = Fmt.kstr Eio.Flow.string_source "%a" pp items in
   try Ok (Eio.Process.run proc ~stdin [ vhs ]) with
   | Eio.Exn.Io (Eio.Process.E (Executable_not_found exe), _) ->
       Error (Executable_not_found exe)

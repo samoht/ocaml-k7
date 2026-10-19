@@ -5,21 +5,20 @@
     and theme, output files to render, and terminal actions such as typing text,
     pressing return, waiting for output and hiding setup steps.
 
-    [Vhs] builds tapes as values, prints them in the [*.tape] syntax, turns
-    {{!Cram}cram tests} into tapes and {{!running}runs} [vhs] on them. Only
-    {!render} performs I/O.
+    [Vhs] builds tapes as lists of {{!item}items}, prints them in the [*.tape]
+    syntax, turns {{!Cram}cram tests} into tapes and {{!running}runs} [vhs] on
+    them. Only {!render} performs I/O.
 
     {[
     let demo =
-      Vhs.tape
-        [
-          Vhs.output "demo.gif";
-          Vhs.set (Width 1000);
-          Vhs.set (Height 560);
-          Vhs.type' "dune test";
-          Vhs.enter ();
-          Vhs.wait Prompt;
-        ]
+      [
+        Vhs.output "demo.gif";
+        Vhs.set (Width 1000);
+        Vhs.set (Height 560);
+        Vhs.type' "dune test";
+        Vhs.enter ();
+        Vhs.wait Prompt;
+      ]
     ]} *)
 
 (** {1:tapes Tapes} *)
@@ -76,13 +75,7 @@ type wait =
   | Screen of string  (** Some line of the screen matches. *)
 
 type item
-(** The type for tape lines. *)
-
-type t
-(** The type for VHS tapes. *)
-
-val tape : item list -> t
-(** [tape items] is the tape of [items], one line each, in order. *)
+(** The type for tape lines. A tape is an [item list]. *)
 
 (** {1:items Items}
 
@@ -148,12 +141,10 @@ val raw : string -> item
 
 (** {1:printing Printing} *)
 
-val pp : t Fmt.t
+val pp : item list Fmt.t
 (** [pp] formats a tape in the [*.tape] syntax, one line per item. *)
 
 (** {1:cram Cram tests} *)
-
-type tape := t
 
 (** Cram tests recorded as tapes.
 
@@ -171,23 +162,12 @@ module Cram : sig
       expected output and exit codes included, are dropped. Lines may end with
       ["\r\n"]. *)
 
-  val to_tape :
-    ?settings:setting list ->
-    ?setup_scripts:string list ->
-    ?pause:duration ->
-    ?final_pause:duration ->
-    output:string ->
-    t ->
-    tape
-  (** [to_tape ~output t] records the cram test [t] as a tape writing its GIF
-      (or other format chosen by extension) to [output].
-
-      Each command is typed and submitted, then the tape waits for the
-      {!constructor-Prompt} to return before pausing. [settings] become
-      {!val-set} lines and [setup_scripts] are sourced in order inside a hidden
-      clearing block. [pause] is the reading pause after each command (defaults
-      to [S 1.]) and [final_pause] holds the last screen before exit (defaults
-      to [S 3.]). *)
+  val items : ?setup:string list -> ?pause:duration -> t -> item list
+  (** [items ~setup ~pause t] are the tape lines that record [t]. They source
+      the shell scripts [setup] in order (defaults to [[]]) while the recording
+      is hidden, then clear the screen. Each command of [t] is typed and
+      submitted, then the tape waits for the {!constructor-Prompt} and pauses
+      for [pause] (defaults to [S 1.]). *)
 end
 
 (** {1:running Running vhs} *)
@@ -202,7 +182,9 @@ type error =
 val pp_error : error Fmt.t
 (** [pp_error] formats an error for humans. *)
 
-val render : proc:_ Eio.Process.mgr -> ?vhs:string -> t -> (unit, error) result
-(** [render ~proc ~vhs t] runs the executable [vhs] (defaults to ["vhs"]) with
-    [t] on its standard input. [vhs] resolves the {!val-output} and
-    {!val-source} paths of [t] against the current directory. *)
+val render :
+  proc:_ Eio.Process.mgr -> ?vhs:string -> item list -> (unit, error) result
+(** [render ~proc ~vhs items] runs the executable [vhs] (defaults to ["vhs"])
+    with the tape [items] on its standard input. [vhs] resolves the
+    {!val-output} and {!val-source} paths of [items] against the current
+    directory. *)

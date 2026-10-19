@@ -16,7 +16,10 @@ let settings ~width =
 let tape ~width ~setup_scripts ~output src =
   let settings = settings ~width in
   Result.bind (Vhs.Cram.parse src) @@ fun cram ->
-  match Vhs.Cram.to_tape ~settings ~setup_scripts ~output cram with
+  match
+    (Vhs.output output :: List.map Vhs.set settings)
+    @ Vhs.Cram.items ~setup:setup_scripts cram
+  with
   | tape -> Ok tape
   | exception Invalid_argument msg -> Error msg
 
