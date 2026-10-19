@@ -22,7 +22,6 @@
   (ocaml (>= 5.1))
   eio
   eio_main
-  nox-loc
   fmt
   fpath
   (alcotest :with-test)

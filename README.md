@@ -85,3 +85,8 @@ conversion is available as a library through `Vhs.Cram.parse` and
 ## License
 
 ISC. See [LICENSE.md](LICENSE.md).
+
+`lib/loc.ml` and `lib/loc.mli` are copied from
+[jsont](https://erratique.ch/software/jsont), Daniel Bünzli's JSON codec
+library (`jsont_base.ml` and `jsont.ml`), with the JSON-specific parts
+removed. They keep the jsont copyright and the same ISC licence.

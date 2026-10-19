@@ -1,7 +1,7 @@
 (library
  (name vhs)
  (public_name vhs)
- (libraries eio nox-loc fmt fpath))
+ (libraries eio fmt fpath))
 
 (mdx
  (package vhs)
