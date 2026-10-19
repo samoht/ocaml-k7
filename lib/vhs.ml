@@ -250,6 +250,12 @@ let check_raw ~started line =
     | Ok (Set _ | Require) -> Ok false
     | Ok Other -> Ok true
 
+(* [is_empty a] is [true] iff [a] prints nothing. *)
+let rec is_empty = function
+  | Hidden actions -> List.for_all is_empty actions
+  | Type s -> s = ""
+  | Key _ | Sleep _ | Wait _ | Raw _ -> false
+
 (* [check_actions ~started actions] is whether an action that ends the
    settings has run once [actions] have. *)
 let rec check_actions ~started = function
@@ -259,7 +265,7 @@ let rec check_actions ~started = function
         match a with
         | Type s ->
             let* () = check_type s in
-            Ok true
+            Ok (started || s <> "")
         | Key k ->
             let* () = check_key k in
             Ok true
@@ -269,7 +275,8 @@ let rec check_actions ~started = function
         | Wait (timeout, w) ->
             let* () = check_wait timeout w in
             Ok true
-        | Hidden actions -> check_actions ~started:true actions
+        | Hidden actions as a ->
+            check_actions ~started:(started || not (is_empty a)) actions
         | Raw line -> check_raw ~started line
       in
       check_actions ~started rest
@@ -415,12 +422,6 @@ let add_line b s =
 let add_ms b n =
   Buffer.add_string b (Int.to_string n);
   Buffer.add_string b "ms"
-
-(* [is_empty a] is [true] iff [a] prints nothing. *)
-let rec is_empty = function
-  | Hidden actions -> List.for_all is_empty actions
-  | Type s -> s = ""
-  | Key _ | Sleep _ | Wait _ | Raw _ -> false
 
 let rec add_action ~hidden b = function
   | Type s -> add_type b s

@@ -165,8 +165,9 @@ val tape :
 
 val to_string : t -> string
 (** [to_string t] is [t] in the [.tape] syntax: the [Output] lines, then the
-    [Set] lines, then the actions, one or more lines each. A {!type'} with all
-    three quote characters is several [Type] lines. *)
+    [Set] lines, then the actions. An action is one or more lines, except
+    [type' ""] and a {!hidden} of such actions, which are none. A {!type'} with
+    all three quote characters is several [Type] lines. *)
 
 val pp : t Fmt.t
 (** [pp ppf t] is [Fmt.string ppf (to_string t)]. *)

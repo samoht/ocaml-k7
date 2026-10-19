@@ -128,6 +128,9 @@ let test_raw () =
   rejects "late require" [ sleep (Ms 1); raw "Require dune" ];
   rejects "setting after env" [ raw "Env A b"; raw "Set Margin 2" ];
   rejects "setting in hidden" [ hidden [ raw "Set Margin 2" ] ];
+  (* An action that prints nothing does not end the settings. *)
+  expect "setting after empty actions" "Set Margin 2\n"
+    (body [ type' ""; hidden [ type' "" ]; raw "Set Margin 2" ]);
   error "hide" {|raw line "Hide": use hidden instead|} [ raw "Hide" ];
   rejects "show" [ raw "  Show" ]
 
