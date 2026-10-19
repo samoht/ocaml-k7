@@ -178,6 +178,12 @@ let test_invalid_regexp () =
   rejects "invalid RE2 must raise Invalid_argument" (fun () ->
       Vhs.wait (Line "["))
 
+let test_overflowing_wait () =
+  (* Go durations use signed 64-bit nanoseconds. One millisecond beyond
+     that range becomes zero in VHS and fails [vhs validate]. *)
+  rejects "overflowing timeout must raise Invalid_argument" (fun () ->
+      Vhs.wait ~timeout:(Ms 9_223_372_036_855) Prompt)
+
 let suite =
   ( "vhs",
     [
@@ -193,6 +199,8 @@ let suite =
       Alcotest.test_case "vhs rules" `Quick test_vhs_rules;
       Alcotest.test_case "wait slash" `Quick test_wait_slash;
       Alcotest.test_case "keys and waits" `Quick test_keys_and_waits;
+      Alcotest.test_case "overflowing wait rejected" `Quick
+        test_overflowing_wait;
       Alcotest.test_case "invalid regexp rejected" `Quick test_invalid_regexp;
       Alcotest.test_case "source extension rejected" `Quick
         test_source_extension;
