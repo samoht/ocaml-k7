@@ -28,21 +28,30 @@
     as a decimal with at most nine fractional digits. *)
 type duration = Ms of int | S of float
 
-(** The type for keys pressed in the virtual terminal. *)
+(** The type for keys pressed in the virtual terminal. A key without an argument
+    is the VHS key of the same name. *)
 type key =
   | Enter
   | Tab
   | Space
   | Backspace
+  | Delete
+  | Insert
   | Escape
-  | Left
-  | Right
   | Up
   | Down
-  | Ctrl of string  (** A control chord, for example [Ctrl "c"]. *)
-  | Alt of string  (** An alt/meta chord. *)
-  | Ctrl_alt of string  (** A combined control+alt chord. *)
-  | Raw_key of string  (** An already-formed VHS key token. *)
+  | Left
+  | Right
+  | Page_up
+  | Page_down
+  | Scroll_up
+  | Scroll_down
+  | Ctrl of char
+      (** [Ctrl c] holds control and presses [c]: an ASCII letter, [@], [^],
+          [-], [.], a backslash or a square bracket. *)
+  | Alt of char
+      (** [Alt c] holds alt and presses [c]: an ASCII letter, [.] or a square
+          bracket. *)
 
 (** The type for terminal and renderer settings. *)
 type setting =
@@ -173,13 +182,13 @@ val raw_command : string -> item
       character or all three quote characters.
     - a {!constructor-Type} payload holds a control character other than a
       newline or a tab.
-    - a {!constructor-Require} program, an {!constructor-Env} name, a
-      {!constructor-Custom} setting name or a {!constructor-Ctrl},
-      {!constructor-Alt} or {!constructor-Ctrl_alt} key is empty or holds a
-      space or a control character.
+    - a {!constructor-Require} program, an {!constructor-Env} name or a
+      {!constructor-Custom} setting name is empty or holds a space or a control
+      character.
+    - a {!constructor-Ctrl} or {!constructor-Alt} key is not one VHS accepts.
     - a {!constructor-Comment}, a {!constructor-Custom} setting value, a
-      {!constructor-Raw_key}, a {!constructor-Raw_command} or a
-      {!constructor-Raw_line} holds a newline or a carriage return.
+      {!constructor-Raw_command} or a {!constructor-Raw_line} holds a newline or
+      a carriage return.
     - a duration is negative or not finite.
     - a wait pattern holds a newline or a carriage return. *)
 

@@ -99,8 +99,8 @@ let test_unquoted () =
   rejects "env key" (env evil "v");
   rejects "custom name" (set (Custom ("A B", "1")));
   rejects "custom value" (set (Custom ("A", "1\r")));
-  rejects "ctrl" (key (Ctrl "c Enter"));
-  rejects "raw key" (key (Raw_key evil));
+  rejects "ctrl digit" (key (Ctrl '1'));
+  rejects "alt backslash" (key (Alt '\\'));
   rejects "raw command" (raw_command evil);
   rejects "raw line" (raw_line evil);
   expect "raw line kept" "Set Margin 20\n"
@@ -127,8 +127,10 @@ let test_keys_and_waits () =
   let tape =
     tape
       [
-        key (Ctrl "c");
-        key (Ctrl_alt "Delete");
+        key (Ctrl 'c');
+        key (Ctrl '\\');
+        key (Alt '.');
+        key Page_up;
         wait (Wait_screen "ready");
         screenshot "frame.png";
         source "common.tape";
@@ -136,7 +138,9 @@ let test_keys_and_waits () =
   in
   expect "keys and waits"
     "Ctrl+c\n\
-     Ctrl+Alt+Delete\n\
+     Ctrl+\\\n\
+     Alt+.\n\
+     PageUp\n\
      Wait+Screen /ready/\n\
      Screenshot \"frame.png\"\n\
      Source \"common.tape\"\n"

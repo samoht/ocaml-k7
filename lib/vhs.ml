@@ -5,15 +5,19 @@ type key =
   | Tab
   | Space
   | Backspace
+  | Delete
+  | Insert
   | Escape
-  | Left
-  | Right
   | Up
   | Down
-  | Ctrl of string
-  | Alt of string
-  | Ctrl_alt of string
-  | Raw_key of string
+  | Left
+  | Right
+  | Page_up
+  | Page_down
+  | Scroll_up
+  | Scroll_down
+  | Ctrl of char
+  | Alt of char
 
 type setting =
   | Shell of string
@@ -152,20 +156,31 @@ let pp_duration ppf = function
       Fmt.invalid_arg "Vhs: invalid duration %gs" s
   | S s -> Fmt.pf ppf "%ss" (decimal s)
 
+let is_letter = function 'a' .. 'z' | 'A' .. 'Z' -> true | _ -> false
+
+let pp_chord name valid ppf c =
+  if not (is_letter c || String.contains valid c) then
+    Fmt.invalid_arg "Vhs: %s+%C is not a VHS key" name c;
+  Fmt.pf ppf "%s+%c" name c
+
 let pp_key ppf = function
   | Enter -> Fmt.string ppf "Enter"
   | Tab -> Fmt.string ppf "Tab"
   | Space -> Fmt.string ppf "Space"
   | Backspace -> Fmt.string ppf "Backspace"
+  | Delete -> Fmt.string ppf "Delete"
+  | Insert -> Fmt.string ppf "Insert"
   | Escape -> Fmt.string ppf "Escape"
-  | Left -> Fmt.string ppf "Left"
-  | Right -> Fmt.string ppf "Right"
   | Up -> Fmt.string ppf "Up"
   | Down -> Fmt.string ppf "Down"
-  | Ctrl key -> Fmt.pf ppf "Ctrl+%a" pp_word key
-  | Alt key -> Fmt.pf ppf "Alt+%a" pp_word key
-  | Ctrl_alt key -> Fmt.pf ppf "Ctrl+Alt+%a" pp_word key
-  | Raw_key key -> pp_line ppf key
+  | Left -> Fmt.string ppf "Left"
+  | Right -> Fmt.string ppf "Right"
+  | Page_up -> Fmt.string ppf "PageUp"
+  | Page_down -> Fmt.string ppf "PageDown"
+  | Scroll_up -> Fmt.string ppf "ScrollUp"
+  | Scroll_down -> Fmt.string ppf "ScrollDown"
+  | Ctrl c -> pp_chord "Ctrl" {|@[\]^-.|} ppf c
+  | Alt c -> pp_chord "Alt" "[]." ppf c
 
 let pp_setting ppf = function
   | Shell shell -> Fmt.pf ppf "Shell %a" pp_quoted shell
