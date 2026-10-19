@@ -159,6 +159,10 @@ let test_quoted_slash_semantics () =
   expect "literal slash inside RE2 quoting" "Wait+Line /\\Q\\E\\x2f\\Q\\E/\n"
     (str [ Vhs.wait (Line {|\Q/\E|}) ])
 
+let test_underscore_env () =
+  (* [vhs validate] rejects: Env _FOO "x". *)
+  rejects "Env _FOO must raise Invalid_argument" (fun () -> Vhs.env "_FOO" "x")
+
 let suite =
   ( "vhs",
     [
@@ -174,6 +178,7 @@ let suite =
       Alcotest.test_case "vhs rules" `Quick test_vhs_rules;
       Alcotest.test_case "wait slash" `Quick test_wait_slash;
       Alcotest.test_case "keys and waits" `Quick test_keys_and_waits;
+      Alcotest.test_case "underscore env rejected" `Quick test_underscore_env;
       Alcotest.test_case "quoted slash semantics" `Quick
         test_quoted_slash_semantics;
     ] )
