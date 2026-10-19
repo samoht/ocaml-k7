@@ -150,10 +150,14 @@ val raw_command : string -> item
 (** {1:rendering Rendering} *)
 
 val pp : t Fmt.t
-(** [pp] formats a complete tape with one line per item. *)
+(** [pp] is {!Value.pp}.
+
+    @raise Invalid_argument if the tape is not {{!Value.printing}printable}. *)
 
 val to_string : t -> string
-(** [to_string t] is the textual [*.tape] representation of [t]. *)
+(** [to_string t] is {!Value.to_string}[ t].
+
+    @raise Invalid_argument if [t] is not {{!Value.printing}printable}. *)
 
 val write_file : path:string -> t -> unit
 (** [write_file ~path t] writes the textual [*.tape] representation of [t] to

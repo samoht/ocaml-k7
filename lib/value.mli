@@ -65,7 +65,9 @@ type wait = Wait of string | Wait_screen of string | Wait_line of string
 
 (** The type for terminal actions. *)
 type command =
-  | Type of string  (** Types text without pressing return. *)
+  | Type of string
+      (** Types text without pressing return. Newlines and tabs are typed as
+          {!constructor-Enter} and {!constructor-Tab}. *)
   | Key of key
   | Sleep of duration  (** Pauses the recording timeline. *)
   | Wait_for of wait
@@ -158,6 +160,17 @@ val raw_command : string -> item
 (** [raw_command line] emits a command line unchanged, for VHS commands not
     modelled here. *)
 
+(** {1:printing Printing}
+
+    VHS strings have no escape sequences and end at a newline. The printers
+    pick, for each quoted payload, a quote character (["\""], ['\''] or [`]) it
+    does not hold, and cut a {!constructor-Type} payload into several commands
+    where needed. They raise [Invalid_argument] if:
+    - a quoted payload other than a {!constructor-Type} one holds a control
+      character or all three quote characters.
+    - a {!constructor-Type} payload holds a control character other than a
+      newline or a tab. *)
+
 val pp_duration : duration Fmt.t
 (** [pp_duration] formats a VHS duration. *)
 
@@ -177,10 +190,14 @@ val pp_item : item Fmt.t
 (** [pp_item] formats one tape item without forcing a trailing newline. *)
 
 val pp : t Fmt.t
-(** [pp] formats a complete tape with one line per item. *)
+(** [pp] formats a complete tape with one line per item.
+
+    @raise Invalid_argument if the tape is not {{!printing}printable}. *)
 
 val to_string : t -> string
-(** [to_string t] is the textual [*.tape] representation of [t]. *)
+(** [to_string t] is the textual [*.tape] representation of [t].
+
+    @raise Invalid_argument if [t] is not {{!printing}printable}. *)
 
 val equal : t -> t -> bool
 (** [equal a b] compares tapes by their generated textual representation. *)

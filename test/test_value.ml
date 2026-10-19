@@ -1,5 +1,10 @@
 let expect name expected got = Alcotest.(check string) name expected got
 
+let rejects name item =
+  match Vhs.Value.(to_string (tape [ item ])) with
+  | s -> Alcotest.failf "%s: printed %S" name s
+  | exception Invalid_argument _ -> ()
+
 let test_basic_tape () =
   let open Vhs.Value in
   let tape =
@@ -40,14 +45,28 @@ let test_escaping () =
       [
         type' {|printf "hello\n" && echo \done|};
         env "PROMPT" {|a "quoted" value|};
-        type' "bad\x01byte";
       ]
   in
   expect "escaping"
     "Type 'printf \"hello\\n\" && echo \\done'\n\
-     Env PROMPT 'a \"quoted\" value'\n\
-     Type \"bad\\x01byte\"\n"
+     Env PROMPT 'a \"quoted\" value'\n"
     (to_string tape)
+
+let test_type_control () =
+  let open Vhs.Value in
+  expect "newline is Enter"
+    "Type 'echo \"a\"'\nEnter\nType \"Output evil.gif\"\n"
+    (to_string (tape [ type' "echo \"a\"\nOutput evil.gif" ]));
+  expect "tab is Tab" "Type \"a\"\nTab\nType \"b\"\nEnter\n"
+    (to_string (tape [ type' "a\tb\n" ]));
+  expect "empty" "Type \"\"\n" (to_string (tape [ type' "" ]));
+  rejects "control byte" (type' "bad\x01byte")
+
+let test_quoted_control () =
+  let open Vhs.Value in
+  rejects "output" (output "a.gif\nOutput evil.gif");
+  rejects "env value" (env "A" "x\ry");
+  rejects "theme" (set (Theme "a\x00"))
 
 (* A docker format string forces double quotes and VHS types it verbatim, so
    the [\t] must reach the shell as one backslash. *)
@@ -69,9 +88,7 @@ let test_three_quotes () =
   let open Vhs.Value in
   expect "split type" "Type `a\"b'c`\nType \"`d\"\n"
     (to_string (tape [ type' {|a"b'c`d|} ]));
-  match to_string (tape [ output {|a"b'c`d|} ]) with
-  | s -> Alcotest.failf "printed %S" s
-  | exception Invalid_argument _ -> ()
+  rejects "output" (output {|a"b'c`d|})
 
 let test_keys_and_waits () =
   let open Vhs.Value in
@@ -101,5 +118,7 @@ let suite =
       Alcotest.test_case "backslash verbatim" `Quick test_backslash_verbatim;
       Alcotest.test_case "both quotes" `Quick test_both_quotes;
       Alcotest.test_case "three quotes" `Quick test_three_quotes;
+      Alcotest.test_case "type control" `Quick test_type_control;
+      Alcotest.test_case "quoted control" `Quick test_quoted_control;
       Alcotest.test_case "keys and waits" `Quick test_keys_and_waits;
     ] )

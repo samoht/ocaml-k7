@@ -72,34 +72,16 @@ let show () = Command Show
 let screenshot ?path () = Command (Screenshot path)
 let source path = Command (Source path)
 let raw_command s = Command (Raw_command s)
-
-let add_hex_escape b code =
-  let hex = "0123456789abcdef" in
-  Buffer.add_string b "\\x";
-  Buffer.add_char b hex.[code lsr 4];
-  Buffer.add_char b hex.[code land 0xf]
-
-(* VHS types a double-quoted string verbatim: a backslash is not an escape
-   introducer, so backslashes must not be doubled here. *)
-let escape_double_quoted s =
-  let b = Buffer.create (String.length s + 8) in
-  Buffer.add_char b '"';
-  String.iter
-    (fun c ->
-      let code = Char.code c in
-      if code < 0x20 || code = 0x7f then add_hex_escape b code
-      else Buffer.add_char b c)
-    s;
-  Buffer.add_char b '"';
-  Buffer.contents b
-
 let quotes = [ '"'; '\''; '`' ]
 let is_quote c = List.mem c quotes
+let is_control c = Char.code c < 0x20 || Char.code c = 0x7f
 
-(* A VHS string has no escapes, so it is delimited by a quote it lacks. *)
+(* A VHS string has no escapes and ends at a newline, so it is delimited by
+   a quote it lacks and cannot hold a control character. *)
 let quote_string s =
+  if String.exists is_control s then
+    Fmt.invalid_arg "Vhs.Value: %S holds a control character" s;
   match List.find_opt (fun q -> not (String.contains s q)) quotes with
-  | Some '"' -> escape_double_quoted s
   | Some q -> Fmt.str "%c%s%c" q s q
   | None ->
       Fmt.invalid_arg "Vhs.Value: %S holds all three VHS quote characters" s
@@ -121,10 +103,30 @@ let quotable_chunks s =
     s;
   List.rev (String.sub s !start (String.length s - !start) :: !chunks)
 
-let pp_type ppf s =
-  Fmt.list ~sep:(Fmt.any "\n")
-    (fun ppf chunk -> Fmt.pf ppf "Type %a" pp_quoted chunk)
-    ppf (quotable_chunks s)
+(* [type_lines s] are the VHS commands typing [s]: text runs become [Type]
+   commands and newlines and tabs become key presses. *)
+let type_lines s =
+  let lines = ref [] and start = ref 0 in
+  let text stop =
+    if stop > !start then
+      let chunks = quotable_chunks (String.sub s !start (stop - !start)) in
+      List.iter (fun c -> lines := ("Type " ^ quote_string c) :: !lines) chunks
+  in
+  String.iteri
+    (fun i c ->
+      match c with
+      | '\n' | '\t' ->
+          text i;
+          lines := (if c = '\n' then "Enter" else "Tab") :: !lines;
+          start := i + 1
+      | c when is_control c ->
+          Fmt.invalid_arg "Vhs.Value: Type %S holds a control character" s
+      | _ -> ())
+    s;
+  text (String.length s);
+  match !lines with [] -> [ {|Type ""|} ] | lines -> List.rev lines
+
+let pp_type ppf s = Fmt.(list ~sep:(any "\n") string) ppf (type_lines s)
 
 let pp_duration ppf = function
   | Ms n -> Fmt.pf ppf "%dms" n
