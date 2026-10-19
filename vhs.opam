@@ -6,9 +6,7 @@ description:
 maintainer: ["Thomas Gazagnaire <thomas@gazagnaire.org>"]
 authors: ["Thomas Gazagnaire <thomas@gazagnaire.org>"]
 license: "ISC"
-tags: [
-  "org:blacksun" "command-line-utilities" "format" "eio" "area:10010913"
-]
+tags: ["command-line-utilities" "format" "eio"]
 homepage: "https://github.com/samoht/ocaml-vhs"
 bug-reports: "https://github.com/samoht/ocaml-vhs/issues"
 depends: [

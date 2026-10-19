@@ -13,7 +13,7 @@
 (package
  (name vhs)
  (synopsis "Generate and run Charmbracelet VHS terminal tapes")
- (tags (org:blacksun command-line-utilities format eio area:10010913))
+ (tags (command-line-utilities format eio))
  (description
   "Small OCaml library for generating Charmbracelet VHS .tape files and \
    invoking the vhs command-line tool. The value layer models VHS tape lines \
