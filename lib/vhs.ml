@@ -223,12 +223,15 @@ module Cram = struct
   (* Source the setup scripts, then clear, all hidden: the [clear] must come
      after the [source] lines so their echoes are wiped from the scrollback
      before [Show] resumes capture, otherwise they leak into the recording. *)
+  let sh_quote s =
+    "'" ^ String.concat {|'\''|} (String.split_on_char '\'' s) ^ "'"
+
   let setup_block = function
     | [] -> []
     | scripts ->
         hide
         :: List.concat_map
-             (fun s -> [ type' ("source " ^ Filename.quote s); key Enter ])
+             (fun s -> [ type' ("source " ^ sh_quote s); key Enter ])
              scripts
         @ [ type' "clear"; key Enter; show ]
 

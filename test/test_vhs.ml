@@ -202,10 +202,12 @@ let test_setup_quoted () =
      Enter\n\
      Type \"source 'my setup.sh'\"\n\
      Enter\n\
+     Type \"source 'it'\\''s.sh'\"\n\
+     Enter\n\
      Type \"clear\"\n\
      Enter\n\
      Show\n"
-    (cram ~setup:[ "setup.sh"; "my setup.sh" ] "")
+    (cram ~setup:[ "setup.sh"; "my setup.sh"; "it's.sh" ] "")
 
 let test_parse () =
   let src =
