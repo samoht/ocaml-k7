@@ -168,6 +168,11 @@ let test_zero_wait () =
   rejects "Wait@0ms must raise Invalid_argument" (fun () ->
       Vhs.wait ~timeout:(Ms 0) Prompt)
 
+let test_source_extension () =
+  (* [vhs validate] rejects: Source "common.txt". *)
+  rejects "non-tape source must raise Invalid_argument" (fun () ->
+      Vhs.source "common.txt")
+
 let suite =
   ( "vhs",
     [
@@ -183,6 +188,8 @@ let suite =
       Alcotest.test_case "vhs rules" `Quick test_vhs_rules;
       Alcotest.test_case "wait slash" `Quick test_wait_slash;
       Alcotest.test_case "keys and waits" `Quick test_keys_and_waits;
+      Alcotest.test_case "source extension rejected" `Quick
+        test_source_extension;
       Alcotest.test_case "zero wait rejected" `Quick test_zero_wait;
       Alcotest.test_case "underscore env rejected" `Quick test_underscore_env;
       Alcotest.test_case "quoted slash semantics" `Quick
