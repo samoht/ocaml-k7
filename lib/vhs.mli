@@ -169,8 +169,13 @@ end
 (** The type for errors of {!render}. *)
 type error =
   | Executable_not_found of string  (** No such executable on the [PATH]. *)
-  | Failed of { vhs : string; status : [ `Exited of int | `Signaled of int ] }
-      (** The executable [vhs] ran and did not exit with [0]. *)
+  | Failed of {
+      vhs : string;
+      status : [ `Exited of int | `Signaled of int ];
+      stderr : string;
+    }
+      (** The executable [vhs] ran and did not exit with [0]; [stderr] is what
+          it wrote on its standard error, such as the wait that timed out. *)
   | Io of string  (** Any other I/O failure, as a message. *)
 
 val pp_error : error Fmt.t
@@ -179,6 +184,6 @@ val pp_error : error Fmt.t
 val render :
   proc:_ Eio.Process.mgr -> ?vhs:string -> item list -> (unit, error) result
 (** [render ~proc ~vhs items] runs the executable [vhs] (defaults to ["vhs"])
-    with the tape [items] on its standard input. [vhs] resolves the
-    {!val-output} and {!val-source} paths of [items] against the current
-    directory. *)
+    with the tape [items] on its standard input and its standard error captured
+    for {!Failed}. [vhs] resolves the {!val-output} and {!val-source} paths of
+    [items] against the current directory. *)

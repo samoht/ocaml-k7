@@ -258,8 +258,11 @@ let render ?vhs tape =
   Vhs.render ~proc:(Eio.Stdenv.process_mgr env) ?vhs tape
 
 let test_render_stdin () =
-  match render ~vhs:"sh" [ Vhs.raw "exit 3" ] with
-  | Error (Failed { vhs = "sh"; status = `Exited 3 }) -> ()
+  match render ~vhs:"sh" [ Vhs.raw "echo timeout waiting >&2; exit 3" ] with
+  | Error (Failed { vhs = "sh"; status = `Exited 3; stderr } as e) ->
+      expect "stderr" "timeout waiting\n" stderr;
+      expect "message" "sh exited with code 3: timeout waiting"
+        (Fmt.str "%a" Vhs.pp_error e)
   | Ok () -> Alcotest.fail "sh did not read the tape"
   | Error e -> Alcotest.failf "unexpected %a" Vhs.pp_error e
 

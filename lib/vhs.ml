@@ -255,15 +255,25 @@ end
 
 type error =
   | Executable_not_found of string
-  | Failed of { vhs : string; status : [ `Exited of int | `Signaled of int ] }
+  | Failed of {
+      vhs : string;
+      status : [ `Exited of int | `Signaled of int ];
+      stderr : string;
+    }
   | Io of string
 
 let pp_error ppf = function
   | Executable_not_found exe -> Fmt.pf ppf "executable not found: %s" exe
-  | Failed { vhs; status = `Exited n } ->
-      Fmt.pf ppf "%s exited with code %d" vhs n
-  | Failed { vhs; status = `Signaled n } ->
-      Fmt.pf ppf "%s was killed by signal %d" vhs n
+  | Failed { vhs; status; stderr } ->
+      let lines =
+        String.split_on_char '\n' stderr
+        |> List.map String.trim
+        |> List.filter (( <> ) "")
+      in
+      (match status with
+      | `Exited n -> Fmt.pf ppf "%s exited with code %d" vhs n
+      | `Signaled n -> Fmt.pf ppf "%s was killed by signal %d" vhs n);
+      if lines <> [] then Fmt.pf ppf ": %s" (String.concat " " lines)
   | Io msg -> Fmt.string ppf msg
 
 let io_message = function
@@ -273,9 +283,15 @@ let io_message = function
 
 let render ~proc ?(vhs = "vhs") items =
   let stdin = Fmt.kstr Eio.Flow.string_source "%a" pp items in
-  try Ok (Eio.Process.run proc ~stdin [ vhs ]) with
+  let stderr = Buffer.create 256 in
+  try
+    Ok
+      (Eio.Process.run proc ~stdin
+         ~stderr:(Eio.Flow.buffer_sink stderr)
+         [ vhs ])
+  with
   | Eio.Exn.Io (Eio.Process.E (Executable_not_found exe), _) ->
       Error (Executable_not_found exe)
   | Eio.Exn.Io (Eio.Process.E (Child_error status), _) ->
-      Error (Failed { vhs; status })
+      Error (Failed { vhs; status; stderr = Buffer.contents stderr })
   | Eio.Exn.Io (err, _) -> Error (Io (io_message err))
