@@ -175,11 +175,18 @@ let test_settings () =
            Framerate 24;
          ]
        []);
-  error "small width" "Set Width 100: below twice the padding (60)"
+  error "small width" "Set Width 100: below twice the default padding (60)"
     ~settings:[ Width 100 ] [];
+  error "small height" "Set Height 100: below twice the padding (60)"
+    ~settings:[ Padding 60; Height 100 ] [];
+  (* The size the user did not set is not named as an offending line. *)
   error "padding and default height"
-    "Set Height 600: below twice the padding (400)"
+    "Set Padding 400: above half the default height (600)"
     ~settings:[ Padding 400; Width 1000 ]
+    [];
+  error "padding and default width"
+    "Set Padding 700: above half the default width (1200)"
+    ~settings:[ Padding 700; Height 2000 ]
     [];
   rejects "negative padding" ~settings:[ Padding (-1) ] [];
   rejects "font size" ~settings:[ Font_size 0 ] [];

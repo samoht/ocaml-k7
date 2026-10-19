@@ -280,21 +280,35 @@ let check_setting = function
   | Font_size _ | Framerate _ | Padding _ | Width _ | Height _ -> Ok ()
 
 (* VHS refuses a frame smaller than twice the padding, its defaults
-   included. The padding is not negative here, and halving the size, unlike
-   doubling the padding, cannot overflow. *)
+   included; the error names a setting the caller gave. The padding is not
+   negative here, and halving the size, unlike doubling the padding, cannot
+   overflow. *)
 let check_size settings =
-  let last f default =
-    List.fold_left (fun v s -> Option.value (f s) ~default:v) default settings
+  let last f =
+    List.fold_left
+      (fun v s -> Option.fold ~none:v ~some:Option.some (f s))
+      None settings
   in
-  let padding = last (function Padding n -> Some n | _ -> None) 60 in
-  let width = last (function Width n -> Some n | _ -> None) 1200 in
-  let height = last (function Height n -> Some n | _ -> None) 600 in
-  let too_small size = size < 0 || padding > size / 2 in
-  if too_small width then
-    err "Set Width %d: below twice the padding (%d)" width padding
-  else if too_small height then
-    err "Set Height %d: below twice the padding (%d)" height padding
-  else Ok ()
+  let padding = last (function Padding n -> Some n | _ -> None) in
+  let p = Option.value padding ~default:60 in
+  let check name size default =
+    let n = Option.value size ~default in
+    if n >= 0 && p <= n / 2 then Ok ()
+    else
+      match size with
+      | Some n ->
+          err "Set %s %d: below twice the %spadding (%d)" name n
+            (if padding = None then "default " else "")
+            p
+      | None ->
+          err "Set Padding %d: above half the default %s (%d)" p
+            (String.lowercase_ascii name)
+            default
+  in
+  let* () =
+    check "Width" (last (function Width n -> Some n | _ -> None)) 1200
+  in
+  check "Height" (last (function Height n -> Some n | _ -> None)) 600
 
 let tape ?(settings = []) ~outputs actions =
   let* () =
