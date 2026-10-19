@@ -235,11 +235,31 @@ let test_waits () =
     [ wait (Screen "[") ];
   rejects "line break" [ wait (Screen "a\nb") ]
 
+(* Only validation runs here: the oracle must never record or publish. *)
+let validate_accepted actions =
+  match Vhs.tape ~outputs:[ "demo.gif" ] actions with
+  | Error _ -> ()
+  | Ok t ->
+      let path = Filename.temp_file "vhs-validate" ".tape" in
+      Fun.protect
+        ~finally:(fun () -> Sys.remove path)
+        (fun () ->
+          let oc = open_out_bin path in
+          output_string oc (Vhs.to_string t);
+          close_out oc;
+          Alcotest.(check int)
+            "accepted tape validates" 0
+            (Sys.command
+               ("vhs validate " ^ Filename.quote path ^ " > /dev/null 2>&1")))
+
+let test_raw_validation () = validate_accepted [ Vhs.raw "Sleep -1ms" ]
+
 let suite =
   ( "vhs",
     List.map
       (fun (name, fn) -> Alcotest.test_case name `Quick fn)
       [
+        ("raw validation", test_raw_validation);
         ("basic tape", test_basic_tape);
         ("quotes", test_quotes);
         ("backslash verbatim", test_backslash_verbatim);
