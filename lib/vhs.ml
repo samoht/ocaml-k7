@@ -94,8 +94,14 @@ let check_quotable what s =
     err "%s %S: holds all three quote characters" what s
   else Ok ()
 
+(* The largest Go [time.Duration], in whole milliseconds. *)
+let max_ms = 9_223_372_036_854
+
 let check_ms what n =
-  if n < 0 then err "%s%dms: negative duration" what n else Ok ()
+  if n < 0 then err "%s%dms: negative duration" what n
+  else if n > max_ms then
+    err "%s%dms: beyond Go's duration range (%dms)" what n max_ms
+  else Ok ()
 
 let check_type s =
   if String.exists (fun c -> is_control c && c <> '\t' && c <> '\n') s then
@@ -115,7 +121,10 @@ let check_key = function
 
 let check_wait timeout w =
   let* () =
-    match timeout with None -> Ok () | Some (Ms n) -> check_ms "Wait@" n
+    match timeout with
+    | None -> Ok ()
+    | Some (Ms 0) -> err "Wait@0ms: the timeout must be positive"
+    | Some (Ms n) -> check_ms "Wait@" n
   in
   match w with
   | Prompt -> Ok ()

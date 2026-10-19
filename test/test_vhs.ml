@@ -120,7 +120,15 @@ let test_durations () =
   expect "sleep" "Sleep 25ms\nSleep 0ms\n"
     (body [ sleep (Ms 25); sleep (Ms 0) ]);
   error "negative" "Sleep -1ms: negative duration" [ sleep (Ms (-1)) ];
+  error "zero timeout" "Wait@0ms: the timeout must be positive"
+    [ wait ~timeout:(Ms 0) Prompt ];
   rejects "negative timeout" [ wait ~timeout:(Ms (-1)) Prompt ];
+  (* Go durations are signed 64-bit nanoseconds; one more millisecond
+     overflows and fails [vhs validate]. *)
+  expect "largest" "Wait@9223372036854ms\n"
+    (body [ wait ~timeout:(Ms 9_223_372_036_854) Prompt ]);
+  rejects "overflowing timeout" [ wait ~timeout:(Ms 9_223_372_036_855) Prompt ];
+  rejects "overflowing sleep" [ sleep (Ms 9_223_372_036_855) ];
   rejects "typing speed" ~settings:[ Typing_speed (Ms (-1)) ] []
 
 let test_settings () =

@@ -23,8 +23,8 @@
 
 (** {1:actions Actions} *)
 
-(** The type for durations, in milliseconds. A tape accepts durations that are
-    not negative. *)
+(** The type for durations, in milliseconds. A tape accepts [Ms 0] to
+    [Ms 9_223_372_036_854], the range of Go's [time.Duration]. *)
 type duration = Ms of int
 
 (** The type for keys. A key without an argument is the VHS key of the same
@@ -138,7 +138,7 @@ val tape :
     - a string holds a control character (the tabs and newlines of {!type'}
       aside), or all three quote characters (['"'], ['\''] and ['`']) where VHS
       quotes it;
-    - a duration is negative;
+    - a duration is out of range, or a wait timeout is [Ms 0];
     - a {!Screen} pattern is not valid Go regular expression syntax;
     - a key or a setting breaks the condition its documentation states. *)
 
