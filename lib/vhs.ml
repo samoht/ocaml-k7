@@ -271,12 +271,12 @@ let io_message = function
   | Eio.Process.E (Executable_format_error exe) -> exe ^ ": not an executable"
   | err -> Fmt.str "%a" Eio.Exn.pp_err err
 
-let render ~proc ?(vhs = "vhs") items =
+let render ?(vhs = "vhs") ~proc ~cwd items =
   let stdin = Fmt.kstr Eio.Flow.string_source "%a" pp items in
   let stderr = Buffer.create 256 in
   try
     Ok
-      (Eio.Process.run proc ~stdin
+      (Eio.Process.run proc ~cwd ~stdin
          ~stderr:(Eio.Flow.buffer_sink stderr)
          [ vhs ])
   with

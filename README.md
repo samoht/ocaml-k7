@@ -66,13 +66,13 @@ Sleep 2000ms
 ```
 
 Each step raises `Invalid_argument` if VHS could not read it, for instance a
-string holding a newline. `Vhs.render` runs `vhs` on the tape, and returns
+string holding a newline. `Vhs.render` runs `vhs` on the tape in a given directory, and returns
 an error when `vhs` is not installed or fails:
 
 ```ocaml
 let make_gif env =
-  let proc = Eio.Stdenv.process_mgr env in
-  match Vhs.render ~proc tape with
+  let proc = Eio.Stdenv.process_mgr env and cwd = Eio.Stdenv.cwd env in
+  match Vhs.render ~proc ~cwd tape with
   | Ok () -> ()
   | Error e -> Fmt.epr "%a@." Vhs.pp_error e
 ```

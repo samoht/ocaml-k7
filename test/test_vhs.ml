@@ -253,9 +253,10 @@ let cram_suite =
       Alcotest.test_case "crlf" `Quick test_crlf;
     ] )
 
-let render ?vhs tape =
+let render ?vhs ?(cwd = ".") tape =
   Eio_main.run @@ fun env ->
-  Vhs.render ~proc:(Eio.Stdenv.process_mgr env) ?vhs tape
+  let cwd = Eio.Path.(Eio.Stdenv.fs env / cwd) in
+  Vhs.render ?vhs ~proc:(Eio.Stdenv.process_mgr env) ~cwd tape
 
 let test_render_stdin () =
   match render ~vhs:"sh" [ Vhs.raw "echo timeout waiting >&2; exit 3" ] with
@@ -272,6 +273,14 @@ let test_render_not_found () =
   | Ok () -> Alcotest.fail "ran a missing executable"
   | Error e -> Alcotest.failf "unexpected %a" Vhs.pp_error e
 
+let test_render_cwd () =
+  match
+    render ~vhs:"sh" ~cwd:"/" [ Vhs.raw {|[ "$(pwd -P)" = / ] && exit 5|} ]
+  with
+  | Error (Failed { status = `Exited 5; _ }) -> ()
+  | Ok () -> Alcotest.fail "sh did not run in /"
+  | Error e -> Alcotest.failf "unexpected %a" Vhs.pp_error e
+
 let test_render_io () =
   match render ~vhs:"/etc" [] with
   | Error (Io msg) ->
@@ -286,5 +295,6 @@ let run_suite =
     [
       Alcotest.test_case "render stdin" `Quick test_render_stdin;
       Alcotest.test_case "render not found" `Quick test_render_not_found;
+      Alcotest.test_case "render cwd" `Quick test_render_cwd;
       Alcotest.test_case "render io" `Quick test_render_io;
     ] )

@@ -32,7 +32,9 @@ let record ~vhs ~width ~setup_scripts ~output input =
   | exception Eio.Io (err, _) -> err_load input err
   | src ->
       Result.bind (tape ~width ~setup_scripts ~output src) @@ fun tape ->
-      Vhs.render ~proc:(Eio.Stdenv.process_mgr env) ~vhs tape
+      Vhs.render ~vhs
+        ~proc:(Eio.Stdenv.process_mgr env)
+        ~cwd:(Eio.Stdenv.cwd env) tape
       |> Result.map_error (Fmt.to_to_string Vhs.pp_error)
 
 let run vhs width setup_scripts output input =

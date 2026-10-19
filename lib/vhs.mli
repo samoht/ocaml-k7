@@ -181,8 +181,13 @@ val pp_error : error Fmt.t
 (** [pp_error] formats an error for humans. *)
 
 val render :
-  proc:_ Eio.Process.mgr -> ?vhs:string -> item list -> (unit, error) result
-(** [render ~proc ~vhs items] runs the executable [vhs] (defaults to ["vhs"])
-    with the tape [items] on its standard input and its standard error captured
-    for {!Failed}. [vhs] resolves the {!val-output} and {!val-source} paths of
-    [items] against the current directory. *)
+  ?vhs:string ->
+  proc:_ Eio.Process.mgr ->
+  cwd:_ Eio.Path.t ->
+  item list ->
+  (unit, error) result
+(** [render ~vhs ~proc ~cwd items] runs the executable [vhs] (defaults to
+    ["vhs"]) in the directory [cwd], with the tape [items] on its standard input
+    and its standard error captured for {!Failed}. The {!val-output},
+    {!val-screenshot} and {!val-source} paths of [items] are relative to [cwd].
+*)
