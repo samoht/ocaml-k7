@@ -46,7 +46,7 @@ let tape =
     Vhs.set (Height 560);
     Vhs.type' "dune test";
     Vhs.key Enter;
-    Vhs.sleep (S 2.);
+    Vhs.sleep (Ms 2000);
   ]
 ```
 
@@ -61,7 +61,7 @@ Set Width 1000
 Set Height 560
 Type "dune test"
 Enter
-Sleep 2s
+Sleep 2000ms
 - : unit = ()
 ```
 
@@ -92,7 +92,7 @@ Output "hello.gif"
 Type "echo hello"
 Enter
 Wait
-Sleep 1s
+Sleep 1000ms
 - : unit = ()
 ```
 

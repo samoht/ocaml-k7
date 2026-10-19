@@ -1,4 +1,4 @@
-type duration = Ms of int | S of float
+type duration = Ms of int
 
 type key =
   | Enter
@@ -69,20 +69,7 @@ let quotable_chunks s =
   in
   cut [] 0 [] 0
 
-(* VHS reads a plain decimal: no exponent, no sign. *)
-let decimal s =
-  let s = Fmt.str "%.9f" (Float.abs s) in
-  let rec last i =
-    match s.[i] with '0' -> last (i - 1) | '.' -> i - 1 | _ -> i
-  in
-  String.sub s 0 (last (String.length s - 1) + 1)
-
-let duration fn = function
-  | Ms n -> natural fn n ^ "ms"
-  | S s when Float.is_nan s || s < 0. || s = Float.infinity ->
-      invalid fn "invalid duration %gs" s
-  | S s -> decimal s ^ "s"
-
+let duration fn (Ms n) = natural fn n ^ "ms"
 let is_letter = function 'a' .. 'z' | 'A' .. 'Z' -> true | _ -> false
 
 let chord name valid c =
@@ -249,7 +236,7 @@ module Cram = struct
     List.concat_map (fun line -> [ type' line; key Enter ]) step
     @ [ wait Prompt; sleep pause ]
 
-  let items ?(setup = []) ?(pause = S 1.) steps =
+  let items ?(setup = []) ?(pause = Ms 1000) steps =
     setup_block setup @ List.concat_map (step_items ~pause) steps
 end
 

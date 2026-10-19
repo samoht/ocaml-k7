@@ -27,7 +27,7 @@ let test_basic_tape () =
       set (Theme "Builtin Dark");
       type' "dune test";
       key Enter;
-      sleep (S 1.5);
+      sleep (Ms 1500);
     ]
   in
   expect "tape"
@@ -41,7 +41,7 @@ Set Height 560
 Set Theme "Builtin Dark"
 Type "dune test"
 Enter
-Sleep 1.5s
+Sleep 1500ms
 |}
     (str tape)
 
@@ -101,12 +101,9 @@ let test_unquoted () =
 
 let test_durations () =
   let open Vhs in
-  expect "decimal" "Sleep 0.00001s\nSleep 2s\nSleep 0s\nSleep 25ms\n"
-    (str [ sleep (S 1e-5); sleep (S 2.); sleep (S (-0.)); sleep (Ms 25) ]);
-  rejects "negative" (fun () -> sleep (S (-1.)));
-  rejects "nan" (fun () -> sleep (S Float.nan));
-  rejects "infinity" (fun () -> set (Typing_speed (S Float.infinity)));
-  rejects "negative ms" (fun () -> sleep (Ms (-1)))
+  expect "ms" "Sleep 25ms\nSleep 0ms\n" (str [ sleep (Ms 25); sleep (Ms 0) ]);
+  rejects "negative" (fun () -> sleep (Ms (-1)));
+  rejects "negative timeout" (fun () -> wait ~timeout:(Ms (-1)) Prompt)
 
 let test_vhs_rules () =
   let open Vhs in
@@ -137,7 +134,7 @@ let test_keys_and_waits () =
       wait (Screen "ready");
       wait Prompt;
       wait ~timeout:(Ms 500) Prompt;
-      wait ~timeout:(S 2.) (Line "ok");
+      wait ~timeout:(Ms 2000) (Line "ok");
       screenshot "frame.png";
       source "common.tape";
     ]
@@ -150,7 +147,7 @@ let test_keys_and_waits () =
      Wait+Screen /ready/\n\
      Wait\n\
      Wait@500ms\n\
-     Wait+Line@2s /ok/\n\
+     Wait+Line@2000ms /ok/\n\
      Screenshot \"frame.png\"\n\
      Source \"common.tape\"\n"
     (str tape)
@@ -178,7 +175,7 @@ let cram ?setup src =
   | Error msg -> Alcotest.fail msg
 
 let test_minimal () =
-  expect "minimal" "Type \"./main.exe\"\nEnter\nWait\nSleep 1s\n"
+  expect "minimal" "Type \"./main.exe\"\nEnter\nWait\nSleep 1000ms\n"
     (cram "  $ ./main.exe\n  +hello, world\n")
 
 let test_splice () =
@@ -190,12 +187,13 @@ Set Width 900
 Type "echo done"
 Enter
 Wait
-Sleep 2s
-Sleep 3s
+Sleep 2000ms
+Sleep 3000ms
 |}
     (str
-       ((output "demo.gif" :: set (Width 900) :: Cram.items ~pause:(S 2.) cram)
-       @ [ sleep (S 3.) ]))
+       (output "demo.gif" :: set (Width 900)
+        :: Cram.items ~pause:(Ms 2000) cram
+       @ [ sleep (Ms 3000) ]))
 
 let test_setup_quoted () =
   expect "quoted"
@@ -224,13 +222,13 @@ let test_parse () =
     "Type \"echo hi\"\n\
      Enter\n\
      Wait\n\
-     Sleep 1s\n\
+     Sleep 1000ms\n\
      Type \"printf a\\\"\n\
      Enter\n\
      Type \"b\"\n\
      Enter\n\
      Wait\n\
-     Sleep 1s\n"
+     Sleep 1000ms\n"
     (cram src)
 
 let test_parse_control () =
@@ -239,7 +237,7 @@ let test_parse_control () =
   | Error _ -> ()
 
 let test_crlf () =
-  expect "crlf" "Type \"echo hi\"\nEnter\nWait\nSleep 1s\n"
+  expect "crlf" "Type \"echo hi\"\nEnter\nWait\nSleep 1000ms\n"
     (cram "  $ echo hi\r\n  hi\r\n")
 
 let cram_suite =

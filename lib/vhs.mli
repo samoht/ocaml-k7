@@ -23,9 +23,8 @@
 
 (** {1:tapes Tapes} *)
 
-(** The type for VHS durations, in milliseconds or seconds. Seconds are printed
-    as a decimal with at most nine fractional digits. *)
-type duration = Ms of int | S of float
+(** The type for VHS durations, in milliseconds. *)
+type duration = Ms of int
 
 (** The type for keys pressed in the virtual terminal. A key without an argument
     is the VHS key of the same name. *)
@@ -161,7 +160,7 @@ module Cram : sig
       the shell scripts [setup] in order (defaults to [[]]) while the recording
       is hidden, then clear the screen. Each command of [t] is typed and
       submitted, then the tape waits for the {!constructor-Prompt} and pauses
-      for [pause] (defaults to [S 1.]). *)
+      for [pause] (defaults to [Ms 1000]). *)
 end
 
 (** {1:running Running vhs} *)
