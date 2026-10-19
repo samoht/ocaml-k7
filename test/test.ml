@@ -1,2 +1,3 @@
 let () =
-  Alcotest.run "vhs" [ Test_value.suite; Test_vhs.suite; Test_cram.suite ]
+  Alcotest.run "vhs"
+    [ Test_value.suite; Test_vhs.suite; Test_cram.suite; Test_loc.suite ]

@@ -8,7 +8,7 @@
 (license ISC)
 (authors "Thomas Gazagnaire <thomas@gazagnaire.org>")
 (maintainers "Thomas Gazagnaire <thomas@gazagnaire.org>")
-(source (tangled gazagnaire.org/ocaml-vhs))
+(source (github samoht/ocaml-vhs))
 
 (package
  (name vhs)
@@ -25,5 +25,6 @@
   fmt
   fpath
   (alcotest :with-test)
+  (re :with-test)
   (mdx :with-test)
   (odoc :with-doc)))
