@@ -104,11 +104,16 @@ let has_control ?(except = "") s =
 let quote_bit = function '"' -> 1 | '\'' -> 2 | '`' -> 4 | _ -> 0
 
 (* A VHS string ends at its quote, a newline or a NUL and has no escapes. *)
-let check_quotable what s =
-  if has_control s then err "%s %S: holds a control character" what s
+let quotable_problem s =
+  if has_control s then Some "holds a control character"
   else if String.fold_left (fun m c -> m lor quote_bit c) 0 s = 7 then
-    err "%s %S: holds all three quote characters" what s
-  else Ok ()
+    Some "holds all three quote characters"
+  else None
+
+let check_quotable what s =
+  match quotable_problem s with
+  | None -> Ok ()
+  | Some why -> err "%s %S: %s" what s why
 
 (* The largest Go [time.Duration], in whole milliseconds. *)
 let max_ms = 9_223_372_036_854
@@ -163,17 +168,21 @@ let check_wait timeout w =
    the format from the extension and fails. *)
 let extensions = [ ".gif"; ".mp4"; ".webm"; ".txt"; ".ascii"; ".test"; ".png" ]
 
-let check_output path =
-  let* () = check_quotable "Output" path in
-  if String.starts_with ~prefix:"-" path then
-    err "Output %S: starts with -, which ffmpeg reads as an option" path
-  else if String.ends_with ~suffix:"/" path then Ok ()
+(* [output_problem path] is why [path] cannot be an output, if it cannot. *)
+let output_problem path =
+  if Option.is_some (quotable_problem path) then quotable_problem path
+  else if String.starts_with ~prefix:"-" path then
+    Some "starts with -, which ffmpeg reads as an option"
+  else if String.ends_with ~suffix:"/" path then None
   else
     match Tape_syntax.extension path with
-    | "" -> err "Output %S: neither an extension nor a trailing slash" path
-    | e when List.mem e extensions -> Ok ()
-    | _ ->
-        err "Output %S: not .gif, .mp4, .webm, .txt, .ascii, .test or .png" path
+    | "" -> Some Tape_syntax.no_extension
+    | e when List.mem e extensions -> None
+    | _ -> Some "not .gif, .mp4, .webm, .txt, .ascii, .test or .png"
+
+let check_output path =
+  Option.fold ~none:(Ok ()) ~some:(err "Output %S: %s" path)
+    (output_problem path)
 
 (* VHS keeps one output of each kind and writes the last one it reads. *)
 let kind path =
@@ -229,11 +238,10 @@ let check_raw ~started line =
     | Error e -> err "raw line %S: %s" line e
     | Ok (Hide | Show) -> err "raw line %S: use hidden instead" line
     | Ok (Blank | Set "TypingSpeed") -> Ok started
-    | Ok (Output path) ->
-        let* () =
-          check_output path |> Result.map_error (Fmt.str "raw line %S: %s" line)
-        in
-        Ok started
+    | Ok (Output path) -> (
+        match output_problem path with
+        | None -> Ok started
+        | Some why -> err "raw line %S: %s" line why)
     | Ok (Set _ | Require) when started ->
         err "raw line %S: VHS ignores it after the first action" line
     | Ok (Set name) when List.mem_assoc name constructors ->

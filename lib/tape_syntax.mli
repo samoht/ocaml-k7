@@ -27,6 +27,10 @@ val check : string -> (command, string) result
     rejects, which VHS only finds when it runs the command. [line] holds no
     newline. A [Source] line's tape is not read. *)
 
+val no_extension : string
+(** [no_extension] is the error message for an [Output] path without an
+    extension or a trailing slash. *)
+
 val extension : string -> string
 (** [extension path] is Go's [filepath.Ext path]: the suffix of [path] from the
     last dot of its last segment, or [""] if that segment has no dot. *)

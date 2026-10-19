@@ -266,6 +266,8 @@ let extension path =
   in
   go (String.length path - 1)
 
+let no_extension = "neither an extension nor a trailing slash"
+
 let path p ~what =
   if (peek p).kind <> String then fail "Expected path after %s" what;
   next p;
@@ -394,7 +396,7 @@ let command p =
       | "Output" ->
           let out = path p ~what:"output" in
           if extension out = "" && not (String.ends_with ~suffix:"/" out) then
-            fail "Expected folder with trailing slash";
+            fail "%s" no_extension;
           Output out
       | "Sleep" ->
           ignore (time p);

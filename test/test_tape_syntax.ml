@@ -69,7 +69,12 @@ let test_rejected () =
     "use the setting Font_family instead";
   fails "padding" "Set Padding 400" "use the setting Padding instead";
   fails "output" "Output x.foo"
-    {|Output "x.foo": not .gif, .mp4, .webm, .txt, .ascii, .test or .png|}
+    "not .gif, .mp4, .webm, .txt, .ascii, .test or .png";
+  (* The same reason as for [~outputs]. *)
+  fails "output without extension" "Output demo"
+    "neither an extension nor a trailing slash";
+  fails "output dash" {|Output "-y.gif"|}
+    "starts with -, which ffmpeg reads as an option"
 
 (* Lines [vhs validate] judged one by one, written by tape_oracle.go: a line
    accepted here is one VHS reads without error. *)
