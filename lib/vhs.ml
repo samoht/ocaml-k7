@@ -81,23 +81,6 @@ let raw_command = Value.raw_command
 let pp = Value.pp
 let to_string = Value.to_string
 
-let write_path_err =
-  "Vhs.write_file: path must be a relative file path with no '.' or '..' \
-   segments"
-
-let valid_path path =
-  let p =
-    try Fpath.v path with Invalid_argument _ -> invalid_arg write_path_err
-  in
-  if List.exists Fpath.is_rel_seg (Fpath.segs p) then invalid_arg write_path_err
-
-let write_file ~path t =
-  valid_path path;
-  let oc = open_out_bin path in
-  Fun.protect
-    ~finally:(fun () -> close_out_noerr oc)
-    (fun () -> output_string oc (to_string t))
-
 type error =
   | Executable_not_found of string
   | Child_error of { argv : string list; status : Eio.Process.exit_status }
@@ -108,7 +91,13 @@ let pp_error ppf = function
   | Child_error { argv; status } ->
       Fmt.pf ppf "%a failed: %a" Eio.Process.pp_args argv Eio.Process.pp_status
         status
-  | Io exn -> Fmt.string ppf (Printexc.to_string exn)
+  | Io (Sys_error msg) -> Fmt.string ppf msg
+  | Io exn -> Fmt.exn ppf exn
+
+let write_file ~path t =
+  let contents = to_string t in
+  try Ok (Out_channel.with_open_bin path (fun oc -> output_string oc contents))
+  with Sys_error _ as exn -> Error (Io exn)
 
 let run_process proc argv =
   try Ok (Eio.Process.run proc argv) with
@@ -129,8 +118,7 @@ let parse_process proc argv =
 let render_file ~proc ?(vhs = "vhs") path = run_process proc [ vhs; path ]
 
 let render ~proc ?vhs ~path tape =
-  write_file ~path tape;
-  render_file ~proc ?vhs path
+  Result.bind (write_file ~path tape) (fun () -> render_file ~proc ?vhs path)
 
 let publish ~proc ?(vhs = "vhs") file =
   parse_process proc [ vhs; "publish"; file ]

@@ -23,7 +23,6 @@
   (eio (>= 1.0))
   (eio_main (>= 1.0))
   fmt
-  fpath
   (alcotest :with-test)
   (mdx :with-test)
   (odoc :with-doc)))

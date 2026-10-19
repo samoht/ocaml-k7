@@ -147,7 +147,7 @@ val raw_command : string -> item
 (** [raw_command line] emits a command line unchanged, for VHS commands not
     modelled here. *)
 
-(** {1:rendering Rendering} *)
+(** {1:printing Printing} *)
 
 val pp : t Fmt.t
 (** [pp] is {!Value.pp}.
@@ -159,24 +159,25 @@ val to_string : t -> string
 
     @raise Invalid_argument if [t] is not {{!Value.printing}printable}. *)
 
-val write_file : path:string -> t -> unit
-(** [write_file ~path t] writes the textual [*.tape] representation of [t] to
-    [path].
+(** {1:running Writing and running tapes}
 
-    @raise Invalid_argument
-      if [path] contains a relative segment such as ["."] or [".."]. *)
+    These functions never raise for an I/O failure: they return it as an
+    {!type-error}. *)
 
-(** {1:running Running vhs} *)
-
-(** The type for why running the [vhs] executable failed. *)
+(** The type for I/O and process errors. *)
 type error =
   | Executable_not_found of string  (** No such executable on the PATH. *)
   | Child_error of { argv : string list; status : Eio.Process.exit_status }
       (** The executable ran and exited non-zero. *)
-  | Io of exn  (** Any other Eio I/O failure. *)
+  | Io of exn  (** Any other I/O failure. *)
 
 val pp_error : error Fmt.t
-(** [pp_error] formats process and filesystem errors from the runners below. *)
+(** [pp_error] formats errors for humans. *)
+
+val write_file : path:string -> t -> (unit, error) result
+(** [write_file ~path t] writes [to_string t] to [path].
+
+    @raise Invalid_argument if [t] is not {{!Value.printing}printable}. *)
 
 val render_file :
   proc:_ Eio.Process.mgr -> ?vhs:string -> string -> (unit, error) result
@@ -190,7 +191,9 @@ val render :
   t ->
   (unit, error) result
 (** [render ~proc ?vhs ~path tape] is [write_file ~path tape] followed by
-    [render_file ~proc ?vhs path]. *)
+    [render_file ~proc ?vhs path].
+
+    @raise Invalid_argument if [tape] is not {{!Value.printing}printable}. *)
 
 val publish :
   proc:_ Eio.Process.mgr -> ?vhs:string -> string -> (string, error) result
