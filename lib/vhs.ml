@@ -159,6 +159,39 @@ let check_output path =
     | _ ->
         err "Output %S: not .gif, .mp4, .webm, .txt, .ascii, .test or .png" path
 
+(* VHS keeps one output of each kind and writes the last one it reads. *)
+let kind path =
+  if String.ends_with ~suffix:"/" path then "frames"
+  else
+    match Tape_syntax.extension path with
+    | ".mp4" -> "MP4"
+    | ".webm" -> "WebM"
+    | ".txt" | ".ascii" | ".test" -> "text"
+    | ".png" -> "frames"
+    | _ -> "GIF"
+
+(* [seen] holds at most one path per kind, so this is linear. *)
+let check_kinds paths =
+  let rec go seen = function
+    | [] -> Ok ()
+    | q :: rest -> (
+        match List.assoc_opt (kind q) seen with
+        | Some p ->
+            err "Output %S: VHS writes only the last %s output, %S" p (kind q) q
+        | None -> go ((kind q, q) :: seen) rest)
+  in
+  go [] paths
+
+(* The paths of the raw [Output] lines of [actions], in order. *)
+let rec raw_outputs actions =
+  List.concat_map
+    (function
+      | Raw line -> (
+          match Tape_syntax.check line with Ok (Output p) -> [ p ] | _ -> [])
+      | Hidden actions -> raw_outputs actions
+      | Type _ | Key _ | Sleep _ | Wait _ -> [])
+    actions
+
 (* The constructor that writes each setting [Set] can also write. *)
 let constructors =
   [
@@ -255,6 +288,7 @@ let tape ?(settings = []) ~outputs actions =
   let* () = iter_result check_setting settings in
   let* () = check_size settings in
   let* _started = check_actions ~started:false actions in
+  let* () = check_kinds (outputs @ raw_outputs actions) in
   Ok { outputs; settings; actions }
 
 (* Printing *)

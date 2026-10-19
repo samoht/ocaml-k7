@@ -147,6 +147,8 @@ val tape :
     first offending item, if:
     - [outputs] is empty, or one has another extension, none and no trailing
       slash, or starts with [-], which ffmpeg reads as an option;
+    - two outputs, {!raw} [Output] lines included, are of the same kind (GIF,
+      MP4, WebM, text, or PNG frames), of which VHS writes only the last;
     - a string holds a control character (the tabs and newlines of {!type'}
       aside), all three quote characters (['"'], ['\''] and ['`']) where VHS
       quotes it, or, in typed text, invalid UTF-8;

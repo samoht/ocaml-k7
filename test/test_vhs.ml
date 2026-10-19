@@ -258,6 +258,18 @@ let test_outputs () =
   List.iter
     (fun path -> ignore (str ~outputs:[ path ] []))
     [ "a.gif"; "a.mp4"; "a.webm"; "a.txt"; "a.ascii"; "a.test"; "a.png" ];
+  (* VHS keeps one output of each kind, the last one. *)
+  error "two GIFs"
+    {|Output "a.gif": VHS writes only the last GIF output, "b.gif"|}
+    ~outputs:[ "a.gif"; "b.gif" ] [];
+  error "two texts"
+    {|Output "a.txt": VHS writes only the last text output, "b.ascii"|}
+    ~outputs:[ "a.txt"; "c.gif"; "b.ascii" ]
+    [];
+  error "two frame directories"
+    {|Output "a/": VHS writes only the last frames output, "b.png"|}
+    ~outputs:[ "a/"; "b.png" ] [];
+  rejects "raw output" [ Vhs.raw "Output b.mp4" ] ~outputs:[ "a.mp4" ];
   (* VHS hands any other extension to ffmpeg as a GIF, and ffmpeg picks the
      format from the extension. *)
   error "unknown extension"
