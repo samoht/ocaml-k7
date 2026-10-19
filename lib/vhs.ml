@@ -355,9 +355,11 @@ module Cram = struct
   let pp ppf steps =
     List.iter
       (fun { command; output; exit_code } ->
-        List.iter (Fmt.pf ppf "$ %s@\n") command;
-        List.iter (Fmt.pf ppf "%s@\n") output;
-        Option.iter (Fmt.pf ppf "[%d]@\n") exit_code)
+        List.iteri
+          (fun i -> Fmt.pf ppf "  %s %s@\n" (if i = 0 then "$" else ">"))
+          command;
+        List.iter (Fmt.pf ppf "  %s@\n") output;
+        Option.iter (Fmt.pf ppf "  [%d]@\n") exit_code)
       steps
 end
 

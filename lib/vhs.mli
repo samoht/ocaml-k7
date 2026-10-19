@@ -221,23 +221,15 @@ type tape := t
     become the waits that keep the recording in step with the checked output.
     Setup scripts are sourced, hidden, before the first command. *)
 module Cram : sig
-  type step = {
-    command : string list;
-        (** One entry per input line; continuation ([> ]) lines add entries,
-            with the [$ ] prompt and [> ] markers removed. *)
-    output : string list;
-        (** Expected output, with the two-space indent removed. *)
-    exit_code : int option;
-        (** The trailing [[N]] annotation, when the command exits non-zero. *)
-  }
-  (** The type for command blocks of a cram test. *)
-
-  type t = step list
-  (** The type for parsed cram tests: their command blocks in order. *)
+  type t
+  (** The type for cram tests: a sequence of commands, each with its expected
+      output and exit code. *)
 
   val parse : string -> t
-  (** [parse src] is the command blocks of cram source [src] in order. Prose and
-      blank lines are dropped, and lines may end with ["\r\n"]. *)
+  (** [parse src] is the cram test of source [src]. A line [  $ cmd] starts a
+      command, the [  > ] lines after it continue it, the other lines indented
+      by two spaces are its expected output except an [[N]] line, which is its
+      exit code. Other lines are dropped and lines may end with ["\r\n"]. *)
 
   val to_tape :
     ?settings:setting list ->
@@ -258,7 +250,7 @@ module Cram : sig
       [final_pause] holds the last screen before exit (defaults to [S 3.]). *)
 
   val pp : t Fmt.t
-  (** [pp] formats a parsed cram test as its commands and expected output. *)
+  (** [pp] formats a cram test as cram source, without prose. *)
 end
 
 (** {1:running Writing and running tapes}

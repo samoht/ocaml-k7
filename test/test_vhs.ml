@@ -215,7 +215,8 @@ let test_slash () =
 
 let test_setup_quoted () =
   let tape =
-    Vhs.Cram.to_tape ~setup_scripts:[ "my setup.sh" ] ~output:"demo.gif" []
+    Vhs.Cram.to_tape ~setup_scripts:[ "my setup.sh" ] ~output:"demo.gif"
+      (Vhs.Cram.parse "")
   in
   expect "quoted"
     "Output \"demo.gif\"\n\
@@ -228,16 +229,17 @@ let test_setup_quoted () =
     (Vhs.to_string tape)
 
 let test_parse () =
-  let src = "prose is ignored\n\n  $ echo hi\n  hi\n  $ false\n  [1]\n" in
-  let steps = Vhs.Cram.parse src in
-  Alcotest.(check int) "step count" 2 (List.length steps);
-  match steps with
-  | [ a; b ] ->
-      expect "cmd a" "echo hi" (String.concat "\n" a.Vhs.Cram.command);
-      expect "out a" "hi" (String.concat "\n" a.Vhs.Cram.output);
-      expect "cmd b" "false" (String.concat "\n" b.Vhs.Cram.command);
-      Alcotest.(check (option int)) "exit b" (Some 1) b.Vhs.Cram.exit_code
-  | _ -> Alcotest.fail "expected two steps"
+  let src =
+    "prose is ignored\n\n\
+    \  $ echo hi\n\
+    \  hi\n\
+    \  $ printf a\\\n\
+    \  > b\n\
+    \  ab\n\
+    \  [1]\n"
+  in
+  expect "cram" "  $ echo hi\n  hi\n  $ printf a\\\n  > b\n  ab\n  [1]\n"
+    (Fmt.str "%a" Vhs.Cram.pp (Vhs.Cram.parse src))
 
 let test_crlf () =
   let steps = Vhs.Cram.parse "  $ echo hi\r\n  hi\r\n" in
