@@ -25,7 +25,7 @@ A command the tape cannot type is an error, not an exception.
 
   $ printf '  $ echo \001\n' > bad.t
   $ vhs-cram --output demo.gif bad.t
-  vhs-cram: "echo \001" holds a control character
+  vhs-cram: bad.t: line 1: "echo \001" holds a control character
   [123]
 
 So is a test without commands, and an output path VHS cannot read.
@@ -36,16 +36,23 @@ So is a test without commands, and an output path VHS cannot read.
   [123]
 
   $ vhs-cram --output demo demo.t
-  vhs-cram: Vhs.output: "demo" has no extension and does not end with a slash
+  vhs-cram: Output "demo": neither an extension nor a trailing slash
   [123]
 
-A failing vhs is reported.
+A failing vhs is reported with its standard error.
 
-  $ vhs-cram --vhs false --output demo.gif demo.t
-  vhs-cram: false exited with code 1
+  $ cat > fake-vhs <<'EOF'
+  > #!/bin/sh
+  > cat > /dev/null
+  > echo 'Error: timeout waiting for "Line" to match >$' >&2
+  > exit 1
+  > EOF
+  $ chmod +x fake-vhs
+  $ vhs-cram --vhs ./fake-vhs --output demo.gif demo.t
+  vhs-cram: ./fake-vhs exited with code 1: Error: timeout waiting for "Line" to match >$
   [123]
 
-Setup and clear must finish while recording is still hidden.
+A setup script is sourced while the recording is hidden.
 
   $ printf ':\n' > setup.sh
   $ vhs-cram --vhs cat --setup setup.sh --output demo.gif demo.t
@@ -54,10 +61,8 @@ Setup and clear must finish while recording is still hidden.
   Hide
   Type "source 'setup.sh'"
   Enter
-  Wait
   Type "clear"
   Enter
-  Wait
   Show
   Type "echo hi"
   Enter

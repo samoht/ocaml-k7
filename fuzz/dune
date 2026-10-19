@@ -1,6 +1,6 @@
 (executable
  (name fuzz)
- (libraries vhs fmt alcobar))
+ (libraries vhs vhs_cram fmt alcobar))
 
 (rule
  (alias runtest)

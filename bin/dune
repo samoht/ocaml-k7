@@ -1,5 +1,14 @@
-(executable
+; The library is private: it keeps the cram translation and the command line
+; testable without making them part of the installed vhs library.
+
+(library
  (name vhs_cram)
+ (modules cram cli)
+ (libraries vhs cmdliner eio eio.unix eio_main fmt))
+
+(executable
+ (name main)
  (public_name vhs-cram)
  (package vhs)
- (libraries vhs cmdliner eio eio_main fmt))
+ (modules main)
+ (libraries vhs_cram cmdliner))

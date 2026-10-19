@@ -1,125 +1,120 @@
+(*---------------------------------------------------------------------------
+  Copyright (c) 2026 Thomas Gazagnaire. All rights reserved.
+  SPDX-License-Identifier: ISC
+  ---------------------------------------------------------------------------*)
+
+open Vhs_cram
+
 let expect = Alcotest.(check string)
-let str = Fmt.str "%a" Vhs.pp
 
-let tape src =
-  match Vhs_cram_subject.tape ~setup:[] ~output:"demo.gif" "input.t" src with
-  | Ok tape -> str tape
-  | Error msg -> Alcotest.fail msg
-
-let from_flow actions =
-  Eio_mock.Backend.run @@ fun () ->
-  let source = Eio_mock.Flow.make "cram input" in
-  Eio_mock.Flow.on_read source actions;
-  Eio.Buf_read.(take_all (of_flow source ~max_size:1_000_000)) |> tape
-
-let test_byte_reads () =
-  let src = "  $ echo hello\r\n  hello\r\n" in
-  let actions =
-    List.init (String.length src) (fun i -> `Return (String.make 1 src.[i]))
+let contains ~sub s =
+  let n = String.length sub in
+  let rec at i =
+    i + n <= String.length s && (String.sub s i n = sub || at (i + 1))
   in
-  expect "tape" (tape src) (from_flow (actions @ [ `Raise End_of_file ]))
+  at 0
 
-let test_split_utf8 () =
-  let b = Buffer.create 4 in
-  Buffer.add_utf_8_uchar b (Uchar.of_int 0x1f642);
-  let face = Buffer.contents b in
-  let src = "  $ echo " ^ face in
-  expect "UTF-8 and EOF without newline" (tape src)
-    (from_flow
-       [
-         `Return ("  $ echo " ^ String.sub face 0 2);
-         `Return (String.sub face 2 2);
-         `Raise End_of_file;
-       ])
+let tape ?(setup = []) ?(output = "demo.gif") src =
+  Cli.tape ~setup ~output ~name:"input.t" src
+  |> Result.map (Fmt.str "%a" Vhs.pp)
 
-let test_read_raises () =
-  let err = Eio.Fs.err (Permission_denied Eio_mock.Simulated_failure) in
-  match from_flow [ `Return "  $ echo "; `Raise err ] with
-  | exception Eio.Io (code, _) -> (
-      match Vhs_cram_subject.err_load "input.t" code with
-      | Error msg ->
-          Alcotest.(check bool)
-            "input named" true
-            (String.starts_with ~prefix:"input.t: " msg)
-      | Ok _ -> Alcotest.fail "accepted read error")
-  | _ -> Alcotest.fail "read error was lost"
-
-let test_tape_errors () =
-  let check_error ~setup ~output src =
-    match Vhs_cram_subject.tape ~setup ~output "input.t" src with
-    | Error msg -> Alcotest.(check bool) "diagnostic" true (msg <> "")
-    | Ok _ -> Alcotest.fail "invalid tape accepted"
+let test_tape () =
+  expect "tape"
+    "Output \"demo.gif\"\n\
+     Set Shell \"bash\"\n\
+     Type \"true\"\n\
+     Enter\n\
+     Wait\n\
+     Sleep 1000ms\n"
+    (Result.get_ok (tape "  $ true\n"));
+  let error name expected src ~setup ~output =
+    Alcotest.(check (result string string))
+      name (Error expected) (tape ~setup ~output src)
   in
-  check_error ~setup:[] ~output:"demo.gif" "prose only";
-  check_error ~setup:[] ~output:"demo.gif" "  $ echo \001\n";
-  check_error ~setup:[] ~output:"no-extension" "  $ true\n";
-  check_error ~setup:[ "bad\nsetup" ] ~output:"demo.gif" "  $ true\n";
-  Alcotest.(check (result unit string))
-    "no command diagnostic" (Error "input.t: no command")
-    (Vhs_cram_subject.err_no_command "input.t")
+  error "no command" "input.t: no command" "prose only" ~setup:[]
+    ~output:"x.gif";
+  error "control" {|input.t: line 1: "echo \001" holds a control character|}
+    "  $ echo \001\n" ~setup:[] ~output:"x.gif";
+  error "output" {|Output "demo": neither an extension nor a trailing slash|}
+    "  $ true\n" ~setup:[] ~output:"demo";
+  match tape ~setup:[ "bad\000setup" ] "  $ true\n" with
+  | Error _ -> ()
+  | Ok s -> Alcotest.failf "accepted %S" s
 
-let with_input src fn =
-  let path = Filename.temp_file "vhs-cram-test" ".t" in
-  Fun.protect
-    ~finally:(fun () -> Sys.remove path)
-    (fun () ->
-      let oc = open_out_bin path in
-      Fun.protect
-        ~finally:(fun () -> close_out oc)
-        (fun () -> output_string oc src);
-      fn path)
+(* Real processes: [run] owns the whole Eio environment. A shell script
+   stands in for vhs. *)
+let with_files files fn =
+  Eio_main.run @@ fun env ->
+  let dir = Filename.temp_dir "vhs-cram" "" in
+  let path name = Filename.concat dir name in
+  List.iter
+    (fun (name, perm, contents) ->
+      Eio.Path.save ~create:(`Or_truncate perm)
+        Eio.Path.(Eio.Stdenv.fs env / path name)
+        contents)
+    files;
+  fn env path
 
-(* record owns Eio_main.run and opens a real file. The smallest real
-   stand-ins are a temporary cram file and the existing true/false commands. *)
-let test_record () =
-  with_input "  $ echo hi\n" @@ fun input ->
-  let record vhs =
-    Vhs_cram_subject.record ~vhs ~setup:[] ~output:"demo.gif" input
-  in
-  Alcotest.(check (result unit string))
-    "successful child" (Ok ()) (record "true");
-  Alcotest.(check (result unit string))
-    "failed child" (Error "false exited with code 1") (record "false");
-  (match record "vhs-no-such-test-executable" with
-  | Error msg ->
-      Alcotest.(check bool)
-        "missing executable" true
-        (String.starts_with ~prefix:"executable not found:" msg)
-  | Ok () -> Alcotest.fail "missing executable ran");
+let fake_vhs status =
+  Fmt.str
+    "#!/bin/sh\n\
+     cat > /dev/null\n\
+     echo 'from stdout'\n\
+     echo 'from stderr' >&2\n\
+     exit %d\n"
+    status
+
+let run env ~vhs input = Cli.run env ~vhs ~setup:[] ~output:"demo.gif" input
+
+let test_run () =
+  with_files
+    [
+      ("demo.t", 0o644, "  $ echo hi\n");
+      ("ok", 0o755, fake_vhs 0);
+      ("ko", 0o755, fake_vhs 3);
+    ]
+  @@ fun env path ->
+  Alcotest.(check int) "success" 0 (run env ~vhs:(path "ok") (path "demo.t"));
+  Alcotest.(check int) "failure" 123 (run env ~vhs:(path "ko") (path "demo.t"));
   Alcotest.(check int)
-    "run success exit status" 0
-    (Vhs_cram_subject.run "true" [] "demo.gif" input);
+    "missing vhs" 123
+    (run env ~vhs:"vhs-no-such-executable" (path "demo.t"));
   Alcotest.(check int)
-    "run failure exit status" 123
-    (Vhs_cram_subject.run "false" [] "demo.gif" input)
+    "missing input" 123
+    (run env ~vhs:(path "ok") (path "missing.t"))
 
-let test_record_load_error () =
-  with_input "" @@ fun input ->
-  let input = input ^ ".missing" in
+let test_render () =
+  with_files
+    [
+      ("ko", 0o755, fake_vhs 3);
+      ("pwd", 0o755, "#!/bin/sh\ncat > /dev/null\npwd -P >&2\nexit 4\n");
+    ]
+  @@ fun env path ->
+  let proc = Eio.Stdenv.process_mgr env in
+  let cwd = Eio.Stdenv.cwd env in
+  let t = Result.get_ok (Vhs.tape ~outputs:[ "x.gif" ] []) in
+  (match Vhs.render ~vhs:(path "ko") ~proc ~cwd t with
+  | Error (Failed { status = `Exited 3; _ } as e) ->
+      expect "stderr only"
+        (path "ko" ^ " exited with code 3: from stderr")
+        (Fmt.str "%a" Vhs.pp_error e)
+  | _ -> Alcotest.fail "lost the failure");
   match
-    Vhs_cram_subject.record ~vhs:"true" ~setup:[] ~output:"demo.gif" input
+    Vhs.render ~vhs:(path "pwd") ~proc ~cwd:Eio.Path.(Eio.Stdenv.fs env / "/") t
   with
-  | Error msg ->
-      Alcotest.(check bool)
-        "path named" true
-        (String.starts_with ~prefix:(input ^ ": ") msg)
-  | Ok () -> Alcotest.fail "missing input read"
+  | Error (Failed { stderr = "/\n"; _ }) -> ()
+  | Error e -> Alcotest.failf "not run in /: %a" Vhs.pp_error e
+  | Ok () -> Alcotest.fail "pwd succeeded"
 
 let test_command () =
-  with_input "  $ true\n" @@ fun input ->
-  let err = Format.str_formatter in
   let help_buffer = Buffer.create 256 in
   let help = Format.formatter_of_buffer help_buffer in
+  let err = Format.formatter_of_buffer (Buffer.create 256) in
   let eval args =
     Cmdliner.Cmd.eval_value ~err ~help
       ~argv:(Array.of_list ("vhs-cram" :: args))
-      Vhs_cram_subject.cmd
+      Cli.cmd
   in
-  (match
-     eval [ "--vhs"; "true"; "--output"; "demo.gif"; "--setup"; input; input ]
-   with
-  | Ok (`Ok 0) -> ()
-  | _ -> Alcotest.fail "valid command line failed");
   (match eval [] with
   | Error _ -> ()
   | _ -> Alcotest.fail "missing required arguments accepted");
@@ -127,19 +122,19 @@ let test_command () =
   | Ok `Help -> ()
   | _ -> Alcotest.fail "help failed");
   Format.pp_print_flush help ();
-  Alcotest.(check bool) "manual rendered" true (Buffer.length help_buffer > 0);
-  ignore (Format.flush_str_formatter ())
+  let man = Buffer.contents help_buffer in
+  List.iter
+    (fun s ->
+      if not (contains ~sub:s man) then Alcotest.failf "manual lacks %S" s)
+    [ "--vhs cat" ]
 
 let suite =
   ( "cli",
     List.map
       (fun (name, fn) -> Alcotest.test_case name `Quick fn)
       [
-        ("input one byte at a time", test_byte_reads);
-        ("input split UTF-8 and EOF mid-line", test_split_utf8);
-        ("input read raises", test_read_raises);
-        ("tape diagnostics", test_tape_errors);
-        ("record and run with real child", test_record);
-        ("record load error", test_record_load_error);
-        ("command arguments", test_command);
+        ("tape", test_tape);
+        ("run", test_run);
+        ("render real processes", test_render);
+        ("command line", test_command);
       ] )

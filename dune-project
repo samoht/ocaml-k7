@@ -15,9 +15,9 @@
  (synopsis "Generate and run Charmbracelet VHS terminal tapes")
  (tags (command-line-utilities format eio))
  (description
-  "Small OCaml library for generating Charmbracelet VHS .tape files and \
-   invoking the vhs command-line tool. Tapes are checked values, \
-   so generated demos are deterministic and reviewable.")
+  "Build VHS terminal recordings as OCaml values, check them against VHS's \
+   own parser rules before VHS runs, print them as .tape files and run vhs \
+   on them. The vhs-cram command records a cram test.")
  (depends
   (ocaml (>= 5.2))
   (eio (>= 1.4))

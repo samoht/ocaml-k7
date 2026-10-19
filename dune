@@ -4,4 +4,5 @@
 
 (mdx
  (files README.md)
- (libraries vhs eio eio.core eio.unix eio_main fmt))
+ (deps %{bin:vhs-cram})
+ (libraries vhs eio fmt))

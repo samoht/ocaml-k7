@@ -1,3 +1,11 @@
+(*---------------------------------------------------------------------------
+  Copyright (c) 2026 Thomas Gazagnaire. All rights reserved.
+  SPDX-License-Identifier: ISC
+  ---------------------------------------------------------------------------*)
+
+(* The tape syntax, the key names and the characters [Ctrl] and [Alt] accept
+   follow VHS's lexer/lexer.go and parser/parser.go (MIT, Charm) at v0.12.1. *)
+
 type duration = Ms of int
 
 type key =
@@ -19,8 +27,36 @@ type key =
   | Ctrl of char
   | Alt of char
 
+type wait = Prompt | Screen of string
+
+type action =
+  | Type of string
+  | Key of key
+  | Sleep of duration
+  | Wait of duration option * wait
+  | Hidden of action list
+  | Raw of string
+
+let type' s = Type s
+let key k = Key k
+let sleep d = Sleep d
+let wait ?timeout w = Wait (timeout, w)
+let hidden actions = Hidden actions
+let raw line = Raw line
+
+type shell =
+  | Bash
+  | Zsh
+  | Fish
+  | Powershell
+  | Pwsh
+  | Cmd
+  | Nushell
+  | Osh
+  | Xonsh
+
 type setting =
-  | Shell of string
+  | Shell of shell
   | Font_size of int
   | Font_family of string
   | Width of int
@@ -30,52 +66,125 @@ type setting =
   | Typing_speed of duration
   | Framerate of int
 
-type wait = Prompt | Line of string | Screen of string
-type item = string
+type t = {
+  outputs : string list;
+  settings : setting list;
+  actions : action list;
+}
 
-let invalid fn fmt =
-  Fmt.kstr (fun msg -> invalid_arg ("Vhs." ^ fn ^ ": " ^ msg)) fmt
+(* Checking *)
 
-let quotes = [ '"'; '\''; '`' ]
-let is_quote c = List.mem c quotes
-let is_control c = Char.code c < 0x20 || Char.code c = 0x7f
+let ( let* ) = Result.bind
+let err fmt = Fmt.kstr Result.error fmt
 
-(* A VHS string has no escapes and ends at a newline. *)
-let has_control s = String.exists is_control s
+let rec iter_result f = function
+  | [] -> Ok ()
+  | x :: rest ->
+      let* () = f x in
+      iter_result f rest
 
-let line fn s =
-  if has_control s then invalid fn "%S holds a control character" s;
-  s
+let is_control c = Char.code c < 0x20 || c = '\x7f'
+let quote_bit = function '"' -> 1 | '\'' -> 2 | '`' -> 4 | _ -> 0
 
-let quoted fn s =
-  match List.find_opt (fun q -> not (String.contains s q)) quotes with
-  | Some q -> Fmt.str "%c%s%c" q (line fn s) q
-  | None -> invalid fn "%S holds all three VHS quote characters" s
+(* A VHS string ends at its quote, a newline or a NUL and has no escapes. *)
+let check_quotable what s =
+  if String.exists is_control s then
+    err "%s %S: holds a control character" what s
+  else if String.fold_left (fun m c -> m lor quote_bit c) 0 s = 7 then
+    err "%s %S: holds all three quote characters" what s
+  else Ok ()
 
-let natural fn n =
-  if n < 0 then invalid fn "%d is negative" n;
-  string_of_int n
+let check_ms what n =
+  if n < 0 then err "%s%dms: negative duration" what n else Ok ()
 
-(* [quotable_chunks s] cuts [s] so that no chunk holds all three quotes. *)
-let quotable_chunks s =
-  let rec cut chunks start seen i =
-    let chunk () = String.sub s start (i - start) in
-    if i = String.length s then List.rev (chunk () :: chunks)
-    else
-      let c = s.[i] in
-      if (not (is_quote c)) || List.mem c seen then cut chunks start seen (i + 1)
-      else if List.length seen = 2 then cut (chunk () :: chunks) i [ c ] (i + 1)
-      else cut chunks start (c :: seen) (i + 1)
-  in
-  cut [] 0 [] 0
+let check_type s =
+  if String.exists (fun c -> is_control c && c <> '\t' && c <> '\n') s then
+    err "Type %S: holds a control character other than tab and newline" s
+  else Ok ()
 
-let duration fn (Ms n) = natural fn n ^ "ms"
 let is_letter = function 'a' .. 'z' | 'A' .. 'Z' -> true | _ -> false
 
-let chord name valid c =
-  if not (is_letter c || String.contains valid c) then
-    invalid "key" "%s+%C is not a VHS key" name c;
-  Fmt.str "%s+%c" name c
+let check_chord name valid c =
+  if is_letter c || String.contains valid c then Ok ()
+  else err "%s+%s: not a VHS key" name (Char.escaped c)
+
+let check_key = function
+  | Ctrl c -> check_chord "Ctrl" {|@[\]^-.|} c
+  | Alt c -> check_chord "Alt" "[]." c
+  | _ -> Ok ()
+
+let trailing_backslashes s =
+  let rec count i =
+    if i > 0 && s.[i - 1] = '\\' then 1 + count (i - 1) else 0
+  in
+  count (String.length s)
+
+let check_wait timeout w =
+  let* () =
+    match timeout with None -> Ok () | Some (Ms n) -> check_ms "Wait@" n
+  in
+  match w with
+  | Prompt -> Ok ()
+  | Screen re when String.exists is_control re ->
+      err "Wait+Screen %S: holds a control character" re
+  | Screen re when trailing_backslashes re mod 2 = 1 ->
+      err "Wait+Screen %S: ends with a backslash" re
+  | Screen _ -> Ok ()
+
+let rec check_action = function
+  | Type s -> check_type s
+  | Key k -> check_key k
+  | Sleep (Ms n) -> check_ms "Sleep " n
+  | Wait (timeout, w) -> check_wait timeout w
+  | Hidden actions -> iter_result check_action actions
+  | Raw line when String.exists is_control line ->
+      err "raw line %S: holds a control character" line
+  | Raw _ -> Ok ()
+
+(* Go's [filepath.Ext] is the suffix from the last dot of the last segment. *)
+let has_extension path =
+  match (String.rindex_opt path '.', String.rindex_opt path '/') with
+  | Some dot, Some slash -> dot > slash
+  | Some _, None -> true
+  | None, _ -> false
+
+let check_output path =
+  let* () = check_quotable "Output" path in
+  if has_extension path || String.ends_with ~suffix:"/" path then Ok ()
+  else err "Output %S: neither an extension nor a trailing slash" path
+
+let check_setting = function
+  | Shell _ -> Ok ()
+  | Font_size n when n < 0 -> err "Set FontSize %d: negative" n
+  | Framerate n when n < 0 -> err "Set Framerate %d: negative" n
+  | Padding n when n < 0 -> err "Set Padding %d: negative" n
+  | Width n when n < 0 -> err "Set Width %d: negative" n
+  | Height n when n < 0 -> err "Set Height %d: negative" n
+  | Font_family f -> check_quotable "Set FontFamily" f
+  | Theme t -> check_quotable "Set Theme" t
+  | Typing_speed (Ms n) -> check_ms "Set TypingSpeed " n
+  | Font_size _ | Framerate _ | Padding _ | Width _ | Height _ -> Ok ()
+
+let tape ?(settings = []) ~outputs actions =
+  let* () =
+    if outputs = [] then err "no output" else iter_result check_output outputs
+  in
+  let* () = iter_result check_setting settings in
+  let* () = iter_result check_action actions in
+  Ok { outputs; settings; actions }
+
+(* Printing *)
+
+let shell_name = function
+  | Bash -> "bash"
+  | Zsh -> "zsh"
+  | Fish -> "fish"
+  | Powershell -> "powershell"
+  | Pwsh -> "pwsh"
+  | Cmd -> "cmd"
+  | Nushell -> "nu"
+  | Osh -> "osh"
+  | Xonsh -> "xonsh"
 
 let key_name = function
   | Enter -> "Enter"
@@ -93,155 +202,143 @@ let key_name = function
   | Page_down -> "PageDown"
   | Scroll_up -> "ScrollUp"
   | Scroll_down -> "ScrollDown"
-  | Ctrl c -> chord "Ctrl" {|@[\]^-.|} c
-  | Alt c -> chord "Alt" "[]." c
+  | Ctrl c -> "Ctrl+" ^ String.make 1 c
+  | Alt c -> "Alt+" ^ String.make 1 c
 
-let setting = function
-  | Shell shell -> "Shell " ^ quoted "set" shell
-  | Font_size n -> "FontSize " ^ natural "set" n
-  | Font_family font -> "FontFamily " ^ quoted "set" font
-  | Width n -> "Width " ^ natural "set" n
-  | Height n -> "Height " ^ natural "set" n
-  | Theme theme -> "Theme " ^ quoted "set" theme
-  | Padding n -> "Padding " ^ natural "set" n
-  | Typing_speed d -> "TypingSpeed " ^ duration "set" d
-  | Framerate n -> "Framerate " ^ natural "set" n
+(* [add_quoted b s ~first ~last ~quotes] adds [s.[first..last-1]] quoted with
+   a character absent from [quotes], the bits of the quotes it holds. *)
+let add_quoted b s ~first ~last ~quotes =
+  let q =
+    if quotes land 1 = 0 then '"' else if quotes land 2 = 0 then '\'' else '`'
+  in
+  Buffer.add_char b q;
+  Buffer.add_substring b s first (last - first);
+  Buffer.add_char b q
+
+let add_string b s =
+  let quotes = String.fold_left (fun m c -> m lor quote_bit c) 0 s in
+  add_quoted b s ~first:0 ~last:(String.length s) ~quotes
+
+(* A [Type] line per run of [s.[first..last-1]] without all three quotes. *)
+let add_text b s ~first ~last =
+  let line start stop quotes =
+    Buffer.add_string b "Type ";
+    add_quoted b s ~first:start ~last:stop ~quotes;
+    Buffer.add_char b '\n'
+  in
+  let rec go start i quotes =
+    if i = last then line start i quotes
+    else
+      let bit = quote_bit s.[i] in
+      if bit = 0 || quotes land bit <> 0 then go start (i + 1) quotes
+      else if quotes lor bit = 7 then (
+        line start i quotes;
+        go i (i + 1) bit)
+      else go start (i + 1) (quotes lor bit)
+  in
+  if first < last then go first first 0
+
+let add_type b s =
+  let n = String.length s in
+  let rec go start i =
+    if i = n then add_text b s ~first:start ~last:i
+    else
+      match s.[i] with
+      | ('\t' | '\n') as c ->
+          add_text b s ~first:start ~last:i;
+          Buffer.add_string b (if c = '\t' then "Tab\n" else "Enter\n");
+          go (i + 1) (i + 1)
+      | _ -> go start (i + 1)
+  in
+  go 0 0
+
+let add_line b fmt = Printf.bprintf b (fmt ^^ "\n")
+
+(* [is_empty a] is [true] iff [a] prints nothing. *)
+let rec is_empty = function
+  | Hidden actions -> List.for_all is_empty actions
+  | Type s -> s = ""
+  | Key _ | Sleep _ | Wait _ | Raw _ -> false
 
 (* A slash ends a VHS regexp and only VHS 0.11 and later read [\/] as an
    escape, so a slash, escaped or not, is written as RE2's [\x2f]. *)
-let regexp re =
+let write_regexp b re =
   let n = String.length re in
-  let b = Buffer.create (n + 8) in
   let rec go i =
     if i < n then
       match re.[i] with
       | '/' ->
           Buffer.add_string b {|\x2f|};
           go (i + 1)
-      | '\\' when i + 1 = n -> invalid "wait" "%S ends with a backslash" re
-      | '\\' when re.[i + 1] = '/' ->
+      | '\\' when i + 1 < n && re.[i + 1] = '/' ->
           Buffer.add_string b {|\x2f|};
           go (i + 2)
-      | '\\' ->
-          Buffer.add_string b (String.sub re i 2);
+      | '\\' when i + 1 < n ->
+          Buffer.add_substring b re i 2;
           go (i + 2)
       | c ->
           Buffer.add_char b c;
           go (i + 1)
   in
+  Buffer.add_char b '/';
   go 0;
-  "/" ^ line "wait" (Buffer.contents b) ^ "/"
+  Buffer.add_char b '/'
 
-let has_extension path =
-  match String.rindex_opt path '.' with
-  | Some i ->
-      i < String.length path - 1 && not (String.contains_from path i '/')
-  | None -> false
+let rec add_action ~hidden b = function
+  | Type s -> add_type b s
+  | Key k -> add_line b "%s" (key_name k)
+  | Sleep (Ms n) -> add_line b "Sleep %dms" n
+  | Wait (timeout, w) ->
+      Buffer.add_string b "Wait";
+      (match w with Prompt -> () | Screen _ -> Buffer.add_string b "+Screen");
+      Option.iter (fun (Ms n) -> Printf.bprintf b "@%dms" n) timeout;
+      (match w with
+      | Prompt -> ()
+      | Screen re ->
+          Buffer.add_char b ' ';
+          write_regexp b re);
+      Buffer.add_char b '\n'
+  | Hidden actions when hidden -> List.iter (add_action ~hidden b) actions
+  | Hidden actions when List.for_all is_empty actions -> ()
+  | Hidden actions ->
+      Buffer.add_string b "Hide\n";
+      List.iter (add_action ~hidden:true b) actions;
+      Buffer.add_string b "Show\n"
+  | Raw line -> add_line b "%s" line
 
-let comment s = if s = "" then "#" else "# " ^ line "comment" s
-let blank = ""
-let require program = "Require " ^ quoted "require" program
+let add_setting b s =
+  Buffer.add_string b "Set ";
+  (match s with
+  | Shell sh -> Printf.bprintf b "Shell %S" (shell_name sh)
+  | Font_size n -> Printf.bprintf b "FontSize %d" n
+  | Font_family f ->
+      Buffer.add_string b "FontFamily ";
+      add_string b f
+  | Width n -> Printf.bprintf b "Width %d" n
+  | Height n -> Printf.bprintf b "Height %d" n
+  | Theme t ->
+      Buffer.add_string b "Theme ";
+      add_string b t
+  | Padding n -> Printf.bprintf b "Padding %d" n
+  | Typing_speed (Ms n) -> Printf.bprintf b "TypingSpeed %dms" n
+  | Framerate n -> Printf.bprintf b "Framerate %d" n);
+  Buffer.add_char b '\n'
 
-let output path =
-  if not (has_extension path || String.ends_with ~suffix:"/" path) then
-    invalid "output" "%S has no extension and does not end with a slash" path;
-  "Output " ^ quoted "output" path
+let to_string t =
+  let b = Buffer.create 4096 in
+  List.iter
+    (fun path ->
+      Buffer.add_string b "Output ";
+      add_string b path;
+      Buffer.add_char b '\n')
+    t.outputs;
+  List.iter (add_setting b) t.settings;
+  List.iter (add_action ~hidden:false b) t.actions;
+  Buffer.contents b
 
-let is_env_name s =
-  s <> ""
-  && (not (s.[0] >= '0' && s.[0] <= '9'))
-  && String.for_all
-       (function
-         | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' -> true | _ -> false)
-       s
+let pp ppf t = Fmt.string ppf (to_string t)
 
-let env name value =
-  if not (is_env_name name) then
-    invalid "env" "%S is not an environment variable name" name;
-  "Env " ^ name ^ " " ^ quoted "env" value
-
-let set s = "Set " ^ setting s
-
-let type' s =
-  quotable_chunks (line "type'" s)
-  |> List.map (fun c -> "Type " ^ quoted "type'" c)
-  |> String.concat "\n"
-
-let key k = key_name k
-let sleep d = "Sleep " ^ duration "sleep" d
-
-let wait ?timeout w =
-  let timeout =
-    Option.fold ~none:"" ~some:(fun d -> "@" ^ duration "wait" d) timeout
-  in
-  match w with
-  | Prompt -> "Wait" ^ timeout
-  | Line re -> "Wait+Line" ^ timeout ^ " " ^ regexp re
-  | Screen re -> "Wait+Screen" ^ timeout ^ " " ^ regexp re
-
-let hide = "Hide"
-let show = "Show"
-
-let screenshot path =
-  if not (String.ends_with ~suffix:".png" path) then
-    invalid "screenshot" "%S does not end with .png" path;
-  "Screenshot " ^ quoted "screenshot" path
-
-let source path = "Source " ^ quoted "source" path
-let raw s = line "raw" s
-let pp = Fmt.(list ~sep:nop (string ++ any "\n"))
-
-module Cram = struct
-  type t = string list list
-
-  let err_control l =
-    Fmt.kstr (fun e -> Error e) "%S holds a control character" l
-
-  let drop n s = String.sub s n (String.length s - n)
-
-  let chomp l =
-    if String.ends_with ~suffix:"\r" l then String.sub l 0 (String.length l - 1)
-    else l
-
-  let flush steps = function [] -> steps | cmd -> List.rev cmd :: steps
-
-  let add (steps, cmd) line =
-    if String.starts_with ~prefix:"  $ " line then
-      (flush steps cmd, [ drop 4 line ])
-    else if cmd <> [] && String.starts_with ~prefix:"  > " line then
-      (steps, drop 4 line :: cmd)
-    else (flush steps cmd, [])
-
-  let parse src =
-    let lines = List.map chomp (String.split_on_char '\n' src) in
-    let steps, cmd = List.fold_left add ([], []) lines in
-    let steps = List.rev (flush steps cmd) in
-    match List.find_opt has_control (List.concat steps) with
-    | None -> Ok steps
-    | Some l -> err_control l
-
-  (* Source the setup scripts, then clear, all hidden: the [clear] must come
-     after the [source] lines so their echoes are wiped from the scrollback
-     before [Show] resumes capture, otherwise they leak into the recording. *)
-  let sh_quote s =
-    "'" ^ String.concat {|'\''|} (String.split_on_char '\'' s) ^ "'"
-
-  let setup_block = function
-    | [] -> []
-    | scripts ->
-        hide
-        :: List.concat_map
-             (fun s -> [ type' ("source " ^ sh_quote s); key Enter ])
-             scripts
-        @ [ type' "clear"; key Enter; show ]
-
-  let step_items ~pause step =
-    List.concat_map (fun line -> [ type' line; key Enter ]) step
-    @ [ wait Prompt; sleep pause ]
-
-  let items ?(setup = []) ?(pause = Ms 1000) steps =
-    setup_block setup @ List.concat_map (step_items ~pause) steps
-end
+(* Running *)
 
 type error =
   | Executable_not_found of string
@@ -271,17 +368,17 @@ let io_message = function
   | Eio.Process.E (Executable_format_error exe) -> exe ^ ": not an executable"
   | err -> Fmt.str "%a" Eio.Exn.pp_err err
 
-let render ?(vhs = "vhs") ~proc ~cwd items =
-  let stdin = Fmt.kstr Eio.Flow.string_source "%a" pp items in
+let render ?(vhs = "vhs") ~proc ~cwd t =
   let stderr = Buffer.create 256 in
-  try
-    Ok
-      (Eio.Process.run proc ~cwd ~stdin
-         ~stderr:(Eio.Flow.buffer_sink stderr)
-         [ vhs ])
+  let stdin = Eio.Flow.string_source (to_string t) in
+  match
+    Eio.Process.run proc ~cwd ~stdin
+      ~stderr:(Eio.Flow.buffer_sink stderr)
+      [ vhs ]
   with
-  | Eio.Exn.Io (Eio.Process.E (Executable_not_found exe), _) ->
+  | () -> Ok ()
+  | exception Eio.Io (Eio.Process.E (Executable_not_found exe), _) ->
       Error (Executable_not_found exe)
-  | Eio.Exn.Io (Eio.Process.E (Child_error status), _) ->
+  | exception Eio.Io (Eio.Process.E (Child_error status), _) ->
       Error (Failed { vhs; status; stderr = Buffer.contents stderr })
-  | Eio.Exn.Io (err, _) -> Error (Io (io_message err))
+  | exception Eio.Io (err, _) -> Error (Io (io_message err))
