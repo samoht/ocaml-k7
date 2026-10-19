@@ -42,11 +42,22 @@ let is_empty t = t = []
 let sh_quote s =
   "'" ^ String.concat {|'\''|} (String.split_on_char '\'' s) ^ "'"
 
+(* The prompt VHS gives bash, which [Prompt] waits for. *)
+let ps1 = {|PS1='\[\e[38;2;90;86;224m\]> \[\e[0m\]'|}
+
 let setup_actions = function
   | [] -> []
   | scripts ->
-      let source s = Vhs.type' ("source " ^ sh_quote s ^ "\n") in
-      [ Vhs.hidden (List.map source scripts @ [ Vhs.type' "clear\n" ]) ]
+      let line = List.map (fun s -> "source " ^ sh_quote s) scripts @ [ ps1 ] in
+      [
+        Vhs.hidden
+          [
+            Vhs.type' (String.concat "; " line ^ "\n");
+            Vhs.wait Prompt;
+            Vhs.type' "clear\n";
+            Vhs.wait Prompt;
+          ];
+      ]
 
 let command lines =
   [

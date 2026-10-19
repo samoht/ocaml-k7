@@ -69,6 +69,9 @@ let man =
        VHS terminal running bash, waits for the prompt to come back, and \
        records the session with $(b,vhs). Expected output and exit codes are \
        ignored; other settings are the VHS defaults.";
+    `P
+      "Setup scripts may change the prompt: $(tname) sets $(b,PS1) back to the \
+       VHS prompt after sourcing them, since it waits for that prompt.";
     `S Manpage.s_examples;
     `Pre
       "$(cmd) --output demo.gif demo.t\n\

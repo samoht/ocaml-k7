@@ -105,7 +105,8 @@ Sleep 1000ms
 ```
 
 A setup script, given with `--setup`, runs before the first command without
-being recorded.
+being recorded. `vhs-cram` then sets the prompt back to the one VHS waits for,
+in case the script changed it.
 
 ## Credits
 

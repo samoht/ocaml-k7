@@ -126,7 +126,7 @@ let test_command () =
   List.iter
     (fun s ->
       if not (contains ~sub:s man) then Alcotest.failf "manual lacks %S" s)
-    [ "--vhs cat" ]
+    [ "--vhs cat"; "PS1" ]
 
 let suite =
   ( "cli",

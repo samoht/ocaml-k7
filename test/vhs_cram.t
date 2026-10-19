@@ -52,17 +52,20 @@ A failing vhs is reported with its standard error.
   vhs-cram: ./fake-vhs exited with code 1: Error: timeout waiting for "Line" to match >$
   [123]
 
-A setup script is sourced while the recording is hidden.
+Setup and clear finish while the recording is still hidden, after
+resetting the prompt that the waits rely on.
 
-  $ printf ':\n' > setup.sh
+  $ printf 'PS1=x\n' > setup.sh
   $ vhs-cram --vhs cat --setup setup.sh --output demo.gif demo.t
   Output "demo.gif"
   Set Shell "bash"
   Hide
-  Type "source 'setup.sh'"
+  Type "source 'setup.sh'; PS1='\[\e[38;2;90;86;224m\]> \[\e[0m\]'"
   Enter
+  Wait
   Type "clear"
   Enter
+  Wait
   Show
   Type "echo hi"
   Enter

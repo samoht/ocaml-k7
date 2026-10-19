@@ -66,15 +66,18 @@ let test_parse_errors () =
     "empty" true
     (Cram.is_empty (Result.get_ok (Cram.parse "prose\n  > orphan\n")))
 
+(* The setup and the clear must both finish while the recording is hidden,
+   and the prompt [Wait] relies on must survive a setup that changes [PS1]. *)
 let test_setup () =
   expect "setup"
     "Hide\n\
-     Type \"source 'slow.sh'\"\n\
+     Type \"source 'slow.sh'; source 'it'\\''s.sh'; \
+     PS1='\\[\\e[38;2;90;86;224m\\]> \\[\\e[0m\\]'\"\n\
      Enter\n\
-     Type \"source 'it'\\''s.sh'\"\n\
-     Enter\n\
+     Wait\n\
      Type \"clear\"\n\
      Enter\n\
+     Wait\n\
      Show\n\
      Type \"echo ready\"\n\
      Enter\n\
