@@ -69,8 +69,10 @@ Error "Output \"demo\": neither an extension nor a trailing slash"
 ```
 
 `Vhs.Prompt` relies on the prompt VHS gives each shell it starts, which ends
-with `>`. A tape that changes the prompt should wait for something else on the
-screen, with `Vhs.Screen` and a regular expression.
+with `>`, so it also holds while a command prints a line ending with `>`. A
+tape that changes the prompt, or runs such a command, should wait for
+something else, with a regular expression on the line under the cursor
+(`Vhs.Line`) or on the screen (`Vhs.Screen`).
 
 `Vhs.render` runs `vhs` on the tape in a given directory, and returns an error
 when `vhs` is not installed or fails:
@@ -98,15 +100,21 @@ $ printf '  $ echo hello\n  hello\n' > hello.t
 $ vhs-cram --print --output hello.gif hello.t
 Output "hello.gif"
 Set Shell "bash"
+Hide
+Type "PS1='\[\e[38;2;90;86;224m\]>\[\342\200\213\] \[\e[0m\]'; clear"
+Enter
+Wait+Line /\x{200B}$/
+Show
 Type "echo hello"
 Enter
-Wait
+Wait+Line /\x{200B}$/
 Sleep 1000ms
 ```
 
 A setup script, given with `--setup`, runs before the first command without
-being recorded. `vhs-cram` then sets the prompt back to the one VHS waits for,
-in case the script changed it.
+being recorded. `vhs-cram` then sets the prompt to the one VHS gives bash
+followed by an invisible zero-width space, and waits for that prompt: output
+that ends with `>` while its command still runs is not mistaken for it.
 
 ## Credits
 

@@ -86,33 +86,37 @@ let test_commands commands eol =
   match Cram.parse src with
   | Error e -> failf "typeable commands rejected: %s" e
   | Ok cram ->
-      let got = submitted (printed cram) in
+      let got =
+        match submitted (printed cram) with
+        | prelude :: got when String.ends_with ~suffix:"; clear" prelude -> got
+        | _ -> fail "no hidden prelude"
+      in
       let expected = List.concat_map (fun c -> [ c; c ]) commands in
       if got <> expected then
         failf "%S submitted %d lines, not %d" src (List.length got)
           (List.length expected);
       check (Cram.is_empty cram = (commands = []))
 
-(* A setup is sourced hidden, in order, with the prompt reset, then cleared,
-   before the first command. *)
+(* A setup is sourced hidden, in order, then the prompt is set and the
+   screen cleared, before the first command; without a setup, only the
+   prompt and the clear are. *)
 let test_setup scripts command =
   let scripts = List.map typeable scripts and command = typeable command in
   let cram = Result.get_ok (Cram.parse ("  $ " ^ command)) in
   let tape = printed ~setup:scripts cram in
   let lines = String.split_on_char '\n' tape in
   let count l = List.length (List.filter (String.equal l) lines) in
-  match scripts with
-  | [] ->
-      check
-        (count "Hide" = 0
-        && List.equal String.equal (submitted tape) [ command ])
-  | _ -> (
-      check (count "Hide" = 1 && count "Show" = 1);
-      match submitted tape with
-      | [ setup; "clear"; c ] ->
-          check (String.equal c command);
-          check (String.starts_with ~prefix:"source " setup)
-      | l -> failf "setup submitted %d lines" (List.length l))
+  check (count "Hide" = 1 && count "Show" = 1);
+  match submitted tape with
+  | [ prelude; c ] ->
+      check (String.equal c command);
+      let sources =
+        String.concat ""
+          (List.map (fun s -> "source " ^ Filename.quote s ^ "; ") scripts)
+      in
+      check (String.starts_with ~prefix:(sources ^ "PS1=") prelude);
+      check (String.ends_with ~suffix:"; clear" prelude)
+  | l -> failf "submitted %d lines" (List.length l)
 
 let suite =
   ( "cram",

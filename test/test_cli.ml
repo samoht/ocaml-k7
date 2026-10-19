@@ -20,12 +20,18 @@ let tape ?(setup = []) ?(output = "demo.gif") src =
 
 let test_tape () =
   expect "tape"
-    "Output \"demo.gif\"\n\
-     Set Shell \"bash\"\n\
-     Type \"true\"\n\
-     Enter\n\
-     Wait\n\
-     Sleep 1000ms\n"
+    {|Output "demo.gif"
+Set Shell "bash"
+Hide
+Type "PS1='\[\e[38;2;90;86;224m\]>\[\342\200\213\] \[\e[0m\]'; clear"
+Enter
+Wait+Line /\x{200B}$/
+Show
+Type "true"
+Enter
+Wait+Line /\x{200B}$/
+Sleep 1000ms
+|}
     (Result.get_ok (tape "  $ true\n"));
   let error name expected src ~setup ~output =
     Alcotest.(check (result string string))
@@ -231,7 +237,8 @@ let test_output_order () =
     in
     scan 0
   in
-  match (position "\nFIRST_DONE\n", position "echo SECOND_DONE") with
+  (* The command line holds [FIRST_DONE] too; its output follows [decoy>]. *)
+  match (position "decoy>FIRST_DONE", position "echo SECOND_DONE") with
   | Some first, Some second ->
       Alcotest.(check bool)
         "first output precedes typing the second command" true (first < second)

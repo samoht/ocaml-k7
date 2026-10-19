@@ -16,9 +16,14 @@ varies across cmdliner versions.
   $ vhs-cram --print --output demo.gif demo.t
   Output "demo.gif"
   Set Shell "bash"
+  Hide
+  Type "PS1='\[\e[38;2;90;86;224m\]>\[\342\200\213\] \[\e[0m\]'; clear"
+  Enter
+  Wait+Line /\x{200B}$/
+  Show
   Type "echo hi"
   Enter
-  Wait
+  Wait+Line /\x{200B}$/
   Sleep 1000ms
 
 A command the tape cannot type is an error, not an exception.
@@ -61,14 +66,11 @@ resetting the prompt that the waits rely on.
   Output "demo.gif"
   Set Shell "bash"
   Hide
-  Type "source 'setup.sh'; PS1='\[\e[38;2;90;86;224m\]> \[\e[0m\]'"
+  Type "source 'setup.sh'; PS1='\[\e[38;2;90;86;224m\]>\[\342\200\213\] \[\e[0m\]'; clear"
   Enter
-  Wait
-  Type "clear"
-  Enter
-  Wait
+  Wait+Line /\x{200B}$/
   Show
   Type "echo hi"
   Enter
-  Wait
+  Wait+Line /\x{200B}$/
   Sleep 1000ms

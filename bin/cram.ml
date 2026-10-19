@@ -45,28 +45,19 @@ let is_empty t = t = []
 let sh_quote s =
   "'" ^ String.concat {|'\''|} (String.split_on_char '\'' s) ^ "'"
 
-(* The prompt VHS gives bash, which [Prompt] waits for. *)
-let ps1 = {|PS1='\[\e[38;2;90;86;224m\]> \[\e[0m\]'|}
+(* The prompt VHS gives bash with a zero-width space after the [>]: the
+   recording looks the same, but [ready] holds only on this prompt, not on
+   output that ends with [>] while its command still runs. *)
+let ps1 = {|PS1='\[\e[38;2;90;86;224m\]>\[\342\200\213\] \[\e[0m\]'|}
+let ready = Vhs.wait (Line {|\x{200B}$|})
 
-let setup_actions = function
-  | [] -> []
-  | scripts ->
-      let line = List.map (fun s -> "source " ^ sh_quote s) scripts @ [ ps1 ] in
-      [
-        Vhs.hidden
-          [
-            Vhs.type' (String.concat "; " line ^ "\n");
-            Vhs.wait Prompt;
-            Vhs.type' "clear\n";
-            Vhs.wait Prompt;
-          ];
-      ]
+let prepare setup =
+  let line =
+    List.map (fun s -> "source " ^ sh_quote s) setup @ [ ps1; "clear" ]
+  in
+  Vhs.hidden [ Vhs.type' (String.concat "; " line ^ "\n"); ready ]
 
 let command lines =
-  [
-    Vhs.type' (String.concat "\n" lines ^ "\n");
-    Vhs.wait Prompt;
-    Vhs.sleep (Ms 1000);
-  ]
+  [ Vhs.type' (String.concat "\n" lines ^ "\n"); ready; Vhs.sleep (Ms 1000) ]
 
-let actions ~setup t = setup_actions setup @ List.concat_map command t
+let actions ~setup t = prepare setup :: List.concat_map command t

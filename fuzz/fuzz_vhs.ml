@@ -513,11 +513,10 @@ let test_output_order n =
   let executable = path "recorder" in
   save env executable "#!/bin/sh\nunset VHS_PUBLISH\nexec vhs \"$@\"\n";
   let output = path "order.txt" in
+  let decoy = Fmt.str "progress-%d>" (n land 255) in
   let src =
-    Fmt.str
-      "  $ printf 'progress-%d>'; sleep 3; echo FIRST_DONE\n\
-      \  $ echo SECOND_DONE\n"
-      (n land 255)
+    Fmt.str "  $ printf '%s'; sleep 3; echo FIRST_DONE\n  $ echo SECOND_DONE\n"
+      decoy
   in
   let cram = Result.get_ok (Vhs_cram.Cram.parse src) in
   let t =
@@ -553,7 +552,8 @@ let test_output_order n =
     in
     scan 0
   in
-  match (position "\nFIRST_DONE\n", position "echo SECOND_DONE") with
+  (* The command line holds [FIRST_DONE] too; its output follows [decoy]. *)
+  match (position (decoy ^ "FIRST_DONE"), position "echo SECOND_DONE") with
   | Some first, Some second when first < second -> ()
   | _ -> failf "next command was typed before the first output for %S" src
 

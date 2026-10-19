@@ -6,6 +6,12 @@
 open Vhs_cram
 
 let expect = Alcotest.(check string)
+let ready = {|Wait+Line /\x{200B}$/|} ^ "\n"
+let ps1 = {|PS1='\[\e[38;2;90;86;224m\]>\[\342\200\213\] \[\e[0m\]'|}
+
+(* What every recording starts with, hidden. *)
+let prelude ?(sources = "") () =
+  "Hide\nType \"" ^ sources ^ ps1 ^ "; clear\"\nEnter\n" ^ ready ^ "Show\n"
 
 let cram ?(setup = []) src =
   match Cram.parse src with
@@ -20,7 +26,8 @@ let cram ?(setup = []) src =
       | Error msg -> Alcotest.fail msg)
 
 let test_minimal () =
-  expect "minimal" "Type \"./main.exe\"\nEnter\nWait\nSleep 1000ms\n"
+  expect "minimal"
+    (prelude () ^ "Type \"./main.exe\"\nEnter\n" ^ ready ^ "Sleep 1000ms\n")
     (cram "  $ ./main.exe\n  +hello, world\n")
 
 let test_parse () =
@@ -35,20 +42,14 @@ let test_parse () =
     \  > not a continuation\n"
   in
   expect "cram"
-    "Type \"echo hi\"\n\
-     Enter\n\
-     Wait\n\
-     Sleep 1000ms\n\
-     Type \"printf a\\\"\n\
-     Enter\n\
-     Type \"b\"\n\
-     Enter\n\
-     Wait\n\
-     Sleep 1000ms\n"
+    (prelude () ^ "Type \"echo hi\"\nEnter\n" ^ ready
+   ^ "Sleep 1000ms\nType \"printf a\\\"\nEnter\nType \"b\"\nEnter\n" ^ ready
+   ^ "Sleep 1000ms\n")
     (cram src)
 
 let test_crlf () =
-  expect "crlf" "Type \"echo hi\"\nEnter\nWait\nSleep 1000ms\n"
+  expect "crlf"
+    (prelude () ^ "Type \"echo hi\"\nEnter\n" ^ ready ^ "Sleep 1000ms\n")
     (cram "  $ echo hi\r\n  hi\r\n")
 
 let test_parse_errors () =
@@ -66,23 +67,12 @@ let test_parse_errors () =
     "empty" true
     (Cram.is_empty (Result.get_ok (Cram.parse "prose\n  > orphan\n")))
 
-(* The setup and the clear must both finish while the recording is hidden,
-   and the prompt [Wait] relies on must survive a setup that changes [PS1]. *)
+(* The setup and the clear finish while the recording is hidden, and the
+   prompt [ready] relies on survives a setup that changes [PS1]. *)
 let test_setup () =
   expect "setup"
-    "Hide\n\
-     Type \"source 'slow.sh'; source 'it'\\''s.sh'; \
-     PS1='\\[\\e[38;2;90;86;224m\\]> \\[\\e[0m\\]'\"\n\
-     Enter\n\
-     Wait\n\
-     Type \"clear\"\n\
-     Enter\n\
-     Wait\n\
-     Show\n\
-     Type \"echo ready\"\n\
-     Enter\n\
-     Wait\n\
-     Sleep 1000ms\n"
+    (prelude ~sources:{|source 'slow.sh'; source 'it'\''s.sh'; |} ()
+    ^ "Type \"echo ready\"\nEnter\n" ^ ready ^ "Sleep 1000ms\n")
     (cram ~setup:[ "slow.sh"; "it's.sh" ] "  $ echo ready\n")
 
 let suite =

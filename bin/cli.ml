@@ -82,8 +82,10 @@ let man =
        records the session with $(b,vhs). Expected output and exit codes are \
        ignored; other settings are the VHS defaults.";
     `P
-      "Setup scripts may change the prompt: $(tname) sets $(b,PS1) back to the \
-       VHS prompt after sourcing them, since it waits for that prompt.";
+      "Before the first command, and after the setup scripts, $(tname) sets \
+       $(b,PS1) to the VHS prompt followed by an invisible zero-width space, \
+       which tells the prompt from output that ends with $(b,>). A command \
+       that changes $(b,PS1) makes the next wait time out.";
     `S Manpage.s_examples;
     `Pre
       "$(cmd) --output demo.gif demo.t\n\
