@@ -106,19 +106,23 @@ type shell =
   | Osh
   | Xonsh
 
-(** The type for settings, applied before the first action. Their integers are
-    not negative. *)
+(** The type for settings, applied before the first action. *)
 type setting =
   | Shell of shell  (** The shell to run (defaults to {!constructor-Bash}). *)
-  | Font_size of int  (** The font size (defaults to [22]). *)
+  | Font_size of int  (** A positive size (defaults to [22]). *)
   | Font_family of string  (** A font list. *)
-  | Width of int  (** The width in pixels (defaults to [1200]). *)
-  | Height of int  (** The height in pixels (defaults to [600]). *)
+  | Width of int
+      (** The width in pixels, at least twice the padding (defaults to [1200]).
+      *)
+  | Height of int
+      (** The height in pixels, at least twice the padding (defaults to [600]).
+      *)
   | Theme of string  (** A theme name, as [vhs themes] lists them, or JSON. *)
-  | Padding of int  (** The padding in pixels (defaults to [60]). *)
+  | Padding of int
+      (** The padding in pixels, not negative (defaults to [60]). *)
   | Typing_speed of duration
       (** The pause after each typed character (defaults to [Ms 50]). *)
-  | Framerate of int  (** The frame rate (defaults to [50]). *)
+  | Framerate of int  (** A positive frame rate (defaults to [50]). *)
 
 type t
 (** The type for tapes VHS reads without error and without ignoring a line. *)

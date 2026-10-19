@@ -165,8 +165,15 @@ let test_settings () =
            Framerate 24;
          ]
        []);
-  error "negative width" "Set Width -5: negative" ~settings:[ Width (-5) ] [];
-  rejects "negative padding" ~settings:[ Padding (-1) ] []
+  error "small width" "Set Width 100: below twice the padding (60)"
+    ~settings:[ Width 100 ] [];
+  error "padding and default height"
+    "Set Height 600: below twice the padding (400)"
+    ~settings:[ Padding 400; Width 1000 ]
+    [];
+  rejects "negative padding" ~settings:[ Padding (-1) ] [];
+  rejects "font size" ~settings:[ Font_size 0 ] [];
+  rejects "framerate" ~settings:[ Framerate 0 ] []
 
 let test_outputs () =
   error "no output" "no output" ~outputs:[] [];

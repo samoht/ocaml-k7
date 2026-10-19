@@ -191,21 +191,35 @@ let check_output path =
 
 let check_setting = function
   | Shell _ -> Ok ()
-  | Font_size n when n < 0 -> err "Set FontSize %d: negative" n
-  | Framerate n when n < 0 -> err "Set Framerate %d: negative" n
+  | Font_size n when n <= 0 -> err "Set FontSize %d: not positive" n
+  | Framerate n when n <= 0 -> err "Set Framerate %d: not positive" n
   | Padding n when n < 0 -> err "Set Padding %d: negative" n
-  | Width n when n < 0 -> err "Set Width %d: negative" n
-  | Height n when n < 0 -> err "Set Height %d: negative" n
   | Font_family f -> check_quotable "Set FontFamily" f
   | Theme t -> check_quotable "Set Theme" t
   | Typing_speed (Ms n) -> check_ms "Set TypingSpeed " n
   | Font_size _ | Framerate _ | Padding _ | Width _ | Height _ -> Ok ()
+
+(* VHS refuses a frame smaller than twice the padding, its defaults
+   included. *)
+let check_size settings =
+  let last f default =
+    List.fold_left (fun v s -> Option.value (f s) ~default:v) default settings
+  in
+  let padding = last (function Padding n -> Some n | _ -> None) 60 in
+  let width = last (function Width n -> Some n | _ -> None) 1200 in
+  let height = last (function Height n -> Some n | _ -> None) 600 in
+  if width < 2 * padding then
+    err "Set Width %d: below twice the padding (%d)" width padding
+  else if height < 2 * padding then
+    err "Set Height %d: below twice the padding (%d)" height padding
+  else Ok ()
 
 let tape ?(settings = []) ~outputs actions =
   let* () =
     if outputs = [] then err "no output" else iter_result check_output outputs
   in
   let* () = iter_result check_setting settings in
+  let* () = check_size settings in
   let* _started = check_actions ~started:false actions in
   Ok { outputs; settings; actions }
 
