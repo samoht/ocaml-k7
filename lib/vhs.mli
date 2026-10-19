@@ -182,4 +182,6 @@ val render :
 (** [render ~vhs ~proc ~cwd t] runs [vhs -q] (defaults to ["vhs"]) in the
     directory [cwd] with the tape [t] on its standard input, so the outputs of
     [t] are relative to [cwd]. What [vhs] prints is kept for {!Failed} and
-    dropped on success. *)
+    dropped on success. If the calling fiber is cancelled, [render] sends [vhs]
+    [SIGTERM], which makes it stop the terminal and the browser it started, and
+    waits for it to exit. *)

@@ -429,21 +429,57 @@ let io_message ~cwd = function
       fs_message (Option.value (Eio.Path.native cwd) ~default:(snd cwd)) e
   | err -> Fmt.str "%a" Eio.Exn.pp_err err
 
-let render ?(vhs = "vhs") ~proc ~cwd t =
-  let output = Buffer.create 256 in
-  let sink = Eio.Flow.buffer_sink output in
-  let stdin = Eio.Flow.string_source (to_string t) in
-  (* Awaiting the child rather than raising on its status lets the switch
-     copy all its output first. *)
-  match
-    Eio.Switch.run @@ fun sw ->
+(* [run_vhs] runs protected from cancellation, so that its switch keeps
+   reaping [vhs] until it exits; [cancelled] makes it send [vhs] SIGTERM,
+   which [vhs] cleans up after. *)
+let run_vhs ~vhs ~proc ~cwd ~cancelled ~sink tape =
+  Eio.Switch.run @@ fun sw ->
+  let stdin, feed = Eio.Process.pipe ~sw proc in
+  let child =
     Eio.Process.spawn ~sw proc
       ~cwd:(cwd :> Eio.Fs.dir_ty Eio.Path.t)
       ~stdin ~stdout:sink ~stderr:sink [ vhs; "-q" ]
-    |> Eio.Process.await
+  in
+  Eio.Flow.close stdin;
+  (* A [vhs] that exits before reading the whole tape reports why itself. *)
+  Eio.Fiber.fork ~sw (fun () ->
+      (try Eio.Flow.copy_string tape feed with Eio.Io _ -> ());
+      Eio.Flow.close feed);
+  Eio.Fiber.first
+    (fun () -> Eio.Process.await child)
+    (fun () ->
+      Eio.Promise.await cancelled;
+      Eio.Process.signal child Sys.sigterm;
+      Eio.Process.await child)
+
+let render ?(vhs = "vhs") ~proc ~cwd t =
+  let output = Buffer.create 256 in
+  let sink = Eio.Flow.buffer_sink output in
+  let tape = to_string t in
+  let cancelled, cancel = Eio.Promise.create () in
+  let finished, finish = Eio.Promise.create () in
+  let supervise () =
+    Eio.Cancel.protect @@ fun () ->
+    Eio.Promise.resolve finish
+      (match run_vhs ~vhs ~proc ~cwd ~cancelled ~sink tape with
+      | status -> Ok status
+      | exception (Eio.Io _ as e) -> Error e)
+  in
+  let wait () =
+    match Eio.Promise.await finished with
+    | outcome -> outcome
+    | exception (Eio.Cancel.Cancelled _ as e) ->
+        Eio.Promise.resolve cancel ();
+        raise e
+  in
+  match
+    Eio.Switch.run @@ fun sw ->
+    Eio.Fiber.fork ~sw supervise;
+    wait ()
   with
-  | `Exited 0 -> Ok ()
-  | status -> Error (Failed { vhs; status; output = Buffer.contents output })
-  | exception Eio.Io (Eio.Process.E (Executable_not_found exe), _) ->
+  | Ok (`Exited 0) -> Ok ()
+  | Ok status -> Error (Failed { vhs; status; output = Buffer.contents output })
+  | Error (Eio.Io (Eio.Process.E (Executable_not_found exe), _)) ->
       Error (Executable_not_found exe)
-  | exception Eio.Io (err, _) -> Error (Io (io_message ~cwd err))
+  | Error (Eio.Io (err, _)) -> Error (Io (io_message ~cwd err))
+  | Error e -> raise e

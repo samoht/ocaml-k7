@@ -12,7 +12,59 @@ let tape actions =
 
 let str t = Fmt.str "%a" Vhs.pp t
 
-(* A child process whose body runs in a fiber of the test's switch. *)
+(* An in-memory pipe: Eio_mock has none. The empty string marks the end. *)
+module Pipe = struct
+  module Source = struct
+    type t = { chunks : string Eio.Stream.t; mutable pending : string }
+
+    let read_methods = []
+
+    let single_read t dst =
+      if t.pending = "" then t.pending <- Eio.Stream.take t.chunks;
+      if t.pending = "" then (
+        Eio.Stream.add t.chunks "";
+        raise End_of_file);
+      let n = min (Cstruct.length dst) (String.length t.pending) in
+      Cstruct.blit_from_string t.pending 0 dst 0 n;
+      t.pending <- String.sub t.pending n (String.length t.pending - n);
+      n
+
+    let close _ = ()
+  end
+
+  module Sink = struct
+    type t = string Eio.Stream.t
+
+    let single_write t bufs =
+      let s = Cstruct.to_string (Cstruct.concat bufs) in
+      if s <> "" then Eio.Stream.add t s;
+      String.length s
+
+    let copy t ~src = Eio.Flow.Pi.simple_copy ~single_write t ~src
+    let close t = Eio.Stream.add t ""
+  end
+
+  let v () =
+    let chunks = Eio.Stream.create max_int in
+    let source =
+      Eio.Resource.T
+        ( Source.{ chunks; pending = "" },
+          Eio.Resource.handler
+            (H (Eio.Resource.Close, Source.close)
+            :: Eio.Resource.bindings (Eio.Flow.Pi.source (module Source))) )
+    in
+    let sink =
+      Eio.Resource.T
+        ( chunks,
+          Eio.Resource.handler
+            (H (Eio.Resource.Close, Sink.close)
+            :: Eio.Resource.bindings (Eio.Flow.Pi.sink (module Sink))) )
+    in
+    (source, sink)
+end
+
+(* A child process whose body runs in a fiber of the test's switch, so that it
+   outlives a cancelled [render]. *)
 module Child = struct
   type t = {
     status : Eio.Process.exit_status Eio.Promise.t;
@@ -44,7 +96,11 @@ module Manager = struct
 
   let environment _ = [||]
   let getenv_opt _ _ = None
-  let pipe _ ~sw:_ = failwith "render must not request a pipe"
+
+  let pipe _ ~sw:_ =
+    let r, w = Pipe.v () in
+    ( (r :> [ Eio.Resource.close_ty | Eio.Flow.source_ty ] Eio.Resource.t),
+      (w :> [ Eio.Resource.close_ty | Eio.Flow.sink_ty ] Eio.Resource.t) )
 
   let spawn t ~sw:_ ?cwd ?stdin ?stdout ?stderr ?env ?executable args =
     Alcotest.(check bool) "environment inherited" true (Option.is_none env);
@@ -167,6 +223,36 @@ let test_spawn_errors () =
       (Executable_format_error "vhs", "vhs: not an executable");
     ]
 
+(* Cancelling render sends vhs SIGTERM, which it cleans up after, and waits
+   for it to exit. *)
+let test_cancel () =
+  Eio_mock.Backend.run @@ fun () ->
+  Eio.Switch.run @@ fun sw ->
+  let term, stop = Eio.Promise.create () in
+  let exited = ref false in
+  let proc =
+    manager ~sw (fun _ _ ->
+        let run ~stdin ~output:_ =
+          ignore (read_all stdin);
+          let status = Eio.Promise.await term in
+          exited := true;
+          status
+        in
+        let on_signal n =
+          Alcotest.(check int) "SIGTERM" Sys.sigterm n;
+          Eio.Promise.resolve stop (`Signaled n)
+        in
+        { run; on_signal })
+  in
+  (match
+     Eio.Fiber.first
+       (fun () -> `Rendered (Vhs.render ~proc ~cwd (tape [])))
+       (fun () -> `Cancelled)
+   with
+  | `Cancelled -> ()
+  | `Rendered _ -> Alcotest.fail "render finished");
+  Alcotest.(check bool) "child exited before render returned" true !exited
+
 let suite =
   ( "eio",
     List.map
@@ -178,4 +264,5 @@ let suite =
         ("signaled child", test_signal);
         ("error lines", test_pp_error);
         ("spawn errors", test_spawn_errors);
+        ("cancel", test_cancel);
       ] )

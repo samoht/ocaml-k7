@@ -89,7 +89,14 @@ let test_render () =
   with_files
     [
       ("ko", 0o755, fake_vhs 3);
-      ("pwd", 0o755, "#!/bin/sh\ncat > /dev/null\npwd -P >&2\nexit 4\n");
+      ("pwd", 0o755, "#!/bin/sh\npwd -P >&2\nexit 4\n");
+      ("early", 0o755, "#!/bin/sh\nexit 2\n");
+      ( "slow",
+        0o755,
+        "#!/bin/sh\n\
+         trap 'echo > \"$0.stopped\"; exit 7' TERM\n\
+         cat > /dev/null\n\
+         while :; do sleep 0.05; done\n" );
     ]
   @@ fun env path ->
   let proc = Eio.Stdenv.process_mgr env in
@@ -109,17 +116,42 @@ let test_render () =
   | Error (Failed { output = "/\n"; _ }) -> ()
   | Error e -> Alcotest.failf "not run in /: %a" Vhs.pp_error e
   | Ok () -> Alcotest.fail "pwd succeeded");
-  match
-    Vhs.render ~vhs:(path "ko") ~proc
-      ~cwd:Eio.Path.(Eio.Stdenv.fs env / path "missing-dir")
-      t
-  with
+  (* A vhs that exits without reading a tape larger than a pipe buffer is
+     reported by its status, not by the broken pipe. *)
+  let big =
+    Result.get_ok
+      (Vhs.tape ~outputs:[ "x.gif" ]
+         (List.init 20_000 (fun _ -> Vhs.type' "echo hello")))
+  in
+  (match Vhs.render ~vhs:(path "early") ~proc ~cwd big with
+  | Error (Failed { status = `Exited 2; _ }) -> ()
+  | Error e -> Alcotest.failf "early exit: %a" Vhs.pp_error e
+  | Ok () -> Alcotest.fail "early exit succeeded");
+  (match
+     Vhs.render ~vhs:(path "ko") ~proc
+       ~cwd:Eio.Path.(Eio.Stdenv.fs env / path "missing-dir")
+       t
+   with
   | Error (Io msg) ->
       expect "missing cwd"
         (path "missing-dir" ^ ": no such file or directory")
         msg
   | Error e -> Alcotest.failf "unexpected %a" Vhs.pp_error e
-  | Ok () -> Alcotest.fail "ran in a missing directory"
+  | Ok () -> Alcotest.fail "ran in a missing directory");
+  (* Cancelling render stops vhs with SIGTERM and waits for it. *)
+  let clock = Eio.Stdenv.clock env in
+  (match
+     Eio.Fiber.first
+       (fun () -> `Rendered (Vhs.render ~vhs:(path "slow") ~proc ~cwd t))
+       (fun () ->
+         Eio.Time.sleep clock 0.5;
+         `Timeout)
+   with
+  | `Timeout -> ()
+  | `Rendered _ -> Alcotest.fail "slow vhs finished");
+  Alcotest.(check bool)
+    "vhs stopped before render returned" true
+    (Sys.file_exists (path "slow.stopped"))
 
 let test_command () =
   let help_buffer = Buffer.create 256 in
