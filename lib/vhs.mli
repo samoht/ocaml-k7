@@ -59,7 +59,7 @@ type command = Value.command =
   | Wait_for of wait
   | Hide
   | Show
-  | Screenshot of string option
+  | Screenshot of string
   | Source of string
   | Raw_command of string
 
@@ -138,8 +138,8 @@ val hide : unit -> item
 val show : unit -> item
 (** [show ()] ends a hidden region started by {!val-hide}. *)
 
-val screenshot : ?path:string -> unit -> item
-(** [screenshot ~path ()] is [Command (Screenshot path)]. *)
+val screenshot : string -> item
+(** [screenshot path] is [Command (Screenshot path)]. *)
 
 val source : string -> item
 (** [source path] includes another tape. *)

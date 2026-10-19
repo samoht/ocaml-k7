@@ -130,7 +130,7 @@ let test_keys_and_waits () =
         key (Ctrl "c");
         key (Ctrl_alt "Delete");
         wait (Wait_screen "ready");
-        screenshot ~path:"frame.png" ();
+        screenshot "frame.png";
         source "common.tape";
       ]
   in

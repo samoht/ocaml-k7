@@ -76,7 +76,7 @@ type command =
   | Wait_for of wait
   | Hide  (** Hides subsequent input/output from the recording. *)
   | Show  (** Resumes rendering after {!constructor-Hide}. *)
-  | Screenshot of string option  (** Captures the current frame. *)
+  | Screenshot of string  (** Captures the current frame to a PNG file. *)
   | Source of string  (** Includes commands from another tape file. *)
   | Raw_command of string  (** A raw VHS command line. *)
 
@@ -156,8 +156,8 @@ val hide : unit -> item
 val show : unit -> item
 (** [show ()] ends a hidden region started by {!val-hide}. *)
 
-val screenshot : ?path:string -> unit -> item
-(** [screenshot ~path ()] is [Command (Screenshot path)]. *)
+val screenshot : string -> item
+(** [screenshot path] is [Command (Screenshot path)]. *)
 
 val source : string -> item
 (** [source path] includes another tape. *)

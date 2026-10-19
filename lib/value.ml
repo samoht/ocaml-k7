@@ -36,7 +36,7 @@ type command =
   | Wait_for of wait
   | Hide
   | Show
-  | Screenshot of string option
+  | Screenshot of string
   | Source of string
   | Raw_command of string
 
@@ -69,7 +69,7 @@ let sleep d = Command (Sleep d)
 let wait w = Command (Wait_for w)
 let hide () = Command Hide
 let show () = Command Show
-let screenshot ?path () = Command (Screenshot path)
+let screenshot path = Command (Screenshot path)
 let source path = Command (Source path)
 let raw_command s = Command (Raw_command s)
 let quotes = [ '"'; '\''; '`' ]
@@ -215,8 +215,7 @@ let pp_command ppf = function
   | Wait_for w -> pp_wait ppf w
   | Hide -> Fmt.string ppf "Hide"
   | Show -> Fmt.string ppf "Show"
-  | Screenshot None -> Fmt.string ppf "Screenshot"
-  | Screenshot (Some path) -> Fmt.pf ppf "Screenshot %a" pp_quoted path
+  | Screenshot path -> Fmt.pf ppf "Screenshot %a" pp_quoted path
   | Source path -> Fmt.pf ppf "Source %a" pp_quoted path
   | Raw_command line -> pp_line ppf line
 

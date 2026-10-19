@@ -42,7 +42,7 @@ type command = Value.command =
   | Wait_for of wait
   | Hide
   | Show
-  | Screenshot of string option
+  | Screenshot of string
   | Source of string
   | Raw_command of string
 
