@@ -236,27 +236,12 @@ let raw s = line "raw" s
 let pp = Fmt.(list ~sep:nop (string ++ any "\n"))
 
 module Cram = struct
-  type step = {
-    command : string list;
-    output : string list;
-    exit_code : int option;
-  }
-
-  type t = step list
+  type t = string list list
 
   let err_control l =
     Fmt.kstr (fun e -> Error e) "%S holds a control character" l
 
   let drop n s = String.sub s n (String.length s - n)
-
-  (* [  [N]] exit-code annotation: two-space indent, then [N] on its own. *)
-  let exit_code_of_output line =
-    if
-      String.length line >= 3
-      && Char.equal line.[0] '['
-      && Char.equal line.[String.length line - 1] ']'
-    then int_of_string_opt (String.sub line 1 (String.length line - 2))
-    else None
 
   let parse src =
     let chomp l =
@@ -265,44 +250,24 @@ module Cram = struct
     in
     let lines = List.map chomp (String.split_on_char '\n' src) in
     let steps = ref [] in
-    let cmd = ref []
-    and out = ref []
-    and exit = ref None
-    and open_ = ref false in
+    let cmd = ref [] in
     let flush () =
-      if !open_ then
-        steps :=
-          { command = List.rev !cmd; output = List.rev !out; exit_code = !exit }
-          :: !steps;
-      cmd := [];
-      out := [];
-      exit := None;
-      open_ := false
+      if !cmd <> [] then steps := List.rev !cmd :: !steps;
+      cmd := []
     in
     List.iter
       (fun line ->
         if String.starts_with ~prefix:"  $ " line then begin
           flush ();
-          open_ := true;
           cmd := [ drop 4 line ]
         end
-        else if !open_ && String.starts_with ~prefix:"  > " line then
+        else if !cmd <> [] && String.starts_with ~prefix:"  > " line then
           cmd := drop 4 line :: !cmd
-        else if !open_ && String.starts_with ~prefix:"  " line then begin
-          let content = drop 2 line in
-          match exit_code_of_output content with
-          | Some _ as code -> exit := code
-          | None -> out := content :: !out
-        end
         else flush ())
       lines;
     flush ();
     let steps = List.rev !steps in
-    match
-      List.find_opt
-        (fun l -> not (typeable l))
-        (List.concat_map (fun s -> s.command) steps)
-    with
+    match List.find_opt (fun l -> not (typeable l)) (List.concat steps) with
     | None -> Ok steps
     | Some l -> err_control l
 
@@ -319,7 +284,7 @@ module Cram = struct
         @ [ type' "clear"; enter (); show () ]
 
   let step_items ~pause step =
-    List.concat_map (fun line -> [ type' line; enter () ]) step.command
+    List.concat_map (fun line -> [ type' line; enter () ]) step
     @ [ wait Prompt; sleep pause ]
 
   let to_tape ?(settings = []) ?(setup_scripts = []) ?(pause = S 1.)
@@ -336,16 +301,6 @@ module Cram = struct
              steps)
     in
     tape items
-
-  let pp ppf steps =
-    List.iter
-      (fun { command; output; exit_code } ->
-        List.iteri
-          (fun i -> Fmt.pf ppf "  %s %s@\n" (if i = 0 then "$" else ">"))
-          command;
-        List.iter (Fmt.pf ppf "  %s@\n") output;
-        Option.iter (Fmt.pf ppf "  [%d]@\n") exit_code)
-      steps
 end
 
 type error =

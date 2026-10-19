@@ -162,15 +162,14 @@ type tape := t
     sourced, hidden, before the first command. *)
 module Cram : sig
   type t
-  (** The type for cram tests: a sequence of commands, each with its expected
-      output and exit code. *)
+  (** The type for cram tests: a sequence of shell commands. *)
 
   val parse : string -> (t, string) result
   (** [parse src] is the cram test of source [src], or [Error msg] if a command
       holds a control character other than a tab. A line [  $ cmd] starts a
-      command, the [  > ] lines after it continue it, the other lines indented
-      by two spaces are its expected output except an [[N]] line, which is its
-      exit code. Other lines are dropped and lines may end with ["\r\n"]. *)
+      command and the [  > ] lines right after it continue it. Other lines,
+      expected output and exit codes included, are dropped. Lines may end with
+      ["\r\n"]. *)
 
   val to_tape :
     ?settings:setting list ->
@@ -189,9 +188,6 @@ module Cram : sig
       clearing block. [pause] is the reading pause after each command (defaults
       to [S 1.]) and [final_pause] holds the last screen before exit (defaults
       to [S 3.]). *)
-
-  val pp : t Fmt.t
-  (** [pp] formats a cram test as cram source, without prose. *)
 end
 
 (** {1:running Running vhs} *)

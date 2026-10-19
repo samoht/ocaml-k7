@@ -252,10 +252,22 @@ let test_parse () =
     \  $ printf a\\\n\
     \  > b\n\
     \  ab\n\
-    \  [1]\n"
+    \  [1]\n\
+    \  > not a continuation\n"
   in
-  expect "cram" "  $ echo hi\n  hi\n  $ printf a\\\n  > b\n  ab\n  [1]\n"
-    (Fmt.str "%a" Vhs.Cram.pp (cram src))
+  expect "cram"
+    "Output \"x.gif\"\n\
+     Type \"echo hi\"\n\
+     Enter\n\
+     Wait\n\
+     Sleep 1s\n\
+     Type \"printf a\\\"\n\
+     Enter\n\
+     Type \"b\"\n\
+     Enter\n\
+     Wait\n\
+     Sleep 3s\n"
+    (str (Vhs.Cram.to_tape ~output:"x.gif" (cram src)))
 
 let test_parse_control () =
   match Vhs.Cram.parse "  $ echo \x01\n" with
