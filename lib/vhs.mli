@@ -181,8 +181,9 @@ type error =
       status : [ `Exited of int | `Signaled of int ];
       output : string;
     }
-      (** The executable [vhs] ran and did not exit with [0]; [output] is what
-          it printed, such as the wait that timed out. *)
+      (** The executable [vhs] ran and did not exit with [0]; [output] is the
+          end of what it printed, at most 64 KiB, such as the wait that timed
+          out. *)
   | Io of string  (** Any other I/O failure. *)
 
 val pp_error : error Fmt.t

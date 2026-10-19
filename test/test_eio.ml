@@ -190,6 +190,20 @@ let test_split_utf8 () =
        [ "cost " ^ String.sub euro 0 1; String.sub euro 1 2 ^ "\n" ]
        (tape []))
 
+(* A chatty vhs cannot grow the kept output without bound. *)
+let test_long_output () =
+  let line i = Fmt.str "line %07d\n" i in
+  let writes = List.init 100_000 line in
+  match run writes (tape []) with
+  | Error (Vhs.Failed { output; _ }) ->
+      Alcotest.(check bool)
+        "at most 64 KiB kept" true
+        (String.length output <= 65536);
+      Alcotest.(check bool)
+        "the end is kept" true
+        (String.ends_with ~suffix:(line 99_999) output)
+  | _ -> Alcotest.fail "expected child failure"
+
 let test_success () =
   match
     run ~status:(`Exited 0) ~vhs:"custom-vhs" [ "progress" ]
@@ -317,6 +331,7 @@ let suite =
       [
         ("output one byte at a time", test_byte_writes);
         ("output split UTF-8", test_split_utf8);
+        ("long output", test_long_output);
         ("success and explicit executable", test_success);
         ("signaled child", test_signal);
         ("error lines", test_pp_error);

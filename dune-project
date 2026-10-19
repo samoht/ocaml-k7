@@ -25,7 +25,7 @@
   fmt
   (cmdliner (>= 2.0.0))
   (alcotest :with-test)
-  (cstruct :with-test)
+  (cstruct (>= 6.0.1))
   (alcobar :with-test)
   (mdx :with-test)
   (odoc :with-doc)))

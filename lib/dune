@@ -1,7 +1,7 @@
 (library
  (name vhs)
  (public_name vhs)
- (libraries eio fmt))
+ (libraries cstruct eio fmt))
 
 (mdx
  (package vhs)

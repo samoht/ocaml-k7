@@ -540,9 +540,31 @@ let run_vhs ~vhs ~proc ~cwd ~cancelled ~sink tape =
       Eio.Process.signal child Sys.sigterm;
       Eio.Process.await child)
 
+(* A sink that keeps the last [kept] bytes written to it, in amortised
+   constant time per byte. *)
+module Tail = struct
+  type t = Buffer.t
+
+  let kept = 65536
+
+  let single_write b bufs =
+    List.iter (fun c -> Buffer.add_string b (Cstruct.to_string c)) bufs;
+    if Buffer.length b > 2 * kept then (
+      let tail = Buffer.sub b (Buffer.length b - kept) kept in
+      Buffer.clear b;
+      Buffer.add_string b tail);
+    Cstruct.lenv bufs
+
+  let copy t ~src = Eio.Flow.Pi.simple_copy ~single_write t ~src
+
+  let contents b =
+    let n = Buffer.length b in
+    if n <= kept then Buffer.contents b else Buffer.sub b (n - kept) kept
+end
+
 let render ?(vhs = "vhs") ~proc ~cwd t =
   let output = Buffer.create 256 in
-  let sink = Eio.Flow.buffer_sink output in
+  let sink = Eio.Resource.T (output, Eio.Flow.Pi.sink (module Tail)) in
   let tape = to_string t in
   let cancelled, cancel = Eio.Promise.create () in
   let finished, finish = Eio.Promise.create () in
@@ -566,7 +588,7 @@ let render ?(vhs = "vhs") ~proc ~cwd t =
     wait ()
   with
   | Ok (`Exited 0) -> Ok ()
-  | Ok status -> Error (Failed { vhs; status; output = Buffer.contents output })
+  | Ok status -> Error (Failed { vhs; status; output = Tail.contents output })
   | Error (Eio.Io (Eio.Process.E (Executable_not_found exe), _)) ->
       Error (Executable_not_found exe)
   | Error (Eio.Io (err, _)) -> Error (Io (io_message ~cwd err))
