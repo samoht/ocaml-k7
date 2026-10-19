@@ -39,17 +39,18 @@ So is a test without commands, and an output path VHS cannot read.
   vhs-cram: Output "demo": neither an extension nor a trailing slash
   [123]
 
-A failing vhs is reported with its standard error.
+A failing vhs is reported with what it printed.
 
   $ cat > fake-vhs <<'EOF'
   > #!/bin/sh
   > cat > /dev/null
-  > echo 'Error: timeout waiting for "Line" to match >$' >&2
+  > echo 'Error: timeout waiting for "Line" to match >$'
   > exit 1
   > EOF
   $ chmod +x fake-vhs
   $ vhs-cram --vhs ./fake-vhs --output demo.gif demo.t
-  vhs-cram: ./fake-vhs exited with code 1: Error: timeout waiting for "Line" to match >$
+  vhs-cram: ./fake-vhs exited with code 1
+    Error: timeout waiting for "Line" to match >$
   [123]
 
 Setup and clear finish while the recording is still hidden, after

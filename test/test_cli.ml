@@ -58,6 +58,7 @@ let with_files files fn =
 let fake_vhs status =
   Fmt.str
     "#!/bin/sh\n\
+     [ \"$1\" = -q ] || exit 9\n\
      cat > /dev/null\n\
      echo 'from stdout'\n\
      echo 'from stderr' >&2\n\
@@ -96,14 +97,14 @@ let test_render () =
   let t = Result.get_ok (Vhs.tape ~outputs:[ "x.gif" ] []) in
   (match Vhs.render ~vhs:(path "ko") ~proc ~cwd t with
   | Error (Failed { status = `Exited 3; _ } as e) ->
-      expect "stderr only"
-        (path "ko" ^ " exited with code 3: from stderr")
+      expect "both streams"
+        (path "ko" ^ " exited with code 3\n  from stdout\n  from stderr")
         (Fmt.str "%a" Vhs.pp_error e)
   | _ -> Alcotest.fail "lost the failure");
   match
     Vhs.render ~vhs:(path "pwd") ~proc ~cwd:Eio.Path.(Eio.Stdenv.fs env / "/") t
   with
-  | Error (Failed { stderr = "/\n"; _ }) -> ()
+  | Error (Failed { output = "/\n"; _ }) -> ()
   | Error e -> Alcotest.failf "not run in /: %a" Vhs.pp_error e
   | Ok () -> Alcotest.fail "pwd succeeded"
 

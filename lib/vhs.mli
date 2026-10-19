@@ -163,14 +163,15 @@ type error =
   | Failed of {
       vhs : string;
       status : [ `Exited of int | `Signaled of int ];
-      stderr : string;
+      output : string;
     }
-      (** The executable [vhs] ran and did not exit with [0]; [stderr] is what
-          it wrote on its standard error, such as the wait that timed out. *)
+      (** The executable [vhs] ran and did not exit with [0]; [output] is what
+          it printed, such as the wait that timed out. *)
   | Io of string  (** Any other I/O failure. *)
 
 val pp_error : error Fmt.t
-(** [pp_error] formats an error for humans. *)
+(** [pp_error] formats an error for humans: one line, followed for {!Failed} by
+    the last lines [vhs] printed, indented. *)
 
 val render :
   ?vhs:string ->
@@ -178,7 +179,7 @@ val render :
   cwd:_ Eio.Path.t ->
   t ->
   (unit, error) result
-(** [render ~vhs ~proc ~cwd t] runs the executable [vhs] (defaults to ["vhs"])
-    in the directory [cwd], with the tape [t] on its standard input and its
-    standard error captured for {!Failed}. The outputs of [t] are relative to
-    [cwd]. *)
+(** [render ~vhs ~proc ~cwd t] runs [vhs -q] (defaults to ["vhs"]) in the
+    directory [cwd] with the tape [t] on its standard input, so the outputs of
+    [t] are relative to [cwd]. What [vhs] prints is kept for {!Failed} and
+    dropped on success. *)

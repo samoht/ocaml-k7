@@ -378,22 +378,41 @@ type error =
   | Failed of {
       vhs : string;
       status : [ `Exited of int | `Signaled of int ];
-      stderr : string;
+      output : string;
     }
   | Io of string
 
+(* VHS styles its messages with ANSI escapes when it thinks it can. *)
+let strip_ansi s =
+  let b = Buffer.create (String.length s) in
+  let n = String.length s in
+  let rec go i =
+    if i < n then
+      if s.[i] = '\027' && i + 1 < n && s.[i + 1] = '[' then skip (i + 2)
+      else (
+        Buffer.add_char b s.[i];
+        go (i + 1))
+  and skip i =
+    if i < n then match s.[i] with '@' .. '~' -> go (i + 1) | _ -> skip (i + 1)
+  in
+  go 0;
+  Buffer.contents b
+
+let last_lines = 10
+
 let pp_error ppf = function
   | Executable_not_found exe -> Fmt.pf ppf "executable not found: %s" exe
-  | Failed { vhs; status; stderr } ->
-      let lines =
-        String.split_on_char '\n' stderr
-        |> List.map String.trim
-        |> List.filter (( <> ) "")
-      in
+  | Failed { vhs; status; output } ->
       (match status with
       | `Exited n -> Fmt.pf ppf "%s exited with code %d" vhs n
       | `Signaled n -> Fmt.pf ppf "%s was killed by signal %d" vhs n);
-      if lines <> [] then Fmt.pf ppf ": %s" (String.concat " " lines)
+      let lines =
+        String.split_on_char '\n' (strip_ansi output)
+        |> List.map String.trim
+        |> List.filter (( <> ) "")
+      in
+      let drop = List.length lines - last_lines in
+      List.iteri (fun i l -> if i >= drop then Fmt.pf ppf "@\n  %s" l) lines
   | Io msg -> Fmt.string ppf msg
 
 let io_message = function
@@ -402,21 +421,20 @@ let io_message = function
   | err -> Fmt.str "%a" Eio.Exn.pp_err err
 
 let render ?(vhs = "vhs") ~proc ~cwd t =
-  let stderr = Buffer.create 256 in
+  let output = Buffer.create 256 in
+  let sink = Eio.Flow.buffer_sink output in
   let stdin = Eio.Flow.string_source (to_string t) in
   (* Awaiting the child rather than raising on its status lets the switch
-     copy all its standard error first. *)
+     copy all its output first. *)
   match
     Eio.Switch.run @@ fun sw ->
     Eio.Process.spawn ~sw proc
       ~cwd:(cwd :> Eio.Fs.dir_ty Eio.Path.t)
-      ~stdin
-      ~stderr:(Eio.Flow.buffer_sink stderr)
-      [ vhs ]
+      ~stdin ~stdout:sink ~stderr:sink [ vhs; "-q" ]
     |> Eio.Process.await
   with
   | `Exited 0 -> Ok ()
-  | status -> Error (Failed { vhs; status; stderr = Buffer.contents stderr })
+  | status -> Error (Failed { vhs; status; output = Buffer.contents output })
   | exception Eio.Io (Eio.Process.E (Executable_not_found exe), _) ->
       Error (Executable_not_found exe)
   | exception Eio.Io (err, _) -> Error (Io (io_message err))

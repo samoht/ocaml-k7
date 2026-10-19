@@ -51,8 +51,10 @@ module Manager = struct
     Alcotest.(check bool)
       "executable selected by argv" true
       (Option.is_none executable);
-    Alcotest.(check bool) "stdout inherited" true (Option.is_none stdout);
-    let output = Option.get stderr in
+    let output = Option.get stdout in
+    Alcotest.(check bool)
+      "stdout and stderr captured together" true
+      (Option.get stderr == output);
     let body = t.start cwd args in
     let status, resolve = Eio.Promise.create () in
     Eio.Fiber.fork ~sw:t.sw (fun () ->
@@ -77,7 +79,7 @@ let run ?vhs ?(status = `Exited 3) writes t =
     manager ~sw (fun dir args ->
         Alcotest.(check (list string))
           "argv"
-          [ Option.value ~default:"vhs" vhs ]
+          [ Option.value ~default:"vhs" vhs; "-q" ]
           args;
         expect "cwd" "mock-cwd" (snd (Option.get dir));
         let run ~stdin ~output =
@@ -94,8 +96,8 @@ let run ?vhs ?(status = `Exited 3) writes t =
   Vhs.render ?vhs ~proc ~cwd t
 
 let failed expected = function
-  | Error (Vhs.Failed { stderr; status = `Exited 3; _ }) ->
-      expect "stderr" expected stderr
+  | Error (Vhs.Failed { output; status = `Exited 3; _ }) ->
+      expect "output" expected output
   | Error e -> Alcotest.failf "unexpected error: %a" Vhs.pp_error e
   | Ok () -> Alcotest.fail "expected child failure"
 
@@ -124,10 +126,30 @@ let test_success () =
 
 let test_signal () =
   match run ~status:(`Signaled 9) [ "killed" ] (tape []) with
-  | Error (Vhs.Failed { vhs = "vhs"; status = `Signaled 9; stderr = "killed" })
+  | Error (Vhs.Failed { vhs = "vhs"; status = `Signaled 9; output = "killed" })
     ->
       ()
-  | _ -> Alcotest.fail "lost signal, executable, or stderr"
+  | _ -> Alcotest.fail "lost signal, executable, or output"
+
+let test_pp_error () =
+  let output =
+    String.concat "\n"
+      (List.init 12 (fun i -> Fmt.str "\027[31mline %d\027[0m" i))
+  in
+  expect "last lines, indented"
+    "vhs exited with code 1\n\
+    \  line 2\n\
+    \  line 3\n\
+    \  line 4\n\
+    \  line 5\n\
+    \  line 6\n\
+    \  line 7\n\
+    \  line 8\n\
+    \  line 9\n\
+    \  line 10\n\
+    \  line 11"
+    (Fmt.str "%a" Vhs.pp_error
+       (Failed { vhs = "vhs"; status = `Exited 1; output = output ^ "\n\n" }))
 
 let test_spawn_errors () =
   Eio_mock.Backend.run @@ fun () ->
@@ -150,9 +172,10 @@ let suite =
     List.map
       (fun (name, fn) -> Alcotest.test_case name `Quick fn)
       [
-        ("stderr one byte at a time", test_byte_writes);
-        ("stderr split UTF-8", test_split_utf8);
+        ("output one byte at a time", test_byte_writes);
+        ("output split UTF-8", test_split_utf8);
         ("success and explicit executable", test_success);
         ("signaled child", test_signal);
+        ("error lines", test_pp_error);
         ("spawn errors", test_spawn_errors);
       ] )
