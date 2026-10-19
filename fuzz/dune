@@ -7,7 +7,10 @@
  (enabled_if
   (<> %{profile} afl))
  (action
-  (run %{exe:fuzz.exe} --budget 0.1 --seed 42)))
+  (setenv
+   VHS_CRAM_TEST_EXE
+   %{bin:vhs-cram}
+   (run %{exe:fuzz.exe} --budget 0.1 --timeout 60 --seed 42))))
 
 (rule
  (alias fuzz)

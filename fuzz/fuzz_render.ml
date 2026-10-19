@@ -116,9 +116,57 @@ let test_cancel_reaps delay =
   in
   if alive then failf "cancelled render left process %d alive" pid
 
+let test_exit_codes n =
+  with_dir @@ fun env path ->
+  let executable = path "recorder" in
+  let status = n land 255 in
+  let signaled = n land 256 <> 0 in
+  save env executable
+    ("#!/bin/sh\ncat > /dev/null\n"
+    ^ if signaled then "kill -TERM $$\n" else Fmt.str "exit %d\n" status);
+  save env (path "input.t") "  $ echo hello\n";
+  save env (path "empty.t") "prose only\n";
+  save env (path "bad.t") "  $ echo \001\n";
+  let cli =
+    Option.value ~default:"vhs-cram" (Sys.getenv_opt "VHS_CRAM_TEST_EXE")
+  in
+  let eval expected args =
+    let buffer = Buffer.create 256 in
+    let sink = Eio.Flow.buffer_sink buffer in
+    let received =
+      Eio.Switch.run @@ fun sw ->
+      let child =
+        Eio.Process.spawn ~sw ~stdout:sink ~stderr:sink
+          (Eio.Stdenv.process_mgr env)
+          (cli :: args)
+      in
+      Eio.Process.await child
+    in
+    if received <> `Exited expected then
+      failf "%s: expected %d, got %a: %s" (String.concat " " args) expected
+        Eio.Process.pp_status received (Buffer.contents buffer)
+  in
+  let flags = [ "--output"; path "demo.gif"; "--vhs"; executable ] in
+  eval
+    (if status = 0 && not signaled then 0 else 123)
+    (flags @ [ path "input.t" ]);
+  eval 123 (flags @ [ path "empty.t" ]);
+  eval 123 (flags @ [ path "bad.t" ]);
+  eval 124 (flags @ [ path "missing.t" ]);
+  eval 124 (("--setup" :: path "missing.sh" :: flags) @ [ path "input.t" ]);
+  eval 0
+    ("--print" :: "--vhs" :: path "missing-vhs"
+    :: [ "--output"; path "demo.gif"; path "input.t" ]);
+  eval 123
+    [ "--vhs"; path "missing-vhs"; "--output"; path "demo.gif"; path "input.t" ];
+  eval 123 [ "--print"; "--output"; "no-extension"; path "input.t" ];
+  eval 0 [ "--help=plain" ];
+  eval 124 [ "--unknown-adversarial-flag" ]
+
 let suite =
   ( "render",
     [
+      test_case "documented executable exit codes" [ int16 ] test_exit_codes;
       test_case "cancelled render reaps the child" [ int8 ] test_cancel_reaps;
       test_case "never publish implicitly"
         [ choose [ const "dumb"; const "xterm-256color"; const "" ] ]
