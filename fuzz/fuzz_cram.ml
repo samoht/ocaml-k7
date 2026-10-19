@@ -6,7 +6,19 @@
 open Alcobar
 open Vhs_cram
 
-let is_control c = Char.code c < 0x20 || c = '\x7f'
+(* C0, DEL and C1. *)
+let is_control u =
+  Uchar.to_int u < 0x20 || (Uchar.to_int u >= 0x7f && Uchar.to_int u <= 0x9f)
+
+let has_control s =
+  let rec go i =
+    i < String.length s
+    &&
+    let d = String.get_utf_8_uchar s i in
+    (Uchar.utf_decode_is_valid d && is_control (Uchar.utf_decode_uchar d))
+    || go (i + Uchar.utf_decode_length d)
+  in
+  go 0
 
 let printed ?(setup = []) cram =
   match Vhs.tape ~outputs:[ "x.gif" ] (Cram.actions ~setup cram) with
@@ -39,9 +51,7 @@ let typeable s =
         if Uchar.utf_decode_is_valid d then Uchar.utf_decode_uchar d
         else Uchar.rep
       in
-      if Uchar.is_char u && is_control (Uchar.to_char u) then
-        Buffer.add_char b ' '
-      else Buffer.add_utf_8_uchar b u;
+      if is_control u then Buffer.add_char b ' ' else Buffer.add_utf_8_uchar b u;
       go
         (i
         + if Uchar.utf_decode_is_valid d then Uchar.utf_decode_length d else 1))
@@ -61,7 +71,7 @@ let test_parse src =
     |> List.filter (String.starts_with ~prefix:"  $ ")
     |> List.map (fun l -> String.sub l 4 (String.length l - 4))
   in
-  let bad l = (not (String.is_valid_utf_8 l)) || String.exists is_control l in
+  let bad l = (not (String.is_valid_utf_8 l)) || has_control l in
   match Cram.parse src with
   | Ok cram ->
       if List.exists bad command_lines then failf "accepted %S" src;

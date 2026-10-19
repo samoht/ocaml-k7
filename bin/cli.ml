@@ -5,14 +5,14 @@
 
 let ( let* ) = Result.bind
 
-(* bash would complete on a typed tab and continue the line on a newline. *)
-let untypeable path = String.exists (fun c -> c < ' ' || c = '\x7f') path
-
 let tape ~setup ~output ~name src =
   let* cram = Cram.parse src |> Result.map_error (Fmt.str "%s: %s" name) in
-  match (Cram.is_empty cram, List.find_opt untypeable setup) with
+  match
+    (Cram.is_empty cram, List.find_opt (Fun.negate Cram.is_typeable) setup)
+  with
   | true, _ -> Fmt.error "%s: no command" name
-  | false, Some path -> Fmt.error "setup %S: holds a control character" path
+  | false, Some path ->
+      Fmt.error "setup %S: holds invalid UTF-8 or a control character" path
   | false, None ->
       Vhs.tape ~settings:[ Shell Bash ] ~outputs:[ output ]
         (Cram.actions ~setup cram)

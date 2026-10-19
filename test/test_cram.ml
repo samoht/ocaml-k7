@@ -62,6 +62,9 @@ let test_parse_errors () =
     "prose\n  $ echo \x01\n";
   (* A tab would reach bash's completion, not the command. *)
   error "tab" {|line 1: "a\tb" holds a control character|} "  $ a\tb\n";
+  (* A terminal reads U+009B as CSI. *)
+  error "C1" {|line 1: "a\194\155b" holds a control character|}
+    "  $ a\xc2\x9bb\n";
   error "continuation" {|line 2: "\255" is not valid UTF-8|} "  $ a\n  > \xff\n";
   Alcotest.(check bool)
     "empty" true

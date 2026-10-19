@@ -50,7 +50,7 @@ Sleep 1000ms
       match tape ~setup:[ path ] "  $ true\n" with
       | Error _ -> ()
       | Ok s -> Alcotest.failf "accepted %S" s)
-    [ "bad\000setup"; "a\tb.sh"; "a\nb.sh" ]
+    [ "bad\000setup"; "a\tb.sh"; "a\nb.sh"; "a\xc2\x85b.sh"; "\xff.sh" ]
 
 (* Real processes: [run] owns the whole Eio environment. A shell script
    stands in for vhs. *)

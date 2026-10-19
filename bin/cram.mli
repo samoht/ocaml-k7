@@ -17,8 +17,13 @@ type t
 
 val parse : string -> (t, string) result
 (** [parse src] is the cram test of source [src], or [Error msg] if a command
-    line holds a control character or invalid UTF-8, which a terminal cannot
-    type as such. Lines may end with ["\r\n"]. [parse] reads [src] once. *)
+    line is not {!is_typeable}. Lines may end with ["\r\n"]. [parse] reads [src]
+    once. *)
+
+val is_typeable : string -> bool
+(** [is_typeable s] is [true] iff [s] is valid UTF-8 without a control
+    character: a C0 control, DEL or a C1 control, which a terminal reads as an
+    escape sequence. *)
 
 val is_empty : t -> bool
 (** [is_empty t] is [true] iff [t] has no command. *)

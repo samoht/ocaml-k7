@@ -14,7 +14,7 @@ val tape :
 (** [tape ~setup ~output ~name src] is the tape that records the cram test of
     source [src] in a bash terminal, after the [setup] scripts, to [output]. It
     is [Error msg] if {!Cram.parse} or {!Vhs.tape} fail, if [src] has no
-    command, or if a [setup] path holds a control character; [msg] starts with
+    command, or if a [setup] path is not {!Cram.is_typeable}; [msg] starts with
     [name] when it is about [src]. *)
 
 val run :

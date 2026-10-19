@@ -5,10 +5,23 @@
 
 type t = string list list
 
+(* C1 controls are U+0080 to U+009F, [\xc2\x80] to [\xc2\x9f] in UTF-8. *)
+let is_typeable s =
+  let n = String.length s in
+  let rec go i =
+    i >= n
+    ||
+    match s.[i] with
+    | '\xc2' when i + 1 < n && Char.code s.[i + 1] land 0xe0 = 0x80 -> false
+    | c when c < ' ' || c = '\x7f' -> false
+    | _ -> go (i + 1)
+  in
+  String.is_valid_utf_8 s && go 0
+
 let check_line n line =
   if not (String.is_valid_utf_8 line) then
     Fmt.error "line %d: %S is not valid UTF-8" n line
-  else if not (String.for_all (fun c -> c >= ' ' && c <> '\x7f') line) then
+  else if not (is_typeable line) then
     Fmt.error "line %d: %S holds a control character" n line
   else Ok line
 
