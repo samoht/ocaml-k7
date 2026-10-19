@@ -1,0 +1,6 @@
+; Not installed and not part of runtest: run with
+; dune exec bench/bench.exe --profile=release
+
+(executable
+ (name bench)
+ (libraries vhs fmt unix))
