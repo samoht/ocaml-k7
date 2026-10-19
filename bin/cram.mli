@@ -32,7 +32,8 @@ val actions : setup:string list -> t -> Vhs.action list
 (** [actions ~setup t] sources the shell scripts [setup] in order, sets [PS1] to
     the VHS prompt followed by a zero-width space and clears the screen, all
     {!Vhs.hidden}; then it types each command of [t], waits until the line under
-    the cursor ends with that prompt, and pauses one second. The space is
-    invisible, so the recording shows the VHS prompt, but it tells the prompt
-    from a line the command prints that ends with [>]: each command's output is
-    complete before the next command is typed. *)
+    the cursor ends with that prompt, and pauses one second. The space does not
+    show in a GIF or a video, so the recording shows the VHS prompt, but it
+    tells the prompt from a line the command prints that ends with [>]: each
+    command's output is complete before the next command is typed. A text output
+    of VHS holds the space after each prompt. *)

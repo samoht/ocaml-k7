@@ -99,9 +99,11 @@ let man =
        ignored; other settings are the VHS defaults.";
     `P
       "Before the first command, and after the setup scripts, $(tname) sets \
-       $(b,PS1) to the VHS prompt followed by an invisible zero-width space, \
-       which tells the prompt from output that ends with $(b,>). A command \
-       that changes $(b,PS1) makes the next wait time out.";
+       $(b,PS1) to the VHS prompt followed by a zero-width space, U+200B, \
+       which tells the prompt from output that ends with $(b,>). The space \
+       does not show in a GIF or a video, but the text outputs ($(b,.txt), \
+       $(b,.ascii) and $(b,.test)) hold it after each prompt. A command that \
+       changes $(b,PS1) makes the next wait time out.";
     `S Manpage.s_examples;
     `Pre
       "$(cmd) --output demo.gif demo.t\n\

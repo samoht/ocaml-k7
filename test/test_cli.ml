@@ -231,7 +231,7 @@ let test_command () =
   List.iter
     (fun s ->
       if not (contains ~sub:s man) then Alcotest.failf "manual lacks %S" s)
-    [ "--print"; "123"; "PS1" ]
+    [ "--print"; "123"; "PS1"; "U+200B" ]
 
 (* The vhs executable of the tests that run it, from [VHS_ORACLE]: the
    oracle alias sets it, runtest does not. *)
