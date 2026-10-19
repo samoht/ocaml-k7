@@ -191,6 +191,13 @@ let test_late_setting () =
   rejects "late Width must raise Invalid_argument" (fun () ->
       str [ Vhs.type' "x"; Vhs.set (Width 320) ])
 
+let test_type_invalid_utf8 () =
+  (* [vhs validate] accepts Type "\xff", but typing it through VHS into
+     printf '%s' '\xff' writes EF BF BD, rather than FF, to a file.
+     Reject text which the terminal input path cannot preserve. *)
+  rejects "invalid UTF-8 must raise Invalid_argument" (fun () ->
+      Vhs.type' "\xff")
+
 let suite =
   ( "vhs",
     [
@@ -206,6 +213,8 @@ let suite =
       Alcotest.test_case "vhs rules" `Quick test_vhs_rules;
       Alcotest.test_case "wait slash" `Quick test_wait_slash;
       Alcotest.test_case "keys and waits" `Quick test_keys_and_waits;
+      Alcotest.test_case "invalid UTF-8 Type rejected" `Quick
+        test_type_invalid_utf8;
       Alcotest.test_case "late setting rejected" `Quick test_late_setting;
       Alcotest.test_case "overflowing wait rejected" `Quick
         test_overflowing_wait;
