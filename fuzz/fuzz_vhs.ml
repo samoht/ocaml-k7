@@ -192,20 +192,22 @@ let test_sizes w h p =
            ])
   | None -> check (not ok)
 
-(* An output is accepted iff it has an extension in its last segment or a
-   trailing slash, and holds no control character nor all three quotes. *)
-let test_output path =
+(* An output is accepted iff it ends with a slash or one of the documented
+   extensions in its last segment, does not start with a dash, and holds no
+   control character nor all three quotes. *)
+let test_output path suffix =
+  let path = path ^ suffix in
   let ext =
-    match (String.rindex_opt path '.', String.rindex_opt path '/') with
-    | Some d, Some s -> d > s
-    | Some _, None -> true
-    | None, _ -> false
+    List.exists
+      (fun e -> String.ends_with ~suffix:e path)
+      [ ".gif"; ".mp4"; ".webm"; ".txt"; ".ascii"; ".test"; ".png" ]
   in
   let quotes =
     List.for_all (fun q -> String.contains path q) [ '"'; '\''; '`' ]
   in
   let ok =
     (ext || String.ends_with ~suffix:"/" path)
+    && (not (String.starts_with ~prefix:"-" path))
     && (not (String.exists is_control path))
     && not quotes
   in
@@ -292,7 +294,13 @@ let suite =
         test_raw;
       test_case "hidden" [ list bytes; int ] test_hidden;
       test_case "sizes" [ int16; int16; int8 ] test_sizes;
-      test_case "outputs" [ bytes ] test_output;
+      test_case "outputs"
+        [
+          bytes;
+          choose
+            [ const ""; const ".gif"; const ".png"; const "/"; const ".gfi" ];
+        ]
+        test_output;
       test_case "pp_error" [ bytes; int ] test_pp_error;
       test_case "keys" [ char ] test_keys;
       test_case "settings" [ int; bytes ] test_settings;

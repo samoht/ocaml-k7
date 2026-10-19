@@ -135,11 +135,12 @@ val tape :
   (t, string) result
 (** [tape ~settings ~outputs actions] is the tape that applies [settings]
     (defaults to [[]]), runs [actions] and writes the recording to each path of
-    [outputs], in the format of its extension: [.gif], [.mp4], [.webm], [.txt]
-    or [.ascii] for the screen as text, and PNG frames for a directory, written
-    with a trailing slash. It is [Error msg], with [msg] naming the first
-    offending item, if:
-    - [outputs] is empty, or one has neither an extension nor a trailing slash;
+    [outputs], in the format of its extension: [.gif], [.mp4], [.webm], [.txt],
+    [.ascii] or [.test] for the screen as text, and a directory of PNG frames
+    for [.png] or a trailing slash. It is [Error msg], with [msg] naming the
+    first offending item, if:
+    - [outputs] is empty, or one has another extension, none and no trailing
+      slash, or starts with [-], which ffmpeg reads as an option;
     - a string holds a control character (the tabs and newlines of {!type'}
       aside), all three quote characters (['"'], ['\''] and ['`']) where VHS
       quotes it, or, in typed text, invalid UTF-8;

@@ -180,17 +180,28 @@ let rec check_actions ~started = function
       in
       check_actions ~started rest
 
-(* Go's [filepath.Ext] is the suffix from the last dot of the last segment. *)
-let has_extension path =
-  match (String.rindex_opt path '.', String.rindex_opt path '/') with
-  | Some dot, Some slash -> dot > slash
-  | Some _, None -> true
-  | None, _ -> false
+(* Go's [filepath.Ext]: the suffix from the last dot of the last segment. *)
+let extension path =
+  match String.rindex_opt path '.' with
+  | Some dot when not (String.contains_from path dot '/') ->
+      Some (String.sub path dot (String.length path - dot))
+  | _ -> None
+
+(* VHS hands an unknown extension to ffmpeg as a GIF, and ffmpeg then picks
+   the format from the extension and fails. *)
+let extensions = [ ".gif"; ".mp4"; ".webm"; ".txt"; ".ascii"; ".test"; ".png" ]
 
 let check_output path =
   let* () = check_quotable "Output" path in
-  if has_extension path || String.ends_with ~suffix:"/" path then Ok ()
-  else err "Output %S: neither an extension nor a trailing slash" path
+  if String.starts_with ~prefix:"-" path then
+    err "Output %S: starts with -, which ffmpeg reads as an option" path
+  else if String.ends_with ~suffix:"/" path then Ok ()
+  else
+    match extension path with
+    | None -> err "Output %S: neither an extension nor a trailing slash" path
+    | Some e when List.mem e extensions -> Ok ()
+    | Some _ ->
+        err "Output %S: not .gif, .mp4, .webm, .txt, .ascii, .test or .png" path
 
 (* VHS fonts are set by browser code that quotes the list with [']. *)
 let check_setting = function

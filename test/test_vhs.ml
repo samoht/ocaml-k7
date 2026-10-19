@@ -185,7 +185,20 @@ let test_outputs () =
     ~outputs:[ "demo" ] [];
   rejects "dotted directory" ~outputs:[ "a.b/c" ] [];
   expect "several" "Output \"frames/\"\nOutput \"x.txt\"\n"
-    (str ~outputs:[ "frames/"; "x.txt" ] [])
+    (str ~outputs:[ "frames/"; "x.txt" ] []);
+  List.iter
+    (fun path -> ignore (str ~outputs:[ path ] []))
+    [ "a.gif"; "a.mp4"; "a.webm"; "a.txt"; "a.ascii"; "a.test"; "a.png" ];
+  (* VHS hands any other extension to ffmpeg as a GIF, and ffmpeg picks the
+     format from the extension. *)
+  error "unknown extension"
+    {|Output "demo.gfi": not .gif, .mp4, .webm, .txt, .ascii, .test or .png|}
+    ~outputs:[ "demo.gfi" ] [];
+  (* ffmpeg reads its last argument, the output, as an option if it starts
+     with a dash. *)
+  error "dash"
+    {|Output "-y.gif": starts with -, which ffmpeg reads as an option|}
+    ~outputs:[ "-y.gif" ] []
 
 let test_keys () =
   let open Vhs in
