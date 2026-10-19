@@ -70,6 +70,7 @@ let test_total s t n =
         sleep (Ms n);
         wait ~timeout:(Ms n) (Screen s);
         wait (Screen t);
+        wait (Line s);
         hidden [ raw s; type' t ];
         raw t;
       ]
@@ -281,6 +282,7 @@ let test_validates text n =
     [
       ([], [ type' text ]);
       ([], [ wait (Screen text) ]);
+      ([], [ wait ~timeout:(Ms (1 + (n land 1023))) (Line text) ]);
       ([], [ raw text ]);
       ([], [ Fmt.kstr raw "Sleep -%dms" (1 + (n land 255)) ]);
       ([ Theme text ], []);

@@ -292,14 +292,21 @@ let test_keys () =
 let test_waits () =
   let open Vhs in
   expect "waits"
-    "Wait+Screen /ready/\nWait\nWait@500ms\nWait+Screen@2000ms /ok$/\n"
+    "Wait+Screen /ready/\n\
+     Wait\n\
+     Wait@500ms\n\
+     Wait+Screen@2000ms /ok$/\n\
+     Wait+Line@10ms /a\\x2fb$/\n"
     (body
        [
          wait (Screen "ready");
          wait Prompt;
          wait ~timeout:(Ms 500) Prompt;
          wait ~timeout:(Ms 2000) (Screen "ok$");
+         wait ~timeout:(Ms 10) (Line "a/b$");
        ]);
+  error "invalid line" {|Wait+Line "(": missing closing ): `(`|}
+    [ wait (Line "(") ];
   error "invalid" {|Wait+Screen "[": missing closing ]: `[`|}
     [ wait (Screen "[") ];
   rejects "line break" [ wait (Screen "a\nb") ]

@@ -60,6 +60,9 @@ type wait =
           command. It never holds once something changes the prompt, such as a
           sourced script that sets [PS1], and it holds early when a command
           prints a line ending with [>] and waits. *)
+  | Line of string
+      (** The line under the cursor, without its trailing spaces, matches the
+          regular expression, as for {!Screen}. *)
   | Screen of string
       (** The screen, its lines joined by newlines, matches the regular
           expression, in the {{:https://github.com/google/re2/wiki/Syntax}RE2}
@@ -148,7 +151,7 @@ val tape :
       aside), all three quote characters (['"'], ['\''] and ['`']) where VHS
       quotes it, or, in typed text, invalid UTF-8;
     - a duration is out of range, or a wait timeout is [Ms 0];
-    - a {!Screen} pattern is not valid Go regular expression syntax;
+    - a {!Line} or {!Screen} pattern is not valid Go regular expression syntax;
     - a key or a setting breaks the condition its documentation states;
     - a {!raw} line is not exactly one command VHS's parser accepts, ends inside
       a string, a regular expression or a JSON value, or lacks the argument of

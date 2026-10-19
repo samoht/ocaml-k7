@@ -27,7 +27,7 @@ type key =
   | Ctrl of char
   | Alt of char
 
-type wait = Prompt | Screen of string
+type wait = Prompt | Line of string | Screen of string
 
 type action =
   | Type of string
@@ -123,6 +123,11 @@ let check_key = function
   | Alt c -> check_chord "Alt" "[]." c
   | _ -> Ok ()
 
+let wait_name = function
+  | Prompt -> "Wait"
+  | Line _ -> "Wait+Line"
+  | Screen _ -> "Wait+Screen"
+
 let check_wait timeout w =
   let* () =
     match timeout with
@@ -132,11 +137,11 @@ let check_wait timeout w =
   in
   match w with
   | Prompt -> Ok ()
-  | Screen re when String.exists is_control re ->
-      err "Wait+Screen %S: holds a control character" re
-  | Screen re ->
+  | (Line re | Screen re) when String.exists is_control re ->
+      err "%s %S: holds a control character" (wait_name w) re
+  | Line re | Screen re ->
       Regexp_syntax.check re
-      |> Result.map_error (Fmt.str "Wait+Screen %S: %s" re)
+      |> Result.map_error (Fmt.str "%s %S: %s" (wait_name w) re)
 
 (* VHS hands an unknown extension to ffmpeg as a GIF, and ffmpeg then picks
    the format from the extension and fails. *)
@@ -354,8 +359,7 @@ let rec add_action ~hidden b = function
       add_ms b n;
       Buffer.add_char b '\n'
   | Wait (timeout, w) ->
-      Buffer.add_string b "Wait";
-      (match w with Prompt -> () | Screen _ -> Buffer.add_string b "+Screen");
+      Buffer.add_string b (wait_name w);
       Option.iter
         (fun (Ms n) ->
           Buffer.add_char b '@';
@@ -363,7 +367,7 @@ let rec add_action ~hidden b = function
         timeout;
       (match w with
       | Prompt -> ()
-      | Screen re ->
+      | Line re | Screen re ->
           Buffer.add_char b ' ';
           Regexp_syntax.write b re);
       Buffer.add_char b '\n'
