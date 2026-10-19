@@ -411,9 +411,18 @@ let test_cram_setup_total setup =
   | Error msg -> fail msg
   | Ok cram -> ignore (str (Vhs.Cram.items ~setup cram))
 
+(* The pause argument likewise has no documented exception. *)
+let test_cram_pause_total n =
+  match Vhs.Cram.parse "  $ true\n" with
+  | Error msg -> fail msg
+  | Ok cram -> ignore (str (Vhs.Cram.items ~pause:(Ms n) cram))
+
 let suite =
   ( "vhs",
     [
+      test_case "cram items arbitrary pause does not raise"
+        [ choose [ int; const (-1) ] ]
+        test_cram_pause_total;
       test_case "cram items arbitrary setup does not raise"
         [ choose [ list bytes; const [ "\000" ] ] ]
         test_cram_setup_total;
