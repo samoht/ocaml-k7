@@ -108,7 +108,18 @@ let test_raw () =
   let open Vhs in
   expect "kept" "Set Margin 20\nEnv A \"b\"\n"
     (body [ raw "Set Margin 20"; raw {|Env A "b"|} ]);
-  rejects "control" [ raw "a\tb" ]
+  expect "typing speed after actions" "Enter\nSet TypingSpeed 10ms\nEnter\n"
+    (body [ key Enter; raw "Set TypingSpeed 10ms"; key Enter ]);
+  expect "comment after actions" "Enter\n# done\n"
+    (body [ key Enter; raw "# done" ]);
+  error "late setting"
+    {|raw line "Set Width 320": VHS ignores it after the first action|}
+    [ type' "x"; raw "Set Width 320" ];
+  rejects "late require" [ sleep (Ms 1); raw "Require dune" ];
+  rejects "setting after env" [ raw "Env A b"; raw "Set Margin 2" ];
+  rejects "setting in hidden" [ hidden [ raw "Set Margin 2" ] ];
+  error "hide" {|raw line "Hide": use hidden instead|} [ raw "Hide" ];
+  rejects "show" [ raw "  Show" ]
 
 let test_hidden () =
   let open Vhs in

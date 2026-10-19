@@ -121,7 +121,7 @@ type setting =
   | Framerate of int  (** The frame rate (defaults to [50]). *)
 
 type t
-(** The type for checked tapes. *)
+(** The type for tapes VHS reads without error and without ignoring a line. *)
 
 val tape :
   ?settings:setting list ->
@@ -140,7 +140,10 @@ val tape :
       quotes it, or, in typed text, invalid UTF-8;
     - a duration is out of range, or a wait timeout is [Ms 0];
     - a {!Screen} pattern is not valid Go regular expression syntax;
-    - a key or a setting breaks the condition its documentation states. *)
+    - a key or a setting breaks the condition its documentation states;
+    - a {!raw} line is [Hide] or [Show] (use {!hidden}), or is [Require] or
+      [Set], other than [Set TypingSpeed], after an action, where VHS ignores
+      it. *)
 
 val pp : t Fmt.t
 (** [pp] formats a tape in the [.tape] syntax: the [Output] lines, then the

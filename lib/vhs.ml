@@ -135,15 +135,47 @@ let check_wait timeout w =
       Regexp_syntax.check re
       |> Result.map_error (Fmt.str "Wait+Screen %S: %s" re)
 
-let rec check_action = function
-  | Type s -> check_type s
-  | Key k -> check_key k
-  | Sleep (Ms n) -> check_ms "Sleep " n
-  | Wait (timeout, w) -> check_wait timeout w
-  | Hidden actions -> iter_result check_action actions
-  | Raw line when String.exists is_control line ->
-      err "raw line %S: holds a control character" line
-  | Raw _ -> Ok ()
+let first_word line =
+  String.split_on_char ' ' (String.trim line) |> List.filter (( <> ) "")
+
+(* VHS applies [Set] and [Require] only before the first other command. *)
+let check_raw ~started line =
+  if String.exists is_control line then
+    err "raw line %S: holds a control character" line
+  else
+    match first_word line with
+    | ("Hide" | "Show") :: _ -> err "raw line %S: use hidden instead" line
+    | ("Set" :: "TypingSpeed" :: _ | "Output" :: _ | []) as _neutral ->
+        Ok started
+    | w :: _ when w.[0] = '#' -> Ok started
+    | ("Set" | "Require") :: _ when started ->
+        err "raw line %S: VHS ignores it after the first action" line
+    | ("Set" | "Require") :: _ -> Ok false
+    | _ -> Ok true
+
+(* [check_actions ~started actions] is whether an action that ends the
+   settings has run once [actions] have. *)
+let rec check_actions ~started = function
+  | [] -> Ok started
+  | a :: rest ->
+      let* started =
+        match a with
+        | Type s ->
+            let* () = check_type s in
+            Ok true
+        | Key k ->
+            let* () = check_key k in
+            Ok true
+        | Sleep (Ms n) ->
+            let* () = check_ms "Sleep " n in
+            Ok true
+        | Wait (timeout, w) ->
+            let* () = check_wait timeout w in
+            Ok true
+        | Hidden actions -> check_actions ~started:true actions
+        | Raw line -> check_raw ~started line
+      in
+      check_actions ~started rest
 
 (* Go's [filepath.Ext] is the suffix from the last dot of the last segment. *)
 let has_extension path =
@@ -174,7 +206,7 @@ let tape ?(settings = []) ~outputs actions =
     if outputs = [] then err "no output" else iter_result check_output outputs
   in
   let* () = iter_result check_setting settings in
-  let* () = iter_result check_action actions in
+  let* _started = check_actions ~started:false actions in
   Ok { outputs; settings; actions }
 
 (* Printing *)
