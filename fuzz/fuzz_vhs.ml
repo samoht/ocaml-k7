@@ -215,9 +215,214 @@ let test_type_utf8 text =
         failf "accepted invalid UTF-8 %S; VHS terminal input replaces its bytes"
           text
 
+(* Item constructors document Invalid_argument; printers and parsers do not. *)
+let accepted build law =
+  match build () with
+  | exception Invalid_argument _ -> ()
+  | item -> law (str [ item ])
+
+let quoted_payload prefix suffix tape =
+  check (String.starts_with ~prefix tape);
+  check (String.ends_with ~suffix tape);
+  let first = String.length prefix in
+  let last = String.length tape - String.length suffix in
+  check (last >= first + 2);
+  let q = tape.[first] in
+  check (List.mem q [ '"'; '\''; '`' ]);
+  check (tape.[last - 1] = q);
+  String.sub tape (first + 1) (last - first - 2)
+
+let test_builder_payloads s t =
+  let open Vhs in
+  accepted
+    (fun () -> comment s)
+    (fun tape -> check (tape = if s = "" then "#\n" else "# " ^ s ^ "\n"));
+  accepted (fun () -> raw s) (fun tape -> check (tape = s ^ "\n"));
+  List.iter
+    (fun (prefix, build) ->
+      accepted build (fun tape -> check (quoted_payload prefix "\n" tape = s)))
+    [
+      ("Require ", fun () -> require s);
+      ("Output ", fun () -> output s);
+      ("Screenshot ", fun () -> screenshot s);
+      ("Source ", fun () -> source s);
+      ("Set Shell ", fun () -> set (Shell s));
+      ("Set FontFamily ", fun () -> set (Font_family s));
+      ("Set Theme ", fun () -> set (Theme s));
+    ];
+  accepted
+    (fun () -> env s t)
+    (fun tape -> check (quoted_payload ("Env " ^ s ^ " ") "\n" tape = t));
+  check (str [ blank; hide; show; wait Prompt ] = "\nHide\nShow\nWait\n")
+
+let test_numeric_builders n =
+  let open Vhs in
+  List.iter
+    (fun (prefix, build) ->
+      if n < 0 then
+        match build () with
+        | exception Invalid_argument _ -> ()
+        | _ -> failf "%s accepted negative %d" prefix n
+      else check (str [ build () ] = prefix ^ string_of_int n ^ "\n"))
+    [
+      ("Set FontSize ", fun () -> set (Font_size n));
+      ("Set Width ", fun () -> set (Width n));
+      ("Set Height ", fun () -> set (Height n));
+      ("Set Padding ", fun () -> set (Padding n));
+      ("Set Framerate ", fun () -> set (Framerate n));
+    ];
+  let duration prefix build =
+    accepted build (fun tape ->
+        check (n >= 0);
+        check (tape = prefix ^ string_of_int n ^ "ms\n"))
+  in
+  duration "Sleep " (fun () -> sleep (Ms n));
+  duration "Set TypingSpeed " (fun () -> set (Typing_speed (Ms n)));
+  duration "Wait@" (fun () -> wait ~timeout:(Ms n) Prompt)
+
+let test_key_names c =
+  let open Vhs in
+  List.iter
+    (fun (k, name) -> check (str [ key k ] = name ^ "\n"))
+    [
+      (Enter, "Enter");
+      (Tab, "Tab");
+      (Space, "Space");
+      (Backspace, "Backspace");
+      (Delete, "Delete");
+      (Insert, "Insert");
+      (Escape, "Escape");
+      (Up, "Up");
+      (Down, "Down");
+      (Left, "Left");
+      (Right, "Right");
+      (Page_up, "PageUp");
+      (Page_down, "PageDown");
+      (Scroll_up, "ScrollUp");
+      (Scroll_down, "ScrollDown");
+    ];
+  List.iter
+    (fun (name, key) ->
+      accepted
+        (fun () -> Vhs.key key)
+        (fun tape -> check (tape = name ^ "+" ^ String.make 1 c ^ "\n")))
+    [ ("Ctrl", Ctrl c); ("Alt", Alt c) ]
+
+let test_pp_composition texts =
+  let items =
+    List.filter_map
+      (fun s ->
+        match Vhs.type' s with
+        | exception Invalid_argument _ -> None
+        | item -> Some item)
+      texts
+  in
+  check (str [] = "");
+  check
+    (str items = String.concat "" (List.map (fun item -> str [ item ]) items))
+
+let test_pp_error s t n =
+  List.iter
+    (fun e -> ignore (Fmt.str "%a" Vhs.pp_error e))
+    Vhs.
+      [
+        Executable_not_found s;
+        Io s;
+        Failed { vhs = s; status = `Exited n; stderr = t };
+        Failed { vhs = s; status = `Signaled n; stderr = t };
+      ];
+  check (Fmt.str "%a" Vhs.pp_error (Vhs.Io s) = s)
+
+let test_cram_eol commands =
+  let commands = List.map command_text commands in
+  let src eol = String.concat eol (List.map (fun s -> "  $ " ^ s) commands) in
+  let convert s =
+    match Vhs.Cram.parse s with
+    | Error msg -> fail msg
+    | Ok cram -> str (Vhs.Cram.items cram)
+  in
+  let lf = convert (src "\n") in
+  check (lf = convert (src "\r\n"));
+  check (lf = convert (src "\n" ^ "\n"));
+  check (submitted_commands lf = commands)
+
+let test_cram_pause src n =
+  match Vhs.Cram.parse src with
+  | Error _ -> ()
+  | Ok cram ->
+      let default = str (Vhs.Cram.items cram) in
+      check (default = str (Vhs.Cram.items ~setup:[] ~pause:(Ms 1000) cram));
+      if n >= 0 then (
+        let tape = str (Vhs.Cram.items ~pause:(Ms n) cram) in
+        check (submitted_commands tape = submitted_commands default);
+        let sleeps =
+          String.split_on_char '\n' tape
+          |> List.filter (String.starts_with ~prefix:"Sleep ")
+        in
+        List.iter
+          (fun line -> check (line = "Sleep " ^ string_of_int n ^ "ms"))
+          sleeps)
+
+let test_wait_agreement re n =
+  let build w =
+    match Vhs.wait ~timeout:(Ms n) w with
+    | exception Invalid_argument _ -> None
+    | item -> Some (str [ item ])
+  in
+  match (build (Line re), build (Screen re)) with
+  | None, None -> ()
+  | Some line, Some screen ->
+      check (String.starts_with ~prefix:"Wait+Line" line);
+      check (String.starts_with ~prefix:"Wait+Screen" screen);
+      check
+        (String.sub line 9 (String.length line - 9)
+        = String.sub screen 11 (String.length screen - 11))
+  | _ -> fail "Line and Screen disagree on accepted regexps or timeouts"
+
+let test_cram_setup scripts text =
+  let scripts = List.map command_text scripts in
+  let command = command_text text in
+  let cram =
+    match Vhs.Cram.parse ("  $ " ^ command) with
+    | Ok cram -> cram
+    | Error msg -> fail msg
+  in
+  let tape = str (Vhs.Cram.items ~setup:scripts cram) in
+  let shell_quote s =
+    "'" ^ String.concat {|'\''|} (String.split_on_char '\'' s) ^ "'"
+  in
+  let expected =
+    match scripts with
+    | [] -> [ command ]
+    | _ ->
+        List.map (fun s -> "source " ^ shell_quote s) scripts
+        @ [ "clear"; command ]
+  in
+  check (submitted_commands tape = expected);
+  if scripts <> [] then (
+    check (String.starts_with ~prefix:"Hide\n" tape);
+    check
+      (List.length (String.split_on_char '\n' tape |> List.filter (( = ) "Show"))
+      = 1))
+
 let suite =
   ( "vhs",
     [
+      test_case "wait Line and Screen agree" [ bytes; int ] test_wait_agreement;
+      test_case "cram setup preserves script order"
+        [ list bytes; bytes ]
+        test_cram_setup;
+      test_case "builder payloads roundtrip" [ bytes; bytes ]
+        test_builder_payloads;
+      test_case "numeric settings preserve nonnegative values" [ int ]
+        test_numeric_builders;
+      test_case "keys preserve their names" [ char ] test_key_names;
+      test_case "pp composes item lists" [ list bytes ] test_pp_composition;
+      test_case "pp_error arbitrary variants" [ bytes; bytes; int ]
+        test_pp_error;
+      test_case "cram agrees across line endings" [ list bytes ] test_cram_eol;
+      test_case "cram pause preserves commands and defaults" [ bytes; int ]
+        test_cram_pause;
       test_case "parse arbitrary bytes" [ bytes ] test_parse_no_exception;
       test_case "builders only raise Invalid_argument" [ bytes; bytes; int ]
         test_builders_no_exception;
