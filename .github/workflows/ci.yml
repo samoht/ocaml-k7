@@ -45,8 +45,8 @@ jobs:
       - run: opam exec -- dune build
       - run: opam exec -- dune test
 
-  lint:
-    name: Lint
+  lint-fmt:
+    name: Format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -56,6 +56,20 @@ jobs:
           ocaml-compiler: '5.4'
 
       - uses: ocaml/setup-ocaml/lint-fmt@v3
+
+  # merlint is not on opam yet and comes from a private overlay, so this job
+  # reports without blocking until merlint is released.
+  merlint:
+    name: Lint (merlint)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: '5.4'
+
       - run: opam repo add samoht https://tangled.org/gazagnaire.org/opam-overlay.git
       - run: opam install . --deps-only --with-test
       - run: opam install merlint
