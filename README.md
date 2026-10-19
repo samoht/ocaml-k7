@@ -82,8 +82,8 @@ let make_gif env =
 A cram test is a `.t` file that dune runs: each line starting with `  $ ` is
 a shell command, and the lines below it are the output it must print.
 `Vhs.Cram` turns one into a tape. Each command is typed, and the recording
-waits until the last line of its expected output is on screen before moving
-on, so the GIF shows the output the test checks:
+waits for the shell prompt to come back before moving on, so the GIF shows
+the output the command prints:
 
 ```ocaml
 # let test = Vhs.Cram.parse "  $ echo hello\n  hello\n" in
@@ -91,7 +91,7 @@ on, so the GIF shows the output the test checks:
 Output "hello.gif"
 Type "echo hello"
 Enter
-Wait+Screen /hello/
+Wait
 Sleep 3s
 - : unit = ()
 ```

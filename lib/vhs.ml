@@ -321,31 +321,6 @@ module Cram = struct
     flush ();
     List.rev !steps
 
-  let regexp_meta = function
-    | '\\' | '.' | '+' | '*' | '?' | '(' | ')' | '[' | ']' | '{' | '}' | '^'
-    | '$' | '|' ->
-        true
-    | _ -> false
-
-  let escape_regexp s =
-    let b = Buffer.create (String.length s + 8) in
-    String.iter
-      (fun c ->
-        if regexp_meta c then Buffer.add_char b '\\';
-        Buffer.add_char b c)
-      s;
-    Buffer.contents b
-
-  (* The last non-empty output line is the one nearest the returned prompt, so
-     it is the safest "everything has rendered" marker to wait on. *)
-  let wait_pattern output =
-    let nonempty =
-      List.filter (fun l -> not (String.equal (String.trim l) "")) output
-    in
-    match List.rev nonempty with
-    | last :: _ -> Some (escape_regexp (String.trim last))
-    | [] -> None
-
   (* Source the setup scripts, then clear, all hidden: the [clear] must come
      after the [source] lines so their echoes are wiped from the scrollback
      before [Show] resumes capture, otherwise they leak into the recording. *)
@@ -360,10 +335,7 @@ module Cram = struct
 
   let step_items ~pause step =
     List.concat_map (fun line -> [ type' line; enter () ]) step.command
-    @ (match wait_pattern step.output with
-      | Some pat -> [ wait (Screen pat) ]
-      | None -> [])
-    @ [ sleep pause ]
+    @ [ wait Prompt; sleep pause ]
 
   let to_tape ?(settings = []) ?(setup_scripts = []) ?(pause = S 1.)
       ?(final_pause = S 3.) ~output (steps : t) =

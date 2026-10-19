@@ -172,9 +172,9 @@ type tape := t
 
 (** Cram tests recorded as tapes.
 
-    The [$ ] command lines become keystrokes and the expected-output lines
-    become the waits that keep the recording in step with the checked output.
-    Setup scripts are sourced, hidden, before the first command. *)
+    The [$ ] command lines become keystrokes, each followed by a wait for the
+    prompt so the recording shows the command's output. Setup scripts are
+    sourced, hidden, before the first command. *)
 module Cram : sig
   type t
   (** The type for cram tests: a sequence of commands, each with its expected
@@ -197,12 +197,12 @@ module Cram : sig
   (** [to_tape ~output t] records the cram test [t] as a tape writing its GIF
       (or other format chosen by extension) to [output].
 
-      Each command is typed and submitted; when it has expected output, the tape
-      waits for the last non-empty output line before pausing, with regexp
-      metacharacters escaped. [settings] become {!val-set} lines and
-      [setup_scripts] are sourced in order inside a hidden clearing block.
-      [pause] is the reading pause after each command (defaults to [S 1.]) and
-      [final_pause] holds the last screen before exit (defaults to [S 3.]). *)
+      Each command is typed and submitted, then the tape waits for the
+      {!constructor-Prompt} to return before pausing. [settings] become
+      {!val-set} lines and [setup_scripts] are sourced in order inside a hidden
+      clearing block. [pause] is the reading pause after each command (defaults
+      to [S 1.]) and [final_pause] holds the last screen before exit (defaults
+      to [S 3.]). *)
 
   val pp : t Fmt.t
   (** [pp] formats a cram test as cram source, without prose. *)
