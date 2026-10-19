@@ -2,6 +2,9 @@
  (name fuzz)
  (libraries vhs vhs_cram fmt alcobar eio eio_main unix))
 
+; The property run is a quick smoke. The oracle alias also runs the
+; properties that need the real vhs (VHS_ORACLE), for longer.
+
 (rule
  (alias runtest)
  (enabled_if
@@ -10,7 +13,20 @@
   (setenv
    VHS_CRAM_TEST_EXE
    %{bin:vhs-cram}
-   (run %{exe:fuzz.exe} --budget 0.1 --timeout 60 --seed 42))))
+   (run %{exe:fuzz.exe} --budget 0.2 --timeout 60 --seed 42))))
+
+(rule
+ (alias oracle)
+ (enabled_if
+  (<> %{profile} afl))
+ (action
+  (setenv
+   VHS_CRAM_TEST_EXE
+   %{bin:vhs-cram}
+   (setenv
+    VHS_ORACLE
+    vhs
+    (run %{exe:fuzz.exe} --budget 5 --timeout 120)))))
 
 (rule
  (alias fuzz)

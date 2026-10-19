@@ -193,10 +193,12 @@ let test_command () =
       if not (contains ~sub:s man) then Alcotest.failf "manual lacks %S" s)
     [ "--print"; "123"; "PS1" ]
 
+(* The vhs executable of the tests that run it, from [VHS_ORACLE]: the
+   oracle alias sets it, runtest does not. *)
+let oracle = Sys.getenv_opt "VHS_ORACLE"
+
 let test_output_order () =
-  with_files
-    [ ("recorder", 0o755, "#!/bin/sh\nunset VHS_PUBLISH\nexec vhs \"$@\"\n") ]
-  @@ fun env path ->
+  with_files [] @@ fun env path ->
   let output = path "order.txt" in
   let src =
     "  $ printf 'decoy>'; sleep 3; echo FIRST_DONE\n  $ echo SECOND_DONE\n"
@@ -221,7 +223,7 @@ let test_output_order () =
   in
   let result =
     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 30. (fun () ->
-        Vhs.render ~vhs:(path "recorder")
+        Vhs.render ?vhs:oracle
           ~proc:(Eio.Stdenv.process_mgr env)
           ~cwd:(Eio.Stdenv.cwd env) t)
   in
@@ -248,10 +250,12 @@ let suite =
   ( "cli",
     List.map
       (fun (name, fn) -> Alcotest.test_case name `Quick fn)
-      [
-        ("tape", test_tape);
-        ("run", test_run);
-        ("render real processes", test_render);
-        ("command line", test_command);
-        ("output order", test_output_order);
-      ] )
+      ([
+         ("tape", test_tape);
+         ("run", test_run);
+         ("render real processes", test_render);
+         ("command line", test_command);
+       ]
+      @
+      if Option.is_some oracle then [ ("output order", test_output_order) ]
+      else []) )

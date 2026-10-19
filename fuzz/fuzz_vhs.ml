@@ -275,6 +275,22 @@ let test_order path text =
           check (String.equal set "Set Width 1000")
       | _ -> fail "missing lines")
 
+(* The vhs executable of the properties that run it, from [VHS_ORACLE]:
+   the oracle alias sets it, runtest does not. *)
+let oracle = Sys.getenv_opt "VHS_ORACLE"
+
+let vhs_validates t =
+  let path = Filename.temp_file "vhs-property" ".tape" in
+  Fun.protect
+    ~finally:(fun () -> Sys.remove path)
+    (fun () ->
+      Out_channel.with_open_bin path (fun oc ->
+          output_string oc (Vhs.to_string t));
+      Sys.command
+        (Filename.quote_command (Option.get oracle) [ "validate"; path ]
+           ~stdout:"/dev/null" ~stderr:"/dev/null")
+      = 0)
+
 (* Check against the real parser, rather than a second tape lexer. *)
 let test_validates text n =
   let open Vhs in
@@ -296,19 +312,37 @@ let test_validates text n =
       match Vhs.tape ~settings ~outputs:[ "demo.gif" ] actions with
       | Error _ -> ()
       | Ok t ->
-          let path = Filename.temp_file "vhs-property" ".tape" in
-          Fun.protect
-            ~finally:(fun () -> Sys.remove path)
-            (fun () ->
-              let oc = open_out_bin path in
-              output_string oc (Vhs.to_string t);
-              close_out oc;
-              if
-                Sys.command
-                  ("vhs validate " ^ Filename.quote path ^ " > /dev/null 2>&1")
-                <> 0
-              then failf "accepted tape rejected by VHS: %s" (Vhs.to_string t)))
+          if not (vhs_validates t) then
+            failf "accepted tape rejected by VHS: %s" (Vhs.to_string t))
     candidates
+
+(* Raw lines from VHS's own vocabulary reach the parser far more often than
+   arbitrary bytes do. *)
+let fragments =
+  [ "Type"; "Sleep"; "Wait"; "Wait+Line"; "Wait+Screen"; "Set"; "Output";
+    "Require"; "Env"; "Screenshot"; "Copy"; "Paste"; "Ctrl"; "Alt"; "Shift";
+    "Enter"; "Tab"; "Hide"; "#"; "\"a\""; "'b c'"; "`d`"; "x.gif"; "out/";
+    "s.png"; "Line"; "Screen"; "/re/"; "/[/"; {|/a\/b/|}; {|/a\\/|};
+    {|{"k": 1}|}; "{"; "1"; "0"; "1.5"; "1.2.3"; ".5"; "ms"; "s"; "m"; "@";
+    "+"; "%"; "-"; "^"; "["; "]"; "true"; "Margin"; "MarginFill"; "#ff00ff";
+    "WindowBar"; "Rings"; "CursorBlink"; "TypingSpeed"; "WaitTimeout";
+    "WaitPattern"; "LoopOffset"; "LetterSpacing"; "A"; "x" ]
+[@@ocamlformat "disable"]
+
+let test_raw_validates words =
+  let line =
+    List.map
+      (fun (i, glue) ->
+        List.nth fragments (i mod List.length fragments)
+        ^ if glue then "" else " ")
+      words
+    |> String.concat ""
+  in
+  match Vhs.tape ~outputs:[ "demo.gif" ] [ Vhs.raw line ] with
+  | Error _ -> ()
+  | Ok t ->
+      if not (vhs_validates t) then
+        failf "accepted raw line rejected by VHS: %S" line
 
 let test_padding_bound padding =
   let settings = Vhs.[ Padding padding; Width 1200; Height 600 ] in
@@ -510,8 +544,6 @@ let test_exit_codes n =
 
 let test_output_order n =
   with_dir @@ fun env path ->
-  let executable = path "recorder" in
-  save env executable "#!/bin/sh\nunset VHS_PUBLISH\nexec vhs \"$@\"\n";
   let output = path "order.txt" in
   let decoy = Fmt.str "progress-%d>" (n land 255) in
   let src =
@@ -538,7 +570,7 @@ let test_output_order n =
   in
   let result =
     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 40. (fun () ->
-        Vhs.render ~vhs:executable
+        Vhs.render ?vhs:oracle
           ~proc:(Eio.Stdenv.process_mgr env)
           ~cwd:(Eio.Stdenv.cwd env) t)
   in
@@ -557,52 +589,64 @@ let test_output_order n =
   | Some first, Some second when first < second -> ()
   | _ -> failf "next command was typed before the first output for %S" src
 
+(* Properties that run [vhs] itself, so need [oracle]. *)
+let with_vhs =
+  [
+    test_case "command output precedes next input" [ int8 ] test_output_order;
+    test_case "accepted tapes validate" [ bytes; int ] test_validates;
+    test_case "accepted raw lines validate"
+      [ list1 (pair uint8 bool) ]
+      test_raw_validates;
+  ]
+
 let suite =
   ( "vhs",
-    [
-      test_case "command output precedes next input" [ int8 ] test_output_order;
-      test_case "documented executable exit codes" [ int16 ] test_exit_codes;
-      test_case "cancelled render reaps the child" [ int8 ] test_cancel_reaps;
-      test_case "never publish implicitly"
-        [ choose [ const "dumb"; const "xterm-256color"; const "" ] ]
-        test_no_publication;
-      test_case "errors identify the invalid item" [ int ] test_error_item;
-      test_case "typed text cannot inject commands"
-        [
-          choose [ bytes; const ""; const "λ中文👩🏽‍💻é"; const "\000"; const "\xff" ];
-        ]
-        test_no_injection;
-      test_case "padding fits the frame"
-        [ choose [ int; const max_int; const ((max_int / 2) + 1); const 300 ] ]
-        test_padding_bound;
-      test_case "accepted tapes validate" [ bytes; int ] test_validates;
-      test_case "type is exact"
-        [ choose [ bytes; const "\xff"; const {|a"b'c`d|} ] ]
-        test_type;
-      test_case "tape is total" [ bytes; bytes; int ] test_total;
-      test_case "durations"
-        [ choose [ int; const max_ms; const (max_ms + 1); const 0 ] ]
-        test_durations;
-      test_case "screen tokens"
-        [ choose [ bytes; const {|\Q/\E|}; const {|\Qa\|} ] ]
-        test_screen;
-      test_case "raw lines"
-        [
-          choose
-            [ bytes; const "Set Width 300"; const "Require x"; const " Hide" ];
-        ]
-        test_raw;
-      test_case "hidden" [ list bytes; int ] test_hidden;
-      test_case "sizes" [ int16; int16; int8 ] test_sizes;
-      test_case "outputs"
-        [
-          bytes;
-          choose
-            [ const ""; const ".gif"; const ".png"; const "/"; const ".gfi" ];
-        ]
-        test_output;
-      test_case "pp_error" [ bytes; int ] test_pp_error;
-      test_case "keys" [ char ] test_keys;
-      test_case "settings" [ int; bytes ] test_settings;
-      test_case "order" [ bytes; bytes ] test_order;
-    ] )
+    (if Option.is_some oracle then with_vhs else [])
+    @ [
+        test_case "documented executable exit codes" [ int16 ] test_exit_codes;
+        test_case "cancelled render reaps the child" [ int8 ] test_cancel_reaps;
+        test_case "never publish implicitly"
+          [ choose [ const "dumb"; const "xterm-256color"; const "" ] ]
+          test_no_publication;
+        test_case "errors identify the invalid item" [ int ] test_error_item;
+        test_case "typed text cannot inject commands"
+          [
+            choose
+              [ bytes; const ""; const "λ中文👩🏽‍💻é"; const "\000"; const "\xff" ];
+          ]
+          test_no_injection;
+        test_case "padding fits the frame"
+          [
+            choose [ int; const max_int; const ((max_int / 2) + 1); const 300 ];
+          ]
+          test_padding_bound;
+        test_case "type is exact"
+          [ choose [ bytes; const "\xff"; const {|a"b'c`d|} ] ]
+          test_type;
+        test_case "tape is total" [ bytes; bytes; int ] test_total;
+        test_case "durations"
+          [ choose [ int; const max_ms; const (max_ms + 1); const 0 ] ]
+          test_durations;
+        test_case "screen tokens"
+          [ choose [ bytes; const {|\Q/\E|}; const {|\Qa\|} ] ]
+          test_screen;
+        test_case "raw lines"
+          [
+            choose
+              [ bytes; const "Set Width 300"; const "Require x"; const " Hide" ];
+          ]
+          test_raw;
+        test_case "hidden" [ list bytes; int ] test_hidden;
+        test_case "sizes" [ int16; int16; int8 ] test_sizes;
+        test_case "outputs"
+          [
+            bytes;
+            choose
+              [ const ""; const ".gif"; const ".png"; const "/"; const ".gfi" ];
+          ]
+          test_output;
+        test_case "pp_error" [ bytes; int ] test_pp_error;
+        test_case "keys" [ char ] test_keys;
+        test_case "settings" [ int; bytes ] test_settings;
+        test_case "order" [ bytes; bytes ] test_order;
+      ] )

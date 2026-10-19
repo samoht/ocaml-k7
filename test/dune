@@ -3,5 +3,16 @@
  (deps regexp_cases.txt tape_cases.txt)
  (libraries vhs vhs_cram fmt alcotest cstruct eio eio_main eio.mock cmdliner))
 
+; The oracle alias also runs the tests that record with the real vhs.
+
+(rule
+ (alias oracle)
+ (deps regexp_cases.txt tape_cases.txt)
+ (action
+  (setenv
+   VHS_ORACLE
+   vhs
+   (run %{exe:test.exe}))))
+
 (cram
  (deps %{bin:vhs-cram}))
