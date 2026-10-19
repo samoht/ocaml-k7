@@ -173,7 +173,10 @@ let test_settings () =
     [];
   rejects "negative padding" ~settings:[ Padding (-1) ] [];
   rejects "font size" ~settings:[ Font_size 0 ] [];
-  rejects "framerate" ~settings:[ Framerate 0 ] []
+  rejects "framerate" ~settings:[ Framerate 0 ] [];
+  (* VHS puts the font list in single quotes in browser code. *)
+  rejects "font quote" ~settings:[ Font_family "x'; alert(1); '" ] [];
+  rejects "font backslash" ~settings:[ Font_family {|x\|} ] []
 
 let test_outputs () =
   error "no output" "no output" ~outputs:[] [];

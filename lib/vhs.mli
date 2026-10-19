@@ -110,7 +110,8 @@ type shell =
 type setting =
   | Shell of shell  (** The shell to run (defaults to {!constructor-Bash}). *)
   | Font_size of int  (** A positive size (defaults to [22]). *)
-  | Font_family of string  (** A font list. *)
+  | Font_family of string
+      (** A font list, which holds no ['] and no backslash. *)
   | Width of int
       (** The width in pixels, at least twice the padding (defaults to [1200]).
       *)

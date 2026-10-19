@@ -189,11 +189,14 @@ let check_output path =
   if has_extension path || String.ends_with ~suffix:"/" path then Ok ()
   else err "Output %S: neither an extension nor a trailing slash" path
 
+(* VHS fonts are set by browser code that quotes the list with [']. *)
 let check_setting = function
   | Shell _ -> Ok ()
   | Font_size n when n <= 0 -> err "Set FontSize %d: not positive" n
   | Framerate n when n <= 0 -> err "Set Framerate %d: not positive" n
   | Padding n when n < 0 -> err "Set Padding %d: negative" n
+  | Font_family f when String.exists (fun c -> c = '\'' || c = '\\') f ->
+      err "Set FontFamily %S: holds a single quote or a backslash" f
   | Font_family f -> check_quotable "Set FontFamily" f
   | Theme t -> check_quotable "Set Theme" t
   | Typing_speed (Ms n) -> check_ms "Set TypingSpeed " n
