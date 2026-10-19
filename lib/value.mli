@@ -25,7 +25,8 @@
         ]
     ]} *)
 
-(** The type for VHS durations, printed as [ms] or [s]. *)
+(** The type for VHS durations, in milliseconds or seconds. Seconds are printed
+    as a decimal with at most nine fractional digits. *)
 type duration = Ms of int | S of float
 
 (** The type for keys pressed in the virtual terminal. *)
@@ -176,7 +177,8 @@ val raw_command : string -> item
       space or a control character.
     - a {!constructor-Comment}, a {!constructor-Custom} setting value, a
       {!constructor-Raw_key}, a {!constructor-Raw_command} or a
-      {!constructor-Raw_line} holds a newline or a carriage return. *)
+      {!constructor-Raw_line} holds a newline or a carriage return.
+    - a duration is negative or not finite. *)
 
 val pp_duration : duration Fmt.t
 (** [pp_duration] formats a VHS duration. *)

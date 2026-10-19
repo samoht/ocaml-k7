@@ -106,6 +106,16 @@ let test_unquoted () =
   expect "raw line kept" "Set Margin 20\n"
     (to_string (tape [ set (Custom ("Margin", "20")) ]))
 
+let test_durations () =
+  let open Vhs.Value in
+  expect "decimal" "Sleep 0.00001s\nSleep 2s\nSleep 0s\nSleep 25ms\n"
+    (to_string
+       (tape [ sleep (S 1e-5); sleep (S 2.); sleep (S (-0.)); sleep (Ms 25) ]));
+  rejects "negative" (sleep (S (-1.)));
+  rejects "nan" (sleep (S Float.nan));
+  rejects "infinity" (set (Typing_speed (S Float.infinity)));
+  rejects "negative ms" (sleep (Ms (-1)))
+
 let test_keys_and_waits () =
   let open Vhs.Value in
   let tape =
@@ -137,5 +147,6 @@ let suite =
       Alcotest.test_case "type control" `Quick test_type_control;
       Alcotest.test_case "quoted control" `Quick test_quoted_control;
       Alcotest.test_case "unquoted payloads" `Quick test_unquoted;
+      Alcotest.test_case "durations" `Quick test_durations;
       Alcotest.test_case "keys and waits" `Quick test_keys_and_waits;
     ] )

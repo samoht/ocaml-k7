@@ -138,9 +138,20 @@ let type_lines s =
 
 let pp_type ppf s = Fmt.(list ~sep:(any "\n") string) ppf (type_lines s)
 
+(* VHS reads a plain decimal: no exponent, no sign. *)
+let decimal s =
+  let s = Fmt.str "%.9f" (Float.abs s) in
+  let rec last i =
+    match s.[i] with '0' -> last (i - 1) | '.' -> i - 1 | _ -> i
+  in
+  String.sub s 0 (last (String.length s - 1) + 1)
+
 let pp_duration ppf = function
+  | Ms n when n < 0 -> Fmt.invalid_arg "Vhs.Value: negative duration %dms" n
   | Ms n -> Fmt.pf ppf "%dms" n
-  | S s -> Fmt.pf ppf "%gs" s
+  | S s when Float.is_nan s || s < 0. || s = Float.infinity ->
+      Fmt.invalid_arg "Vhs.Value: invalid duration %gs" s
+  | S s -> Fmt.pf ppf "%ss" (decimal s)
 
 let pp_key ppf = function
   | Enter -> Fmt.string ppf "Enter"
