@@ -25,7 +25,7 @@ let record env ~print ~vhs ~setup ~output input =
   in
   let* tape = tape ~setup ~output ~name:input src in
   if print then
-    Ok (Eio.Flow.copy_string (Fmt.str "%a" Vhs.pp tape) (Eio.Stdenv.stdout env))
+    Ok (Eio.Flow.copy_string (Vhs.to_string tape) (Eio.Stdenv.stdout env))
   else
     Vhs.render ~vhs
       ~proc:(Eio.Stdenv.process_mgr env)

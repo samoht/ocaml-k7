@@ -150,10 +150,13 @@ val tape :
       [Set], other than [Set TypingSpeed], after an action, where VHS ignores
       it. *)
 
-val pp : t Fmt.t
-(** [pp] formats a tape in the [.tape] syntax: the [Output] lines, then the
+val to_string : t -> string
+(** [to_string t] is [t] in the [.tape] syntax: the [Output] lines, then the
     [Set] lines, then the actions, one or more lines each. A {!type'} with all
     three quote characters is several [Type] lines. *)
+
+val pp : t Fmt.t
+(** [pp ppf t] is [Fmt.string ppf (to_string t)]. *)
 
 (** {1:running Running vhs} *)
 

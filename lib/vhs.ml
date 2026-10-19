@@ -309,7 +309,13 @@ let add_type b s =
   in
   go 0 0
 
-let add_line b fmt = Printf.bprintf b (fmt ^^ "\n")
+let add_line b s =
+  Buffer.add_string b s;
+  Buffer.add_char b '\n'
+
+let add_ms b n =
+  Buffer.add_string b (Int.to_string n);
+  Buffer.add_string b "ms"
 
 (* [is_empty a] is [true] iff [a] prints nothing. *)
 let rec is_empty = function
@@ -319,12 +325,19 @@ let rec is_empty = function
 
 let rec add_action ~hidden b = function
   | Type s -> add_type b s
-  | Key k -> add_line b "%s" (key_name k)
-  | Sleep (Ms n) -> add_line b "Sleep %dms" n
+  | Key k -> add_line b (key_name k)
+  | Sleep (Ms n) ->
+      Buffer.add_string b "Sleep ";
+      add_ms b n;
+      Buffer.add_char b '\n'
   | Wait (timeout, w) ->
       Buffer.add_string b "Wait";
       (match w with Prompt -> () | Screen _ -> Buffer.add_string b "+Screen");
-      Option.iter (fun (Ms n) -> Printf.bprintf b "@%dms" n) timeout;
+      Option.iter
+        (fun (Ms n) ->
+          Buffer.add_char b '@';
+          add_ms b n)
+        timeout;
       (match w with
       | Prompt -> ()
       | Screen re ->
@@ -337,24 +350,27 @@ let rec add_action ~hidden b = function
       Buffer.add_string b "Hide\n";
       List.iter (add_action ~hidden:true b) actions;
       Buffer.add_string b "Show\n"
-  | Raw line -> add_line b "%s" line
+  | Raw line -> add_line b line
+
+let setting_line = function
+  | Shell sh -> ("Shell", "\"" ^ shell_name sh ^ "\"")
+  | Font_size n -> ("FontSize", Int.to_string n)
+  | Font_family f -> ("FontFamily", f)
+  | Width n -> ("Width", Int.to_string n)
+  | Height n -> ("Height", Int.to_string n)
+  | Theme t -> ("Theme", t)
+  | Padding n -> ("Padding", Int.to_string n)
+  | Typing_speed (Ms n) -> ("TypingSpeed", Int.to_string n ^ "ms")
+  | Framerate n -> ("Framerate", Int.to_string n)
 
 let add_setting b s =
+  let name, value = setting_line s in
   Buffer.add_string b "Set ";
+  Buffer.add_string b name;
+  Buffer.add_char b ' ';
   (match s with
-  | Shell sh -> Printf.bprintf b "Shell %S" (shell_name sh)
-  | Font_size n -> Printf.bprintf b "FontSize %d" n
-  | Font_family f ->
-      Buffer.add_string b "FontFamily ";
-      add_string b f
-  | Width n -> Printf.bprintf b "Width %d" n
-  | Height n -> Printf.bprintf b "Height %d" n
-  | Theme t ->
-      Buffer.add_string b "Theme ";
-      add_string b t
-  | Padding n -> Printf.bprintf b "Padding %d" n
-  | Typing_speed (Ms n) -> Printf.bprintf b "TypingSpeed %dms" n
-  | Framerate n -> Printf.bprintf b "Framerate %d" n);
+  | Font_family _ | Theme _ -> add_string b value
+  | _ -> Buffer.add_string b value);
   Buffer.add_char b '\n'
 
 let to_string t =
