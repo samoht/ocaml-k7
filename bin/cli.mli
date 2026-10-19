@@ -13,8 +13,9 @@ val tape :
   (Vhs.t, string) result
 (** [tape ~setup ~output ~name src] is the tape that records the cram test of
     source [src] in a bash terminal, after the [setup] scripts, to [output]. It
-    is [Error msg] if {!Cram.parse} or {!Vhs.tape} fail, or if [src] has no
-    command; [msg] starts with [name] when it is about [src]. *)
+    is [Error msg] if {!Cram.parse} or {!Vhs.tape} fail, if [src] has no
+    command, or if a [setup] path holds a control character; [msg] starts with
+    [name] when it is about [src]. *)
 
 val run :
   Eio_unix.Stdenv.base ->

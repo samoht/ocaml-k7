@@ -37,9 +37,14 @@ let test_tape () =
     "  $ echo \001\n" ~setup:[] ~output:"x.gif";
   error "output" {|Output "demo": neither an extension nor a trailing slash|}
     "  $ true\n" ~setup:[] ~output:"demo";
-  match tape ~setup:[ "bad\000setup" ] "  $ true\n" with
-  | Error _ -> ()
-  | Ok s -> Alcotest.failf "accepted %S" s
+  (* Typed into bash, a tab completes and a newline continues the line, so
+     neither reaches [source] as part of the path. *)
+  List.iter
+    (fun path ->
+      match tape ~setup:[ path ] "  $ true\n" with
+      | Error _ -> ()
+      | Ok s -> Alcotest.failf "accepted %S" s)
+    [ "bad\000setup"; "a\tb.sh"; "a\nb.sh" ]
 
 (* Real processes: [run] owns the whole Eio environment. A shell script
    stands in for vhs. *)
