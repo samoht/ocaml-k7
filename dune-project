@@ -16,8 +16,8 @@
  (tags (command-line-utilities format eio))
  (description
   "Small OCaml library for generating Charmbracelet VHS .tape files and \
-   invoking the vhs command-line tool. The value layer models VHS tape lines \
-   explicitly so generated demos are deterministic and reviewable.")
+   invoking the vhs command-line tool. Tapes are checked values, \
+   so generated demos are deterministic and reviewable.")
  (depends
   (ocaml (>= 5.2))
   (eio (>= 1.0))

@@ -81,9 +81,12 @@ let is_control c = Char.code c < 0x20 || Char.code c = 0x7f
 
 (* A VHS string has no escapes and ends at a newline, so it is delimited by
    a quote it lacks and cannot hold a control character. *)
-let quote_string s =
+let check_controls s =
   if String.exists is_control s then
-    fail_invalid "%S holds a control character" s;
+    fail_invalid "%S holds a control character" s
+
+let quote_string s =
+  check_controls s;
   match List.find_opt (fun q -> not (String.contains s q)) quotes with
   | Some q -> Fmt.str "%c%s%c" q s q
   | None -> fail_invalid "%S holds all three VHS quote characters" s
@@ -91,8 +94,7 @@ let quote_string s =
 let pp_quoted ppf s = Fmt.string ppf (quote_string s)
 
 let pp_line ppf s =
-  if String.exists is_control s then
-    fail_invalid "%S holds a control character" s;
+  check_controls s;
   Fmt.string ppf s
 
 let pp_word ppf s =

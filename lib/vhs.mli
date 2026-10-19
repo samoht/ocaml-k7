@@ -65,12 +65,15 @@ type setting =
   | Typing_speed of duration  (** Delay between typed characters. *)
   | Framerate of int
   | Custom of string * string
-      (** Name and raw value for unmodelled settings. *)
+      (** [Custom (name, value)] is [Set name value], printed unchanged. *)
 
 (** The type for waits on terminal output. The string is an
     {{:https://github.com/google/re2/wiki/Syntax}RE2} regular expression without
     the surrounding slashes; a slash in it is printed as [\x2f]. *)
-type wait = Wait of string | Wait_screen of string | Wait_line of string
+type wait =
+  | Wait of string  (** Matches in the default scope of VHS, the cursor line. *)
+  | Wait_screen of string  (** Matches anywhere on the screen. *)
+  | Wait_line of string  (** Matches the line of the cursor. *)
 
 type item
 (** The type for tape lines. *)
@@ -134,8 +137,7 @@ val source : string -> item
 (** [source path] runs the tape file [path]. *)
 
 val raw : string -> item
-(** [raw line] is [line], printed unchanged, for VHS syntax not modelled here.
-*)
+(** [raw line] is [line], printed unchanged. *)
 
 (** {1:printing Printing}
 
@@ -196,7 +198,7 @@ module Cram : sig
 
       Each command is typed and submitted; when it has expected output, the tape
       waits for the last non-empty output line before pausing, with regexp
-      metacharacters escaped. [settings] become {!constructor-Set} lines and
+      metacharacters escaped. [settings] become {!val-set} lines and
       [setup_scripts] are sourced in order inside a hidden clearing block.
       [pause] is the reading pause after each command (defaults to [S 1.]) and
       [final_pause] holds the last screen before exit (defaults to [S 3.]). *)
