@@ -184,6 +184,13 @@ let test_overflowing_wait () =
   rejects "overflowing timeout must raise Invalid_argument" (fun () ->
       Vhs.wait ~timeout:(Ms 9_223_372_036_855) Prompt)
 
+let test_late_setting () =
+  (* [vhs validate] accepts this tape, but running it warns:
+     'Set Width 320' has been ignored. Move the directive to the top.
+     Refuse to print a checked tape whose requested dimensions are ignored. *)
+  rejects "late Width must raise Invalid_argument" (fun () ->
+      str [ Vhs.type' "x"; Vhs.set (Width 320) ])
+
 let suite =
   ( "vhs",
     [
@@ -199,6 +206,7 @@ let suite =
       Alcotest.test_case "vhs rules" `Quick test_vhs_rules;
       Alcotest.test_case "wait slash" `Quick test_wait_slash;
       Alcotest.test_case "keys and waits" `Quick test_keys_and_waits;
+      Alcotest.test_case "late setting rejected" `Quick test_late_setting;
       Alcotest.test_case "overflowing wait rejected" `Quick
         test_overflowing_wait;
       Alcotest.test_case "invalid regexp rejected" `Quick test_invalid_regexp;
