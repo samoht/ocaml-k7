@@ -1,7 +1,6 @@
 ISC License
 
 Copyright (c) 2026 Thomas Gazagnaire <thomas@gazagnaire.org>
-Copyright (c) 2024 The jsont programmers (lib/loc.ml, lib/loc.mli)
 
 Permission to use, copy, modify, and distribute this software for any
 purpose with or without fee is hereby granted, provided that the above

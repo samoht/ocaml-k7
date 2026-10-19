@@ -1,9 +1,6 @@
-module Loc = Loc
-module Meta = Loc.Meta
 module Value = Value
 module Cram = Cram
 
-type 'a node = 'a Value.node
 type duration = Value.duration = Ms of int | S of float
 
 type key = Value.key =
@@ -39,29 +36,30 @@ type wait = Value.wait =
   | Wait_line of string
 
 type command = Value.command =
-  | Type of string node
-  | Key of key node
-  | Sleep of duration node
-  | Wait_for of wait node
-  | Hide of unit node
-  | Show of unit node
-  | Screenshot of string option node
-  | Source of string node
-  | Raw_command of string node
+  | Type of string
+  | Key of key
+  | Sleep of duration
+  | Wait_for of wait
+  | Hide
+  | Show
+  | Screenshot of string option
+  | Source of string
+  | Raw_command of string
 
 type item = Value.item =
-  | Comment of string node
-  | Blank of unit node
-  | Require of string node
-  | Output of string node
-  | Env of (string * string) node
-  | Set of setting node
-  | Command of command node
-  | Raw_line of string node
+  | Comment of string
+  | Blank
+  | Require of string
+  | Output of string
+  | Env of string * string
+  | Set of setting
+  | Command of command
+  | Raw_line of string
 
-type t = Value.t = Tape of item list node
+type t = Value.t
 
 let tape = Value.tape
+let items = Value.items
 let comment = Value.comment
 let blank = Value.blank
 let require = Value.require

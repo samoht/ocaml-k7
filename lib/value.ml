@@ -1,6 +1,3 @@
-module Meta = Loc.Meta
-
-type 'a node = 'a * Meta.t
 type duration = Ms of int | S of float
 
 type key =
@@ -33,48 +30,48 @@ type setting =
 type wait = Wait of string | Wait_screen of string | Wait_line of string
 
 type command =
-  | Type of string node
-  | Key of key node
-  | Sleep of duration node
-  | Wait_for of wait node
-  | Hide of unit node
-  | Show of unit node
-  | Screenshot of string option node
-  | Source of string node
-  | Raw_command of string node
+  | Type of string
+  | Key of key
+  | Sleep of duration
+  | Wait_for of wait
+  | Hide
+  | Show
+  | Screenshot of string option
+  | Source of string
+  | Raw_command of string
 
 type item =
-  | Comment of string node
-  | Blank of unit node
-  | Require of string node
-  | Output of string node
-  | Env of (string * string) node
-  | Set of setting node
-  | Command of command node
-  | Raw_line of string node
+  | Comment of string
+  | Blank
+  | Require of string
+  | Output of string
+  | Env of string * string
+  | Set of setting
+  | Command of command
+  | Raw_line of string
 
-type t = Tape of item list node
+type t = item list
 
-let node ?(meta = Meta.none) v = (v, meta)
-let tape ?meta items = Tape (node ?meta items)
-let comment ?meta s = Comment (node ?meta s)
-let blank ?meta () = Blank (node ?meta ())
-let require ?meta s = Require (node ?meta s)
-let output ?meta s = Output (node ?meta s)
-let env ?meta k v = Env (node ?meta (k, v))
-let set ?meta s = Set (node ?meta s)
-let command ?meta c = Command (node ?meta c)
-let raw_line ?meta s = Raw_line (node ?meta s)
-let type' ?meta s = command ?meta (Type (node ?meta s))
-let key ?meta k = command ?meta (Key (node ?meta k))
-let enter ?meta () = key ?meta Enter
-let sleep ?meta d = command ?meta (Sleep (node ?meta d))
-let wait ?meta w = command ?meta (Wait_for (node ?meta w))
-let hide ?meta () = command ?meta (Hide (node ?meta ()))
-let show ?meta () = command ?meta (Show (node ?meta ()))
-let screenshot ?meta ?path () = command ?meta (Screenshot (node ?meta path))
-let source ?meta path = command ?meta (Source (node ?meta path))
-let raw_command ?meta s = command ?meta (Raw_command (node ?meta s))
+let tape items = items
+let items t = t
+let comment s = Comment s
+let blank () = Blank
+let require s = Require s
+let output s = Output s
+let env k v = Env (k, v)
+let set s = Set s
+let command c = Command c
+let raw_line s = Raw_line s
+let type' s = Command (Type s)
+let key k = Command (Key k)
+let enter () = key Enter
+let sleep d = Command (Sleep d)
+let wait w = Command (Wait_for w)
+let hide () = Command Hide
+let show () = Command Show
+let screenshot ?path () = Command (Screenshot path)
+let source path = Command (Source path)
+let raw_command s = Command (Raw_command s)
 
 let add_hex_escape b code =
   let hex = "0123456789abcdef" in
@@ -153,30 +150,28 @@ let pp_wait ppf = function
   | Wait_line pattern -> Fmt.pf ppf "Wait+Line /%s/" pattern
 
 let pp_command ppf = function
-  | Type (s, _) -> Fmt.pf ppf "Type %a" pp_quoted s
-  | Key (k, _) -> pp_key ppf k
-  | Sleep (d, _) -> Fmt.pf ppf "Sleep %a" pp_duration d
-  | Wait_for (w, _) -> pp_wait ppf w
-  | Hide _ -> Fmt.string ppf "Hide"
-  | Show _ -> Fmt.string ppf "Show"
-  | Screenshot (None, _) -> Fmt.string ppf "Screenshot"
-  | Screenshot (Some path, _) -> Fmt.pf ppf "Screenshot %a" pp_quoted path
-  | Source (path, _) -> Fmt.pf ppf "Source %a" pp_quoted path
-  | Raw_command (line, _) -> Fmt.string ppf line
+  | Type s -> Fmt.pf ppf "Type %a" pp_quoted s
+  | Key k -> pp_key ppf k
+  | Sleep d -> Fmt.pf ppf "Sleep %a" pp_duration d
+  | Wait_for w -> pp_wait ppf w
+  | Hide -> Fmt.string ppf "Hide"
+  | Show -> Fmt.string ppf "Show"
+  | Screenshot None -> Fmt.string ppf "Screenshot"
+  | Screenshot (Some path) -> Fmt.pf ppf "Screenshot %a" pp_quoted path
+  | Source path -> Fmt.pf ppf "Source %a" pp_quoted path
+  | Raw_command line -> Fmt.string ppf line
 
 let pp_item ppf = function
-  | Comment ("", _) -> Fmt.string ppf "#"
-  | Comment (s, _) -> Fmt.pf ppf "# %s" s
-  | Blank _ -> ()
-  | Require (s, _) -> Fmt.pf ppf "Require %s" s
-  | Output (path, _) -> Fmt.pf ppf "Output %a" pp_quoted path
-  | Env ((key, value), _) -> Fmt.pf ppf "Env %s %a" key pp_quoted value
-  | Set (setting, _) -> Fmt.pf ppf "Set %a" pp_setting setting
-  | Command (command, _) -> pp_command ppf command
-  | Raw_line (line, _) -> Fmt.string ppf line
+  | Comment "" -> Fmt.string ppf "#"
+  | Comment s -> Fmt.pf ppf "# %s" s
+  | Blank -> ()
+  | Require s -> Fmt.pf ppf "Require %s" s
+  | Output path -> Fmt.pf ppf "Output %a" pp_quoted path
+  | Env (key, value) -> Fmt.pf ppf "Env %s %a" key pp_quoted value
+  | Set setting -> Fmt.pf ppf "Set %a" pp_setting setting
+  | Command command -> pp_command ppf command
+  | Raw_line line -> Fmt.string ppf line
 
-let pp ppf (Tape (items, _)) =
-  List.iter (fun item -> Fmt.pf ppf "%a\n" pp_item item) items
-
+let pp ppf items = List.iter (fun item -> Fmt.pf ppf "%a\n" pp_item item) items
 let to_string t = Fmt.str "%a" pp t
 let equal a b = String.equal (to_string a) (to_string b)

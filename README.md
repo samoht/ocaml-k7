@@ -109,8 +109,3 @@ $ vhs-cram --setup setup.sh --output demo.gif demo.t
 ## License
 
 ISC. See [LICENSE.md](LICENSE.md).
-
-`lib/loc.ml` and `lib/loc.mli` are copied from
-[jsont](https://erratique.ch/software/jsont), Daniel Bünzli's JSON library,
-with the JSON-specific parts removed. They keep the jsont copyright and the
-same ISC licence.

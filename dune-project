@@ -25,6 +25,5 @@
   fmt
   fpath
   (alcotest :with-test)
-  (re :with-test)
   (mdx :with-test)
   (odoc :with-doc)))

@@ -25,11 +25,6 @@
         ]
     ]} *)
 
-module Meta = Loc.Meta
-
-type 'a node = 'a * Meta.t
-(** The type for tape values paired with their source metadata. *)
-
 (** The type for VHS durations, printed as [ms] or [s]. *)
 type duration = Ms of int | S of float
 
@@ -70,97 +65,96 @@ type wait = Wait of string | Wait_screen of string | Wait_line of string
 
 (** The type for terminal actions. *)
 type command =
-  | Type of string node  (** Types text without pressing return. *)
-  | Key of key node
-  | Sleep of duration node  (** Pauses the recording timeline. *)
-  | Wait_for of wait node
-  | Hide of unit node  (** Hides subsequent input/output from the recording. *)
-  | Show of unit node  (** Resumes rendering after {!Hide}. *)
-  | Screenshot of string option node  (** Captures the current frame. *)
-  | Source of string node  (** Includes commands from another tape file. *)
-  | Raw_command of string node  (** A raw VHS command line. *)
+  | Type of string  (** Types text without pressing return. *)
+  | Key of key
+  | Sleep of duration  (** Pauses the recording timeline. *)
+  | Wait_for of wait
+  | Hide  (** Hides subsequent input/output from the recording. *)
+  | Show  (** Resumes rendering after {!Hide}. *)
+  | Screenshot of string option  (** Captures the current frame. *)
+  | Source of string  (** Includes commands from another tape file. *)
+  | Raw_command of string  (** A raw VHS command line. *)
 
 (** The type for tape lines. *)
 type item =
-  | Comment of string node
-  | Blank of unit node
-  | Require of string node
+  | Comment of string
+  | Blank
+  | Require of string
       (** A command dependency; VHS fails early if the program is missing. *)
-  | Output of string node  (** An output target such as [demo.gif]. *)
-  | Env of (string * string) node
-      (** A variable visible to the virtual terminal. *)
-  | Set of setting node
-  | Command of command node
-  | Raw_line of string node  (** A raw tape line. *)
+  | Output of string  (** An output target such as [demo.gif]. *)
+  | Env of string * string  (** A variable visible to the virtual terminal. *)
+  | Set of setting
+  | Command of command
+  | Raw_line of string  (** A raw tape line. *)
 
-(** A complete VHS tape. *)
-type t = Tape of item list node
+type t
+(** The type for VHS tapes. *)
 
-val node : ?meta:Meta.t -> 'a -> 'a node
-(** [node ?meta v] wraps [v] with [meta], defaulting to {!Meta.none}. *)
-
-val tape : ?meta:Meta.t -> item list -> t
+val tape : item list -> t
 (** [tape items] is a VHS tape with [items] in output order. Emit
     {!constructor-Output}, {!constructor-Require} and {!constructor-Set} before
     commands to match VHS' own expectations. *)
 
-val comment : ?meta:Meta.t -> string -> item
+val items : t -> item list
+(** [items t] are the items of [t] in output order. *)
+
+val comment : string -> item
 (** [comment s] emits [# s], or a bare [#] when [s] is empty. *)
 
-val blank : ?meta:Meta.t -> unit -> item
+val blank : unit -> item
 (** [blank ()] emits an empty line. *)
 
-val require : ?meta:Meta.t -> string -> item
+val require : string -> item
 (** [require program] declares that [program] must be available before VHS runs
     the tape. *)
 
-val output : ?meta:Meta.t -> string -> item
+val output : string -> item
 (** [output path] adds an output target; VHS chooses the renderer from the file
     extension. *)
 
-val env : ?meta:Meta.t -> string -> string -> item
+val env : string -> string -> item
 (** [env key value] emits [Env key "value"]. *)
 
-val set : ?meta:Meta.t -> setting -> item
+val set : setting -> item
 (** [set setting] changes the virtual terminal or renderer. Emit it before the
     first terminal action. *)
 
-val command : ?meta:Meta.t -> command -> item
+val command : command -> item
 (** [command c] lifts [c] into a tape item. *)
 
-val raw_line : ?meta:Meta.t -> string -> item
+val raw_line : string -> item
 (** [raw_line line] emits [line] unchanged, for VHS syntax not modelled here. *)
 
-val type' : ?meta:Meta.t -> string -> item
+val type' : string -> item
 (** [type' s] types [s] without pressing return, so a shell command is usually
     [type' "..."; enter ()]. *)
 
-val key : ?meta:Meta.t -> key -> item
+val key : key -> item
 (** [key k] presses [k] in the virtual terminal. *)
 
-val enter : ?meta:Meta.t -> unit -> item
+val enter : unit -> item
 (** [enter ()] emits {!constructor-Enter}. *)
 
-val sleep : ?meta:Meta.t -> duration -> item
+val sleep : duration -> item
 (** [sleep d] pauses the recording timeline for [d]. Use {!val-wait} to
     synchronize with command output instead. *)
 
-val wait : ?meta:Meta.t -> wait -> item
+val wait : wait -> item
 (** [wait w] pauses until [w] matches terminal output. *)
 
-val hide : ?meta:Meta.t -> unit -> item
+val hide : unit -> item
 (** [hide ()] starts a hidden region: its commands run but are not rendered. *)
 
-val show : ?meta:Meta.t -> unit -> item
+val show : unit -> item
 (** [show ()] ends a hidden region started by {!val-hide}. *)
 
-val screenshot : ?meta:Meta.t -> ?path:string -> unit -> item
+val screenshot : ?path:string -> unit -> item
 (** [screenshot ?path ()] emits {!constructor-Screenshot}. *)
 
-val source : ?meta:Meta.t -> string -> item
+val source : string -> item
 (** [source path] includes another tape. *)
 
-val raw_command : ?meta:Meta.t -> string -> item
+val raw_command : string -> item
 (** [raw_command line] emits a command line unchanged, for VHS commands not
     modelled here. *)
 
