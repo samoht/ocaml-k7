@@ -91,11 +91,23 @@ module Manager = struct
 
   type t = {
     sw : Eio.Switch.t;
+    inherited : string array;
+    inspect_env : string array option -> unit;
     start : Eio.Fs.dir_ty Eio.Path.t option -> string list -> body;
   }
 
-  let environment _ = [||]
-  let getenv_opt _ _ = None
+  let environment t = t.inherited
+
+  let getenv_opt t key =
+    let prefix = key ^ "=" in
+    Array.find_map
+      (fun entry ->
+        if String.starts_with ~prefix entry then
+          Some
+            (String.sub entry (String.length prefix)
+               (String.length entry - String.length prefix))
+        else None)
+      t.inherited
 
   let pipe _ ~sw:_ =
     let r, w = Pipe.v () in
@@ -103,7 +115,7 @@ module Manager = struct
       (w :> [ Eio.Resource.close_ty | Eio.Flow.sink_ty ] Eio.Resource.t) )
 
   let spawn t ~sw:_ ?cwd ?stdin ?stdout ?stderr ?env ?executable args =
-    Alcotest.(check bool) "environment inherited" true (Option.is_none env);
+    t.inspect_env env;
     Alcotest.(check bool)
       "executable selected by argv" true
       (Option.is_none executable);
@@ -119,8 +131,14 @@ module Manager = struct
     Eio.Resource.T (child, Eio.Process.Pi.process (module Child))
 end
 
-let manager ~sw start =
-  Eio.Resource.T (Manager.{ sw; start }, Eio.Process.Pi.mgr (module Manager))
+let manager ?(inherited = [||])
+    ?(inspect_env =
+      fun env ->
+        Alcotest.(check bool) "environment inherited" true (Option.is_none env))
+    ~sw start =
+  Eio.Resource.T
+    ( Manager.{ sw; start; inherited; inspect_env },
+      Eio.Process.Pi.mgr (module Manager) )
 
 (* render only forwards this capability; no directory operations are needed. *)
 let cwd = (Eio.Resource.T ((), Eio.Resource.handler []), "mock-cwd")
@@ -253,6 +271,30 @@ let test_cancel () =
   | `Rendered _ -> Alcotest.fail "render finished");
   Alcotest.(check bool) "child exited before render returned" true !exited
 
+let test_publish_environment () =
+  Eio_mock.Backend.run @@ fun () ->
+  Eio.Switch.run @@ fun sw ->
+  let inherited = [| "VHS_PUBLISH=true"; "PATH=/bin"; "TERM=dumb" |] in
+  let inspect_env env =
+    let effective = Option.value ~default:inherited env in
+    Alcotest.(check bool)
+      "recording cannot silently publish" false
+      (Array.mem "VHS_PUBLISH=true" effective)
+  in
+  let proc =
+    manager ~sw ~inherited ~inspect_env (fun _ _ ->
+        {
+          run =
+            (fun ~stdin ~output:_ ->
+              ignore (read_all stdin);
+              `Exited 0);
+          on_signal = (fun _ -> ());
+        })
+  in
+  match Vhs.render ~proc ~cwd (tape []) with
+  | Ok () -> ()
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+
 let suite =
   ( "eio",
     List.map
@@ -265,4 +307,5 @@ let suite =
         ("error lines", test_pp_error);
         ("spawn errors", test_spawn_errors);
         ("cancel", test_cancel);
+        ("publish environment", test_publish_environment);
       ] )
