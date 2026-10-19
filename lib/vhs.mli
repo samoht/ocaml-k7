@@ -72,153 +72,96 @@ type setting =
     the surrounding slashes; a slash in it is printed as [\x2f]. *)
 type wait = Wait of string | Wait_screen of string | Wait_line of string
 
-(** The type for terminal actions. *)
-type command =
-  | Type of string
-      (** Types text without pressing return. Newlines and tabs are typed as
-          {!constructor-Enter} and {!constructor-Tab}. *)
-  | Key of key
-  | Sleep of duration  (** Pauses the recording timeline. *)
-  | Wait_for of wait
-  | Hide  (** Hides subsequent input/output from the recording. *)
-  | Show  (** Resumes rendering after {!constructor-Hide}. *)
-  | Screenshot of string  (** Captures the current frame to a PNG file. *)
-  | Source of string  (** Includes commands from another tape file. *)
-  | Raw_command of string  (** A raw VHS command line. *)
-
+type item
 (** The type for tape lines. *)
-type item =
-  | Comment of string
-  | Blank
-  | Require of string
-      (** A command dependency; VHS fails early if the program is missing. *)
-  | Output of string  (** An output target such as [demo.gif]. *)
-  | Env of string * string  (** A variable visible to the virtual terminal. *)
-  | Set of setting
-  | Command of command
-  | Raw_line of string  (** A raw tape line. *)
 
 type t
 (** The type for VHS tapes. *)
 
 val tape : item list -> t
-(** [tape items] is a VHS tape with [items] in output order. Emit
-    {!constructor-Output}, {!constructor-Require} and {!constructor-Set} before
-    commands to match VHS' own expectations. *)
-
-val items : t -> item list
-(** [items t] are the items of [t] in output order. *)
+(** [tape items] is the tape of [items], one line each, in order. VHS expects
+    {!val-output}, {!val-require} and {!val-set} lines before the first terminal
+    action. *)
 
 (** {1:items Items} *)
 
 val comment : string -> item
-(** [comment s] is the comment line [# s], or [#] if [s] is empty. *)
+(** [comment s] is the line [# s], or [#] if [s] is empty. *)
 
 val blank : unit -> item
-(** [blank ()] is {!constructor-Blank}, an empty line. *)
+(** [blank ()] is an empty line. *)
 
 val require : string -> item
-(** [require program] declares that [program] must be available before VHS runs
-    the tape. *)
+(** [require program] makes VHS fail before running the tape if [program] is not
+    on the [PATH]. *)
 
 val output : string -> item
-(** [output path] adds an output target; VHS chooses the renderer from the file
-    extension. *)
+(** [output path] makes VHS render to [path], in the format of its extension. *)
 
 val env : string -> string -> item
-(** [env name value] is [Env (name, value)]. *)
+(** [env name value] sets the environment variable [name] to [value] in the
+    virtual terminal. *)
 
 val set : setting -> item
-(** [set setting] changes the virtual terminal or renderer. Emit it before the
-    first terminal action. *)
-
-val command : command -> item
-(** [command c] is [Command c]. *)
-
-val raw_line : string -> item
-(** [raw_line line] is the tape line [line], printed unchanged, for VHS syntax
-    not modelled here. *)
+(** [set s] applies the setting [s]. *)
 
 val type' : string -> item
-(** [type' s] is [Command (Type s)]: it types [s] without pressing return, so a
-    shell command is usually [type' "..."; enter ()]. *)
+(** [type' s] types [s] without pressing return; newlines and tabs in [s] are
+    typed as {!constructor-Enter} and {!constructor-Tab}. *)
 
 val key : key -> item
-(** [key k] presses [k] in the virtual terminal. *)
+(** [key k] presses [k]. *)
 
 val enter : unit -> item
 (** [enter ()] is [key Enter]. *)
 
 val sleep : duration -> item
-(** [sleep d] pauses the recording timeline for [d]. Use {!val-wait} to
-    synchronize with command output instead. *)
+(** [sleep d] pauses the recording for [d]. *)
 
 val wait : wait -> item
-(** [wait w] pauses until [w] matches terminal output. *)
+(** [wait w] pauses the recording until [w] matches the terminal. *)
 
 val hide : unit -> item
-(** [hide ()] starts a hidden region: its commands run but are not rendered. *)
+(** [hide ()] stops rendering the terminal; its actions still run. *)
 
 val show : unit -> item
-(** [show ()] ends a hidden region started by {!val-hide}. *)
+(** [show ()] resumes rendering after {!val-hide}. *)
 
 val screenshot : string -> item
-(** [screenshot path] is [Command (Screenshot path)]. *)
+(** [screenshot path] saves the current frame to the PNG file [path]. *)
 
 val source : string -> item
-(** [source path] includes another tape. *)
+(** [source path] runs the tape file [path]. *)
 
-val raw_command : string -> item
-(** [raw_command line] is the command [line], printed unchanged, for VHS
-    commands not modelled here. *)
+val raw : string -> item
+(** [raw line] is [line], printed unchanged, for VHS syntax not modelled here.
+*)
 
 (** {1:printing Printing}
 
-    VHS strings have no escape sequences and end at a newline. The printers
-    pick, for each quoted payload, a quote character (["\""], ['\''] or [`]) it
-    does not hold, and cut a {!constructor-Type} payload into several commands
-    where needed. They raise [Invalid_argument] if:
-    - a quoted payload other than a {!constructor-Type} one holds a control
-      character or all three quote characters.
-    - a {!constructor-Type} payload holds a control character other than a
-      newline or a tab.
-    - a {!constructor-Require} program, an {!constructor-Env} name or a
-      {!constructor-Custom} setting name is empty or holds a space or a control
-      character.
+    VHS strings have no escape sequences and end at a newline. A quoted string
+    is printed between a quote character (["\""], ['\''] or [`]) it does not
+    hold, and {!val-type'} cuts its text into several lines where needed. A tape
+    is {e valid} unless:
+    - a string other than the text of {!val-type'} holds a control character, or
+      all three quote characters if it is quoted.
+    - the text of {!val-type'} holds a control character other than a newline or
+      a tab.
+    - a {!val-require} program, an {!val-env} name or a {!constructor-Custom}
+      setting name is empty or holds a space.
     - a {!constructor-Ctrl} or {!constructor-Alt} key is not one VHS accepts.
-    - a {!constructor-Comment}, a {!constructor-Custom} setting value, a
-      {!constructor-Raw_command} or a {!constructor-Raw_line} holds a newline or
-      a carriage return.
-    - a duration is negative or not finite.
-    - a wait pattern holds a newline or a carriage return. *)
+    - a duration is negative or not finite. *)
 
-val pp_duration : duration Fmt.t
-(** [pp_duration] formats a VHS duration. *)
-
-val pp_key : key Fmt.t
-(** [pp_key] formats a VHS key command. *)
-
-val pp_setting : setting Fmt.t
-(** [pp_setting] formats a VHS setting payload. *)
-
-val pp_wait : wait Fmt.t
-(** [pp_wait] formats a VHS wait command. *)
-
-val pp_command : command Fmt.t
-(** [pp_command] formats a VHS command line. *)
-
-val pp_item : item Fmt.t
-(** [pp_item] formats one tape item without forcing a trailing newline. *)
+val validate : t -> (unit, string) result
+(** [validate t] is [Ok ()] if [t] is valid and [Error msg] with [msg] naming
+    the first invalid string otherwise. *)
 
 val pp : t Fmt.t
-(** [pp] formats a complete tape with one line per item.
+(** [pp] formats a tape in the [*.tape] syntax, one line per item.
 
-    @raise Invalid_argument if the tape is not {{!printing}printable}. *)
-
-val to_string : t -> string
-(** [to_string t] is the textual [*.tape] representation of [t].
-
-    @raise Invalid_argument if [t] is not {{!printing}printable}. *)
+    @raise Invalid_argument
+      if the tape is not valid, that is exactly when {!validate} is [Error _].
+      Nothing is printed then. *)
 
 (** {1:cram Cram tests} *)
 

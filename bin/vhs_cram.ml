@@ -12,10 +12,11 @@ let settings ~width =
   ]
 
 let render ~proc ~vhs ~path tape =
-  match Vhs.render ~proc ~vhs ~path tape with
-  | Ok () -> Ok ()
-  | Error e -> Error (Fmt.to_to_string Vhs.pp_error e)
-  | exception Invalid_argument msg -> Error msg
+  match Vhs.validate tape with
+  | Error _ as e -> e
+  | Ok () ->
+      Vhs.render ~proc ~vhs ~path tape
+      |> Result.map_error (Fmt.to_to_string Vhs.pp_error)
 
 let record ~vhs ~width ~setup_scripts ~output input =
   match In_channel.with_open_bin input In_channel.input_all with

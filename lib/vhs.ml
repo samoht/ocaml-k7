@@ -33,7 +33,13 @@ type setting =
 
 type wait = Wait of string | Wait_screen of string | Wait_line of string
 
-type command =
+type item =
+  | Comment of string
+  | Blank
+  | Require of string
+  | Output of string
+  | Env of string * string
+  | Set of setting
   | Type of string
   | Key of key
   | Sleep of duration
@@ -42,40 +48,33 @@ type command =
   | Show
   | Screenshot of string
   | Source of string
-  | Raw_command of string
-
-type item =
-  | Comment of string
-  | Blank
-  | Require of string
-  | Output of string
-  | Env of string * string
-  | Set of setting
-  | Command of command
-  | Raw_line of string
+  | Raw of string
 
 type t = item list
 
 let tape items = items
-let items t = t
 let comment s = Comment s
 let blank () = Blank
 let require s = Require s
 let output s = Output s
 let env k v = Env (k, v)
 let set s = Set s
-let command c = Command c
-let raw_line s = Raw_line s
-let type' s = Command (Type s)
-let key k = Command (Key k)
-let enter () = key Enter
-let sleep d = Command (Sleep d)
-let wait w = Command (Wait_for w)
-let hide () = Command Hide
-let show () = Command Show
-let screenshot path = Command (Screenshot path)
-let source path = Command (Source path)
-let raw_command s = Command (Raw_command s)
+let type' s = Type s
+let key k = Key k
+let enter () = Key Enter
+let sleep d = Sleep d
+let wait w = Wait_for w
+let hide () = Hide
+let show () = Show
+let screenshot path = Screenshot path
+let source path = Source path
+let raw s = Raw s
+
+(* Raised by the printers on an invalid tape; [pp] and [validate] turn it
+   into [Invalid_argument] and [Error]. *)
+exception Invalid of string
+
+let fail_invalid fmt = Fmt.kstr (fun msg -> raise (Invalid msg)) fmt
 let quotes = [ '"'; '\''; '`' ]
 let is_quote c = List.mem c quotes
 let is_control c = Char.code c < 0x20 || Char.code c = 0x7f
@@ -84,21 +83,21 @@ let is_control c = Char.code c < 0x20 || Char.code c = 0x7f
    a quote it lacks and cannot hold a control character. *)
 let quote_string s =
   if String.exists is_control s then
-    Fmt.invalid_arg "Vhs: %S holds a control character" s;
+    fail_invalid "%S holds a control character" s;
   match List.find_opt (fun q -> not (String.contains s q)) quotes with
   | Some q -> Fmt.str "%c%s%c" q s q
-  | None -> Fmt.invalid_arg "Vhs: %S holds all three VHS quote characters" s
+  | None -> fail_invalid "%S holds all three VHS quote characters" s
 
 let pp_quoted ppf s = Fmt.string ppf (quote_string s)
 
 let pp_line ppf s =
-  if String.exists (fun c -> c = '\n' || c = '\r') s then
-    Fmt.invalid_arg "Vhs: %S holds a line break" s;
+  if String.exists is_control s then
+    fail_invalid "%S holds a control character" s;
   Fmt.string ppf s
 
 let pp_word ppf s =
   if s = "" || String.exists (fun c -> c = ' ' || is_control c) s then
-    Fmt.invalid_arg "Vhs: %S is not a single word" s;
+    fail_invalid "%S is not a single word" s;
   Fmt.string ppf s
 
 (* [quotable_chunks s] cuts [s] so that no chunk holds all three quotes. *)
@@ -133,7 +132,7 @@ let type_lines s =
           lines := (if c = '\n' then "Enter" else "Tab") :: !lines;
           start := i + 1
       | c when is_control c ->
-          Fmt.invalid_arg "Vhs: Type %S holds a control character" s
+          fail_invalid "Type %S holds a control character" s
       | _ -> ())
     s;
   text (String.length s);
@@ -150,17 +149,17 @@ let decimal s =
   String.sub s 0 (last (String.length s - 1) + 1)
 
 let pp_duration ppf = function
-  | Ms n when n < 0 -> Fmt.invalid_arg "Vhs: negative duration %dms" n
+  | Ms n when n < 0 -> fail_invalid "negative duration %dms" n
   | Ms n -> Fmt.pf ppf "%dms" n
   | S s when Float.is_nan s || s < 0. || s = Float.infinity ->
-      Fmt.invalid_arg "Vhs: invalid duration %gs" s
+      fail_invalid "invalid duration %gs" s
   | S s -> Fmt.pf ppf "%ss" (decimal s)
 
 let is_letter = function 'a' .. 'z' | 'A' .. 'Z' -> true | _ -> false
 
 let pp_chord name valid ppf c =
   if not (is_letter c || String.contains valid c) then
-    Fmt.invalid_arg "Vhs: %s+%C is not a VHS key" name c;
+    fail_invalid "%s+%C is not a VHS key" name c;
   Fmt.pf ppf "%s+%c" name c
 
 let pp_key ppf = function
@@ -222,17 +221,6 @@ let pp_wait ppf = function
   | Wait_screen re -> Fmt.pf ppf "Wait+Screen %a" pp_regexp re
   | Wait_line re -> Fmt.pf ppf "Wait+Line %a" pp_regexp re
 
-let pp_command ppf = function
-  | Type s -> pp_type ppf s
-  | Key k -> pp_key ppf k
-  | Sleep d -> Fmt.pf ppf "Sleep %a" pp_duration d
-  | Wait_for w -> pp_wait ppf w
-  | Hide -> Fmt.string ppf "Hide"
-  | Show -> Fmt.string ppf "Show"
-  | Screenshot path -> Fmt.pf ppf "Screenshot %a" pp_quoted path
-  | Source path -> Fmt.pf ppf "Source %a" pp_quoted path
-  | Raw_command line -> pp_line ppf line
-
 let pp_item ppf = function
   | Comment "" -> Fmt.string ppf "#"
   | Comment s -> Fmt.pf ppf "# %a" pp_line s
@@ -241,11 +229,26 @@ let pp_item ppf = function
   | Output path -> Fmt.pf ppf "Output %a" pp_quoted path
   | Env (key, value) -> Fmt.pf ppf "Env %a %a" pp_word key pp_quoted value
   | Set setting -> Fmt.pf ppf "Set %a" pp_setting setting
-  | Command command -> pp_command ppf command
-  | Raw_line line -> pp_line ppf line
+  | Type s -> pp_type ppf s
+  | Key k -> pp_key ppf k
+  | Sleep d -> Fmt.pf ppf "Sleep %a" pp_duration d
+  | Wait_for w -> pp_wait ppf w
+  | Hide -> Fmt.string ppf "Hide"
+  | Show -> Fmt.string ppf "Show"
+  | Screenshot path -> Fmt.pf ppf "Screenshot %a" pp_quoted path
+  | Source path -> Fmt.pf ppf "Source %a" pp_quoted path
+  | Raw line -> pp_line ppf line
 
-let pp ppf items = List.iter (fun item -> Fmt.pf ppf "%a\n" pp_item item) items
-let to_string t = Fmt.str "%a" pp t
+let print t =
+  try Ok (String.concat "" (List.map (Fmt.str "%a\n" pp_item) t))
+  with Invalid msg -> Error msg
+
+let validate t = Result.map ignore (print t)
+
+let pp ppf t =
+  match print t with
+  | Ok s -> Fmt.string ppf s
+  | Error msg -> invalid_arg ("Vhs.pp: " ^ msg)
 
 module Cram = struct
   type step = {
@@ -391,7 +394,7 @@ let pp_error ppf = function
   | Io msg -> Fmt.string ppf msg
 
 let write_file ~path t =
-  let contents = to_string t in
+  let contents = Fmt.str "%a" pp t in
   try Ok (Out_channel.with_open_bin path (fun oc -> output_string oc contents))
   with Sys_error msg -> Error (Io msg)
 
