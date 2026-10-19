@@ -255,7 +255,8 @@ let validate_accepted actions =
 let test_raw_validation () = validate_accepted [ Vhs.raw "Sleep -1ms" ]
 
 let test_padding_overflow () =
-  rejects "padding exceeds the default frame" ~settings:[ Vhs.Padding max_int ] []
+  rejects "padding exceeds the default frame" ~settings:[ Vhs.Padding max_int ]
+    []
 
 let suite =
   ( "vhs",

@@ -312,9 +312,20 @@ let test_padding_bound padding =
   let expected = padding >= 0 && padding <= 300 in
   check (Result.is_ok (Vhs.tape ~settings ~outputs []) = expected)
 
+let test_no_injection text =
+  let hostile = text ^ "\"'`\\\nOutput injected.gif\nHide\nSet Shell bash\n" in
+  (* Decoding must recover only typed text, tabs and Enter, never a new
+     setting, output, visibility change or executable tape command. *)
+  test_type hostile
+
 let suite =
   ( "vhs",
     [
+      test_case "typed text cannot inject commands"
+        [
+          choose [ bytes; const ""; const "λ中文👩🏽‍💻é"; const "\000"; const "\xff" ];
+        ]
+        test_no_injection;
       test_case "padding fits the frame"
         [ choose [ int; const max_int; const ((max_int / 2) + 1); const 300 ] ]
         test_padding_bound;
