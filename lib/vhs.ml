@@ -104,7 +104,8 @@ let check_ms what n =
   else Ok ()
 
 let check_type s =
-  if String.exists (fun c -> is_control c && c <> '\t' && c <> '\n') s then
+  if not (String.is_valid_utf_8 s) then err "Type %S: invalid UTF-8" s
+  else if String.exists (fun c -> is_control c && c <> '\t' && c <> '\n') s then
     err "Type %S: holds a control character other than tab and newline" s
   else Ok ()
 

@@ -91,7 +91,8 @@ let test_type_keys () =
   error "control"
     {|Type "bad\001byte": holds a control character other than tab and newline|}
     [ type' "bad\x01byte" ];
-  rejects "carriage return" [ type' "a\r\n" ]
+  rejects "carriage return" [ type' "a\r\n" ];
+  error "invalid UTF-8" {|Type "\255": invalid UTF-8|} [ type' "\xff" ]
 
 let test_line_injection () =
   let open Vhs in
