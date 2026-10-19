@@ -21,7 +21,23 @@ let lines ?settings actions =
       | [] -> fail "empty tape")
 
 let accepted ?settings actions = Option.is_some (lines ?settings actions)
-let is_control c = Char.code c < 0x20 || c = '\x7f'
+
+(* C0 other than [except], DEL and C1, decoded from UTF-8 where valid. *)
+let has_control ?(except = "") s =
+  let control d =
+    Uchar.utf_decode_is_valid d
+    &&
+    let u = Uchar.to_int (Uchar.utf_decode_uchar d) in
+    (u < 0x20 && not (String.contains except (Char.chr u)))
+    || (u >= 0x7f && u <= 0x9f)
+  in
+  let rec go i =
+    i < String.length s
+    &&
+    let d = String.get_utf_8_uchar s i in
+    control d || go (i + Uchar.utf_decode_length d)
+  in
+  go 0
 
 (* An independent reader for the [Type] subset of VHS: no escapes, the
    matching quote ends the string. *)
@@ -47,8 +63,7 @@ let typed lines =
    than tab and newline, and then types exactly [s]. *)
 let test_type s =
   let typeable =
-    String.is_valid_utf_8 s
-    && not (String.exists (fun c -> is_control c && c <> '\t' && c <> '\n') s)
+    String.is_valid_utf_8 s && not (has_control ~except:"\t\n" s)
   in
   match lines [ Vhs.type' s ] with
   | None -> if typeable then failf "rejected typeable %S" s
@@ -93,7 +108,7 @@ let test_total s t n =
       match tape ~settings ~outputs actions with
       | Error _ -> ()
       | Ok printed ->
-          if String.exists (fun c -> is_control c && c <> '\n') printed then
+          if has_control ~except:"\n" printed then
             failf "control character in %S" printed)
     [
       ([], [ s ], actions);
@@ -210,7 +225,7 @@ let test_output path suffix =
   let ok =
     (ext || String.ends_with ~suffix:"/" path)
     && (not (String.starts_with ~prefix:"-" path))
-    && (not (String.exists is_control path))
+    && (not (has_control path))
     && not quotes
   in
   check (Result.is_ok (tape ~outputs:[ path ] []) = ok)
@@ -252,7 +267,8 @@ let test_settings n font =
   let ok =
     not
       (quotes
-      || String.exists (fun c -> c = '\'' || c = '\\' || is_control c) font)
+      || String.exists (fun c -> c = '\'' || c = '\\') font
+      || has_control font)
   in
   check (accepted ~settings:[ Font_family font ] [] = ok)
 

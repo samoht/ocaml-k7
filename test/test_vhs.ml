@@ -92,6 +92,12 @@ let test_type_keys () =
     {|Type "bad\001byte": holds a control character other than tab and newline|}
     [ type' "bad\x01byte" ];
   rejects "carriage return" [ type' "a\r\n" ];
+  (* A terminal reads U+009B as CSI: this would clear the screen. *)
+  error "C1 control"
+    {|Type "X\194\1552J": holds a control character other than tab and newline|}
+    [ type' "X\xc2\x9b2J" ];
+  expect "not C1" "Type \"\xc2\xa0\xc3\x9b\"\n"
+    (body [ type' "\xc2\xa0\xc3\x9b" ]);
   error "invalid UTF-8" {|Type "\255": invalid UTF-8|} [ type' "\xff" ]
 
 let test_line_injection () =
@@ -102,7 +108,11 @@ let test_line_injection () =
   rejects "font" ~settings:[ Font_family evil ] [];
   rejects "raw" [ raw evil ];
   rejects "screen" [ wait (Screen evil) ];
-  rejects "three quotes" ~outputs:[ {|a"b'c`d.gif|} ] []
+  rejects "three quotes" ~outputs:[ {|a"b'c`d.gif|} ] [];
+  rejects "C1 in output" ~outputs:[ "a\xc2\x85.gif" ] [];
+  rejects "C1 in raw" [ raw "# a\xc2\x9bb" ];
+  rejects "C1 in theme" ~settings:[ Theme "\xc2\x90x" ] [];
+  rejects "C1 in screen" [ wait (Screen "a\xc2\x9db") ]
 
 let test_raw () =
   let open Vhs in

@@ -83,13 +83,29 @@ let rec iter_result f = function
       let* () = f x in
       iter_result f rest
 
-let is_control c = Char.code c < 0x20 || c = '\x7f'
+(* [has_control ~except s] is [true] iff [s] holds a C0 control other than
+   those of [except], DEL, or a C1 control encoded in UTF-8, which a terminal
+   runs as ESC sequences (U+009B is CSI). *)
+let has_control ?(except = "") s =
+  let n = String.length s in
+  let rec go i =
+    i < n
+    &&
+    match s.[i] with
+    | '\xc2' when i + 1 < n && Char.code s.[i + 1] land 0xe0 = 0x80 -> true
+    | c
+      when (Char.code c < 0x20 && not (String.contains except c)) || c = '\x7f'
+      ->
+        true
+    | _ -> go (i + 1)
+  in
+  go 0
+
 let quote_bit = function '"' -> 1 | '\'' -> 2 | '`' -> 4 | _ -> 0
 
 (* A VHS string ends at its quote, a newline or a NUL and has no escapes. *)
 let check_quotable what s =
-  if String.exists is_control s then
-    err "%s %S: holds a control character" what s
+  if has_control s then err "%s %S: holds a control character" what s
   else if String.fold_left (fun m c -> m lor quote_bit c) 0 s = 7 then
     err "%s %S: holds all three quote characters" what s
   else Ok ()
@@ -105,7 +121,7 @@ let check_ms what n =
 
 let check_type s =
   if not (String.is_valid_utf_8 s) then err "Type %S: invalid UTF-8" s
-  else if String.exists (fun c -> is_control c && c <> '\t' && c <> '\n') s then
+  else if has_control ~except:"\t\n" s then
     err "Type %S: holds a control character other than tab and newline" s
   else Ok ()
 
@@ -137,7 +153,7 @@ let check_wait timeout w =
   in
   match w with
   | Prompt -> Ok ()
-  | (Line re | Screen re) when String.exists is_control re ->
+  | (Line re | Screen re) when has_control re ->
       err "%s %S: holds a control character" (wait_name w) re
   | Line re | Screen re ->
       Regexp_syntax.check re
@@ -207,8 +223,7 @@ let constructors =
 
 (* VHS applies [Set] and [Require] only before the first other command. *)
 let check_raw ~started line =
-  if String.exists is_control line then
-    err "raw line %S: holds a control character" line
+  if has_control line then err "raw line %S: holds a control character" line
   else
     match Tape_syntax.check line with
     | Error e -> err "raw line %S: %s" line e

@@ -149,9 +149,9 @@ val tape :
       slash, or starts with [-], which ffmpeg reads as an option;
     - two outputs, {!raw} [Output] lines included, are of the same kind (GIF,
       MP4, WebM, text, or PNG frames), of which VHS writes only the last;
-    - a string holds a control character (the tabs and newlines of {!type'}
-      aside), all three quote characters (['"'], ['\''] and ['`']) where VHS
-      quotes it, or, in typed text, invalid UTF-8;
+    - a string holds a control character, C1 controls included (the tabs and
+      newlines of {!type'} aside), all three quote characters (['"'], ['\''] and
+      ['`']) where VHS quotes it, or, in typed text, invalid UTF-8;
     - a duration is out of range, or a wait timeout is [Ms 0];
     - a {!Line} or {!Screen} pattern is not valid Go regular expression syntax;
     - a key or a setting breaks the condition its documentation states;
