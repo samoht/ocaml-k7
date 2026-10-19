@@ -57,7 +57,7 @@ let parse src =
 
 let regexp_meta = function
   | '\\' | '.' | '+' | '*' | '?' | '(' | ')' | '[' | ']' | '{' | '}' | '^' | '$'
-  | '|' | '/' ->
+  | '|' ->
       true
   | _ -> false
 

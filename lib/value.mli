@@ -59,9 +59,9 @@ type setting =
   | Custom of string * string
       (** Name and raw value for unmodelled settings. *)
 
-(** The type for waits on terminal output. The string is the VHS
-    regular-expression payload without surrounding slashes. Prefer waits to
-    fixed sleeps when a command has variable runtime. *)
+(** The type for waits on terminal output. The string is an
+    {{:https://github.com/google/re2/wiki/Syntax}RE2} regular expression without
+    the surrounding slashes; a slash in it is printed as [\x2f]. *)
 type wait = Wait of string | Wait_screen of string | Wait_line of string
 
 (** The type for terminal actions. *)
@@ -178,7 +178,8 @@ val raw_command : string -> item
     - a {!constructor-Comment}, a {!constructor-Custom} setting value, a
       {!constructor-Raw_key}, a {!constructor-Raw_command} or a
       {!constructor-Raw_line} holds a newline or a carriage return.
-    - a duration is negative or not finite. *)
+    - a duration is negative or not finite.
+    - a wait pattern holds a newline or a carriage return. *)
 
 val pp_duration : duration Fmt.t
 (** [pp_duration] formats a VHS duration. *)

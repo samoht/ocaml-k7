@@ -180,10 +180,33 @@ let pp_setting ppf = function
   | Framerate n -> Fmt.pf ppf "Framerate %d" n
   | Custom (name, value) -> Fmt.pf ppf "%a %a" pp_word name pp_line value
 
+(* A slash ends a VHS regexp and only VHS 0.11 and later read [\/] as an
+   escape, so a slash, escaped or not, is written as RE2's [\x2f]. *)
+let pp_regexp ppf re =
+  let b = Buffer.create (String.length re + 8) in
+  let rec loop i =
+    if i < String.length re then
+      match re.[i] with
+      | '/' ->
+          Buffer.add_string b {|\x2f|};
+          loop (i + 1)
+      | '\\' when i + 1 < String.length re && re.[i + 1] = '/' ->
+          Buffer.add_string b {|\x2f|};
+          loop (i + 2)
+      | '\\' when i + 1 < String.length re ->
+          Buffer.add_string b (String.sub re i 2);
+          loop (i + 2)
+      | c ->
+          Buffer.add_char b c;
+          loop (i + 1)
+  in
+  loop 0;
+  Fmt.pf ppf "/%a/" pp_line (Buffer.contents b)
+
 let pp_wait ppf = function
-  | Wait pattern -> Fmt.pf ppf "Wait /%s/" pattern
-  | Wait_screen pattern -> Fmt.pf ppf "Wait+Screen /%s/" pattern
-  | Wait_line pattern -> Fmt.pf ppf "Wait+Line /%s/" pattern
+  | Wait re -> Fmt.pf ppf "Wait %a" pp_regexp re
+  | Wait_screen re -> Fmt.pf ppf "Wait+Screen %a" pp_regexp re
+  | Wait_line re -> Fmt.pf ppf "Wait+Line %a" pp_regexp re
 
 let pp_command ppf = function
   | Type s -> pp_type ppf s

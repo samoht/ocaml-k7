@@ -48,6 +48,13 @@ Sleep 3s
 |}
     (Vhs.to_string tape)
 
+let test_slash () =
+  let src = "  $ ls\n  a/b\n" in
+  let tape = Vhs.Cram.to_tape ~output:"demo.gif" (Vhs.Cram.parse src) in
+  expect "slash"
+    "Output \"demo.gif\"\nType \"ls\"\nEnter\nWait+Screen /a\\x2fb/\nSleep 3s\n"
+    (Vhs.to_string tape)
+
 let test_parse () =
   let src = "prose is ignored\n\n  $ echo hi\n  hi\n  $ false\n  [1]\n" in
   let steps = Vhs.Cram.parse src in
@@ -65,5 +72,6 @@ let suite =
     [
       Alcotest.test_case "minimal" `Quick test_minimal;
       Alcotest.test_case "full" `Quick test_full;
+      Alcotest.test_case "slash" `Quick test_slash;
       Alcotest.test_case "parse" `Quick test_parse;
     ] )

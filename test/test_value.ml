@@ -116,6 +116,12 @@ let test_durations () =
   rejects "infinity" (set (Typing_speed (S Float.infinity)));
   rejects "negative ms" (sleep (Ms (-1)))
 
+let test_wait_slash () =
+  let open Vhs.Value in
+  expect "slash" "Wait+Screen /a\\x2fb\\x2fc\\\\\\x2f/\n"
+    (to_string (tape [ wait (Wait_screen {|a/b\/c\\/|}) ]));
+  rejects "line break" (wait (Wait_line "a\nOutput evil.gif"))
+
 let test_keys_and_waits () =
   let open Vhs.Value in
   let tape =
@@ -148,5 +154,6 @@ let suite =
       Alcotest.test_case "quoted control" `Quick test_quoted_control;
       Alcotest.test_case "unquoted payloads" `Quick test_unquoted;
       Alcotest.test_case "durations" `Quick test_durations;
+      Alcotest.test_case "wait slash" `Quick test_wait_slash;
       Alcotest.test_case "keys and waits" `Quick test_keys_and_waits;
     ] )
