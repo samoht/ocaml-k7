@@ -170,7 +170,7 @@ type error =
   | Executable_not_found of string  (** No such executable on the PATH. *)
   | Child_error of { argv : string list; status : Eio.Process.exit_status }
       (** The executable ran and exited non-zero. *)
-  | Io of exn  (** Any other I/O failure. *)
+  | Io of string  (** Any other I/O failure, as a message. *)
 
 val pp_error : error Fmt.t
 (** [pp_error] formats errors for humans. *)

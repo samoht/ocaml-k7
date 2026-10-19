@@ -84,46 +84,39 @@ let to_string = Value.to_string
 type error =
   | Executable_not_found of string
   | Child_error of { argv : string list; status : Eio.Process.exit_status }
-  | Io of exn
+  | Io of string
 
 let pp_error ppf = function
   | Executable_not_found exe -> Fmt.pf ppf "executable not found: %s" exe
   | Child_error { argv; status } ->
       Fmt.pf ppf "%a failed: %a" Eio.Process.pp_args argv Eio.Process.pp_status
         status
-  | Io (Sys_error msg) -> Fmt.string ppf msg
-  | Io exn -> Fmt.exn ppf exn
+  | Io msg -> Fmt.string ppf msg
 
 let write_file ~path t =
   let contents = to_string t in
   try Ok (Out_channel.with_open_bin path (fun oc -> output_string oc contents))
-  with Sys_error _ as exn -> Error (Io exn)
+  with Sys_error msg -> Error (Io msg)
 
-let run_process proc argv =
-  try Ok (Eio.Process.run proc argv) with
+let process run argv =
+  try Ok (run argv) with
   | Eio.Exn.Io (Eio.Process.E (Executable_not_found exe), _) ->
       Error (Executable_not_found exe)
   | Eio.Exn.Io (Eio.Process.E (Child_error status), _) ->
       Error (Child_error { argv; status })
-  | Eio.Exn.Io _ as exn -> Error (Io exn)
-
-let parse_process proc argv =
-  try Ok (Eio.Process.parse_out proc Eio.Buf_read.take_all argv) with
-  | Eio.Exn.Io (Eio.Process.E (Executable_not_found exe), _) ->
-      Error (Executable_not_found exe)
-  | Eio.Exn.Io (Eio.Process.E (Child_error status), _) ->
-      Error (Child_error { argv; status })
-  | Eio.Exn.Io _ as exn -> Error (Io exn)
+  | Eio.Exn.Io _ as exn -> Error (Io (Printexc.to_string exn))
 
 (* vhs reads an argument starting with '-' as a flag. *)
 let path_arg path =
   if String.starts_with ~prefix:"-" path then "./" ^ path else path
 
 let render_file ~proc ?(vhs = "vhs") path =
-  run_process proc [ vhs; path_arg path ]
+  process (Eio.Process.run proc) [ vhs; path_arg path ]
 
 let render ~proc ?vhs ~path tape =
   Result.bind (write_file ~path tape) (fun () -> render_file ~proc ?vhs path)
 
 let publish ~proc ?(vhs = "vhs") file =
-  parse_process proc [ vhs; "publish"; path_arg file ]
+  process
+    (Eio.Process.parse_out proc Eio.Buf_read.take_all)
+    [ vhs; "publish"; path_arg file ]
