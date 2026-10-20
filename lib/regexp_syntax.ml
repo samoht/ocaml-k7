@@ -89,9 +89,10 @@ let canonical name =
   ignore (String.fold_left add true name);
   Buffer.contents b
 
-let is_digit c = c >= '0' && c <= '9'
+let is_digit = function '0' .. '9' -> true | _ -> false
+let is_letter = function 'a' .. 'z' | 'A' .. 'Z' -> true | _ -> false
 let is_octal c = c >= '0' && c <= '7'
-let is_alnum c = is_digit c || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+let is_alnum c = is_digit c || is_letter c
 let is_perl_class c = String.contains "dDsSwW" c
 
 let unhex = function

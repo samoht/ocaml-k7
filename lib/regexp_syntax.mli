@@ -22,3 +22,9 @@ val write : Buffer.t -> string -> unit
     an unterminated quote is closed, so the token holds no slash and does not
     end with a backslash. If [check re] is [Ok ()], the pattern written matches
     the same strings as [re]. *)
+
+val is_digit : char -> bool
+(** [is_digit c] is [true] iff [c] is an ASCII digit. *)
+
+val is_letter : char -> bool
+(** [is_letter c] is [true] iff [c] is an ASCII letter. *)

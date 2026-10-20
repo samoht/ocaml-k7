@@ -56,8 +56,8 @@ let keys =
     "Left"; "Right"; "Up"; "PageUp"; "PageDown"; "ScrollUp"; "ScrollDown" ]
 [@@ocamlformat "disable"]
 
-let is_digit = function '0' .. '9' -> true | _ -> false
-let is_letter = function 'a' .. 'z' | 'A' .. 'Z' -> true | _ -> false
+let is_digit = Regexp_syntax.is_digit
+let is_letter = Regexp_syntax.is_letter
 
 let is_ident = function
   | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '.' | '-' | '_' | '/' | '%' -> true
@@ -71,8 +71,8 @@ let rec span line p i =
   if i < String.length line && p line.[i] then span line p (i + 1) else i
 
 (* [delimited line q i] is the index of the [q] closing what starts at [i]. *)
-let rec delimited line q i =
-  if i >= String.length line || line.[i] = q then i else delimited line q (i + 1)
+let delimited line q i =
+  Option.value (String.index_from_opt line i q) ~default:(String.length line)
 
 (* The index of the slash closing the regular expression that starts at
    [i]: a run of backslashes escapes the slash after it iff it is odd. *)

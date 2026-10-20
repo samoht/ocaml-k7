@@ -75,7 +75,6 @@ type t = {
 (* Checking *)
 
 let ( let* ) = Result.bind
-let err fmt = Fmt.kstr Result.error fmt
 
 let rec iter_result f = function
   | [] -> Ok ()
@@ -113,34 +112,32 @@ let quotable_problem s =
 let check_quotable what s =
   match quotable_problem s with
   | None -> Ok ()
-  | Some why -> err "%s %S: %s" what s why
+  | Some why -> Fmt.error "%s %S: %s" what s why
 
 (* The largest Go [time.Duration], in whole milliseconds. *)
 let max_ms = 9_223_372_036_854
 
 let check_ms what n =
-  if n < 0 then err "%s%dms: negative duration" what n
+  if n < 0 then Fmt.error "%s%dms: negative duration" what n
   else if n > max_ms then
-    err "%s%dms: beyond Go's duration range (%dms)" what n max_ms
+    Fmt.error "%s%dms: beyond Go's duration range (%dms)" what n max_ms
   else Ok ()
 
 let check_type s =
-  if not (String.is_valid_utf_8 s) then err "Type %S: invalid UTF-8" s
+  if not (String.is_valid_utf_8 s) then Fmt.error "Type %S: invalid UTF-8" s
   else if has_control ~except:"\t\n" s then
-    err "Type %S: holds a control character other than tab and newline" s
+    Fmt.error "Type %S: holds a control character other than tab and newline" s
   else Ok ()
 
-let is_letter = function 'a' .. 'z' | 'A' .. 'Z' -> true | _ -> false
-
 let check_chord name valid c =
-  if is_letter c || String.contains valid c then Ok ()
-  else err "%s+%s: not a VHS key" name (Char.escaped c)
+  if Regexp_syntax.is_letter c || String.contains valid c then Ok ()
+  else Fmt.error "%s+%s: not a VHS key" name (Char.escaped c)
 
 (* VHS lexes a bare [m] or [s] as a time unit; [Ctrl] takes them quoted, but
    [Alt] then presses nothing. *)
 let check_key = function
   | Ctrl c -> check_chord "Ctrl" {|@[\]^-.|} c
-  | Alt (('m' | 's') as c) -> err "Alt+%c: VHS cannot press it" c
+  | Alt (('m' | 's') as c) -> Fmt.error "Alt+%c: VHS cannot press it" c
   | Alt c -> check_chord "Alt" "[]." c
   | _ -> Ok ()
 
@@ -153,13 +150,13 @@ let check_wait timeout w =
   let* () =
     match timeout with
     | None -> Ok ()
-    | Some (Ms 0) -> err "Wait@0ms: the timeout must be positive"
+    | Some (Ms 0) -> Fmt.error "Wait@0ms: the timeout must be positive"
     | Some (Ms n) -> check_ms "Wait@" n
   in
   match w with
   | Prompt -> Ok ()
   | (Line re | Screen re) when has_control re ->
-      err "%s %S: holds a control character" (wait_name w) re
+      Fmt.error "%s %S: holds a control character" (wait_name w) re
   | Line re | Screen re ->
       Regexp_syntax.check re
       |> Result.map_error (Fmt.str "%s %S: %s" (wait_name w) re)
@@ -181,7 +178,8 @@ let output_problem path =
     | _ -> Some "not .gif, .mp4, .webm, .txt, .ascii, .test or .png"
 
 let check_output path =
-  Option.fold ~none:(Ok ()) ~some:(err "Output %S: %s" path)
+  Option.fold ~none:(Ok ())
+    ~some:(Fmt.error "Output %S: %s" path)
     (output_problem path)
 
 (* VHS keeps one output of each kind and writes the last one it reads. *)
@@ -202,7 +200,8 @@ let check_kinds paths =
     | q :: rest -> (
         match List.assoc_opt (kind q) seen with
         | Some p ->
-            err "Output %S: VHS writes only the last %s output, %S" p (kind q) q
+            Fmt.error "Output %S: VHS writes only the last %s output, %S" p
+              (kind q) q
         | None -> go ((kind q, q) :: seen) rest)
   in
   go [] paths
@@ -231,9 +230,9 @@ let check_cells settings actions =
   iter_result
     (function
       | Tape_syntax.Set ("Rows", arg) when height ->
-          err "Set Rows %s: VHS cannot set both Height and Rows" arg
+          Fmt.error "Set Rows %s: VHS cannot set both Height and Rows" arg
       | Tape_syntax.Set ("Columns", arg) when width ->
-          err "Set Columns %s: VHS cannot set both Width and Columns" arg
+          Fmt.error "Set Columns %s: VHS cannot set both Width and Columns" arg
       | _ -> Ok ())
     (raw_commands actions)
 
@@ -253,22 +252,23 @@ let constructors =
 (* VHS applies [Set], but [Set Shell], and [Require] only before the first
    other command. *)
 let check_raw ~started line =
-  if has_control line then err "raw line %S: holds a control character" line
+  if has_control line then
+    Fmt.error "raw line %S: holds a control character" line
   else
     match Tape_syntax.check line with
-    | Error e -> err "raw line %S: %s" line e
-    | Ok (Hide | Show) -> err "raw line %S: use hidden instead" line
+    | Error e -> Fmt.error "raw line %S: %s" line e
+    | Ok (Hide | Show) -> Fmt.error "raw line %S: use hidden instead" line
     | Ok (Blank | Set ("TypingSpeed", _)) -> Ok started
     | Ok (Output path) -> (
         match output_problem path with
         | None -> Ok started
-        | Some why -> err "raw line %S: %s" line why)
+        | Some why -> Fmt.error "raw line %S: %s" line why)
     | Ok (Set ("Shell", _)) ->
-        err "raw line %S: use the setting Shell instead" line
+        Fmt.error "raw line %S: use the setting Shell instead" line
     | Ok (Set _ | Require) when started ->
-        err "raw line %S: VHS ignores it after the first action" line
+        Fmt.error "raw line %S: VHS ignores it after the first action" line
     | Ok (Set (name, _)) when List.mem_assoc name constructors ->
-        err "raw line %S: use the setting %s instead" line
+        Fmt.error "raw line %S: use the setting %s instead" line
           (List.assoc name constructors)
     | Ok (Set _ | Require) -> Ok false
     | Ok Other -> Ok true
@@ -334,16 +334,16 @@ let is_blank s =
 let check_theme t =
   let* () = check_quotable "Set Theme" t in
   if is_blank t || String.starts_with ~prefix:"{" t || Themes.mem t then Ok ()
-  else err "Set Theme %S: not a VHS theme" t
+  else Fmt.error "Set Theme %S: not a VHS theme" t
 
 (* VHS fonts are set by browser code that quotes the list with [']. *)
 let check_setting = function
   | Shell _ -> Ok ()
-  | Font_size n when n <= 0 -> err "Set FontSize %d: not positive" n
-  | Framerate n when n <= 0 -> err "Set Framerate %d: not positive" n
-  | Padding n when n < 0 -> err "Set Padding %d: negative" n
+  | Font_size n when n <= 0 -> Fmt.error "Set FontSize %d: not positive" n
+  | Framerate n when n <= 0 -> Fmt.error "Set Framerate %d: not positive" n
+  | Padding n when n < 0 -> Fmt.error "Set Padding %d: negative" n
   | Font_family f when String.exists (fun c -> c = '\'' || c = '\\') f ->
-      err "Set FontFamily %S: holds a single quote or a backslash" f
+      Fmt.error "Set FontFamily %S: holds a single quote or a backslash" f
   | Font_family f -> check_quotable "Set FontFamily" f
   | Theme t -> check_theme t
   | Typing_speed (Ms n) -> check_ms "Set TypingSpeed " n
@@ -368,11 +368,11 @@ let check_padding ~padding ~width ~height =
     else
       match size with
       | Some n ->
-          err "Set %s %d: below twice the %spadding (%d)" name n
+          Fmt.error "Set %s %d: below twice the %spadding (%d)" name n
             (if padding = None then "default " else "")
             p
       | None ->
-          err "Set Padding %d: above half the default %s (%d)" p
+          Fmt.error "Set Padding %d: above half the default %s (%d)" p
             (String.lowercase_ascii name)
             default
   in
@@ -397,11 +397,7 @@ let sum ns =
    64-bit arithmetic, which a huge margin passes before the browser refuses
    the viewport, so a sum that overflows does not fit. *)
 let check_size settings actions =
-  let last f =
-    List.fold_left
-      (fun v s -> Option.fold ~none:v ~some:Option.some (f s))
-      None settings
-  in
+  let last f = List.find_map f (List.rev settings) in
   let padding = last (function Padding n -> Some n | _ -> None) in
   let width = last (function Width n -> Some n | _ -> None) in
   let height = last (function Height n -> Some n | _ -> None) in
@@ -436,21 +432,20 @@ let check_size settings actions =
       in
       match (min_width, min_height) with
       | Some mw, Some mh ->
-          err "Set %s: the frame needs at least %Ld x %Ld pixels, not %d x %d"
+          Fmt.error
+            "Set %s: the frame needs at least %Ld x %Ld pixels, not %d x %d"
             culprit mw mh w h
-      | _ -> err "Set %s: the frame size overflows 64 bits" culprit
+      | _ -> Fmt.error "Set %s: the frame size overflows 64 bits" culprit
 
 (* VHS encodes an MP4 in yuv420p, which ffmpeg refuses for an odd width or
    height. *)
 let check_mp4 settings paths =
   let last name f =
-    List.fold_left
-      (fun v s -> Option.fold ~none:v ~some:(fun n -> Some (name, n)) (f s))
-      None settings
+    Option.map (fun n -> (name, n)) (List.find_map f (List.rev settings))
   in
   let odd = function
     | Some (name, n) when n land 1 <> 0 ->
-        err "Set %s %d: odd, which an MP4 output cannot have" name n
+        Fmt.error "Set %s %d: odd, which an MP4 output cannot have" name n
     | _ -> Ok ()
   in
   if List.exists (fun p -> kind p = "MP4") paths then
@@ -459,12 +454,12 @@ let check_mp4 settings paths =
   else Ok ()
 
 let check_outputs = function
-  | [] -> err "no output"
+  | [] -> Fmt.error "no output"
   | outputs -> iter_result check_output outputs
 
 let check_records actions =
   if List.exists records actions then Ok ()
-  else err "no action outside hidden, so VHS records no frame"
+  else Fmt.error "no action outside hidden, so VHS records no frame"
 
 let check_paths settings paths =
   let* () = check_kinds paths in
