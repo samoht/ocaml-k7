@@ -411,6 +411,27 @@ let sum ns =
 (* The longest side of a viewport the browser VHS drives accepts. *)
 let max_viewport = 10_000_000L
 
+(* VHS measures the cells of a raw [Set Rows] or [Set Columns] in the
+   viewport, doubled up to five times, and fails if the terminal there is
+   still smaller; a cell takes at least a pixel. *)
+let check_measured actions ~border name size default bar =
+  match Option.bind (raw_set actions name) Tape_syntax.atoi with
+  | None -> Ok ()
+  | Some n ->
+      let side =
+        Int64.sub
+          (Int64.of_int (Option.value size ~default))
+          (Int64.add border bar)
+      in
+      let most = Int64.mul 32L side in
+      if Int64.compare n most <= 0 then Ok ()
+      else
+        Fmt.error
+          "Set %s %Ld: VHS measures at most %Ld %s, one a pixel in 32 times \
+           the browser's viewport"
+          name n most
+          (String.lowercase_ascii name)
+
 (* VHS sizes the browser's viewport to the frame less twice the padding,
    twice the margin unless [MarginFill] is empty, and the window bar in the
    height, also to measure the cells a raw [Set Rows] or [Set Columns] asks
@@ -443,7 +464,10 @@ let check_viewport actions ~padding ~margin ~bar ~width ~height =
         max_viewport
   in
   let* () = check "Width" width 1200 0L in
-  check "Height" height 600 bar
+  let* () = check "Height" height 600 bar in
+  let cells = check_measured actions ~border:(Int64.mul 2L (Int64.add p m)) in
+  let* () = cells "Columns" width 1200 0L in
+  cells "Rows" height 600 bar
 
 let check_size settings actions =
   let last f = List.find_map f (List.rev settings) in

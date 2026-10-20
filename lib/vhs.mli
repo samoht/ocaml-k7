@@ -178,7 +178,11 @@ val tape :
       integer, a float or a regular expression in Go's syntax, or a positive
       integer for [Rows] and [Columns];
     - a {!raw} [Set Rows] or [Set Columns] sizes the frame in the direction that
-      {!Height} or {!Width} does;
+      {!Height} or {!Width} does, or asks for more rows or columns than 32 times
+      the browser's viewport has pixels: VHS measures the cells in the viewport
+      doubled up to five times, and fails with "could not fit" if the terminal
+      there is still smaller. Fewer can still not fit with a large font, which
+      [tape] does not check;
     - a {!raw} line is [Hide] or [Show] (use {!hidden}), [Set] for a setting of
       {!setting} other than [TypingSpeed] (use the setting), an [Output] that
       breaks the rules of [outputs] or ends with [.svg], or is [Require] or
