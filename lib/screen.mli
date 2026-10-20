@@ -29,7 +29,7 @@ val feed : terminal -> string -> unit
     wraps; line feeds keep the column; and the scroll region of each screen,
     indexes, line, character and column edits, REP, the modes of auto-wrap and
     origin, the saved cursor, the tab stops and the character sets work as in
-    xterm.js. *)
+    xterm.js, and the sequences xterm.js ignores change nothing. *)
 
 val is_dirty : terminal -> bool
 (** [is_dirty t] is [true] iff the screen or the cursor of [t] changed since the

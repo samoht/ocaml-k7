@@ -12,7 +12,7 @@ let default_bg = 0x040506
 let color rgb =
   Ansi.Color.of_rgb (rgb lsr 16) ((rgb lsr 8) land 0xff) (rgb land 0xff)
 
-type state = Ground | Escape | Csi | String | String_escape
+type state = Ground | Escape | Csi | Osc | String | String_escape
 
 (* What a save keeps, as in xterm.js: the column, the line in the buffer,
    which counts the scrollback, the colours and attributes, and the active
@@ -427,11 +427,12 @@ let restore t =
 
 let replacement = "\xef\xbf\xbd"
 
-(* ECMA-48 sequences: CSI ends at a final byte, the strings of OSC, DCS,
-   SOS, PM and APC at BEL or ST. *)
+(* ECMA-48 sequences: CSI ends at a final byte, OSC at BEL or ST, and the
+   strings of DCS, SOS, PM and APC, which xterm.js ignores here, at ST. *)
 let escape = function
   | '[' -> Csi
-  | ']' | 'P' | 'X' | '^' | '_' -> String
+  | ']' -> Osc
+  | 'P' | 'X' | '^' | '_' -> String
   | ' ' .. '/' -> Escape
   | _ -> Ground
 
@@ -614,15 +615,43 @@ let modes t s =
   let p = if dec then String.sub p 1 (String.length p - 1) else p in
   List.iter (mode t ~dec ~set) (String.split_on_char ';' p)
 
-(* The sequences matrix 0.1.0 misreads or lacks, and the cursor moves and
-   edits that read the cursor's column. *)
+(* DECSTR resets the modes, the scroll region, the style, the character
+   sets and the save of the screen, whose line it moves to the first row,
+   and shows the cursor, as in xterm.js. *)
+let soft_reset t =
+  flush t;
+  t.top <- 0;
+  t.bottom <- Vte.rows t.vte - 1;
+  t.wrap <- true;
+  t.origin <- false;
+  Array.fill t.sets 0 4 'B';
+  invoke t 0;
+  t.style <- Ansi.Style.default;
+  let s = { unsaved with line = history t } in
+  if Vte.is_alternate_screen t.vte then t.saved_alternate <- s else t.saved <- s;
+  Buffer.add_string t.out "\027[0m\027[4l\027[?1l\027[?7h\027[?25h\027[?2004l";
+  flush t
+
+(* ESC # 8 homes the cursor and fills the rows from it with E. *)
+let align t =
+  home t;
+  let row, _ = Vte.cursor_pos t.vte and cols = Vte.cols t.vte in
+  for r = row to Vte.rows t.vte - 1 do
+    edit t ~row:r ~col:0 (String.make cols 'E')
+  done;
+  home t
+
+(* The sequences matrix 0.1.0 misreads or lacks, the cursor moves and edits
+   that read the cursor's column, and those xterm.js ignores: an escape
+   sequence it has no handler for, and a CSI sequence with a private prefix
+   or an intermediate byte, which matrix reads as one without. *)
 let sequence t s =
   let n () = count s in
   let last = t.last in
   (* REP repeats the character just before it, as in xterm.js. *)
   t.last <- "";
   match (csi_final s, s) with
-  | _, "\027[3J" -> erase_scrollback t
+  | _, ("\027[3J" | "\027[?3J") -> erase_scrollback t
   | Some '@', _ when String.ends_with ~suffix:" @" s ->
       edit_columns t `Delete (edit_count s)
   | Some 'A', _ when String.ends_with ~suffix:" A" s ->
@@ -631,6 +660,10 @@ let sequence t s =
       edit_columns t ~at_cursor:true `Insert (edit_count s)
   | Some '~', _ when String.ends_with ~suffix:"'~" s ->
       edit_columns t ~at_cursor:true `Delete (edit_count s)
+  | Some 'p', _ when String.ends_with ~suffix:"!p" s -> soft_reset t
+  | Some ('h' | 'l'), _ -> modes t s
+  | Some ('J' | 'K'), _ -> control t s
+  | Some _, _ when not (plain s) -> ()
   | Some ('A' | 'F'), _ ->
       vertical t (-n ()) ~col:(if csi_final s = Some 'F' then Some 0 else None)
   | Some ('B' | 'e' | 'E'), _ ->
@@ -644,9 +677,9 @@ let sequence t s =
       position t ~row:(n ()) ~col:(col + 1)
   | Some '`', _ -> control t ("\027[" ^ params s ^ "G")
   | Some 'a', _ -> control t ("\027[" ^ params s ^ "C")
-  | Some 'P', _ when plain s -> edit_chars t `Delete (n ())
-  | Some '@', _ when plain s -> edit_chars t `Insert (n ())
-  | Some 'X', _ when plain s -> edit_chars t `Erase (n ())
+  | Some 'P', _ -> edit_chars t `Delete (n ())
+  | Some '@', _ -> edit_chars t `Insert (n ())
+  | Some 'X', _ -> edit_chars t `Erase (n ())
   | Some 'b', _ ->
       if last <> "" then
         for _ = 1 to n () do
@@ -654,19 +687,17 @@ let sequence t s =
         done
   | Some 'L', _ -> edit_lines t (-n ())
   | Some 'M', _ -> edit_lines t (n ())
-  | Some ('C' | 'D' | 'G' | 'J' | 'K' | 'P' | '@'), _ -> control t s
+  | Some ('C' | 'D' | 'G'), _ -> control t s
   | Some 'S', _ -> scroll t (n ())
   | Some 'T', _ -> scroll t (-n ())
   | Some 'r', _ ->
       set_region t (params s);
       home t
-  | Some ('h' | 'l'), _ -> modes t s
-  | Some 's', _ when plain s -> save t
-  | Some 'u', _ when plain s -> restore t
-  | Some ('s' | 'u'), _ -> ()
-  | Some 'I', _ when plain s -> tab t (n ())
-  | Some 'Z', _ when plain s -> tab t (-n ())
-  | Some 'g', _ when plain s -> (
+  | Some 's', _ -> save t
+  | Some 'u', _ -> restore t
+  | Some 'I', _ -> tab t (n ())
+  | Some 'Z', _ -> tab t (-n ())
+  | Some 'g', _ -> (
       match params s with
       | "" | "0" -> set_stop t false
       | "3" -> Array.fill (stops t) 0 (Array.length (stops t)) false
@@ -691,11 +722,48 @@ let sequence t s =
   | None, _ when String.length s = 3 && is_charset s.[2] -> (
       match level_of s.[1] with
       | Some level -> designate t level s.[2]
-      | None -> Buffer.add_string t.out s)
+      | None -> ())
+  | None, "\027#8" -> align t
   | None, "\027c" ->
       reset t;
       Buffer.add_string t.out s
-  | _ -> Buffer.add_string t.out s
+  | None, _ when String.starts_with ~prefix:"\027]" s ->
+      Buffer.add_string t.out s
+  | None, _ -> ()
+  | Some _, _ -> Buffer.add_string t.out s
+
+(* The C0 controls, which xterm.js also runs inside an escape or CSI
+   sequence. *)
+let execute t = function
+  | '\b' ->
+      (* matrix 0.1.0 erases the character a backspace moves over, and not
+         the one a cursor move does. *)
+      t.last <- "";
+      control t "\027[D"
+  | '\n' | '\011' | '\012' ->
+      t.last <- "";
+      index t 1
+  | '\t' ->
+      t.last <- "";
+      tab t 1
+  | '\014' -> invoke t 1
+  | '\015' -> invoke t 0
+  | c -> Buffer.add_char t.out c
+
+(* An escape starts a sequence, even inside one; CAN and SUB end it. *)
+let start t =
+  Buffer.clear t.seq;
+  Buffer.add_char t.seq '\027';
+  t.state <- Escape
+
+let abort t =
+  Buffer.clear t.seq;
+  t.state <- Ground
+
+let finish t =
+  let s = Buffer.contents t.seq in
+  abort t;
+  sequence t s
 
 (* The terminal reads valid UTF-8 outside escape sequences: each maximal
    invalid subsequence is U+FFFD, as for [String.get_utf_8_uchar], wherever
@@ -717,41 +785,34 @@ let rec byte t c =
     if utf_8_length c > 0 then Buffer.add_char t.pending c
     else character t replacement
   else
-    let state = t.state in
-    (match (state, c) with
-    | Ground, '\b' ->
-        (* matrix 0.1.0 erases the character a backspace moves over, and
-           not the one a cursor move does. *)
-        t.last <- "";
-        control t "\027[D"
-    | Ground, ('\n' | '\011' | '\012') ->
-        t.last <- "";
-        index t 1
-    | Ground, '\t' ->
-        t.last <- "";
-        tab t 1
-    | Ground, '\014' -> invoke t 1
-    | Ground, '\015' -> invoke t 0
-    | Ground, '\027' -> Buffer.add_char t.seq c
-    | Ground, (' ' .. '~' as c) -> print_ascii t c
+    match (t.state, c) with
+    | Ground, ' ' .. '~' -> print_ascii t c
+    | (Ground | Escape | Csi), '\027' -> start t
+    | (Ground | Escape | Csi), ('\x00' .. '\x17' | '\x19' | '\x1c' .. '\x1f') ->
+        execute t c
+    | _, ('\x18' | '\x1a') -> abort t
     | Ground, _ -> Buffer.add_char t.out c
-    | _ -> Buffer.add_char t.seq c);
-    t.state <-
-      (match (state, c) with
-      | Ground, '\027' -> Escape
-      | Ground, _ -> Ground
-      | Escape, c -> escape c
-      | Csi, '@' .. '~' -> Ground
-      | Csi, _ -> Csi
-      | String, '\007' -> Ground
-      | String, '\027' -> String_escape
-      | String, _ -> String
-      | String_escape, '\\' -> Ground
-      | String_escape, c -> escape c);
-    if state <> Ground && t.state = Ground then (
-      let s = Buffer.contents t.seq in
-      Buffer.clear t.seq;
-      sequence t s)
+    | Escape, c -> (
+        Buffer.add_char t.seq c;
+        match escape c with Ground -> finish t | state -> t.state <- state)
+    | Csi, c ->
+        Buffer.add_char t.seq c;
+        if c >= '@' && c <= '~' then finish t
+    | Osc, '\007' ->
+        Buffer.add_char t.seq c;
+        finish t
+    | (Osc | String), '\027' -> t.state <- String_escape
+    | Osc, c -> if c >= ' ' then Buffer.add_char t.seq c
+    | String, _ -> ()
+    | String_escape, c ->
+        (* ST ends the string, and so does any other escape, which then
+           starts. *)
+        if Buffer.length t.seq > 1 && Buffer.nth t.seq 1 = ']' then
+          Buffer.add_string t.seq "\027\\";
+        finish t;
+        if c <> '\\' then (
+          start t;
+          byte t c)
 
 let feed t s =
   String.iter (byte t) s;
