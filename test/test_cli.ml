@@ -399,6 +399,29 @@ let test_setup_prompt_command () =
   if not (contains ~sub:"\nREADY" screen) then
     Alcotest.failf "setup prevented the command from running: %s" screen
 
+(* The invisible prompt marker is also ordinary output from user programs. *)
+let test_invisible_output_order () =
+  with_files [] @@ fun env path ->
+  let src =
+    "  $ printf '\\342\\200\\213'; sleep 3; printf '\\nFIRST_DONE\\n'\n\
+    \  $ echo SECOND_DONE\n"
+  in
+  let screen = record_cram env path src in
+  let position sub =
+    let rec scan i =
+      if i + String.length sub > String.length screen then
+        Alcotest.failf "recording lacks %S" sub
+      else if String.sub screen i (String.length sub) = sub then i
+      else scan (i + 1)
+    in
+    scan 0
+  in
+  let first = position "\nFIRST_DONE" in
+  let second = position "echo SECOND_DONE" in
+  Alcotest.(check bool)
+    "command output precedes the next input even after U+200B" true
+    (first < second)
+
 let suite =
   ( "cli",
     List.map
@@ -416,5 +439,6 @@ let suite =
           ("output order", test_output_order);
           ("history", test_history);
           ("setup prompt command", test_setup_prompt_command);
+          ("invisible output order", test_invisible_output_order);
         ]
       else []) )
