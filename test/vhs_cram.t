@@ -26,6 +26,19 @@ varies across cmdliner versions.
   Wait+Line /\x{200B}$/
   Sleep 1000ms
 
+A reader that stops before the end of a tape larger than a pipe buffer
+ends --print quietly, as SIGPIPE would; a standard output that cannot be
+written is an error.
+
+  $ i=0; while [ $i -lt 4000 ]; do echo "  \$ echo line $i"; i=$((i + 1)); done > big.t
+  $ { vhs-cram --print --output demo.gif big.t; echo $? > status; } | head -n 1
+  Output "demo.gif"
+  $ cat status
+  0
+  $ vhs-cram --print --output demo.gif big.t >&-
+  vhs-cram: standard output: Bad file descriptor
+  [123]
+
 A command the tape cannot type is an error, not an exception.
 
   $ printf '  $ echo \001\n' > bad.t
