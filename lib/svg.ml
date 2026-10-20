@@ -357,7 +357,9 @@ let add_style t b ~duration frames =
      overline}.xuso{text-decoration:underline line-through overline}";
   if t.blink then
     Buffer.add_string b
-      ".k{animation:b 1.2s step-end infinite}@keyframes b{50%{opacity:0}}";
+      ".k{animation:b 1.2s step-end infinite}@keyframes \
+       b{50%{opacity:0}}@media \
+       (prefers-reduced-motion:reduce){.k{animation:none}}";
   (match frames with
   | [] | [ _ ] -> ()
   | _ ->
