@@ -101,23 +101,24 @@ $ vhs-cram --print --output hello.gif hello.t
 Output "hello.gif"
 Set Shell "bash"
 Hide
-Env VHS_CRAM_PROMPT `__vhs=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} "PS1='\[\e[38;2;90;86;224m\]>\[\342\200\213\] \[\e[0m\]'"); unset PROMPT_COMMAND; PROMPT_COMMAND=$__vhs; unset __vhs VHS_CRAM_PROMPT`
+Env VHS_CRAM_PROMPT `__vhs=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} "PS1='\[\e[38;2;90;86;224m\]>\[\342\200\213\342\200\213\342\200\213\342\201\240\342\201\240\342\200\213\342\200\213\342\200\213\342\201\240\342\200\213\342\201\240\342\201\240\342\200\213\342\200\213\342\201\240\342\201\240\] \[\e[0m\]'"); unset PROMPT_COMMAND; PROMPT_COMMAND=$__vhs; unset __vhs VHS_CRAM_PROMPT`
 Type 'eval "$VHS_CRAM_PROMPT"; clear'
 Enter
-Wait+Line /\x{200B}$/
+Wait+Line /\x{200B}\x{200B}\x{200B}\x{2060}\x{2060}\x{200B}\x{200B}\x{200B}\x{2060}\x{200B}\x{2060}\x{2060}\x{200B}\x{200B}\x{2060}\x{2060}$/
 Show
 Type "echo hello"
 Enter
-Wait+Line /\x{200B}$/
+Wait+Line /\x{200B}\x{200B}\x{200B}\x{2060}\x{2060}\x{200B}\x{200B}\x{200B}\x{2060}\x{200B}\x{2060}\x{2060}\x{200B}\x{200B}\x{2060}\x{2060}$/
 Sleep 1000ms
 ```
 
 A setup script, given with `--setup`, runs before the first command without
 being recorded. `vhs-cram` then makes the last command of bash's
 `PROMPT_COMMAND`, after any prompt hook the setup installs, set the prompt to
-the one VHS gives bash followed by an invisible zero-width space, and waits for
-that prompt: output that ends with `>` while its command still runs is not
-mistaken for it.
+the one VHS gives bash followed by an invisible mark, sixteen zero-width
+characters that spell a digest of the cram test, and waits for that mark:
+output that ends with `>`, or with a zero-width space, while its command still
+runs is not mistaken for the prompt.
 
 ## Credits
 

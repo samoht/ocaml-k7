@@ -52,42 +52,64 @@ let is_empty t = t = []
 let sh_quote s =
   "'" ^ String.concat {|'\''|} (String.split_on_char '\'' s) ^ "'"
 
-(* The prompt VHS gives bash with a zero-width space after the [>]: the
-   recording looks the same, but [ready] holds only on this prompt, not on
-   output that ends with [>] while its command still runs. *)
-let ps1 = {|PS1='\[\e[38;2;90;86;224m\]>\[\342\200\213\] \[\e[0m\]'|}
-let ready = Vhs.wait (Line {|\x{200B}$|})
+(* [mark ~setup t] is the sixteen zero-width characters that follow the
+   [>] of the prompt, one per bit of a digest of [setup] and [t]: U+200B for
+   a 0, U+2060 for a 1. The recording looks the same, but a line holds the
+   mark only on this prompt, not when a command prints a zero-width space or
+   the prompt of another recording. *)
+let mark ~setup t =
+  let d = Digest.string (String.concat "\n" (setup @ List.concat t)) in
+  let bits = (Char.code d.[0] lsl 8) lor Char.code d.[1] in
+  List.init 16 (fun i -> (bits lsr i) land 1 = 1)
+
+let concat_map f l = String.concat "" (List.map f l)
+
+(* The prompt VHS gives bash, with [mark] after the [>]. *)
+let ps1 mark =
+  {|PS1='\[\e[38;2;90;86;224m\]>\[|}
+  ^ concat_map (fun b -> if b then {|\342\201\240|} else {|\342\200\213|}) mark
+  ^ {|\] \[\e[0m\]'|}
+
+let ready mark =
+  Vhs.wait
+    (Line
+       (concat_map (fun b -> if b then {|\x{2060}|} else {|\x{200B}|}) mark
+       ^ "$"))
 
 (* The variable that hands [init] to bash, through VHS's [Env], which sets it
    before the shell starts; [init] unsets it. *)
 let var = "VHS_CRAM_PROMPT"
 
-(* [init] makes [ps1] the last command of [PROMPT_COMMAND], after the hooks a
-   setup installs, which may rewrite [PS1] before each prompt. The hooks of
-   an array, which bash 5.1 and later run in order, are joined into one
-   string, run by every bash. *)
-let init =
+(* [init mark] makes [ps1 mark] the last command of [PROMPT_COMMAND], after
+   the hooks a setup installs, which may rewrite [PS1] before each prompt.
+   The hooks of an array, which bash 5.1 and later run in order, are joined
+   into one string, run by every bash. *)
+let init mark =
   String.concat ""
     [
       {|__vhs=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} "|};
-      ps1;
+      ps1 mark;
       {|"); unset PROMPT_COMMAND; PROMPT_COMMAND=$__vhs; unset __vhs |};
       var;
     ]
 
-let prepare setup =
+let prepare mark setup =
   let line =
     List.map (fun s -> "source " ^ sh_quote s) setup
     @ [ Fmt.str {|eval "$%s"|} var; "clear" ]
   in
   Vhs.hidden
     [
-      Fmt.kstr Vhs.raw "Env %s `%s`" var init;
+      Fmt.kstr Vhs.raw "Env %s `%s`" var (init mark);
       Vhs.type' (String.concat "; " line ^ "\n");
-      ready;
+      ready mark;
     ]
 
-let command lines =
-  [ Vhs.type' (String.concat "\n" lines ^ "\n"); ready; Vhs.sleep (Ms 1000) ]
+let command mark lines =
+  [
+    Vhs.type' (String.concat "\n" lines ^ "\n"); ready mark; Vhs.sleep (Ms 1000);
+  ]
 
-let actions ~setup t = prepare setup :: List.concat_map command t
+let actions ~setup t =
+  let mark = mark ~setup t in
+  prepare mark setup :: List.concat_map (command mark) t

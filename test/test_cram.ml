@@ -6,16 +6,44 @@
 open Vhs_cram
 
 let expect = Alcotest.(check string)
-let ready = {|Wait+Line /\x{200B}$/|} ^ "\n"
+
+(* [replace ~sub ~by s] is [s] with each [sub] replaced by [by]. *)
+let replace ~sub ~by s =
+  let n = String.length sub in
+  let b = Buffer.create (String.length s) in
+  let rec go i =
+    if i > String.length s - n then
+      Buffer.add_substring b s i (String.length s - i)
+    else if String.sub s i n = sub then (
+      Buffer.add_string b by;
+      go (i + n))
+    else (
+      Buffer.add_char b s.[i];
+      go (i + 1))
+  in
+  go 0;
+  Buffer.contents b
+
+(* [unmarked s] is [s] with each character of the prompt mark written as a
+   zero-width space, so that tapes compare whatever the mark. *)
+let unmarked s =
+  s
+  |> replace ~sub:{|\x{2060}|} ~by:{|\x{200B}|}
+  |> replace ~sub:{|\342\201\240|} ~by:{|\342\200\213|}
+
+let repeat s = String.concat "" (List.init 16 (fun _ -> s))
+let ready = "Wait+Line /" ^ repeat {|\x{200B}|} ^ "$/\n"
 
 let env =
-  {|Env VHS_CRAM_PROMPT `__vhs=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} "PS1='\[\e[38;2;90;86;224m\]>\[\342\200\213\] \[\e[0m\]'"); unset PROMPT_COMMAND; PROMPT_COMMAND=$__vhs; unset __vhs VHS_CRAM_PROMPT`|}
+  {|Env VHS_CRAM_PROMPT `__vhs=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} "PS1='\[\e[38;2;90;86;224m\]>\[|}
+  ^ repeat {|\342\200\213|}
+  ^ {|\] \[\e[0m\]'"); unset PROMPT_COMMAND; PROMPT_COMMAND=$__vhs; unset __vhs VHS_CRAM_PROMPT`|}
 
 (* What every recording starts with, hidden. *)
 let prelude ?(typed = {|Type 'eval "$VHS_CRAM_PROMPT"; clear'|}) () =
   "Hide\n" ^ env ^ "\n" ^ typed ^ "\nEnter\n" ^ ready ^ "Show\n"
 
-let cram ?(setup = []) src =
+let printed ?(setup = []) src =
   match Cram.parse src with
   | Error msg -> Alcotest.fail msg
   | Ok t -> (
@@ -26,6 +54,8 @@ let cram ?(setup = []) src =
           String.sub s (String.length header)
             (String.length s - String.length header)
       | Error msg -> Alcotest.fail msg)
+
+let cram ?setup src = unmarked (printed ?setup src)
 
 let test_minimal () =
   expect "minimal"
@@ -83,6 +113,19 @@ let test_setup () =
     ^ "Type \"echo ready\"\nEnter\n" ^ ready ^ "Sleep 1000ms\n")
     (cram ~setup:[ "slow.sh"; "it's.sh" ] "  $ echo ready\n")
 
+(* The mark is the same for the same test and differs between tests, so
+   that a recording is not ready on the prompt of another one. *)
+let test_mark () =
+  let wait src =
+    String.split_on_char '\n' (printed src)
+    |> List.find (String.starts_with ~prefix:"Wait+Line")
+  in
+  Alcotest.(check string) "stable" (wait "  $ true\n") (wait "  $ true\n");
+  Alcotest.(check bool) "distinct" false (wait "  $ true\n" = wait "  $ false\n");
+  Alcotest.(check bool)
+    "sixteen characters" true
+    (unmarked (wait "  $ false\n") = String.trim ready)
+
 let suite =
   ( "cram",
     List.map
@@ -93,4 +136,5 @@ let suite =
         ("crlf", test_crlf);
         ("parse errors", test_parse_errors);
         ("setup", test_setup);
+        ("mark", test_mark);
       ] )

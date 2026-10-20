@@ -102,12 +102,13 @@ let man =
     `P
       "Before the first command, and after the setup scripts, $(tname) makes \
        the last command of $(b,PROMPT_COMMAND) set $(b,PS1) to the VHS prompt \
-       followed by a zero-width space, U+200B, which tells the prompt from \
-       output that ends with $(b,>). The space does not show in a GIF or a \
-       video, but the text outputs ($(b,.txt), $(b,.ascii) and $(b,.test)) \
-       hold it after each prompt. The prompt hooks of the setup scripts still \
-       run first; a command that replaces $(b,PROMPT_COMMAND) makes the next \
-       wait time out.";
+       followed by a mark: sixteen zero-width characters, U+200B and U+2060, \
+       that spell a digest of the setup scripts and the commands. The mark \
+       tells the prompt from output, even output that ends with $(b,>) or with \
+       a zero-width space. It does not show in a GIF or a video, but the text \
+       outputs ($(b,.txt), $(b,.ascii) and $(b,.test)) hold it after each \
+       prompt. The prompt hooks of the setup scripts still run first; a \
+       command that replaces $(b,PROMPT_COMMAND) makes the next wait time out.";
     `S Manpage.s_examples;
     `Pre
       "$(cmd) --output demo.gif demo.t\n\
