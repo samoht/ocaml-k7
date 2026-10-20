@@ -117,6 +117,36 @@ let test_scroll_far () =
         (String.concat "\n" (List.init 9 (fun i -> Int.to_string (i + 11))))
         (last (frames s))
 
+(* A screen wait reads the first lines of the buffer, as VHS's does: the
+   scrollback first, of at most a thousand lines as in xterm.js, which
+   [clear] empties. *)
+let test_buffer () =
+  with_dir @@ fun env cwd ->
+  let shows re = Vhs.wait ~timeout:(Ms 5000) (Screen re) in
+  let t =
+    tape
+      Vhs.
+        [
+          type' "seq 1 30\n";
+          shows {|^> seq 1 30\n1\n2\n|};
+          type' "seq 1 1100\n";
+          shows {|^93\n94\n|};
+          type' "seq 1 30; clear\n";
+          shows {|^>\n\n|};
+          type' "echo x\n";
+          shows {|^> echo x\nx\n>|};
+          key Scroll_up;
+          sleep (Ms 100);
+        ]
+  in
+  match record env cwd t with
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Ok s ->
+      Alcotest.(check string)
+        "no scrollback after clear"
+        (screen [ "> echo x"; "x"; ">" ])
+        (last (frames s))
+
 (* Keys send what xterm sends: the line editor sees arrows, control and alt
    chords. *)
 let test_keys () =
@@ -197,6 +227,7 @@ let suite =
          ("hidden", test_hidden);
          ("scroll", test_scroll);
          ("scroll far", test_scroll_far);
+         ("buffer", test_buffer);
          ("keys", test_keys);
          ("unsupported", test_unsupported);
        ]
