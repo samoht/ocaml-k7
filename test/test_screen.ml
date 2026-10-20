@@ -173,6 +173,41 @@ let test_saved_charset () =
   check_screens
     [ ("restored line drawing", "\027(0\0277\027(B\0278q", [ "\xe2\x94\x80" ]) ]
 
+(* The colour of the first cell of the screen after [s]. *)
+let first_fg s =
+  let t = Vhs.Screen.terminal ~rows:2 ~cols:5 in
+  Vhs.Screen.feed t s;
+  (Vhs.Screen.cells (Vhs.Screen.rows (Vhs.Screen.of_terminal t)).(0)).(0).fg
+
+(* As in xterm.js, a restore brings back the colours and the active
+   character set the save saw, and the line the save was on, which lines
+   scrolled out since moved up; it leaves the cursor's visibility alone,
+   and without a save, it homes the cursor. SI after a restore selects G0
+   again, and leaving the alternate screen of mode 1049 restores the save
+   that entering it made. Real VHS writes these screens. *)
+let test_restore () =
+  check_screens
+    [
+      ("without a save", "\027[5;5Habc\0278X", [ "X"; ""; ""; ""; "    abc" ]);
+      ( "after scrolling",
+        "\027[9;3H\0277\r\n\r\nY\0278X",
+        [ ""; ""; ""; ""; ""; ""; "  X"; ""; "Y" ] );
+      ("shift in", "\027(0\0277\027(B\0278q\015q", [ "\xe2\x94\x80q" ]);
+      ("ANSI restore", "\027(0\027[s\027(B\027[uq", [ "\xe2\x94\x80" ]);
+      ( "alternate screen",
+        "\027(0\027[?1049h\027(B\027[?1049lq",
+        [ "\xe2\x94\x80" ] );
+    ];
+  Alcotest.(check int)
+    "saved colour" (first_fg "\027[31mx")
+    (first_fg "\027[31m\0277\027[0m\0278x");
+  Alcotest.(check int)
+    "colour after the save" (first_fg "x")
+    (first_fg "\0277\027[31m\0278x");
+  Alcotest.(check bool)
+    "hidden cursor" false
+    (contains ~sub:{|href="#c"|} (svg [ (Ms 0, "\0277\027[?25l\0278") ]))
+
 (* TBC removes all tab stops; the next tab reaches the right margin.
    VHS keeps X at column 9 and puts Y in column 46. *)
 let test_clear_tabs () =
@@ -205,6 +240,7 @@ let suite =
         ("controls", test_controls);
         ("history", test_history);
         ("saved character set", test_saved_charset);
+        ("restore", test_restore);
         ("cleared tab stops", test_clear_tabs);
         ("delete wide glyph cell", test_delete_wide);
       ] )
