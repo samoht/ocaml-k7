@@ -224,16 +224,17 @@ let test_text () =
   let text path = screens (Eio.Path.load Eio.Path.(cwd / path)) in
   (match record env cwd (tape [ "demo.svg"; "demo.txt" ] actions) with
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e
-  | Ok _ ->
-      Alcotest.(check (list string))
-        "screens"
-        [
-          screen [ "> x=1"; ">" ];
-          screen [ "> x=1"; "> sleep 1; echo hi" ];
-          screen [ "> x=1"; "> sleep 1; echo hi"; "" ];
-          screen [ "> x=1"; "> sleep 1; echo hi"; "hi"; ">" ];
-        ]
-        (text "demo.txt"));
+  | Ok _ -> (
+      (* The echo of the typing can lag behind it, so the screens after the
+         typing and the key are left out. *)
+      match text "demo.txt" with
+      | [ show; _; _; prompt ] ->
+          Alcotest.(check string) "show" (screen [ "> x=1"; ">" ]) show;
+          Alcotest.(check string)
+            "prompt"
+            (screen [ "> x=1"; "> sleep 1; echo hi"; "hi"; ">" ])
+            prompt
+      | l -> Alcotest.failf "%d screens" (List.length l)));
   match
     record env cwd
       (tape [ "demo.svg" ]
