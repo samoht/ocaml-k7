@@ -12,6 +12,13 @@
     its cell, so the alignment does not depend on the font. The image holds no
     script and no external resource. *)
 
+type bar = {
+  rings : bool;  (** Rings, VHS's [Rings], rather than coloured dots. *)
+  right : bool;  (** On the right of the bar rather than on the left. *)
+  size : int;  (** The height of the bar, in pixels. *)
+}
+(** The type for VHS's window bars. *)
+
 type t = {
   width : int;  (** The width of the image, in pixels. *)
   height : int;  (** The height of the image, in pixels. *)
@@ -28,6 +35,7 @@ type t = {
   margin : int;  (** The width of the margin around the window. *)
   margin_fill : int;  (** The colour of the margin. *)
   radius : int;  (** The radius of the window's corners. *)
+  bar : bar option;  (** The bar at the top of the window, if any. *)
   blink : bool;  (** Whether the cursor blinks. *)
   loop_offset : int;  (** The time the loop starts at, in milliseconds. *)
   speed : float;  (** The playback speed, [1.] for real time. *)

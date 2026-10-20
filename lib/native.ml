@@ -94,6 +94,8 @@ type config = {
   margin : int;
   margin_fill : int;
   border_radius : int;
+  window_bar : string;
+  bar_size : int;
   letter_spacing : float;
   line_height : float;
   rows : int;
@@ -123,6 +125,8 @@ let default_config () =
     margin = 0;
     margin_fill = Palette.default.background;
     border_radius = 0;
+    window_bar = "";
+    bar_size = 30;
     letter_spacing = 1.;
     line_height = 1.;
     rows = 0;
@@ -202,8 +206,12 @@ let set line c name args =
   | "WaitTimeout", _ -> { c with wait_timeout = ms line (fst (time line args)) }
   | "WaitPattern", _ -> { c with wait_pattern = compile line (value ()) }
   | "CursorBlink", _ -> { c with cursor_blink = value () = "true" }
-  | "WindowBar", [ Str "" ] | "WindowBarSize", _ -> c
-  | "WindowBar", _ -> unsupported line "a window bar needs vhs"
+  | "WindowBar", _ -> (
+      match value () with
+      | ("" | "Colorful" | "ColorfulRight" | "Rings" | "RingsRight") as bar ->
+          { c with window_bar = bar }
+      | _ -> unsupported line "not a bar style of VHS")
+  | "WindowBarSize", _ -> { c with bar_size = int_value line (value ()) }
   | _ -> unsupported line "not a setting this module knows"
 
 (* Geometry: xterm.js fits whole cells of JetBrains Mono, VHS's first font,
@@ -221,12 +229,26 @@ let style c =
   let cell_width = max 1 ((c.font_size * 6 / 10) + round c.letter_spacing) in
   let cell_height = max 1 (int_of_float (float char_height *. c.line_height)) in
   let frame = 2 * (c.padding + c.margin) in
+  let bar =
+    match c.window_bar with
+    | "" -> None
+    | style ->
+        Some
+          Svg.
+            {
+              rings = String.starts_with ~prefix:"Rings" style;
+              right = String.ends_with ~suffix:"Right" style;
+              size = c.bar_size;
+            }
+  in
+  let bar_height = match bar with Some b -> b.size | None -> 0 in
   let cols =
     if c.columns > 0 then c.columns
     else max 2 ((c.width - frame - 25) / cell_width)
   in
   let rows =
-    if c.rows > 0 then c.rows else max 1 ((c.height - frame - 10) / cell_height)
+    if c.rows > 0 then c.rows
+    else max 1 ((c.height - frame - bar_height - 10) / cell_height)
   in
   if cols > max_cells || rows > max_cells then
     Fmt.kstr
@@ -236,14 +258,15 @@ let style c =
     if c.columns > 0 then even ((cols * cell_width) + 25 + frame) else c.width
   in
   let height =
-    if c.rows > 0 then even ((rows * cell_height) + 10 + frame) else c.height
+    if c.rows > 0 then even ((rows * cell_height) + 10 + frame + bar_height)
+    else c.height
   in
   Svg.
     {
       width;
       height;
       x = c.margin + c.padding;
-      y = c.margin + c.padding;
+      y = c.margin + bar_height + c.padding;
       cols;
       rows;
       cell_width;
@@ -255,6 +278,7 @@ let style c =
       margin = c.margin;
       margin_fill = c.margin_fill;
       radius = c.border_radius;
+      bar;
       blink = c.cursor_blink;
       loop_offset = 0;
       speed = (if c.playback_speed > 0. then c.playback_speed else 1.);

@@ -245,6 +245,36 @@ let test_text () =
         "from the output" 5
         (List.length (text "later.ascii"))
 
+(* A window bar takes the top of the window, with VHS's dots or rings. *)
+let test_window_bar () =
+  with_dir @@ fun env cwd ->
+  let bar raws =
+    match record env cwd (tape (List.map Vhs.raw raws @ [ Vhs.type' "x" ])) with
+    | Ok s -> s
+    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  in
+  let s = bar [ "Set WindowBar Colorful" ] in
+  List.iter
+    (fun sub -> check_contains "dot" ~sub s)
+    [
+      {|<circle cx="15" cy="15" r="4.5" fill="#ff4f4d"/>|};
+      {|<circle cx="30" cy="15" r="4.5" fill="#febb00"/>|};
+      {|<circle cx="45" cy="15" r="4.5" fill="#00cc1d"/>|};
+      (* 30 pixels fewer for the terminal: 8 rows of 29 pixels. *)
+      {|<svg x="60" y="90" width="644" height="232">|};
+    ];
+  let s =
+    bar [ "Set WindowBar RingsRight"; "Set WindowBarSize 40"; "Set Margin 5" ]
+  in
+  List.iter
+    (fun sub -> check_contains "ring" ~sub s)
+    [
+      {|<circle cx="775" cy="25" r="7.5" fill="#333333"/>|};
+      {|<circle cx="775" cy="25" r="5.5" class="e"/>|};
+      {|<circle cx="753" cy="25" r="7.5" fill="#333333"/>|};
+      {|<svg x="65" y="105" |};
+    ]
+
 (* Keys send what xterm sends: the line editor sees arrows, control and alt
    chords. *)
 let test_keys () =
@@ -381,6 +411,7 @@ let suite =
          ("scrolled line", test_scrolled_line);
          ("trim", test_trim);
          ("text", test_text);
+         ("window bar", test_window_bar);
          ("keys", test_keys);
          ("unsupported", test_unsupported);
        ]

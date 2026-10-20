@@ -3,6 +3,8 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
+type bar = { rings : bool; right : bool; size : int }
+
 type t = {
   width : int;
   height : int;
@@ -19,6 +21,7 @@ type t = {
   margin : int;
   margin_fill : int;
   radius : int;
+  bar : bar option;
   blink : bool;
   loop_offset : int;
   speed : float;
@@ -376,6 +379,41 @@ let add_style t b ~duration frames =
         (-(List.length frames - 1) * t.cols * t.cell_width));
   Buffer.add_string b "</style>"
 
+(* VHS's window bar, from its draw.go: three dots, or three rings, on the
+   left or on the right of the top of the window, in the colour of the
+   terminal's background. Go draws a circle of radius [r] antialiased from
+   [r - 1] to [r]. *)
+let add_bar t b bar =
+  let circle ~cx ~cy ~r fill =
+    if r > 0 then
+      Fmt.kstr (Buffer.add_string b)
+        "<circle cx=\"%d\" cy=\"%d\" r=\"%d.5\" %s/>" cx cy (r - 1) fill
+  in
+  let width = t.width - (2 * t.margin) in
+  let centre ~gap ~r ~space i =
+    let x = gap + r + (i * space) in
+    t.margin + if bar.right then width - x else x
+  in
+  let cy r gap = t.margin + r + gap in
+  if bar.rings then
+    let outer = bar.size / 5 in
+    let inner = 2 * 2 * outer / 5 in
+    let gap = (bar.size - (2 * outer)) / 2 in
+    let space = (2 * outer) + (bar.size / 6) in
+    for i = 0 to 2 do
+      let cx = centre ~gap ~r:outer ~space i in
+      circle ~cx ~cy:(cy outer gap) ~r:outer "fill=\"#333333\"";
+      circle ~cx ~cy:(cy outer gap) ~r:inner "class=\"e\""
+    done
+  else
+    let r = bar.size / 6 in
+    let gap = (bar.size - (2 * r)) / 2 in
+    let space = (2 * r) + (bar.size / 6) in
+    List.iteri
+      (fun i fill ->
+        circle ~cx:(centre ~gap ~r ~space i) ~cy:(cy r gap) ~r fill)
+      [ {|fill="#ff4f4d"|}; {|fill="#febb00"|}; {|fill="#00cc1d"|} ]
+
 let to_string t ~duration frames =
   let b = Buffer.create 65536 in
   let d =
@@ -408,6 +446,7 @@ let to_string t ~duration frames =
     (t.width - (2 * t.margin))
     (t.height - (2 * t.margin))
     t.radius;
+  Option.iter (add_bar t b) t.bar;
   Buffer.add_string b "<defs>";
   add_cursor_defs t b;
   Buffer.add_buffer b d.defs;

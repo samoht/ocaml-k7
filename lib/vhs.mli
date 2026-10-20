@@ -281,15 +281,15 @@ val render :
     last [Copy]), [Env], [Require], and every [Set] but those below. It does not
     play, and is {!Unsupported} on:
     - a {!shell} other than {!Bash};
-    - a JSON [Theme], [Set WindowBar] with a bar, and [Set MarginFill] with an
-      image;
+    - a JSON [Theme] and [Set MarginFill] with an image;
     - [Screenshot] and [Source];
     - a wait pattern with a Unicode class ([\p] or [\P]).
 
     Its patterns match as Go's do, except that [(?i)] folds ASCII letters only
     and [\b] counts Latin-1 letters as word characters next to a non-ASCII
     character. [Set CursorBlink], [Set BorderRadius], [Set PlaybackSpeed] and
-    [Set LoopOffset] change the animation. A size beyond 100000 pixels, or a
+    [Set LoopOffset] change the animation, and [Set WindowBar] and
+    [Set WindowBarSize] draw VHS's window bar. A size beyond 100000 pixels, or a
     terminal beyond 2000 cells a side, is {!Unsupported}. *)
 
 val record :
