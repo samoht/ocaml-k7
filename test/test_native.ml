@@ -184,6 +184,22 @@ let test_scrolled_line () =
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e
   | Ok _ -> ()
 
+(* A line ends at its last character that JavaScript's [trimEnd] keeps,
+   which VHS calls on it: a no-break space is not one. *)
+let test_trim () =
+  with_dir @@ fun env cwd ->
+  let t =
+    tape
+      Vhs.
+        [
+          type' "printf 'ab\\302\\240\\342\\200\\203'; sleep 3\n";
+          wait ~timeout:(Ms 2000) (Line "^ab$");
+        ]
+  in
+  match record env cwd t with
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Ok _ -> ()
+
 (* Keys send what xterm sends: the line editor sees arrows, control and alt
    chords. *)
 let test_keys () =
@@ -267,6 +283,7 @@ let suite =
          ("buffer", test_buffer);
          ("full scrollback", test_full_scrollback);
          ("scrolled line", test_scrolled_line);
+         ("trim", test_trim);
          ("keys", test_keys);
          ("unsupported", test_unsupported);
        ]
