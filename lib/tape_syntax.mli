@@ -30,6 +30,9 @@ val check : string -> (command, string) result
     rejects, and a [Rows] or [Columns] value that is not positive. [line] holds
     no newline. A [Source] line's tape is not read. *)
 
+val atoi : string -> int64 option
+(** [atoi s] is Go's [strconv.Atoi s] on 64 bits, or [None] if it fails. *)
+
 val no_extension : string
 (** [no_extension] is the error message for an {!constructor-Output} path
     without an extension or a trailing slash. *)

@@ -130,7 +130,7 @@ let test_numbers () =
               Alcotest.failf "Set %s %S: Go %s it" setting value
                 (if go then "accepts" else "rejects"))
           [
-            ("Margin", l.[0] = '1');
+            ("WindowBarSize", l.[0] = '1');
             ("BorderRadius", l.[0] = '1');
             ("LetterSpacing", l.[1] = '1');
             ("PlaybackSpeed", l.[1] = '1');

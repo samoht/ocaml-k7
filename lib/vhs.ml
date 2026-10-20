@@ -341,17 +341,18 @@ let check_setting = function
   | Typing_speed (Ms n) -> check_ms "Set TypingSpeed " n
   | Font_size _ | Framerate _ | Padding _ | Width _ | Height _ -> Ok ()
 
+(* The argument of the last raw [Set name] of [actions]. *)
+let raw_set actions name =
+  List.fold_left
+    (fun v -> function
+      | Tape_syntax.Set (n, a) when n = name -> Some a | _ -> v)
+    None (raw_commands actions)
+
 (* VHS refuses a frame smaller than twice the padding, its defaults
    included; the error names a setting the caller gave. The padding is not
    negative here, and halving the size, unlike doubling the padding, cannot
    overflow. *)
-let check_size settings =
-  let last f =
-    List.fold_left
-      (fun v s -> Option.fold ~none:v ~some:Option.some (f s))
-      None settings
-  in
-  let padding = last (function Padding n -> Some n | _ -> None) in
+let check_padding ~padding ~width ~height =
   let p = Option.value padding ~default:60 in
   let check name size default =
     let n = Option.value size ~default in
@@ -367,19 +368,63 @@ let check_size settings =
             (String.lowercase_ascii name)
             default
   in
-  let* () =
-    check "Width" (last (function Width n -> Some n | _ -> None)) 1200
+  let* () = check "Width" width 1200 in
+  check "Height" height 600
+
+(* A raw margin also counts twice, and a raw window bar its size in the
+   height, in Go's wrapping 64-bit arithmetic. *)
+let check_size settings actions =
+  let last f =
+    List.fold_left
+      (fun v s -> Option.fold ~none:v ~some:Option.some (f s))
+      None settings
   in
-  check "Height" (last (function Height n -> Some n | _ -> None)) 600
+  let padding = last (function Padding n -> Some n | _ -> None) in
+  let width = last (function Width n -> Some n | _ -> None) in
+  let height = last (function Height n -> Some n | _ -> None) in
+  let int name default =
+    Option.value ~default (Option.bind (raw_set actions name) Tape_syntax.atoi)
+  in
+  let margin = int "Margin" 0L in
+  let window_bar = raw_set actions "WindowBar" in
+  let bar =
+    match window_bar with
+    | None | Some "" -> 0L
+    | Some _ -> int "WindowBarSize" 30L
+  in
+  if Int64.equal margin 0L && Int64.equal bar 0L then
+    check_padding ~padding ~width ~height
+  else
+    let twice n = Int64.mul 2L n in
+    let min_width =
+      Int64.add
+        (twice (Int64.of_int (Option.value padding ~default:60)))
+        (twice margin)
+    in
+    let min_height = Int64.add min_width bar in
+    let w = Option.value width ~default:1200 in
+    let h = Option.value height ~default:600 in
+    if
+      Int64.compare (Int64.of_int w) min_width >= 0
+      && Int64.compare (Int64.of_int h) min_height >= 0
+    then Ok ()
+    else
+      let culprit =
+        if Int64.equal margin 0L then
+          "WindowBar " ^ Option.value window_bar ~default:""
+        else Fmt.str "Margin %Ld" margin
+      in
+      err "Set %s: the frame needs at least %Ld x %Ld pixels, not %d x %d"
+        culprit min_width min_height w h
 
 let tape ?(settings = []) ~outputs actions =
   let* () =
     if outputs = [] then err "no output" else iter_result check_output outputs
   in
   let* () = iter_result check_setting settings in
-  let* () = check_size settings in
   let* _started = check_actions ~started:false actions in
   let* () = check_cells settings actions in
+  let* () = check_size settings actions in
   let* () = check_kinds (outputs @ raw_outputs actions) in
   Ok { outputs; settings; actions }
 
