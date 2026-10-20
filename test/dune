@@ -10,6 +10,7 @@
   vhs
   vhs_cram
   svg_check
+  matrix.ansi
   native_test
   fmt
   alcotest

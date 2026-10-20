@@ -299,6 +299,39 @@ let test_cell_edits () =
       ("delete column", "abc\r\ndef\027[2G\027['~", [ "ac"; "df" ]);
     ]
 
+(* The attributes of the first cell of the screen after [s]. *)
+let first_attrs s =
+  let t = Vhs.Screen.terminal ~rows:2 ~cols:5 in
+  Vhs.Screen.feed t s;
+  (Vhs.Screen.cells (Vhs.Screen.rows (Vhs.Screen.of_terminal t)).(0)).(0).attrs
+
+(* xterm.js ignores the escape sequences it has no handler for, such as the
+   keypad modes, S7C1T, a CSI sequence with a private prefix that only
+   looks like SGR, and the strings of DCS, PM and APC, which end at ST or
+   at the next escape and not at BEL. A C0 control inside a sequence runs
+   and the sequence goes on; CAN ends it. DECSTR resets the modes, the
+   scroll region and the character sets, ESC # 8 fills the screen with E,
+   and CSI ? 3 J erases the scrollback, not the screen. Real VHS writes
+   these screens. *)
+let test_sequences () =
+  let e = String.make 46 'E' in
+  check_screens
+    [
+      ("keypad modes", "a\027=b\027>c", [ "abc" ]);
+      ("S7C1T", "a\027 Fb", [ "ab" ]);
+      ("DCS", "a\027Pq#0\027\\b", [ "ab" ]);
+      ("APC", "a\027_Gx\007y\027\\b", [ "ab" ]);
+      ("DCS ended by an escape", "a\027Pq\027[Cb", [ "a b" ]);
+      ("control in CSI", "ab\027[1\rCx", [ "ax" ]);
+      ("CAN", "a\027[31\024mb", [ "amb" ]);
+      ("DECSTR", "\027[1;2r\027(0\027[!p\027[Ha\r\nb\r\nc", [ "a"; "b"; "c" ]);
+      ("DECALN", "x\027#8", List.init 9 (fun _ -> e));
+      ("erase the scrollback", "ab\027[?3J", [ "ab" ]);
+    ];
+  Alcotest.(check bool)
+    "modifyOtherKeys" true
+    (Ansi.Attr.is_empty (first_attrs "\027[>4;2mx"))
+
 let suite =
   ( "screen",
     List.map
@@ -322,4 +355,5 @@ let suite =
         ("tab stops", test_tab_stops);
         ("delete wide glyph cell", test_delete_wide);
         ("cell edits", test_cell_edits);
+        ("sequences", test_sequences);
       ] )
