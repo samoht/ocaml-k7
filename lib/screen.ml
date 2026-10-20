@@ -14,6 +14,13 @@ let color rgb =
 
 type state = Ground | Escape | Csi | String | String_escape
 
+(* What a save keeps, as in xterm.js: the column, the line in the buffer,
+   which counts the scrollback, the colours and attributes, and the active
+   character set, named by the final byte of its designation. *)
+type saved = { col : int; line : int; style : Ansi.Style.t; charset : char }
+
+let unsaved = { col = 0; line = 0; style = Ansi.Style.default; charset = 'B' }
+
 type terminal = {
   vte : Vte.t;
   mutable state : state;
@@ -27,9 +34,14 @@ type terminal = {
   mutable bottom : int;  (** The last row of the scroll region. *)
   mutable wrap : bool;  (** Auto-wrap mode. *)
   mutable origin : bool;  (** Origin mode. *)
-  mutable g0 : bool;  (** Whether G0 is DEC line drawing. *)
-  mutable g1 : bool;  (** Whether G1 is DEC line drawing. *)
-  mutable shifted : bool;  (** Whether SO selected G1. *)
+  mutable region : int * int;
+      (** The normal screen's scroll region, while the alternate one shows. *)
+  sets : char array;  (** The character sets G0 to G3 designate. *)
+  mutable level : int;  (** The G set SI, SO or a locking shift invoked. *)
+  mutable charset : char;  (** The character set characters print in. *)
+  mutable style : Ansi.Style.t;  (** The colours and attributes of [vte]. *)
+  mutable saved : saved;  (** The save of the normal screen. *)
+  mutable saved_alternate : saved;  (** The save of the alternate screen. *)
   mutable last : string;  (** The last character printed, for REP. *)
 }
 
@@ -56,9 +68,13 @@ let terminal ~rows ~cols =
     bottom = rows - 1;
     wrap = true;
     origin = false;
-    g0 = false;
-    g1 = false;
-    shifted = false;
+    region = (0, rows - 1);
+    sets = Array.make 4 'B';
+    level = 0;
+    charset = 'B';
+    style = Ansi.Style.default;
+    saved = unsaved;
+    saved_alternate = unsaved;
     last = "";
   }
 
@@ -276,13 +292,120 @@ let character t s =
       Buffer.add_string t.out s;
       flush t))
 
+(* The national character sets of xterm.js: the characters each replaces,
+   and what replaces them. xterm.js prints the first character of the
+   Dutch "ij". *)
+let national = function
+  | 'A' -> ("#", [| "£" |])
+  | '4' -> ({x|#@[\]{|}~|x}, [| "£"; "¾"; "i"; "½"; "|"; "¨"; "f"; "¼"; "´" |])
+  | 'C' | '5' -> ({x|[\]^`{|}~|x}, [| "Ä"; "Ö"; "Å"; "Ü"; "é"; "ä"; "ö"; "å"; "ü" |])
+  | 'R' -> ({x|#@[\]{|}~|x}, [| "£"; "à"; "°"; "ç"; "§"; "é"; "ù"; "è"; "¨" |])
+  | 'Q' -> ({x|@[\]^`{|}~|x}, [| "à"; "â"; "ç"; "ê"; "î"; "ô"; "é"; "ù"; "è"; "û" |])
+  | 'K' -> ({x|@[\]{|}~|x}, [| "§"; "Ä"; "Ö"; "Ü"; "ä"; "ö"; "ü"; "ß" |])
+  | 'Y' -> ({x|#@[\]`{|}~|x}, [| "£"; "§"; "°"; "ç"; "é"; "ù"; "à"; "ò"; "è"; "ì" |])
+  | 'E' | '6' -> ({x|@[\]^`{|}~|x}, [| "Ä"; "Æ"; "Ø"; "Å"; "Ü"; "ä"; "æ"; "ø"; "å"; "ü" |])
+  | 'Z' -> ({x|#@[\]{|}|x}, [| "£"; "§"; "¡"; "Ñ"; "¿"; "°"; "ñ"; "ç" |])
+  | 'H' | '7' -> ({x|@[\]^`{|}~|x}, [| "É"; "Ä"; "Ö"; "Å"; "Ü"; "é"; "ä"; "ö"; "å"; "ü" |])
+  | '=' -> ({x|#@[\]^_`{|}~|x}, [| "ù"; "à"; "é"; "ç"; "ê"; "î"; "è"; "ô"; "ä"; "ö"; "ü"; "û" |])
+  | _ -> ("", [||])
+[@@ocamlformat "disable"]
+
+(* The final bytes of the designations xterm.js reads. *)
+let is_charset c = String.contains "0AB4C5RQKYE6ZH7=" c
 let ascii = Array.init 128 (fun i -> String.make 1 (Char.chr i))
 
 let print_ascii t c =
-  let dec = if t.shifted then t.g1 else t.g0 in
-  if dec && c >= '`' && c <= '~' then
-    character t dec_graphics.(Char.code c - Char.code '`')
-  else character t ascii.(Char.code c)
+  match t.charset with
+  | 'B' -> character t ascii.(Char.code c)
+  | '0' when c >= '`' && c <= '~' ->
+      character t dec_graphics.(Char.code c - Char.code '`')
+  | set -> (
+      let keys, values = national set in
+      match String.index_opt keys c with
+      | Some i -> character t values.(i)
+      | None -> character t ascii.(Char.code c))
+
+(* As in xterm.js, invoking a G set or designating the invoked one sets the
+   active character set, which a restore sets alone. *)
+let invoke t level =
+  t.level <- level;
+  t.charset <- t.sets.(level)
+
+let designate t level set =
+  t.sets.(level) <- set;
+  if t.level = level then t.charset <- set
+
+(* The G set each intermediate byte of a designation designates. *)
+let level_of = function
+  | '(' -> Some 0
+  | ')' | '-' -> Some 1
+  | '*' | '.' -> Some 2
+  | '+' -> Some 3
+  | _ -> None
+
+(* matrix 0.1.0 does not keep the style it draws in, so the screen reads
+   SGR as matrix does to know it. *)
+let sgr style : Ansi.Parser.sgr_attr -> Ansi.Style.t = function
+  | `Reset -> Ansi.Style.default
+  | `Bold -> Ansi.Style.with_bold true style
+  | `Dim -> Ansi.Style.with_dim true style
+  | `Italic -> Ansi.Style.with_italic true style
+  | `Underline -> Ansi.Style.with_underline true style
+  | `Double_underline -> Ansi.Style.with_double_underline true style
+  | `Blink -> Ansi.Style.with_blink true style
+  | `Inverse -> Ansi.Style.with_inverse true style
+  | `Hidden -> Ansi.Style.with_hidden true style
+  | `Strikethrough -> Ansi.Style.with_strikethrough true style
+  | `Overline -> Ansi.Style.with_overline true style
+  | `Framed -> Ansi.Style.with_framed true style
+  | `Encircled -> Ansi.Style.with_encircled true style
+  | `No_bold -> Ansi.Style.with_bold false style
+  | `No_dim -> Ansi.Style.with_dim false style
+  | `No_italic -> Ansi.Style.with_italic false style
+  | `No_underline -> Ansi.Style.with_underline false style
+  | `No_blink -> Ansi.Style.with_blink false style
+  | `No_inverse -> Ansi.Style.with_inverse false style
+  | `No_hidden -> Ansi.Style.with_hidden false style
+  | `No_strikethrough -> Ansi.Style.with_strikethrough false style
+  | `No_overline -> Ansi.Style.with_overline false style
+  | `No_framed -> Ansi.Style.with_framed false style
+  | `No_encircled -> Ansi.Style.with_encircled false style
+  | `Fg c -> Ansi.Style.fg c style
+  | `Bg c -> Ansi.Style.bg c style
+
+let read_sgr t s =
+  List.iter
+    (function
+      | Ansi.Parser.SGR attrs -> t.style <- List.fold_left sgr t.style attrs
+      | _ -> ())
+    (Ansi.Parser.parse s)
+
+(* matrix 0.1.0 restores neither the style nor the character set, and
+   restores the cursor's visibility, so the screen saves and restores the
+   cursor itself, on each screen apart. *)
+let save t =
+  flush t;
+  let row, col = Vte.cursor_pos t.vte in
+  let s =
+    { col; line = history t + row; style = t.style; charset = t.charset }
+  in
+  if Vte.is_alternate_screen t.vte then t.saved_alternate <- s else t.saved <- s
+
+let restore t =
+  flush t;
+  let s =
+    if Vte.is_alternate_screen t.vte then t.saved_alternate else t.saved
+  in
+  let row = max 0 (s.line - history t) in
+  let row =
+    if t.origin then max t.top (min t.bottom row)
+    else min (Vte.rows t.vte - 1) row
+  in
+  move t ~row ~col:(min s.col (Vte.cols t.vte - 1));
+  t.charset <- s.charset;
+  t.style <- s.style;
+  Buffer.add_string t.out ("\027[0m" ^ Ansi.Style.sgr_sequence s.style);
+  flush t
 
 let replacement = "\xef\xbf\xbd"
 
@@ -339,11 +462,60 @@ let home t = move t ~row:(if t.origin then t.top else 0) ~col:0
 let reset t =
   t.top <- 0;
   t.bottom <- Vte.rows t.vte - 1;
+  t.region <- (t.top, t.bottom);
   t.wrap <- true;
   t.origin <- false;
-  t.g0 <- false;
-  t.g1 <- false;
-  t.shifted <- false
+  Array.fill t.sets 0 4 'B';
+  invoke t 0;
+  t.style <- Ansi.Style.default;
+  t.saved <- unsaved;
+  t.saved_alternate <- unsaved
+
+(* Whether the CSI sequence [s] has neither a private prefix nor an
+   intermediate byte. *)
+let plain s =
+  String.for_all (fun c -> String.contains "0123456789;:" c) (params s)
+
+(* A switch of screens gives the alternate one a full scroll region, and
+   the normal one back its own. matrix 0.1.0 also restores the cursor's
+   visibility when it leaves the alternate screen, which xterm.js keeps. *)
+let switched t ~visible =
+  if Vte.cursor_visible t.vte <> visible then
+    Vte.set_cursor_visible t.vte visible;
+  if Vte.is_alternate_screen t.vte then (
+    t.region <- (t.top, t.bottom);
+    t.top <- 0;
+    t.bottom <- Vte.rows t.vte - 1)
+  else
+    let top, bottom = t.region in
+    t.top <- top;
+    t.bottom <- bottom
+
+(* [mode t ~dec ~set p] sets ([set]) or resets the ANSI or DEC ([dec]) mode
+   [p] as xterm.js does; mode 1049 saves the cursor before it enters the
+   alternate screen and restores it after it leaves. *)
+let mode t ~dec ~set p =
+  let alternate = Vte.is_alternate_screen t.vte in
+  let visible = Vte.cursor_visible t.vte in
+  let cursor = dec && p = "1049" in
+  if cursor && set then save t;
+  (match (dec, p) with
+  | true, "6" ->
+      t.origin <- set;
+      home t
+  | true, "7" -> t.wrap <- set
+  | _ -> ());
+  Buffer.add_string t.out
+    ("\027[" ^ (if dec then "?" else "") ^ p ^ if set then "h" else "l");
+  flush t;
+  if Vte.is_alternate_screen t.vte <> alternate then switched t ~visible;
+  if cursor && not set then restore t
+
+let modes t s =
+  let set = csi_final s = Some 'h' and p = params s in
+  let dec = String.starts_with ~prefix:"?" p in
+  let p = if dec then String.sub p 1 (String.length p - 1) else p in
+  List.iter (mode t ~dec ~set) (String.split_on_char ';' p)
 
 (* The sequences matrix 0.1.0 misreads or lacks, and the cursor moves and
    edits that read the cursor's column. *)
@@ -383,23 +555,30 @@ let sequence t s =
   | Some 'r', _ ->
       set_region t (params s);
       home t
-  | Some ('h' | 'l'), _ ->
-      let set = csi_final s = Some 'h' in
-      (match params s with
-      | "?6" ->
-          t.origin <- set;
-          home t
-      | "?7" -> t.wrap <- set
-      | _ -> ());
+  | Some ('h' | 'l'), _ -> modes t s
+  | Some 's', _ when plain s -> save t
+  | Some 'u', _ when plain s -> restore t
+  | Some ('s' | 'u'), _ -> ()
+  | Some 'm', _ ->
+      read_sgr t s;
       Buffer.add_string t.out s
+  | None, "\0277" -> save t
+  | None, "\0278" -> restore t
   | None, "\027D" -> index t 1
   | None, "\027E" ->
       index t 1;
       move t ~row:(fst (Vte.cursor_pos t.vte)) ~col:0
   | None, "\027M" -> index t (-1)
-  | None, ("\027(0" | "\027(B" | "\027)0" | "\027)B") ->
-      let dec = s.[2] = '0' in
-      if s.[1] = '(' then t.g0 <- dec else t.g1 <- dec
+  | None, ("\027n" | "\027}") -> invoke t 2
+  | None, ("\027o" | "\027|") -> invoke t 3
+  | None, "\027~" -> invoke t 1
+  | None, ("\027%@" | "\027%G") ->
+      invoke t 0;
+      designate t 0 'B'
+  | None, _ when String.length s = 3 && is_charset s.[2] -> (
+      match level_of s.[1] with
+      | Some level -> designate t level s.[2]
+      | None -> Buffer.add_string t.out s)
   | None, "\027c" ->
       reset t;
       Buffer.add_string t.out s
@@ -435,8 +614,8 @@ let rec byte t c =
     | Ground, ('\n' | '\011' | '\012') ->
         t.last <- "";
         index t 1
-    | Ground, '\014' -> t.shifted <- true
-    | Ground, '\015' -> t.shifted <- false
+    | Ground, '\014' -> invoke t 1
+    | Ground, '\015' -> invoke t 0
     | Ground, '\027' -> Buffer.add_char t.seq c
     | Ground, (' ' .. '~' as c) -> print_ascii t c
     | Ground, _ -> Buffer.add_char t.out c
