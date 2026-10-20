@@ -16,6 +16,11 @@ commands with the output each one must print, which dune checks) into a
 recording of that test. The library records a tape itself as an animated SVG
 image, which needs no other program; a GIF or a video still needs `vhs`.
 
+![A cram test recorded by vhs-cram as an animated SVG image](doc/demo.svg)
+
+The recording above is [doc/demo.t](doc/demo.t), recorded natively with
+`dune exec -- vhs-cram --output doc/demo.svg doc/demo.t`.
+
 ## Installation
 
 ```
@@ -89,9 +94,10 @@ let make_gif env tape =
 
 ## Recording without VHS
 
-`Vhs.record` plays the tape in bash on a pseudo-terminal, reads what bash
-prints with a terminal emulator, and writes the screens to each `.svg` output
-of the tape as an animated SVG image. The image holds text, no script and no
+`Vhs.record` plays the tape in bash or zsh on a pseudo-terminal, reads what
+the shell prints with a terminal emulator that behaves as VHS's xterm.js, and
+writes the screens to each `.svg` output of the tape as an animated SVG image,
+and its text to a `.txt`, `.ascii` or `.test` output as VHS writes it. The image holds text, no script and no
 external resource, and animates with CSS alone, so it plays in an HTML `<img>`
 and in a README on GitHub.
 VHS cannot write `.svg`, so an `.svg` output is not in the tape that `vhs`
@@ -111,11 +117,14 @@ let make_svg env tape =
 ```
 
 The terminal has the size VHS gives it, and the image uses the colours of the
-tape's theme. Time follows the tape: typing and sleeping take the time the
+tape's theme, named or in JSON, and VHS's window bar and margin. Wait patterns
+match as Go's do. Time follows the tape: typing and sleeping take the time the
 tape says, whatever the machine does around them, so the same output gives the
-same image. A few settings and commands need VHS, such as a window bar or a
-`Screenshot`; `Vhs.record` names them in its error. `Vhs.svg` draws the image
-of output given with its times, without running anything.
+same image. A `Screenshot` writes a still SVG image, and `Source` plays the
+lines of another tape. A few things need VHS, such as fish and the other
+shells, a colour name in a JSON theme or a Unicode class in a wait pattern;
+`Vhs.record` names them in its error. `Vhs.svg` draws the image of output given
+with its times, without running anything.
 
 ## Recording a cram test
 
