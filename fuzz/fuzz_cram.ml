@@ -85,8 +85,9 @@ let test_parse src =
       (* A rejected line may also be a continuation. *)
       ()
 
-(* Commands and continuations are typed in order, each line submitted;
-   prose, output and orphan continuations are not; CRLF reads as LF. *)
+(* Commands and continuations are typed in order, each line submitted, a
+   bare [  >] as an empty line; prose, output and orphan continuations are
+   not; CRLF reads as LF. *)
 let test_commands commands eol =
   let commands = List.map typeable commands in
   let src =
@@ -94,8 +95,8 @@ let test_commands commands eol =
     ^ String.concat ""
         (List.map
            (fun c ->
-             "  $ " ^ c ^ eol ^ "  > " ^ c ^ eol ^ "  output" ^ eol
-             ^ "  > not a continuation" ^ eol)
+             "  $ " ^ c ^ eol ^ "  > " ^ c ^ eol ^ "  >" ^ eol ^ "  output"
+             ^ eol ^ "  > not a continuation" ^ eol)
            commands)
   in
   match Cram.parse src with
@@ -106,7 +107,7 @@ let test_commands commands eol =
         | prelude :: got when String.ends_with ~suffix:"; clear" prelude -> got
         | _ -> fail "no hidden prelude"
       in
-      let expected = List.concat_map (fun c -> [ c; c ]) commands in
+      let expected = List.concat_map (fun c -> [ c; c; "" ]) commands in
       if got <> expected then
         failf "%S submitted %d lines, not %d" src (List.length got)
           (List.length expected);

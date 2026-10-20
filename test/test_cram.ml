@@ -84,6 +84,29 @@ let test_crlf () =
     (prelude () ^ "Type \"echo hi\"\nEnter\n" ^ ready ^ "Sleep 1000ms\n")
     (cram "  $ echo hi\r\n  hi\r\n")
 
+(* As in dune, a bare [  >] continues the command with an empty line, so a
+   heredoc keeps its blank lines; a CRLF line ending reads as LF. *)
+let test_empty_continuation () =
+  let heredoc =
+    "Type \"cat <<EOF\"\n\
+     Enter\n\
+     Type \"a\"\n\
+     Enter\n\
+     Enter\n\
+     Type \"b\"\n\
+     Enter\n\
+     Type \"EOF\"\n\
+     Enter\n"
+  in
+  let expected = prelude () ^ heredoc ^ ready ^ "Sleep 1000ms\n" in
+  expect "LF" expected (cram "  $ cat <<EOF\n  > a\n  >\n  > b\n  > EOF\n");
+  expect "CRLF" expected
+    (cram "  $ cat <<EOF\r\n  > a\r\n  >\r\n  > b\r\n  > EOF\r\n");
+  expect "end of input"
+    (prelude () ^ "Type \"cat <<EOF\"\nEnter\nEnter\n" ^ ready
+   ^ "Sleep 1000ms\n")
+    (cram "  $ cat <<EOF\n  >")
+
 let test_parse_errors () =
   let error name expected src =
     Alcotest.(check (result unit string))
@@ -134,6 +157,7 @@ let suite =
         ("minimal", test_minimal);
         ("parse", test_parse);
         ("crlf", test_crlf);
+        ("empty continuation", test_empty_continuation);
         ("parse errors", test_parse_errors);
         ("setup", test_setup);
         ("mark", test_mark);
