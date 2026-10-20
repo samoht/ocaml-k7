@@ -20,12 +20,15 @@ val vte : terminal -> Vte.t
 (** [vte t] is the emulator of [t], to query; {!feed} is how it reads. *)
 
 val feed : terminal -> string -> unit
-(** [feed t s] makes [t] read [s], the next bytes after those it read. A
-    backspace outside an escape sequence moves the cursor left, as in xterm,
-    where {!Vte.feed} would also erase the character it moves over. A character
-    of no width, such as a combining mark, a zero-width space or joiner or a
-    variation selector, joins the cell before the cursor, as in xterm.js; the
-    first column has no such cell, and drops it. *)
+(** [feed t s] makes [t] read [s], the next bytes after those it read, as
+    xterm.js reads them where {!Vte.feed} does not: a backspace moves the cursor
+    without erasing; a character of no width, such as a combining mark, a
+    zero-width space or joiner or a variation selector, joins the cell before
+    the cursor, and the first column, which has none, drops it; after a
+    character in the last column the cursor stays there until the next character
+    wraps; line feeds keep the column; and the scroll region, indexes, line and
+    character edits, REP, the modes of auto-wrap and origin and DEC line drawing
+    work as in xterm. *)
 
 val is_dirty : terminal -> bool
 (** [is_dirty t] is [true] iff the screen or the cursor of [t] changed since the
