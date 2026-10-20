@@ -31,6 +31,11 @@ val feed : terminal -> string -> unit
     origin, the saved cursor, the tab stops and the character sets work as in
     xterm.js, and the sequences xterm.js ignores change nothing. *)
 
+val take_replies : terminal -> string
+(** [take_replies t] is what [t] answers, as xterm.js does, to the queries it
+    read since the last [take_replies]: of its primary and secondary device
+    attributes, its status and its cursor position. *)
+
 val is_dirty : terminal -> bool
 (** [is_dirty t] is [true] iff the screen or the cursor of [t] changed since the
     last {!clear_dirty}. *)

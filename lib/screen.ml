@@ -48,6 +48,7 @@ type terminal = {
   stops : bool array;  (** The tab stops of the normal screen. *)
   stops_alternate : bool array;  (** The tab stops of the alternate screen. *)
   mutable last : string;  (** The last character printed, for REP. *)
+  replies : Buffer.t;  (** The answers to the queries read. *)
 }
 
 (* xterm.js keeps a thousand lines of scrollback, VHS's [Buffer] reads its
@@ -83,6 +84,7 @@ let terminal ~rows ~cols =
     stops = Array.init cols (fun i -> i mod 8 = 0);
     stops_alternate = Array.init cols (fun i -> i mod 8 = 0);
     last = "";
+    replies = Buffer.create 16;
   }
 
 let vte t = t.vte
@@ -632,6 +634,29 @@ let soft_reset t =
   Buffer.add_string t.out "\027[0m\027[4l\027[?1l\027[?7h\027[?25h\027[?2004l";
   flush t
 
+(* The answers of xterm.js to the queries of the device attributes, the
+   status and the cursor position, [params] and the final byte of their
+   CSI sequence. The cursor's column after a character in the last column
+   is beyond it, in xterm.js as in matrix 0.1.0. *)
+let reply t = function
+  | "c" | "0c" -> Buffer.add_string t.replies "\027[?1;2c"
+  | ">c" | ">0c" -> Buffer.add_string t.replies "\027[>0;276;0c"
+  | "5n" -> Buffer.add_string t.replies "\027[0n"
+  | ("6n" | "?6n") as q ->
+      flush t;
+      let row, col = Vte.cursor_pos t.vte in
+      Fmt.kstr
+        (Buffer.add_string t.replies)
+        "\027[%s%d;%dR"
+        (if q.[0] = '?' then "?" else "")
+        (row + 1) (col + 1)
+  | _ -> ()
+
+let take_replies t =
+  let s = Buffer.contents t.replies in
+  Buffer.clear t.replies;
+  s
+
 (* ESC # 8 homes the cursor and fills the rows from it with E. *)
 let align t =
   home t;
@@ -663,6 +688,8 @@ let sequence t s =
   | Some 'p', _ when String.ends_with ~suffix:"!p" s -> soft_reset t
   | Some ('h' | 'l'), _ -> modes t s
   | Some ('J' | 'K'), _ -> control t s
+  | Some ('c' | 'n'), _ ->
+      reply t (params s ^ String.make 1 s.[String.length s - 1])
   | Some _, _ when not (plain s) -> ()
   | Some ('A' | 'F'), _ ->
       vertical t (-n ()) ~col:(if csi_final s = Some 'F' then Some 0 else None)

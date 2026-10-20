@@ -517,6 +517,8 @@ let replay t output =
     List.fold_left
       (fun _ (ms, bytes) ->
         Screen.feed term bytes;
+        (* Output given with its times has no program to answer. *)
+        ignore (Screen.take_replies term);
         screen := Screen.of_terminal ~previous:!screen term;
         Screen.clear_dirty term;
         add tl ms !screen;
@@ -635,19 +637,7 @@ let refresh st =
 
 let fd st = Pty.file_descr st.pty
 
-let rec reader st buf =
-  match Pty.read st.pty buf 0 (Bytes.length buf) with
-  | 0 -> Eio.Fiber.await_cancel ()
-  | n ->
-      Screen.feed st.term (Bytes.sub_string buf 0 n);
-      refresh st;
-      reader st buf
-  | exception Unix.Unix_error ((EAGAIN | EWOULDBLOCK | EINTR), _, _) ->
-      Eio_unix.await_readable (fd st);
-      reader st buf
-  | exception Unix.Unix_error _ -> Eio.Fiber.await_cancel ()
-
-let write st s =
+let send st s =
   let rec go off =
     if off < String.length s then
       match Pty.write_string st.pty s off (String.length s - off) with
@@ -657,11 +647,29 @@ let write st s =
           go off
       | exception Unix.Unix_error _ -> ()
   in
+  go 0
+
+(* The terminal answers the queries it reads, as xterm.js does. *)
+let rec reader st buf =
+  match Pty.read st.pty buf 0 (Bytes.length buf) with
+  | 0 -> Eio.Fiber.await_cancel ()
+  | n ->
+      Screen.feed st.term (Bytes.sub_string buf 0 n);
+      send st (Screen.take_replies st.term);
+      refresh st;
+      reader st buf
+  | exception Unix.Unix_error ((EAGAIN | EWOULDBLOCK | EINTR), _, _) ->
+      Eio_unix.await_readable (fd st);
+      reader st buf
+  | exception Unix.Unix_error _ -> Eio.Fiber.await_cancel ()
+
+(* Typing scrolls the screen back down. *)
+let write st s =
   if st.offset > 0 then (
     st.offset <- 0;
     st.shown <- st.live;
     record st);
-  go 0
+  send st s
 
 (* [step st ms] runs an action the tape gives [ms] milliseconds. *)
 let step st ms =
