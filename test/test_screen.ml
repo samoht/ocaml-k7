@@ -173,6 +173,19 @@ let test_saved_charset () =
   check_screens
     [ ("restored line drawing", "\027(0\0277\027(B\0278q", [ "\xe2\x94\x80" ]) ]
 
+(* xterm.js reads the national character sets, designates G0 to G3 and
+   shifts to G2 and G3: the UK set maps [#] to [£], a designation that is
+   not DEC line drawing ends it, and the Dutch [\[] is the first letter of
+   its "ij". Real VHS writes this line. *)
+let test_charsets () =
+  check_screens
+    [
+      ( "designations and shifts",
+        "\027(A#\027(B#\027*0\027nq\015q\027(0q\027(Aq#\027(4[",
+        [ "\xc2\xa3#\xe2\x94\x80q\xe2\x94\x80q\xc2\xa3i" ] );
+      ("default", "\027(0\027%Gq", [ "q" ]);
+    ]
+
 (* The colour of the first cell of the screen after [s]. *)
 let first_fg s =
   let t = Vhs.Screen.terminal ~rows:2 ~cols:5 in
@@ -241,6 +254,7 @@ let suite =
         ("history", test_history);
         ("saved character set", test_saved_charset);
         ("restore", test_restore);
+        ("character sets", test_charsets);
         ("cleared tab stops", test_clear_tabs);
         ("delete wide glyph cell", test_delete_wide);
       ] )
