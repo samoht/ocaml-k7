@@ -673,6 +673,7 @@ let sequence t s =
       | [] | [ _ ] -> position t ~row:(int_param (params s) ~default:1) ~col:1
       | row :: col :: _ -> position t ~row ~col)
   | Some 'd', _ ->
+      flush t;
       let _, col = Vte.cursor_pos t.vte in
       position t ~row:(n ()) ~col:(col + 1)
   | Some '`', _ -> control t ("\027[" ^ params s ^ "G")
