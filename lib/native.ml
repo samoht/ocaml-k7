@@ -324,9 +324,34 @@ let wait_command line tokens =
   Wait { line; scope; timeout; pattern }
 
 (* The settings, environment and requirements a line adds, or its action. *)
-let read line t =
+(* The lines of the tape a [Source] line names, as VHS's parser reads it:
+   not empty, without error and without a [Source] line; it drops their
+   [Output] lines. *)
+let sourced ~source line path =
+  let src =
+    match source path with
+    | Ok "" -> unsupported line "VHS refuses an empty tape"
+    | Ok src -> src
+    | Error msg -> stop (Io msg)
+  in
+  List.filter_map
+    (fun l ->
+      match check l with
+      | Error e -> unsupported line "%s: %s" l e
+      | Ok (Output _) -> None
+      | Ok _ when List.mem (Keyword "Source") (tokens l) ->
+          unsupported line "VHS refuses a nested Source"
+      | Ok _ -> Some l)
+    (String.split_on_char '\n' src)
+
+let rec read ~source line t =
   match tokens line with
   | [] -> t
+  | Keyword "Source" :: p :: _ ->
+      List.fold_left
+        (fun t l -> read ~source l t)
+        t
+        (sourced ~source line (lit p))
   | Keyword "Output" :: p :: _ when t.actions = [] ->
       if is_text (lit p) then { t with text = Some (lit p) } else t
   | Keyword "Output" :: p :: _ ->
@@ -334,6 +359,7 @@ let read line t =
   | Keyword "Set" :: Keyword "TypingSpeed" :: args when t.actions <> [] ->
       let c = set line t.config "TypingSpeed" args in
       { t with actions = Set_typing_speed c.typing_speed :: t.actions }
+  | Keyword ("Set" | "Require") :: _ when t.actions <> [] -> t
   | Keyword "Set" :: Keyword name :: args ->
       { t with config = set line t.config name args }
   | Keyword "Env" :: k :: v :: _ ->
@@ -361,12 +387,11 @@ let read line t =
         | Keyword "Copy" :: rest -> Copy (strings rest)
         | [ Keyword "Paste" ] -> Paste
         | Keyword "Screenshot" :: p :: _ -> Screenshot (still_path (lit p))
-        | Keyword "Source" :: _ -> unsupported line "sourcing a tape needs vhs"
         | _ -> unsupported line "not a command this module knows"
       in
       { t with actions = action :: t.actions }
 
-let of_lines lines =
+let of_lines ?(source = fun path -> Error (path ^ ": no file to read")) lines =
   let config = default_config () in
   let empty =
     {
@@ -380,7 +405,7 @@ let of_lines lines =
     }
   in
   match
-    let t = List.fold_left (fun t line -> read line t) empty lines in
+    let t = List.fold_left (fun t line -> read ~source line t) empty lines in
     { t with look = style t.config }
   with
   | t ->

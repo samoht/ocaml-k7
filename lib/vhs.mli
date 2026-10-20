@@ -284,14 +284,14 @@ val render :
 
     {!record} plays the actions of {!action}, the raw [Type], key, [Ctrl],
     [Alt], [Shift], [Sleep], [Wait], [Copy], [Paste] ([Paste] types the last
-    [Copy]), [Screenshot] and [Output] lines, [Env], [Require], and every [Set]
-    but those below. It does not play, and is {!Unsupported} on:
+    [Copy]), [Screenshot] and [Output] lines, [Source] lines, whose tape it
+    reads relative to [cwd] and refuses where VHS does, [Env], [Require], and
+    every [Set] but those below. It does not play, and is {!Unsupported} on:
     - a {!shell} other than {!Bash} and {!Zsh}, which start as in VHS;
     - a colour of a JSON [Theme] other than [#RGB], [#RGBA], [#RRGGBB],
       [#RRGGBBAA], [rgb()] or [rgba()], such as a colour name, which xterm.js
       reads with the browser;
     - [Set MarginFill] with an image;
-    - [Source];
     - a wait pattern with a Unicode class ([\p] or [\P]).
 
     Its patterns match as Go's do, except that [(?i)] folds ASCII letters only

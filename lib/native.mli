@@ -23,10 +23,16 @@ type error =
 type t
 (** The type for tapes to play. *)
 
-val of_lines : string list -> (t, error) result
-(** [of_lines lines] is the tape of [lines], each one a command that
-    {!Tape_syntax.check} accepts. It is [Error (Unsupported _)] on a line this
-    module cannot play. *)
+val of_lines :
+  ?source:(string -> (string, string) result) ->
+  string list ->
+  (t, error) result
+(** [of_lines ~source lines] is the tape of [lines], each one a command that
+    {!Tape_syntax.check} accepts, with the lines of the tape [source path] reads
+    in place of a [Source path] line, as VHS's parser inlines them; [source] is
+    [Error msg] if it cannot read [path] (defaults to always [Error]). It is
+    [Error (Unsupported _)] on a line this module cannot play, and on a [Source]
+    VHS refuses. *)
 
 val text_output : t -> string option
 (** [text_output t] is the path of the text output of [t], its [Output] line

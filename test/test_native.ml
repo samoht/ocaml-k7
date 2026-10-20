@@ -371,6 +371,45 @@ let test_screenshot () =
         [ screen [ "> true"; ">" ] ]
         (frames (still "hidden.svg"))
 
+(* A Source line plays the lines of its tape but their outputs, and is
+   refused where VHS refuses it. *)
+let test_source () =
+  with_dir @@ fun env cwd ->
+  let file name contents =
+    Eio.Path.save ~create:(`Or_truncate 0o644) Eio.Path.(cwd / name) contents
+  in
+  file "inc.tape"
+    "Output \"inc.txt\"\n# a comment\nType \"echo sourced\"\nEnter\nWait\n";
+  file "nested.tape" "Source \"inc.tape\"\n";
+  file "empty.tape" "";
+  file "bad.tape" "Type\n";
+  let play name =
+    record env cwd (tape Vhs.[ raw ("Source " ^ name); sleep (Ms 100) ])
+  in
+  (match play {|"inc.tape"|} with
+  | Ok s ->
+      Alcotest.(check string)
+        "sourced"
+        (screen [ "> echo sourced"; "sourced"; ">" ])
+        (last (frames s));
+      Alcotest.(check bool)
+        "no output" false
+        (Sys.file_exists
+           (Option.get (Eio.Path.native Eio.Path.(cwd / "inc.txt"))))
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+  List.iter
+    (fun (name, sub) ->
+      match play name with
+      | Error (Unsupported why | Io why) -> check_contains name ~sub why
+      | Ok _ -> Alcotest.failf "%s played" name
+      | Error e -> Alcotest.failf "%a" Vhs.pp_error e)
+    [
+      ({|"nested.tape"|}, "nested");
+      ({|"empty.tape"|}, "empty");
+      ({|"bad.tape"|}, "Type");
+      ({|"missing.tape"|}, "missing.tape");
+    ]
+
 (* [after_settings tape txt] is [txt], a text output of VHS for [tape],
    without the screens it reads while it applies the settings, before it
    sizes the terminal: one per [Set], [Output] and [Require] line from the
@@ -501,6 +540,7 @@ let suite =
          ("window bar", test_window_bar);
          ("zsh", test_zsh);
          ("screenshot", test_screenshot);
+         ("source", test_source);
          ("keys", test_keys);
          ("unsupported", test_unsupported);
        ]

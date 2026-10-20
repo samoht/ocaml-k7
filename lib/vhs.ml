@@ -908,10 +908,18 @@ let native_error = function
   | Native.Not_found exe -> Executable_not_found exe
   | Native.Io msg -> Io msg
 
-let native lines = Result.map_error native_error (Native.of_lines lines)
+let native ?source lines =
+  Result.map_error native_error (Native.of_lines ?source lines)
 
 let record ~clock ~proc ~cwd t =
-  let* tape = native (String.split_on_char '\n' (to_string t)) in
+  let source path =
+    match Eio.Path.(load (cwd / path)) with
+    | src -> Ok src
+    | exception Eio.Io (Eio.Fs.E e, _) -> Error (fs_message path e)
+    | exception Eio.Io (err, _) ->
+        Error (path ^ ": " ^ Fmt.to_to_string Eio.Exn.pp_err err)
+  in
+  let* tape = native ~source (String.split_on_char '\n' (to_string t)) in
   let* dir =
     Option.to_result ~none:(Io "the directory is not a native path")
       (Eio.Path.native cwd)
