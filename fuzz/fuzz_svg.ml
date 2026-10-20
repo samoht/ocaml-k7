@@ -25,8 +25,10 @@ let xml_text s =
   Buffer.contents b
 
 (* The terminal erases the character a backspace moves over, so the
-   recorder sends it a cursor move instead outside escape sequences. This
-   is the same rewrite, which the expected screens go through too. *)
+   recorder sends it a cursor move instead outside escape sequences, where it
+   also replaces invalid UTF-8 with U+FFFD, as [String.get_utf_8_uchar] reads
+   it, the characters of a sequence split across chunks included. This is
+   the same rewrite, which the expected screens go through too. *)
 type state = Ground | Escape | Csi | String | String_escape
 
 let escape = function
@@ -35,10 +37,27 @@ let escape = function
   | ' ' .. '/' -> Escape
   | _ -> Ground
 
-let backspaces state s =
+let is_lead c = c >= '\xc2' && c <= '\xf4'
+
+let rewrite (state, pending) s =
   let b = Buffer.create (String.length s) in
-  String.iter
-    (fun c ->
+  let rec byte c =
+    if Buffer.length pending > 0 then
+      let s = Buffer.contents pending ^ String.make 1 c in
+      let d = String.get_utf_8_uchar s 0 in
+      if Uchar.utf_decode_is_valid d then (
+        Buffer.clear pending;
+        Buffer.add_string b s)
+      else if Uchar.utf_decode_length d = String.length s then
+        Buffer.add_char pending c
+      else (
+        Buffer.clear pending;
+        Buffer.add_string b "\xef\xbf\xbd";
+        byte c)
+    else if !state = Ground && c >= '\x80' then
+      if is_lead c then Buffer.add_char pending c
+      else Buffer.add_string b "\xef\xbf\xbd"
+    else (
       if !state = Ground && c = '\b' then Buffer.add_string b "\027[D"
       else Buffer.add_char b c;
       state :=
@@ -53,7 +72,8 @@ let backspaces state s =
         | String, '\007' -> Ground
         | String, '\027' -> String_escape
         | String, _ -> String)
-    s;
+  in
+  String.iter byte s;
   Buffer.contents b
 
 (* The zero-width characters, which the terminal drops but the recorder
@@ -90,11 +110,11 @@ let test_frames chunks =
       | Error e -> failf "not well-formed: %s" e
       | Ok frames ->
           let vte = Vte.create ~rows ~cols () in
-          let state = ref Ground in
+          let state = (ref Ground, Buffer.create 4) in
           let expected =
             List.map
               (fun s ->
-                Vte.feed_string vte (backspaces state s);
+                Vte.feed_string vte (rewrite state s);
                 strip_zero_width
                   (xml_text (Svg_check.trim_rows (Vte.to_string vte))))
               chunks

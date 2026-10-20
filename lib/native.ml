@@ -363,17 +363,16 @@ let timeline c = { quantum = max 1 (1000 / c.framerate); frames = [] }
 
 let replay t output =
   let s = t.look in
-  let vte = Screen.terminal ~rows:s.rows ~cols:s.cols in
-  let input = Screen.input () in
+  let term = Screen.terminal ~rows:s.rows ~cols:s.cols in
   let tl = timeline t.config in
-  add tl 0 (Screen.of_vte vte);
-  let screen = ref (Screen.of_vte vte) in
+  add tl 0 (Screen.of_terminal term);
+  let screen = ref (Screen.of_terminal term) in
   let end_ms =
     List.fold_left
       (fun _ (ms, bytes) ->
-        Screen.feed input vte bytes;
-        screen := Screen.of_vte ~previous:!screen vte;
-        Vte.clear_dirty vte;
+        Screen.feed term bytes;
+        screen := Screen.of_terminal ~previous:!screen term;
+        Screen.clear_dirty term;
         add tl ms !screen;
         ms)
       0 output
@@ -435,8 +434,7 @@ let modified ~shift = function
 (* Playing *)
 
 type state = {
-  vte : Vte.t;
-  input : Screen.input;
+  term : Screen.terminal;
   pty : Pty.t;
   clock : Eio.Time.Mono.ty Eio.Resource.t;
   tl : timeline;
@@ -453,6 +451,7 @@ type state = {
 }
 
 let now st = Eio.Time.Mono.now st.clock
+let vte st = Screen.vte st.term
 
 let elapsed st =
   Int64.to_int
@@ -467,11 +466,12 @@ let stamp st =
 let record st = if not st.hidden then add st.tl (stamp st) st.shown
 
 let refresh st =
-  if Vte.is_dirty st.vte then (
-    st.live <- Screen.of_vte ~previous:st.live st.vte;
+  if Screen.is_dirty st.term then (
+    st.live <- Screen.of_terminal ~previous:st.live st.term;
     st.shown <-
-      (if st.offset = 0 then st.live else Screen.of_vte ~offset:st.offset st.vte);
-    Vte.clear_dirty st.vte;
+      (if st.offset = 0 then st.live
+       else Screen.of_terminal ~offset:st.offset st.term);
+    Screen.clear_dirty st.term;
     record st);
   Eio.Condition.broadcast st.changed
 
@@ -481,7 +481,7 @@ let rec reader st buf =
   match Pty.read st.pty buf 0 (Bytes.length buf) with
   | 0 -> Eio.Fiber.await_cancel ()
   | n ->
-      Screen.feed st.input st.vte (Bytes.sub_string buf 0 n);
+      Screen.feed st.term (Bytes.sub_string buf 0 n);
       refresh st;
       reader st buf
   | exception Unix.Unix_error ((EAGAIN | EWOULDBLOCK | EINTR), _, _) ->
@@ -529,9 +529,10 @@ let type_text st ?speed text =
 
 let scroll st ?speed ~count dir =
   for _ = 1 to count do
-    st.offset <- max 0 (min (Vte.scrollback_size st.vte) (st.offset + dir));
+    st.offset <- max 0 (min (Vte.scrollback_size (vte st)) (st.offset + dir));
     st.shown <-
-      (if st.offset = 0 then st.live else Screen.of_vte ~offset:st.offset st.vte);
+      (if st.offset = 0 then st.live
+       else Screen.of_terminal ~offset:st.offset st.term);
     record st;
     step st (Option.value speed ~default:st.typing_speed)
   done
@@ -546,7 +547,7 @@ let within st seconds f =
       false)
 
 let wait_text st = function
-  | Line -> Screen.line st.live (fst (Vte.cursor_pos st.vte))
+  | Line -> Screen.line st.live (fst (Vte.cursor_pos (vte st)))
   | Screen -> Screen.text st.live
 
 let wait st c ~line ~scope ~timeout ~pattern =
@@ -572,7 +573,7 @@ let run st c = function
   | Key { speed; count; key = "ScrollDown" } -> scroll st ?speed ~count (-1)
   | Key { speed; count; key } ->
       for _ = 1 to count do
-        press st ?speed (key_bytes st.vte key)
+        press st ?speed (key_bytes (vte st) key)
       done
   | Ctrl args -> press st (ctrl_bytes args)
   | Alt k -> press st ("\027" ^ modified ~shift:false k)
@@ -648,7 +649,7 @@ let spawn ~env ~cwd t s =
    does in VHS, which starts a browser in the meantime. *)
 let await_prompt st =
   let rec loop () =
-    if Screen.text st.live = String.make (Vte.rows st.vte - 1) '\n' then (
+    if Screen.text st.live = String.make (Vte.rows (vte st) - 1) '\n' then (
       Eio.Condition.await_no_mutex st.changed;
       loop ())
   in
@@ -663,12 +664,11 @@ let play ~clock ~env ~cwd t =
         Eio.Cancel.protect (fun () -> close clock pty))
     @@ fun () ->
     Pty.set_nonblock pty;
-    let vte = Screen.terminal ~rows:s.rows ~cols:s.cols in
-    let screen = Screen.of_vte vte in
+    let term = Screen.terminal ~rows:s.rows ~cols:s.cols in
+    let screen = Screen.of_terminal term in
     let st =
       {
-        vte;
-        input = Screen.input ();
+        term;
         pty;
         clock;
         tl = timeline t.config;

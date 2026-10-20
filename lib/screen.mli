@@ -9,20 +9,30 @@
     colour is [-1] for the terminal's default, or [0xRRGGBB] as the terminal
     resolved it: an ANSI colour is xterm's RGB value for it. *)
 
-val terminal : rows:int -> cols:int -> Vte.t
-(** [terminal ~rows ~cols] is a terminal whose default colours {!of_vte} reads
-    as [-1]. *)
+type terminal
+(** The type for terminals: a {!Vte.t} and the state of the bytes it reads. *)
 
-type input
-(** The type for the state of the bytes a terminal reads. *)
+val terminal : rows:int -> cols:int -> terminal
+(** [terminal ~rows ~cols] is a terminal that has read nothing, whose default
+    colours {!of_terminal} reads as [-1]. *)
 
-val input : unit -> input
-(** [input ()] is the state of a terminal that has read nothing. *)
+val vte : terminal -> Vte.t
+(** [vte t] is the emulator of [t], to query; {!feed} is how it reads. *)
 
-val feed : input -> Vte.t -> string -> unit
-(** [feed i vte s] makes [vte] read [s], the next bytes after those [i] saw. A
+val feed : terminal -> string -> unit
+(** [feed t s] makes [t] read [s], the next bytes after those it read. A
     backspace outside an escape sequence moves the cursor left, as in xterm,
-    where {!Vte.feed} would also erase the character it moves over. *)
+    where {!Vte.feed} would also erase the character it moves over. A character
+    of no width, such as a combining mark, a zero-width space or joiner or a
+    variation selector, joins the cell before the cursor, as in xterm.js; the
+    first column has no such cell, and drops it. *)
+
+val is_dirty : terminal -> bool
+(** [is_dirty t] is [true] iff the screen or the cursor of [t] changed since the
+    last {!clear_dirty}. *)
+
+val clear_dirty : terminal -> unit
+(** [clear_dirty t] marks [t] unchanged. *)
 
 type cell = {
   text : string;
@@ -51,10 +61,11 @@ val row_equal : row -> row -> bool
 type t
 (** The type for screens. *)
 
-val of_vte : ?previous:t -> ?offset:int -> Vte.t -> t
-(** [of_vte ~previous ~offset vte] is the screen of [vte] scrolled [offset]
-    lines into its scrollback (defaults to [0]). Rows [vte] reports clean are
-    those of [previous], if it has the same size. *)
+val of_terminal : ?previous:t -> ?offset:int -> terminal -> t
+(** [of_terminal ~previous ~offset t] is the screen of [t] scrolled [offset]
+    lines into its scrollback (defaults to [0]). Rows that have not changed
+    since the last {!clear_dirty} are those of [previous], if it has the same
+    size. *)
 
 val rows : t -> row array
 (** [rows t] are the rows of [t], top first. *)

@@ -12,14 +12,96 @@ let default_bg = 0x040506
 let color rgb =
   Ansi.Color.of_rgb (rgb lsr 16) ((rgb lsr 8) land 0xff) (rgb land 0xff)
 
-let terminal ~rows ~cols =
-  Vte.create ~default_fg:(color default_fg) ~default_bg:(color default_bg) ~rows
-    ~cols ()
-
 type state = Ground | Escape | Csi | String | String_escape
-type input = { mutable state : state }
 
-let input () = { state = Ground }
+type terminal = {
+  vte : Vte.t;
+  mutable state : state;
+  pending : Buffer.t;  (** The first bytes of a character in [Ground]. *)
+  out : Buffer.t;  (** The bytes [vte] reads next. *)
+  mutable dirty : int list;  (** The rows {!attach} changed. *)
+}
+
+let terminal ~rows ~cols =
+  {
+    vte =
+      Vte.create ~default_fg:(color default_fg) ~default_bg:(color default_bg)
+        ~rows ~cols ();
+    state = Ground;
+    pending = Buffer.create 4;
+    out = Buffer.create 4096;
+    dirty = [];
+  }
+
+let vte t = t.vte
+let is_dirty t = Vte.is_dirty t.vte || t.dirty <> []
+
+let clear_dirty t =
+  Vte.clear_dirty t.vte;
+  t.dirty <- []
+
+let flush t =
+  if Buffer.length t.out > 0 then (
+    Vte.feed_string t.vte (Buffer.contents t.out);
+    Buffer.clear t.out)
+
+(* matrix 0.1.0 drops a character of no width, so [attach] appends it to the
+   cell before the cursor, the grapheme a wide cell continues, as xterm.js
+   does. In the first column there is no such cell. *)
+let attach t s =
+  flush t;
+  let g = Vte.grid t.vte in
+  let row, col = Vte.cursor_pos t.vte in
+  if col > 0 && row < Grid.height g then (
+    let rec start x =
+      if x > 0 && Grid.is_continuation g (Grid.idx g ~x ~y:row) then
+        start (x - 1)
+      else x
+    in
+    let x = start (min col (Grid.width g) - 1) in
+    let i = Grid.idx g ~x ~y:row in
+    let text = (if Grid.is_empty g i then " " else Grid.get_text g i) ^ s in
+    let width = max 1 (Grid.cell_width g i) in
+    let glyph =
+      Glyph.Pool.intern_sub (Grid.glyph_pool g)
+        ~width_method:(Grid.width_method g) ~tab_width:2 text ~pos:0
+        ~len:(String.length text) ~width
+    in
+    let style = Grid.get_style g i in
+    let fg = Option.value style.fg ~default:(color default_fg)
+    and bg = Option.value style.bg ~default:(color default_bg)
+    and attrs = style.attrs
+    and link = style.link in
+    Grid.set_cell g ~x ~y:row ~glyph ~fg ~bg ~attrs ?link ~blend:false ();
+    for k = 1 to width - 1 do
+      Grid.set_cell g ~x:(x + k) ~y:row
+        ~glyph:
+          (Glyph.make_continuation ~code:glyph ~left:k ~right:(width - 1 - k))
+        ~fg ~bg ~attrs ?link ~blend:false ()
+    done;
+    t.dirty <- row :: t.dirty)
+
+(* The length of the UTF-8 encoding a byte starts, 0 if it starts none. *)
+let utf_8_length = function
+  | '\xc2' .. '\xdf' -> 2
+  | '\xe0' .. '\xef' -> 3
+  | '\xf0' .. '\xf4' -> 4
+  | _ -> 0
+
+let is_zero_width t s =
+  let d = String.get_utf_8_uchar s 0 in
+  Uchar.utf_decode_is_valid d
+  && Uchar.to_int (Uchar.utf_decode_uchar d) >= 0xa0
+  && Glyph.String.measure
+       ~width_method:(Grid.width_method (Vte.grid t.vte))
+       ~tab_width:2 s
+     = 0
+
+(* A character outside escape sequences. *)
+let character t s =
+  if is_zero_width t s then attach t s else Buffer.add_string t.out s
+
+let replacement = "\xef\xbf\xbd"
 
 (* ECMA-48 sequences: CSI ends at a final byte, the strings of OSC, DCS,
    SOS, PM and APC at BEL or ST. *)
@@ -29,27 +111,45 @@ let escape = function
   | ' ' .. '/' -> Escape
   | _ -> Ground
 
-let feed i vte s =
-  let b = Buffer.create (String.length s + 16) in
-  String.iter
-    (fun c ->
-      (match (i.state, c) with
-      | Ground, '\b' -> Buffer.add_string b "\027[D"
-      | _ -> Buffer.add_char b c);
-      i.state <-
-        (match (i.state, c) with
-        | Ground, '\027' -> Escape
-        | Ground, _ -> Ground
-        | Escape, c -> escape c
-        | Csi, '@' .. '~' -> Ground
-        | Csi, _ -> Csi
-        | String, '\007' -> Ground
-        | String, '\027' -> String_escape
-        | String, _ -> String
-        | String_escape, '\\' -> Ground
-        | String_escape, c -> escape c))
-    s;
-  Vte.feed_string vte (Buffer.contents b)
+(* The terminal reads valid UTF-8 outside escape sequences: each maximal
+   invalid subsequence is U+FFFD, as for [String.get_utf_8_uchar], wherever
+   the reads split it. *)
+let rec byte t c =
+  if Buffer.length t.pending > 0 then
+    let s = Buffer.contents t.pending ^ String.make 1 c in
+    let d = String.get_utf_8_uchar s 0 in
+    if Uchar.utf_decode_is_valid d then (
+      Buffer.clear t.pending;
+      character t s)
+    else if Uchar.utf_decode_length d = String.length s then
+      Buffer.add_char t.pending c
+    else (
+      Buffer.clear t.pending;
+      Buffer.add_string t.out replacement;
+      byte t c)
+  else if t.state = Ground && c >= '\x80' then
+    if utf_8_length c > 0 then Buffer.add_char t.pending c
+    else Buffer.add_string t.out replacement
+  else (
+    (match (t.state, c) with
+    | Ground, '\b' -> Buffer.add_string t.out "\027[D"
+    | _ -> Buffer.add_char t.out c);
+    t.state <-
+      (match (t.state, c) with
+      | Ground, '\027' -> Escape
+      | Ground, _ -> Ground
+      | Escape, c -> escape c
+      | Csi, '@' .. '~' -> Ground
+      | Csi, _ -> Csi
+      | String, '\007' -> Ground
+      | String, '\027' -> String_escape
+      | String, _ -> String
+      | String_escape, '\\' -> Ground
+      | String_escape, c -> escape c))
+
+let feed t s =
+  String.iter (byte t) s;
+  flush t
 
 type cell = {
   text : string;
@@ -131,7 +231,42 @@ let row grid y =
   Array.iter (fun (c : cell) -> Buffer.add_string b c.text) cells;
   { cells; text = trim_end (Buffer.contents b) }
 
-let of_vte ?previous ?(offset = 0) vte =
+(* The text of each cell of [r] from [line], the text matrix 0.1.0 keeps
+   of a scrollback line, whose zero-width characters it drops when it draws
+   the line again: each cell's text starts [line] at [pos], and the
+   zero-width characters that follow it are its own. *)
+let restore t r line =
+  let n = String.length line in
+  let rec marks pos =
+    if pos >= n then pos
+    else
+      let len = Uchar.utf_decode_length (String.get_utf_8_uchar line pos) in
+      if is_zero_width t (String.sub line pos len) then marks (pos + len)
+      else pos
+  in
+  let rec go x pos acc =
+    if x = Array.length r.cells then Some (List.rev acc)
+    else
+      let (c : cell) = r.cells.(x) in
+      let len = String.length c.text in
+      if c.width = 0 then go (x + 1) pos (c :: acc)
+      else if pos + len <= n && String.sub line pos len = c.text then
+        let stop = marks (pos + len) in
+        let text = String.sub line pos (stop - pos) in
+        go (x + 1) stop ({ c with text } :: acc)
+      else if pos >= n && c.text = " " then go (x + 1) pos (c :: acc)
+      else None
+  in
+  match go 0 0 [] with
+  | None -> r
+  | Some cells ->
+      let cells = Array.of_list cells in
+      let b = Buffer.create (Array.length cells) in
+      Array.iter (fun (c : cell) -> Buffer.add_string b c.text) cells;
+      { cells; text = trim_end (Buffer.contents b) }
+
+let of_terminal ?previous ?(offset = 0) t =
+  let vte = t.vte in
   let rows = Vte.rows vte and cols = Vte.cols vte in
   let offset = max 0 (min offset (Vte.scrollback_size vte)) in
   let grid =
@@ -148,15 +283,24 @@ let of_vte ?previous ?(offset = 0) vte =
            && Array.length p.rows = rows
            && rows > 0
            && Array.length p.rows.(0).cells = cols ->
-        let dirty = Vte.dirty_rows vte in
+        let dirty = t.dirty @ Vte.dirty_rows vte in
         fun y -> if List.mem y dirty then None else Some p.rows.(y)
     | _ -> fun _ -> None
   in
-  (* The terminal renders the scrollback lines newest first. *)
+  (* matrix 0.1.0 renders the scrollback lines newest first. *)
   let source y = if y < offset then offset - 1 - y else y in
+  let history =
+    if offset = 0 then [||]
+    else
+      let lines = Array.of_list (Vte.scrollback_lines vte) in
+      Array.sub lines (Array.length lines - offset) offset
+  in
   let rows' =
     Array.init rows (fun y ->
-        match reuse y with Some r -> r | None -> row grid (source y))
+        match reuse y with
+        | Some r -> r
+        | None when y < offset -> restore t (row grid (source y)) history.(y)
+        | None -> row grid (source y))
   in
   let cursor =
     let r, c = Vte.cursor_pos vte in
