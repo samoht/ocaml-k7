@@ -682,6 +682,45 @@ let test_terminal_state () =
             "native text and SVG" (expected, expected)
             (text (), last images))
 
+(* The expected screen is checked against real VHS when VHS_ORACLE is set.
+   Keep the prompt below the payload so shell echo cannot affect its cells. *)
+let check_terminal_payload payload first =
+  with_dir @@ fun env cwd ->
+  let command = "printf '\\033[2J\\033[H" ^ payload ^ "\\033[10;1H'" in
+  let t =
+    oracle_tape ~settings:[ Typing_speed (Ms 1) ]
+      Vhs.[ hidden [ type' command; key Enter; wait Prompt ]; sleep (Ms 200) ]
+  in
+  let expected =
+    String.concat "\n" ([ first ] @ List.init 8 (fun _ -> "") @ [ ">"; ""; "" ])
+  in
+  let text () = last_screen (Eio.Path.load Eio.Path.(cwd / "oracle.txt")) in
+  (match oracle with
+  | None -> ()
+  | Some vhs -> (
+      match
+        Vhs.render ~vhs
+          ~clock:(Eio.Stdenv.mono_clock env)
+          ~proc:(Eio.Stdenv.process_mgr env)
+          ~cwd t
+      with
+      | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+      | Ok () -> Alcotest.(check string) "VHS oracle" expected (text ())));
+  match record env cwd t with
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Ok image -> (
+      match Svg_check.frames ~cell_width ~cell_height ~rows:12 image with
+      | Error e -> Alcotest.fail e
+      | Ok images ->
+          Alcotest.(check (pair string string))
+            "native text and SVG" (expected, expected)
+            (text (), last images))
+
+(* REP repeats the complete preceding cell, including its combining marks. *)
+let test_repeat_combining () =
+  check_terminal_payload {|a\314\201\033[3b|}
+    (String.concat "" (List.init 4 (fun _ -> "a\xcc\x81")))
+
 let suite =
   ( "native",
     List.map
@@ -707,6 +746,7 @@ let suite =
          ("keys", test_keys);
          ("unsupported", test_unsupported);
          ("terminal state recording", test_terminal_state);
+         ("repeat combining cell", test_repeat_combining);
        ]
       @
       if Option.is_some oracle then
