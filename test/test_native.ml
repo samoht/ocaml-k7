@@ -1,0 +1,180 @@
+(*---------------------------------------------------------------------------
+  Copyright (c) 2026 Thomas Gazagnaire. All rights reserved.
+  SPDX-License-Identifier: ISC
+  ---------------------------------------------------------------------------*)
+
+open Native_test
+
+let test_record () =
+  with_dir @@ fun env cwd ->
+  let t =
+    tape
+      Vhs.
+        [
+          type' "echo hello\n";
+          wait Prompt;
+          type' "printf '\\033[32mgreen\\033[0m\\n'\n";
+          wait Prompt;
+          sleep (Ms 100);
+        ]
+  in
+  match record env cwd t with
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Ok s ->
+      let saved = Eio.Path.load Eio.Path.(cwd / "demo.svg") in
+      Alcotest.(check string) "written to the output" s saved;
+      check_contains "green" ~sub:{|class="p2">green|} s;
+      Alcotest.(check string)
+        "final screen"
+        (screen
+           [
+             "> echo hello";
+             "hello";
+             "> printf '\\033[32mgreen\\033[0m\\n'";
+             "green";
+             ">";
+           ])
+        (last (frames s))
+
+let test_timeout () =
+  with_dir @@ fun env cwd ->
+  let t =
+    tape Vhs.[ type' "echo hi\n"; wait ~timeout:(Ms 300) (Screen "never") ]
+  in
+  match record env cwd t with
+  | Error (Timeout { wait; last }) ->
+      Alcotest.(check string) "wait" "Wait+Screen@300ms /never/" wait;
+      check_contains "last screen" ~sub:"> echo hi\nhi" last
+  | Ok _ -> Alcotest.fail "no timeout"
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+
+let test_hidden () =
+  with_dir @@ fun env cwd ->
+  let t =
+    tape
+      Vhs.
+        [
+          hidden [ type' "secret=1; clear\n"; wait Prompt ];
+          type' "echo shown\n";
+          wait Prompt;
+          sleep (Ms 100);
+        ]
+  in
+  match record env cwd t with
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Ok s ->
+      Alcotest.(check bool)
+        "hidden typing not shown" false (contains ~sub:"secret" s);
+      Alcotest.(check string)
+        "final"
+        (screen [ "> echo shown"; "shown"; ">" ])
+        (last (frames s))
+
+(* Scrolling shows the scrollback, and typing scrolls back down. *)
+let test_scroll () =
+  with_dir @@ fun env cwd ->
+  let t =
+    tape
+      Vhs.
+        [
+          type' "seq 1 20\n";
+          wait (Screen "20");
+          wait Prompt;
+          key Scroll_up;
+          key Scroll_up;
+          key Scroll_up;
+          sleep (Ms 100);
+        ]
+  in
+  match record env cwd t with
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Ok s ->
+      Alcotest.(check string)
+        "scrolled"
+        (String.concat "\n" (List.init 9 (fun i -> Int.to_string (i + 10))))
+        (last (frames s))
+
+(* Keys send what xterm sends: the line editor sees arrows, control and alt
+   chords. *)
+let test_keys () =
+  with_dir @@ fun env cwd ->
+  let t =
+    tape
+      Vhs.
+        [
+          type' "echo ac";
+          key Left;
+          type' "b";
+          key (Ctrl 'a');
+          key (Alt 'f');
+          type' " X";
+          key Enter;
+          wait Prompt;
+          sleep (Ms 100);
+        ]
+  in
+  match record env cwd t with
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Ok s ->
+      Alcotest.(check string)
+        "edited"
+        (screen [ "> echo X abc"; "X abc"; ">" ])
+        (last (frames s))
+
+let test_unsupported () =
+  with_dir @@ fun env cwd ->
+  let t = tape Vhs.[ raw "Screenshot shot.png"; type' "x" ] in
+  match record env cwd t with
+  | Error (Unsupported why) ->
+      check_contains "names the line" ~sub:"Screenshot" why
+  | Ok _ -> Alcotest.fail "played a screenshot"
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+
+(* The native final screen is the one VHS shows, for a 60 x 12 terminal. *)
+let test_oracle () =
+  with_dir @@ fun env cwd ->
+  let t =
+    match
+      Vhs.tape ~settings:[ Typing_speed (Ms 10) ]
+        ~outputs:[ "oracle.txt"; "oracle.svg" ]
+        Vhs.
+          [
+            raw "Set Columns 60";
+            raw "Set Rows 12";
+            type' "echo hello\n";
+            wait Prompt;
+            type' "printf '\\033[31mred\\033[0m wide: \\346\\227\\245 end\\n'\n";
+            wait (Screen "end");
+            wait Prompt;
+            sleep (Ms 500);
+          ]
+    with
+    | Ok t -> t
+    | Error e -> Alcotest.fail e
+  in
+  let clock = Eio.Stdenv.mono_clock env and proc = Eio.Stdenv.process_mgr env in
+  (match Vhs.render ?vhs:oracle ~clock ~proc ~cwd t with
+  | Ok () -> ()
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+  let vhs = last_screen (Eio.Path.load Eio.Path.(cwd / "oracle.txt")) in
+  match record env cwd t with
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Ok s -> (
+      match Svg_check.frames ~cell_width ~cell_height ~rows:12 s with
+      | Error e -> Alcotest.fail e
+      | Ok frames -> Alcotest.(check string) "final screen" vhs (last frames))
+
+let suite =
+  ( "native",
+    List.map
+      (fun (name, fn) -> Alcotest.test_case name `Quick fn)
+      ([
+         ("record", test_record);
+         ("timeout", test_timeout);
+         ("hidden", test_hidden);
+         ("scroll", test_scroll);
+         ("keys", test_keys);
+         ("unsupported", test_unsupported);
+       ]
+      @ if Option.is_some oracle then [ ("vhs oracle", test_oracle) ] else [])
+  )

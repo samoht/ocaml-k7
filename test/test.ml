@@ -13,4 +13,9 @@ let () =
       Test_cram.suite;
       Test_eio.suite;
       Test_cli.suite;
+      Test_svg.suite;
+      Test_screen.suite;
+      Test_palette.suite;
+      Test_regexp_match.suite;
+      Test_native.suite;
     ]

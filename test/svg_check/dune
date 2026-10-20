@@ -1,0 +1,5 @@
+; Reading the SVG images back, for the tests and the fuzz properties.
+
+(library
+ (name svg_check)
+ (libraries fmt markup matrix.glyph))

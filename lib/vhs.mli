@@ -11,7 +11,8 @@
 
     [Vhs] builds the actions as values, checks them once when {!val-tape}
     assembles a tape, prints tapes in the [.tape] syntax and {{!running}runs}
-    [vhs] on them. Only {!render} performs I/O.
+    [vhs] on them. It also {{!native}records} a tape itself, as an animated SVG
+    image, without [vhs]. Only {!render} and {!record} perform I/O.
 
     {[
     let demo =
@@ -151,13 +152,14 @@ val tape :
 (** [tape ~settings ~outputs actions] is the tape that applies [settings]
     (defaults to [[]]), runs [actions] and writes the recording to each path of
     [outputs], in the format of its extension: [.gif], [.mp4], [.webm], [.txt],
-    [.ascii] or [.test] for the screen as text, and a directory of PNG frames
-    for [.png] or a trailing slash. It is [Error msg], with [msg] naming the
+    [.ascii] or [.test] for the screen as text, a directory of PNG frames for
+    [.png] or a trailing slash, and [.svg] for the animated SVG image that
+    {!record} writes and VHS cannot. It is [Error msg], with [msg] naming the
     first offending item, if:
     - [outputs] is empty, or one has another extension, none and no trailing
       slash, or starts with [-], which ffmpeg reads as an option;
     - two outputs, {!raw} [Output] lines included, are of the same kind (GIF,
-      MP4, WebM, text, or PNG frames), of which VHS writes only the last;
+      MP4, WebM, text, PNG frames or SVG), of which VHS writes only the last;
     - a string holds a control character, C1 controls included (the tabs and
       newlines of {!type'} aside), all three quote characters (['"'], ['\''] and
       ['`']) where VHS quotes it, or, in typed text, invalid UTF-8;
@@ -174,25 +176,25 @@ val tape :
       {!Height} or {!Width} does;
     - a {!raw} line is [Hide] or [Show] (use {!hidden}), [Set] for a setting of
       {!setting} other than [TypingSpeed] (use the setting), an [Output] that
-      breaks the rules of [outputs], or is [Require] or [Set], other than
-      [Set TypingSpeed], after an action that prints a line, where VHS ignores
-      it;
+      breaks the rules of [outputs] or ends with [.svg], or is [Require] or
+      [Set], other than [Set TypingSpeed], after an action that prints a line,
+      where VHS ignores it;
     - no action prints a line outside {!hidden}, so VHS records no frame and
       fails; it also fails if the actions it records all end within one frame,
       such as a lone [sleep (Ms 0)], which [tape] does not check. *)
 
 val to_string : t -> string
-(** [to_string t] is [t] in the [.tape] syntax: the [Output] lines, then the
-    [Set] lines, then the actions. An action is one or more lines, except
-    [type' ""] and a {!hidden} of such actions, which are none. A {!type'} with
-    all three quote characters is several [Type] lines. *)
+(** [to_string t] is [t] in the [.tape] syntax: the [Output] lines, but those of
+    the [.svg] outputs, then the [Set] lines, then the actions. An action is one
+    or more lines, except [type' ""] and a {!hidden} of such actions, which are
+    none. A {!type'} with all three quote characters is several [Type] lines. *)
 
 val pp : t Fmt.t
 (** [pp ppf t] is [Fmt.string ppf (to_string t)]. *)
 
 (** {1:running Running vhs} *)
 
-(** The type for errors of {!render}. *)
+(** The type for errors of {!render} and {!record}. *)
 type error =
   | Executable_not_found of string  (** No such executable on the [PATH]. *)
   | Failed of {
@@ -204,6 +206,12 @@ type error =
           end of what it printed, at most 64 KiB, such as the wait that timed
           out. *)
   | Io of string  (** Any other I/O failure. *)
+  | Unsupported of string
+      (** A setting or a command that {!record} cannot play, named, and why:
+          {!render} plays it. *)
+  | Timeout of { wait : string; last : string }
+      (** The wait line [wait] of {!record} did not hold in time; [last] is the
+          line or the screen it last read. *)
 
 val pp_error : error Fmt.t
 (** [pp_error] formats an error for humans: one line, followed for {!Failed} by
@@ -224,8 +232,71 @@ val render :
     [VHS_PUBLISH], which would upload the recording, [rod], which configures the
     browser VHS drives, and [PS1], [PROMPT] and [PROMPT_COMMAND], which would
     replace the prompt {!Prompt} waits for. What [vhs] prints is kept for
-    {!Failed} and dropped on success. If the calling fiber is cancelled,
-    [render] sends [vhs] [SIGTERM], which makes it stop the terminal and the
-    browser it started, and waits for it to exit. If [vhs] still runs ten
-    seconds later by [clock], [render] sends it [SIGKILL], which can leave the
-    terminal and the browser running, and waits for it to exit. *)
+    {!Failed} and dropped on success. [render] writes neither the [.svg] outputs
+    of [t] nor anything else if they are its only outputs. If the calling fiber
+    is cancelled, [render] sends [vhs] [SIGTERM], which makes it stop the
+    terminal and the browser it started, and waits for it to exit. If [vhs]
+    still runs ten seconds later by [clock], [render] sends it [SIGKILL], which
+    can leave the terminal and the browser running, and waits for it to exit. *)
+
+(** {1:native Recording natively}
+
+    {!record} plays a tape in bash on a pseudo-terminal, reads what bash prints
+    with a terminal emulator and draws the screens it shows as an animated SVG
+    image. It needs no [vhs], browser or [ffmpeg]. The image holds text, no
+    script and no external resource, and animates with CSS only, so it plays in
+    an HTML [<img>].
+
+    The terminal has the size VHS gives it with JetBrains Mono, VHS's first
+    font: [Width], [Height], [Font_size], [Padding] and the raw [Set Margin],
+    [Set LetterSpacing], [Set LineHeight], [Set Rows] and [Set Columns] size it.
+    VHS sizes it with the fonts of the machine it runs on, so it can show more
+    rows than the image elsewhere. The image draws each cell on a grid, in a
+    monospace font of the viewer's machine, in the colours of the [Theme]. The
+    terminal keeps a colour as RGB, so a 256-colour or true colour equal to one
+    of xterm's sixteen ANSI colours takes the theme's colour too. It drops
+    zero-width characters and combining marks, which VHS shows.
+
+    Time is the tape's: a typed character, a key and a sleep last what the tape
+    says, a wait lasts what the program makes it last, and output shows at the
+    time it arrives within the action that runs, rounded down to a frame of
+    {!Framerate}. A tape whose program prints the same bytes within the same
+    frames gives the same image, byte for byte; the time a command takes to
+    print, including how the machine schedules it, changes the frames its output
+    lands in.
+
+    {!record} plays the actions of {!action}, the raw [Type], key, [Ctrl],
+    [Alt], [Shift], [Sleep], [Wait], [Copy] and [Paste] lines ([Paste] types the
+    last [Copy]), [Env], [Require], and every [Set] but those below. It does not
+    play, and is {!Unsupported} on:
+    - a {!shell} other than {!Bash};
+    - a JSON [Theme], [Set WindowBar] with a bar, and [Set MarginFill] with an
+      image;
+    - [Screenshot] and [Source];
+    - a wait pattern with a Unicode class ([\p] or [\P]).
+
+    Its patterns match as Go's do, except that [(?i)] folds ASCII letters only
+    and [\b] counts Latin-1 letters as word characters next to a non-ASCII
+    character. [Set CursorBlink], [Set BorderRadius], [Set PlaybackSpeed] and
+    [Set LoopOffset] change the animation. A size beyond 100000 pixels, or a
+    terminal beyond 2000 cells a side, is {!Unsupported}. *)
+
+val record :
+  clock:_ Eio.Time.Mono.t ->
+  proc:_ Eio.Process.mgr ->
+  cwd:_ Eio.Path.t ->
+  t ->
+  (string, error) result
+(** [record ~clock ~proc ~cwd t] plays [t] in bash in the directory [cwd], with
+    the environment {!render} gives [vhs], and is the SVG image of what it
+    showed. [record] also writes the image to each [.svg] output of [t],
+    relative to [cwd], and writes no other output. The waits of [t] time out by
+    [clock]. It is {!Executable_not_found} if [bash] or the executable of a
+    [Require] line is not on the [PATH]. *)
+
+val svg :
+  ?settings:setting list -> (duration * string) list -> (string, error) result
+(** [svg ~settings output] is the SVG image of a terminal with [settings]
+    (defaults to [[]]) that receives each string of [output] at its time, which
+    increases. It is [Error (Unsupported _)] on a JSON {!Theme} and on the sizes
+    {!record} refuses. *)

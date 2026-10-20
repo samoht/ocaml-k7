@@ -163,7 +163,11 @@ let check_wait timeout w =
 
 (* VHS hands an unknown extension to ffmpeg as a GIF, and ffmpeg then picks
    the format from the extension and fails. *)
-let extensions = [ ".gif"; ".mp4"; ".webm"; ".txt"; ".ascii"; ".test"; ".png" ]
+let extensions =
+  [ ".gif"; ".mp4"; ".webm"; ".txt"; ".ascii"; ".test"; ".png"; ".svg" ]
+
+(* VHS writes a [.svg] output as a GIF, so it never reaches VHS. *)
+let is_svg path = Tape_syntax.extension path = ".svg"
 
 (* [output_problem path] is why [path] cannot be an output, if it cannot. *)
 let output_problem path =
@@ -175,7 +179,7 @@ let output_problem path =
     match Tape_syntax.extension path with
     | "" -> Some Tape_syntax.no_extension
     | e when List.mem e extensions -> None
-    | _ -> Some "not .gif, .mp4, .webm, .txt, .ascii, .test or .png"
+    | _ -> Some "not .gif, .mp4, .webm, .txt, .ascii, .test, .png or .svg"
 
 let check_output path =
   Option.fold ~none:(Ok ())
@@ -191,6 +195,7 @@ let kind path =
     | ".webm" -> "WebM"
     | ".txt" | ".ascii" | ".test" -> "text"
     | ".png" -> "frames"
+    | ".svg" -> "SVG"
     | _ -> "GIF"
 
 (* [seen] holds at most one path per kind, so this is linear. *)
@@ -259,6 +264,8 @@ let check_raw ~started line =
     | Error e -> Fmt.error "raw line %S: %s" line e
     | Ok (Hide | Show) -> Fmt.error "raw line %S: use hidden instead" line
     | Ok (Blank | Set ("TypingSpeed", _)) -> Ok started
+    | Ok (Output path) when is_svg path ->
+        Fmt.error "raw line %S: VHS cannot write .svg, give it in outputs" line
     | Ok (Output path) -> (
         match output_problem path with
         | None -> Ok started
@@ -659,7 +666,7 @@ let to_string t =
       Buffer.add_string b "Output ";
       add_string b path;
       Buffer.add_char b '\n')
-    t.outputs;
+    (List.filter (Fun.negate is_svg) t.outputs);
   List.iter (add_setting b) t.settings;
   List.iter (add_action ~hidden:false b) t.actions;
   Buffer.contents b
@@ -676,6 +683,8 @@ type error =
       output : string;
     }
   | Io of string
+  | Unsupported of string
+  | Timeout of { wait : string; last : string }
 
 (* [utf_8 s] is [s] with each invalid byte replaced by U+FFFD, and without
    C1 controls, which dropping a byte between a lead byte and a continuation
@@ -768,6 +777,10 @@ let pp_error ppf = function
       let drop = List.length lines - last_lines in
       List.iteri (fun i l -> if i >= drop then Fmt.pf ppf "@\n  %s" l) lines
   | Io msg -> Fmt.string ppf (one_line msg)
+  | Unsupported why -> Fmt.pf ppf "not recorded natively: %s" (one_line why)
+  | Timeout { wait; last } ->
+      Fmt.pf ppf "%s timed out; last value was: %s" (one_line wait)
+        (one_line last)
 
 let fs_message path = function
   | Eio.Fs.Not_found _ -> path ^ ": no such file or directory"
@@ -797,13 +810,14 @@ let grace = 10.
    reaping [vhs] until it exits; [cancelled] makes it send [vhs] SIGTERM,
    which [vhs] cleans up after, and SIGKILL if it is still running [grace]
    seconds later. *)
+let environment proc =
+  Eio.Process.environment proc
+  |> Eio.Process.Env.override (List.map (fun v -> (v, None)) cleared)
+
 let run_vhs ~vhs ~clock ~proc ~cwd ~cancelled ~sink tape =
   Eio.Switch.run @@ fun sw ->
   let stdin, feed = Eio.Process.pipe ~sw proc in
-  let env =
-    Eio.Process.environment proc
-    |> Eio.Process.Env.override (List.map (fun v -> (v, None)) cleared)
-  in
+  let env = environment proc in
   let child =
     Eio.Process.spawn ~sw proc ~env
       ~cwd:(cwd :> Eio.Fs.dir_ty Eio.Path.t)
@@ -845,7 +859,7 @@ module Tail = struct
     if n <= kept then Buffer.contents b else Buffer.sub b (n - kept) kept
 end
 
-let render ?(vhs = "vhs") ~clock ~proc ~cwd t =
+let render_vhs ~vhs ~clock ~proc ~cwd t =
   let output = Buffer.create 256 in
   let sink = Eio.Resource.T (output, Eio.Flow.Pi.sink (module Tail)) in
   let tape = to_string t in
@@ -876,3 +890,45 @@ let render ?(vhs = "vhs") ~clock ~proc ~cwd t =
       Error (Executable_not_found exe)
   | Error (Eio.Io (err, _)) -> Error (Io (io_message ~cwd err))
   | Error e -> raise e
+
+let render ?(vhs = "vhs") ~clock ~proc ~cwd t =
+  if List.for_all is_svg t.outputs && raw_outputs t.actions = [] then Ok ()
+  else render_vhs ~vhs ~clock ~proc ~cwd t
+
+(* Recording natively *)
+
+let native_error = function
+  | Native.Unsupported why -> Unsupported why
+  | Native.Timeout { wait; last } -> Timeout { wait; last }
+  | Native.Not_found exe -> Executable_not_found exe
+  | Native.Io msg -> Io msg
+
+let native lines = Result.map_error native_error (Native.of_lines lines)
+
+let record ~clock ~proc ~cwd t =
+  let* tape = native (String.split_on_char '\n' (to_string t)) in
+  let* dir =
+    Option.to_result ~none:(Io "the directory is not a native path")
+      (Eio.Path.native cwd)
+  in
+  let* svg =
+    Result.map_error native_error
+      (Native.play ~clock ~env:(environment proc) ~cwd:dir tape)
+  in
+  let save path =
+    match
+      Eio.Path.save ~create:(`Or_truncate 0o644) Eio.Path.(cwd / path) svg
+    with
+    | () -> Ok ()
+    | exception Eio.Io (Eio.Fs.E e, _) -> Error (Io (fs_message path e))
+    | exception Eio.Io (err, _) ->
+        Error (Io (path ^ ": " ^ Fmt.to_to_string Eio.Exn.pp_err err))
+  in
+  let* () = iter_result save (List.filter is_svg t.outputs) in
+  Ok svg
+
+let svg ?(settings = []) output =
+  let b = Buffer.create 256 in
+  List.iter (add_setting b) settings;
+  let* tape = native (String.split_on_char '\n' (Buffer.contents b)) in
+  Ok (Native.replay tape (List.map (fun (Ms ms, s) -> (ms, s)) output))

@@ -284,7 +284,7 @@ let test_outputs () =
   (* VHS hands any other extension to ffmpeg as a GIF, and ffmpeg picks the
      format from the extension. *)
   error "unknown extension"
-    {|Output "demo.gfi": not .gif, .mp4, .webm, .txt, .ascii, .test or .png|}
+    {|Output "demo.gfi": not .gif, .mp4, .webm, .txt, .ascii, .test, .png or .svg|}
     ~outputs:[ "demo.gfi" ] [];
   (* ffmpeg reads its last argument, the output, as an option if it starts
      with a dash. *)

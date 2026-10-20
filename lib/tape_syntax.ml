@@ -569,3 +569,25 @@ let check line =
   with
   | c -> Ok c
   | exception Error msg -> Error msg
+
+(* Tokens *)
+
+type lexeme =
+  | Keyword of string
+  | Str of string
+  | Pattern of string
+  | Json_value of string
+  | Num of string
+  | Sym of char
+
+let tokens line =
+  Array.to_list (lex line)
+  |> List.filter_map (fun t ->
+      match t.kind with
+      | Word -> Some (Keyword t.lit)
+      | String -> Some (Str t.lit)
+      | Regex -> Some (Pattern t.lit)
+      | Json -> Some (Json_value t.lit)
+      | Number -> Some (Num t.lit)
+      | Punct c -> Some (Sym c)
+      | Comment | Eof | Illegal -> None)

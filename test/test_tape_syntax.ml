@@ -72,7 +72,7 @@ let test_rejected () =
     "use the setting Font_family instead";
   fails "padding" "Set Padding 400" "use the setting Padding instead";
   fails "output" "Output x.foo"
-    "not .gif, .mp4, .webm, .txt, .ascii, .test or .png";
+    "not .gif, .mp4, .webm, .txt, .ascii, .test, .png or .svg";
   (* The same reason as for [~outputs]. *)
   fails "output without extension" "Output demo"
     "neither an extension nor a trailing slash";

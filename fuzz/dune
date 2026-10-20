@@ -1,6 +1,6 @@
 (executable
  (name fuzz)
- (libraries vhs vhs_cram fmt alcobar eio eio_main unix))
+ (libraries vhs vhs_cram svg_check matrix.vte fmt alcobar eio eio_main unix))
 
 ; The property run is a quick smoke. The oracle alias also runs the
 ; properties that need the real vhs (VHS_ORACLE), for longer.

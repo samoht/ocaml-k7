@@ -40,3 +40,23 @@ val no_extension : string
 val extension : string -> string
 (** [extension path] is Go's [filepath.Ext path]: the suffix of [path] from the
     last dot of its last segment, or [""] if that segment has no dot. *)
+
+(** {1:tokens Tokens} *)
+
+(** The type for the tokens of VHS's lexer. *)
+type lexeme =
+  | Keyword of string  (** A keyword, such as [Type] or [ms]. *)
+  | Str of string
+      (** A string without its quotes, or a word that is not a keyword. *)
+  | Pattern of string  (** A regular expression without its slashes. *)
+  | Json_value of string  (** A JSON value, braces included. *)
+  | Num of string  (** A number. *)
+  | Sym of char  (** A punctuation character, such as [@] or [+]. *)
+
+val tokens : string -> lexeme list
+(** [tokens line] are the tokens of [line], its comment excluded. Only a line
+    {!check} accepts gives the tokens VHS reads. *)
+
+val duration : string -> int64 option
+(** [duration s] is [s] as Go's [time.ParseDuration] reads it, in nanoseconds,
+    or [None] if Go rejects it. *)

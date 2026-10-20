@@ -4,10 +4,13 @@
  (libraries
   vhs
   vhs_cram
+  svg_check
+  native_test
   fmt
   alcotest
   cstruct
   eio
+  eio.unix
   eio_main
   eio.mock
   mtime
