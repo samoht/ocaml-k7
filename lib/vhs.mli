@@ -93,9 +93,11 @@ val hidden : action list -> action
 
 val raw : string -> action
 (** [raw line] is the tape line [line], printed as is, with its arguments quoted
-    by the caller. {!val-tape} checks it as its documentation states; VHS checks
-    the rest, such as the value of a setting {!setting} has no constructor for
-    or the tape of a [Source] line, only when it runs. *)
+    by the caller. {!val-tape} checks it as its documentation states. VHS checks
+    the rest only when it runs, such as the tape of a [Source] line, the program
+    of a [Require] line, the image a [Set MarginFill] names when it is not a
+    colour, and what ffmpeg makes of a [Set PlaybackSpeed] or [Set LoopOffset]
+    value. *)
 
 (** {1:tapes Tapes} *)
 
