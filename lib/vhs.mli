@@ -167,8 +167,10 @@ val tape :
     - two outputs, {!raw} [Output] lines included, are of the same kind (GIF,
       MP4, WebM, text, PNG frames or SVG), of which VHS writes only the last;
     - a string holds a control character, C1 controls included (the tabs and
-      newlines of {!type'} aside), all three quote characters (['"'], ['\''] and
-      ['`']) where VHS quotes it, or, in typed text, invalid UTF-8;
+      newlines of {!type'} aside), or, in typed text, invalid UTF-8;
+    - an output path, a {!Theme} or a {!Font_family} holds all three quote
+      characters (['"'], ['\''] and ['`']), which no VHS string can quote; a
+      {!type'} can hold them, see {!to_string};
     - a duration is out of range, or a wait timeout is [Ms 0];
     - a {!Line} or {!Screen} pattern is not valid Go regular expression syntax;
     - a key or a setting breaks the condition its documentation states;
