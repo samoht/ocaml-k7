@@ -173,7 +173,11 @@ val tape :
       {!setting} other than [TypingSpeed] (use the setting), an [Output] that
       breaks the rules of [outputs], or is [Require] or [Set], other than
       [Set TypingSpeed], after an action that prints a line, where VHS ignores
-      it. *)
+      it.
+
+    [tape] does not check that the recording has a frame: VHS fails, after
+    recording, on a tape whose actions all run {!hidden} or take no time, such
+    as one without actions. *)
 
 val to_string : t -> string
 (** [to_string t] is [t] in the [.tape] syntax: the [Output] lines, then the
