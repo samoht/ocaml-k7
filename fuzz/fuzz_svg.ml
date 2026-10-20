@@ -165,10 +165,29 @@ let test_delete_wide n glyph =
   check_eq ~pp:pp_string (prefix ^ " bc")
     (Vhs.Screen.line (Vhs.Screen.of_terminal term) 0)
 
+(* PTY reads may split anywhere, including inside UTF-8 and escape sequences.
+   Delivery boundaries must not change the screen, cursor or scrollback. *)
+let test_chunk_boundaries chunks =
+  let output = String.concat "" chunks in
+  let whole = Vhs.Screen.terminal ~rows ~cols in
+  let split = Vhs.Screen.terminal ~rows ~cols in
+  Vhs.Screen.feed whole output;
+  String.iter (fun c -> Vhs.Screen.feed split (String.make 1 c)) output;
+  let a = Vhs.Screen.of_terminal whole and b = Vhs.Screen.of_terminal split in
+  check (Vhs.Screen.equal a b);
+  check_eq ~pp:Fmt.int (Vhs.Screen.history whole) (Vhs.Screen.history split);
+  check_eq
+    ~pp:Fmt.(Dump.array string)
+    (Vhs.Screen.buffer whole a)
+    (Vhs.Screen.buffer split b)
+
 let suite =
   ( "svg",
     [
       test_case "frames" [ list chunk ] test_frames;
+      test_case "PTY chunk boundaries preserve terminal state"
+        [ list chunk ]
+        test_chunk_boundaries;
       test_case "wide glyph deletion preserves columns" [ uint8; bool ]
         test_delete_wide;
       test_case "cleared tabs reach the right margin" [ uint8 ] test_clear_tabs;
