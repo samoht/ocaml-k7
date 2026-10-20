@@ -115,14 +115,15 @@ let control t s =
 
 (* matrix 0.1.0 has no scroll region, returns the cursor on a line feed and
    reads neither an index nor CSI S and T, so the screen moves the cursor
-   and scrolls the region itself, as xterm does. A full-screen scroll keeps
-   the line it scrolls out in the scrollback. *)
-let scroll t n =
+   and scrolls the region itself, as xterm does. As in xterm.js, only an
+   index of the full screen, [~history:true], keeps the lines it scrolls
+   out in the scrollback. *)
+let scroll ?(history = false) t n =
   flush t;
   move_to_last_column t;
   let rows = Vte.rows t.vte in
   let n = max (-(t.bottom - t.top + 1)) (min n (t.bottom - t.top + 1)) in
-  let full = n > 0 && t.top = 0 && t.bottom = rows - 1 in
+  let full = history && n > 0 && t.top = 0 && t.bottom = rows - 1 in
   if full then Vte.scroll_up t.vte n
   else Grid.scroll (Vte.grid t.vte) ~top:t.top ~bottom:t.bottom n;
   (* The scrolled-in rows are blank, not of the colour the rows had. *)
@@ -146,7 +147,7 @@ let index t dir =
   move_to_last_column t;
   let row, col = Vte.cursor_pos t.vte in
   let edge = if dir > 0 then t.bottom else t.top in
-  if row = edge then scroll t dir
+  if row = edge then scroll ~history:true t dir
   else if row + dir >= 0 && row + dir < Vte.rows t.vte then
     move t ~row:(row + dir) ~col
 
