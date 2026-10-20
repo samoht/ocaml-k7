@@ -173,6 +173,16 @@ let test_saved_charset () =
   check_screens
     [ ("restored line drawing", "\027(0\0277\027(B\0278q", [ "\xe2\x94\x80" ]) ]
 
+(* TBC removes all tab stops; the next tab reaches the right margin.
+   VHS keeps X at column 9 and puts Y in column 46. *)
+let test_clear_tabs () =
+  check_screens
+    [
+      ( "cleared tab stops",
+        "a\tX\027[3g\r\tY",
+        [ "a" ^ String.make 7 ' ' ^ "X" ^ String.make 36 ' ' ^ "Y" ] );
+    ]
+
 let suite =
   ( "screen",
     List.map
@@ -189,4 +199,5 @@ let suite =
         ("controls", test_controls);
         ("history", test_history);
         ("saved character set", test_saved_charset);
+        ("cleared tab stops", test_clear_tabs);
       ] )
