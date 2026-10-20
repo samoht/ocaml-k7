@@ -87,14 +87,8 @@ let take p =
   next p;
   c
 
-let is_hex c =
-  (c >= Char.code '0' && c <= Char.code '9')
-  || (c >= Char.code 'a' && c <= Char.code 'f')
-  || (c >= Char.code 'A' && c <= Char.code 'F')
-
-let hex_value c =
-  if c <= Char.code '9' then c - Char.code '0'
-  else (c lor 0x20) - Char.code 'a' + 10
+let is_hex c = c >= 0 && c < 0x80 && Char.Ascii.is_hex_digit (Char.chr c)
+let hex_value c = Char.Ascii.hex_digit_to_int (Char.chr c)
 
 let rec hex_digits p acc n =
   if n > 0 && is_hex (peek p) then
@@ -426,10 +420,7 @@ let rec gen code = function
 
 (* Go's [isWordChar]: ASCII letters, digits and the underscore. *)
 let is_word c =
-  (c >= 0x30 && c <= 0x39)
-  || (c >= 0x41 && c <= 0x5a)
-  || (c >= 0x61 && c <= 0x7a)
-  || c = 0x5f
+  c = 0x5f || (c >= 0 && c < 0x80 && Char.Ascii.is_alphanum (Char.chr c))
 
 let holds a cps i =
   let n = Array.length cps in

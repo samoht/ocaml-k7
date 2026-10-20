@@ -162,9 +162,7 @@ let float_value line s =
 let is_hex_colour s =
   String.length s = 7
   && s.[0] = '#'
-  && String.for_all
-       (function '0' .. '9' | 'a' .. 'f' | 'A' .. 'F' -> true | _ -> false)
-       (String.sub s 1 6)
+  && String.for_all Char.Ascii.is_hex_digit (String.sub s 1 6)
 
 let set line c name args =
   let value () =
@@ -713,7 +711,7 @@ let within st seconds f =
 let top st =
   Screen.buffer st.term st.live
   |> Array.to_list
-  |> List.filteri (fun i _ -> i < Vte.rows (vte st))
+  |> List.take (Vte.rows (vte st))
 
 let wait_text st = function
   | Line ->

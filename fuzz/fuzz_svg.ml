@@ -99,7 +99,7 @@ let marks =
 (* Each character followed by a zero-width one shows both, whether they
    arrive together or apart: the first row holds them all, in order. *)
 let test_zero_width items =
-  let items = List.filteri (fun i _ -> i < 20) items in
+  let items = List.take 20 items in
   let pieces =
     List.map
       (fun (b, m, apart) ->

@@ -89,17 +89,11 @@ let canonical name =
   ignore (String.fold_left add true name);
   Buffer.contents b
 
-let is_digit = function '0' .. '9' -> true | _ -> false
-let is_letter = function 'a' .. 'z' | 'A' .. 'Z' -> true | _ -> false
 let is_octal c = c >= '0' && c <= '7'
-let is_alnum c = is_digit c || is_letter c
 let is_perl_class c = String.contains "dDsSwW" c
 
-let unhex = function
-  | '0' .. '9' as c -> Char.code c - 48
-  | 'a' .. 'f' as c -> Char.code c - 87
-  | 'A' .. 'F' as c -> Char.code c - 55
-  | _ -> -1
+let unhex c =
+  if Char.Ascii.is_hex_digit c then Char.Ascii.hex_digit_to_int c else -1
 
 (* A group being parsed: [operand] when its last item can take a repetition,
    [top] the repetition product of that item, [widest] the largest product
@@ -156,7 +150,7 @@ let escape re i =
   if c >= 0x80 then invalid j
   else
     match Char.chr c with
-    | c when not (is_alnum c) -> (Char.code c, j)
+    | c when not (Char.Ascii.is_alphanum c) -> (Char.code c, j)
     | '1' .. '7' when not (is_byte is_octal re j) -> invalid j
     | '0' .. '7' as d -> octal re (unhex d) j 1
     | 'x' when j >= n -> invalid j
@@ -263,14 +257,14 @@ let char_class re i =
 let int_at re k =
   let rec scan k v =
     match byte_at re k with
-    | Some c when is_digit c ->
+    | Some c when Char.Ascii.is_digit c ->
         scan (k + 1)
           (if v < 0 || v >= 100_000_000 then -1 else (v * 10) + unhex c)
     | _ -> Some (v, k)
   in
   match byte_at re k with
-  | Some '0' when is_byte is_digit re (k + 1) -> None
-  | Some c when is_digit c -> scan k 0
+  | Some '0' when is_byte Char.Ascii.is_digit re (k + 1) -> None
+  | Some c when Char.Ascii.is_digit c -> scan k 0
   | _ -> None
 
 (* [parseRepeat] for the [{] at [i]: [Some (min, max, j)] when it reads as a
@@ -291,7 +285,8 @@ let counted re i =
   | Some (min, k) -> close min min k
 
 let is_capture_name name =
-  name <> "" && String.for_all (fun c -> c = '_' || is_alnum c) name
+  name <> ""
+  && String.for_all (fun c -> c = '_' || Char.Ascii.is_alphanum c) name
 
 (* [parsePerlFlags] for the [(?] at [i]. *)
 let perl_flags re i =

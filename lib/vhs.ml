@@ -130,7 +130,7 @@ let check_type s =
   else Ok ()
 
 let check_chord name valid c =
-  if Regexp_syntax.is_letter c || String.contains valid c then Ok ()
+  if Char.Ascii.is_letter c || String.contains valid c then Ok ()
   else Fmt.error "%s+%s: not a VHS key" name (Char.escaped c)
 
 (* VHS lexes a bare [m] or [s] as a time unit; [Ctrl] takes them quoted, but
@@ -841,8 +841,8 @@ let pp_error ppf = function
         |> List.map String.trim
         |> List.filter (( <> ) "")
       in
-      let drop = List.length lines - last_lines in
-      List.iteri (fun i l -> if i >= drop then Fmt.pf ppf "@\n  %s" l) lines
+      List.iter (Fmt.pf ppf "@\n  %s")
+        (List.drop (List.length lines - last_lines) lines)
   | Io msg -> Fmt.string ppf (one_line msg)
   | Unsupported why -> Fmt.pf ppf "not recorded natively: %s" (one_line why)
   | Timeout { wait; last } ->

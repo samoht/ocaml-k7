@@ -56,9 +56,6 @@ let keys =
     "Left"; "Right"; "Up"; "PageUp"; "PageDown"; "ScrollUp"; "ScrollDown" ]
 [@@ocamlformat "disable"]
 
-let is_digit = Regexp_syntax.is_digit
-let is_letter = Regexp_syntax.is_letter
-
 let is_ident = function
   | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '.' | '-' | '_' | '/' | '%' -> true
   | _ -> false
@@ -109,10 +106,12 @@ let token line i =
   | ('"' | '\'' | '`') as q ->
       enclosed String "string" (delimited line q (i + 1))
   | '/' -> enclosed Regex "regular expression" (regex line (i + 1))
-  | c when is_digit c || (c = '.' && i + 1 < n && is_digit line.[i + 1]) ->
-      let j = span line (fun c -> is_digit c || c = '.') i in
+  | c
+    when Char.Ascii.is_digit c
+         || (c = '.' && i + 1 < n && Char.Ascii.is_digit line.[i + 1]) ->
+      let j = span line (fun c -> Char.Ascii.is_digit c || c = '.') i in
       (tok Number (sub i j), j)
-  | c when is_letter c || c = '.' ->
+  | c when Char.Ascii.is_letter c || c = '.' ->
       let j = span line is_ident i in
       let lit = sub i j in
       (tok (if List.mem lit keywords then Word else String) lit, j)
@@ -154,7 +153,7 @@ let unsigned_float u =
 
 (* [leadingInt]: the integer at [i] and the index after it. *)
 let rec leading_int s v i =
-  if i < String.length s && is_digit s.[i] then
+  if i < String.length s && Char.Ascii.is_digit s.[i] then
     let v' = Int64.(add (mul v 10L) (digit s i)) in
     if v >! Int64.unsigned_div top 10L || v' >! top then None
     else leading_int s v' (i + 1)
@@ -163,10 +162,10 @@ let rec leading_int s v i =
 (* [leadingFraction]: the digits at [i] as [f / scale], those past the
    precision of [f] dropped, and the index after them. *)
 let rec fraction s f scale i =
-  if i < String.length s && is_digit s.[i] then
+  if i < String.length s && Char.Ascii.is_digit s.[i] then
     let y = Int64.(add (mul f 10L) (digit s i)) in
     if f >! Int64.unsigned_div Int64.max_int 10L || y >! top then
-      (f, scale, span s is_digit i)
+      (f, scale, span s Char.Ascii.is_digit i)
     else fraction s y (scale *. 10.) (i + 1)
   else (f, scale, i)
 
@@ -185,7 +184,7 @@ let scaled v f scale unit =
 
 (* One [number unit] term at [i]: its nanoseconds and the index after it. *)
 let term s i =
-  let is_num c = c = '.' || is_digit c in
+  let is_num c = c = '.' || Char.Ascii.is_digit c in
   match leading_int s 0L i with
   | None -> None
   | Some (v, j) -> (
@@ -202,7 +201,7 @@ let term s i =
 let duration s =
   let rec terms d i =
     if i >= String.length s then if d >! Int64.max_int then None else Some d
-    else if not (s.[i] = '.' || is_digit s.[i]) then None
+    else if not (s.[i] = '.' || Char.Ascii.is_digit s.[i]) then None
     else
       match term s i with
       | None -> None
@@ -221,7 +220,7 @@ let without_sign s =
 
 let atoi s =
   let digits = without_sign s in
-  if digits = "" || not (String.for_all is_digit digits) then None
+  if digits = "" || not (String.for_all Char.Ascii.is_digit digits) then None
   else Int64.of_string_opt (if s.[0] = '+' then digits else s)
 
 (* Go's [special]: an infinity, with a sign or not, or a NaN, without. *)
@@ -258,7 +257,7 @@ let is_float_syntax s =
   let i = if n > 0 && (s.[0] = '+' || s.[0] = '-') then 1 else 0 in
   let hex = i + 2 < n && s.[i] = '0' && lower (i + 1) = 'x' in
   let is_mantissa c =
-    is_digit c
+    Char.Ascii.is_digit c
     || hex
        && match Char.lowercase_ascii c with 'a' .. 'f' -> true | _ -> false
   in
@@ -276,8 +275,8 @@ let is_float_syntax s =
         if i + 1 < n && (s.[i + 1] = '+' || s.[i + 1] = '-') then i + 2
         else i + 1
       in
-      if i < n && is_digit s.[i] then
-        Some (span s (fun c -> is_digit c || c = '_') i)
+      if i < n && Char.Ascii.is_digit s.[i] then
+        Some (span s (fun c -> Char.Ascii.is_digit c || c = '_') i)
       else None
     else if hex then None
     else Some i
@@ -362,10 +361,6 @@ let path p ~what =
   next p;
   (cur p).lit
 
-let is_hex = function
-  | '0' .. '9' | 'a' .. 'f' | 'A' .. 'F' -> true
-  | _ -> false
-
 let set p =
   let name = (peek p).lit in
   if not ((peek p).kind = Word && List.mem name settings) then
@@ -421,7 +416,7 @@ let set p =
         String.starts_with ~prefix:"#" fill
         && not
              (String.length fill = 7
-             && String.for_all is_hex (String.sub fill 1 6))
+             && String.for_all Char.Ascii.is_hex_digit (String.sub fill 1 6))
       then fail "%S is not a valid color." fill
   | "CursorBlink" ->
       ignore (take p);
