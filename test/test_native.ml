@@ -733,6 +733,12 @@ let test_margin_erasure () =
   check_terminal_payload {|\033[60GX\033[JY\033[3;60HX\033[1KY|}
     [ String.make 59 ' ' ^ "X"; "Y"; ""; "Y" ]
 
+(* Unlike 1049, modes 47 and 1047 share the cursor between buffers. *)
+let test_alternate_cursor () =
+  check_terminal_payload
+    {|abc\033[?47hALT\033[?47lX\033[2;1Habc\033[?1047hALT\033[?1047lX|}
+    [ "abc   X"; "abc   X" ]
+
 let suite =
   ( "native",
     List.map
@@ -761,6 +767,7 @@ let suite =
          ("repeat combining cell", test_repeat_combining);
          ("C1 terminal controls", test_c1_controls);
          ("right-margin erasure", test_margin_erasure);
+         ("alternate-screen shared cursor", test_alternate_cursor);
        ]
       @
       if Option.is_some oracle then
