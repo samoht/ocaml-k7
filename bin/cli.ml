@@ -33,7 +33,8 @@ let write flow s =
       Error None
   | exception Eio.Io (Eio.Exn.X (Eio_unix.Unix_error (code, _, _)), _) ->
       Error (Some (Unix.error_message code))
-  | exception Eio.Io (err, _) -> Error (Some (Fmt.str "%a" Eio.Exn.pp_err err))
+  | exception Eio.Io (err, _) ->
+      Error (Fmt.kstr Option.some "%a" Eio.Exn.pp_err err)
 
 let record env ~print ~vhs ~setup ~output input =
   let* src =
