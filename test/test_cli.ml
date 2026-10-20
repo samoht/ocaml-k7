@@ -356,6 +356,49 @@ let test_history () =
   if not (contains ~sub:"\nx!!y" screen) then
     Alcotest.failf "history expanded: %s" screen
 
+let record_cram ?(setup = []) env path src =
+  let output = path "recording.txt" in
+  let cram = Result.get_ok (Cram.parse src) in
+  let t =
+    Result.get_ok
+      (Vhs.tape
+         ~settings:
+           Vhs.
+             [
+               Shell Bash;
+               Width 800;
+               Height 400;
+               Padding 0;
+               Font_size 12;
+               Framerate 5;
+               Typing_speed (Ms 5);
+             ]
+         ~outputs:[ output ]
+         ((Vhs.raw "Set WaitTimeout 3s" :: Cram.actions ~setup cram)
+         @ [ Vhs.sleep (Ms 2000) ]))
+  in
+  (match
+     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 40. (fun () ->
+         Vhs.render ?vhs:oracle
+           ~clock:(Eio.Stdenv.mono_clock env)
+           ~proc:(Eio.Stdenv.process_mgr env)
+           ~cwd:(Eio.Stdenv.cwd env) t)
+   with
+  | Ok () -> ()
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+  Eio.Path.load Eio.Path.(Eio.Stdenv.fs env / output)
+
+(* A setup may install bash's usual dynamic prompt hook. The recorder must
+   establish its own prompt after the hook has run, before waiting for it. *)
+let test_setup_prompt_command () =
+  with_files [ ("setup.sh", 0o644, "PROMPT_COMMAND='PS1=custom'\n") ]
+  @@ fun env path ->
+  let screen =
+    record_cram ~setup:[ path "setup.sh" ] env path "  $ echo READY\n"
+  in
+  if not (contains ~sub:"\nREADY" screen) then
+    Alcotest.failf "setup prevented the command from running: %s" screen
+
 let suite =
   ( "cli",
     List.map
@@ -369,5 +412,9 @@ let suite =
        ]
       @
       if Option.is_some oracle then
-        [ ("output order", test_output_order); ("history", test_history) ]
+        [
+          ("output order", test_output_order);
+          ("history", test_history);
+          ("setup prompt command", test_setup_prompt_command);
+        ]
       else []) )
