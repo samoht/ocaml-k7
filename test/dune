@@ -1,7 +1,8 @@
 ; The emulator and the pattern matcher are private to the library; their
 ; tests compile them in.
 
-(copy_files ../lib/{screen,casefold,casefold_data,regexp_match}.{ml,mli})
+(copy_files
+ ../lib/{screen,casefold,casefold_data,unicode,unicode_data,regexp_match}.{ml,mli})
 
 (test
  (name test)

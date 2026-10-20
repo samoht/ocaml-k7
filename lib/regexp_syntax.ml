@@ -11,59 +11,7 @@ exception Bad of string
 
 let fail fmt = Fmt.kstr (fun msg -> raise_notrace (Bad msg)) fmt
 
-(* The [\p] class names Go 1.27 accepts, in the canonical form below: the
-   special cases, then the canonical names of [unicode.Categories],
-   [unicode.CategoryAliases] and [unicode.Scripts]. *)
 module Names = Set.Make (String)
-
-let unicode_names =
-  Names.of_list
-    [
-      "Adlam"; "Ahom"; "Anatolianhieroglyphs"; "Any"; "Arabic"; "Armenian";
-      "Ascii"; "Assigned"; "Avestan"; "Balinese"; "Bamum"; "Bassavah"; "Batak";
-      "Bengali"; "Beriaerfe"; "Bhaiksuki"; "Bopomofo"; "Brahmi"; "Braille";
-      "Buginese"; "Buhid"; "C"; "Canadianaboriginal"; "Carian"; "Casedletter";
-      "Caucasianalbanian"; "Cc"; "Cf"; "Chakma"; "Cham"; "Cherokee";
-      "Chorasmian"; "Closepunctuation"; "Cn"; "Cntrl"; "Co"; "Combiningmark";
-      "Common"; "Connectorpunctuation"; "Control"; "Coptic"; "Cs"; "Cuneiform";
-      "Currencysymbol"; "Cypriot"; "Cyprominoan"; "Cyrillic"; "Dashpunctuation";
-      "Decimalnumber"; "Deseret"; "Devanagari"; "Digit"; "Divesakuru"; "Dogra";
-      "Duployan"; "Egyptianhieroglyphs"; "Elbasan"; "Elymaic"; "Enclosingmark";
-      "Ethiopic"; "Finalpunctuation"; "Format"; "Garay"; "Georgian";
-      "Glagolitic"; "Gothic"; "Grantha"; "Greek"; "Gujarati"; "Gunjalagondi";
-      "Gurmukhi"; "Gurungkhema"; "Han"; "Hangul"; "Hanifirohingya"; "Hanunoo";
-      "Hatran"; "Hebrew"; "Hiragana"; "Imperialaramaic"; "Inherited";
-      "Initialpunctuation"; "Inscriptionalpahlavi"; "Inscriptionalparthian";
-      "Javanese"; "Kaithi"; "Kannada"; "Katakana"; "Kawi"; "Kayahli";
-      "Kharoshthi"; "Khitansmallscript"; "Khmer"; "Khojki"; "Khudawadi";
-      "Kiratrai"; "L"; "Lao"; "Latin"; "Lc"; "Lepcha"; "Letter"; "Letternumber";
-      "Limbu"; "Lineara"; "Linearb"; "Lineseparator"; "Lisu"; "Ll"; "Lm"; "Lo";
-      "Lowercaseletter"; "Lt"; "Lu"; "Lycian"; "Lydian"; "M"; "Mahajani";
-      "Makasar"; "Malayalam"; "Mandaic"; "Manichaean"; "Marchen"; "Mark";
-      "Masaramgondi"; "Mathsymbol"; "Mc"; "Me"; "Medefaidrin"; "Meeteimayek";
-      "Mendekikakui"; "Meroiticcursive"; "Meroitichieroglyphs"; "Miao"; "Mn";
-      "Modi"; "Modifierletter"; "Modifiersymbol"; "Mongolian"; "Mro"; "Multani";
-      "Myanmar"; "N"; "Nabataean"; "Nagmundari"; "Nandinagari"; "Nd"; "Newa";
-      "Newtailue"; "Nko"; "Nl"; "No"; "Nonspacingmark"; "Number"; "Nushu";
-      "Nyiakengpuachuehmong"; "Ogham"; "Olchiki"; "Oldhungarian"; "Olditalic";
-      "Oldnortharabian"; "Oldpermic"; "Oldpersian"; "Oldsogdian";
-      "Oldsoutharabian"; "Oldturkic"; "Olduyghur"; "Olonal"; "Openpunctuation";
-      "Oriya"; "Osage"; "Osmanya"; "Other"; "Otherletter"; "Othernumber";
-      "Otherpunctuation"; "Othersymbol"; "P"; "Pahawhhmong"; "Palmyrene";
-      "Paragraphseparator"; "Paucinhau"; "Pc"; "Pd"; "Pe"; "Pf"; "Phagspa";
-      "Phoenician"; "Pi"; "Po"; "Privateuse"; "Ps"; "Psalterpahlavi"; "Punct";
-      "Punctuation"; "Rejang"; "Runic"; "S"; "Samaritan"; "Saurashtra"; "Sc";
-      "Separator"; "Sharada"; "Shavian"; "Siddham"; "Sidetic"; "Signwriting";
-      "Sinhala"; "Sk"; "Sm"; "So"; "Sogdian"; "Sorasompeng"; "Soyombo";
-      "Spaceseparator"; "Spacingmark"; "Sundanese"; "Sunuwar"; "Surrogate";
-      "Sylotinagri"; "Symbol"; "Syriac"; "Tagalog"; "Tagbanwa"; "Taile";
-      "Taitham"; "Taiviet"; "Taiyo"; "Takri"; "Tamil"; "Tangsa"; "Tangut";
-      "Telugu"; "Thaana"; "Thai"; "Tibetan"; "Tifinagh"; "Tirhuta";
-      "Titlecaseletter"; "Todhri"; "Tolongsiki"; "Toto"; "Tulutigalari";
-      "Ugaritic"; "Unassigned"; "Uppercaseletter"; "Vai"; "Vithkuqi"; "Wancho";
-      "Warangciti"; "Yezidi"; "Yi"; "Z"; "Zanabazarsquare"; "Zl"; "Zp"; "Zs";
-    ]
-[@@ocamlformat "disable"]
 
 let posix_names =
   Names.of_list
@@ -74,20 +22,6 @@ let posix_names =
          "lower"; "print"; "punct"; "space"; "upper"; "word"; "xdigit";
        ])
 [@@ocamlformat "disable"]
-
-(* Go's [canonicalName]: drop underscores, hyphens and spaces, then capitalise
-   the first letter and lower the others. *)
-let canonical name =
-  let b = Buffer.create (String.length name) in
-  let add first = function
-    | '_' | '-' | ' ' -> first
-    | c ->
-        Buffer.add_char b
-          (if first then Char.uppercase_ascii c else Char.lowercase_ascii c);
-        false
-  in
-  ignore (String.fold_left add true name);
-  Buffer.contents b
 
 let is_octal c = c >= '0' && c <= '7'
 let is_perl_class c = String.contains "dDsSwW" c
@@ -185,7 +119,7 @@ let unicode_class re i =
       String.sub name 1 (String.length name - 1)
     else name
   in
-  if not (Names.mem (canonical name) unicode_names) then
+  if Unicode.find name = None then
     fail "invalid character class range: `%s`" (slice re i j);
   j
 

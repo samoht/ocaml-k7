@@ -15,7 +15,7 @@
   re
   unix))
 
-;; The case folding orbits of Go, as an OCaml string.
+;; The case folding orbits and the Unicode tables of Go, as OCaml strings.
 
 (rule
  (targets casefold_data.ml)
@@ -26,6 +26,17 @@
    (progn
     (echo "let table = {|")
     (cat casefold.txt)
+    (echo "|}\n")))))
+
+(rule
+ (targets unicode_data.ml)
+ (deps unicode.txt)
+ (action
+  (with-stdout-to
+   %{targets}
+   (progn
+    (echo "let table = {|")
+    (cat unicode.txt)
     (echo "|}\n")))))
 
 (mdx

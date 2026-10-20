@@ -306,17 +306,16 @@ val render :
       [#RRGGBBAA], [rgb()] or [rgba()], such as a colour name, which xterm.js
       reads with the browser;
     - [Set MarginFill] with an image other than PNG, JPEG, GIF, WebP, BMP or
-      SVG, by its extension;
-    - a wait pattern with a Unicode class ([\p] or [\P]).
+      SVG, by its extension.
 
-    Its patterns match as Go's do, case folding and ASCII word boundaries
-    included. [Set CursorBlink], [Set BorderRadius], [Set PlaybackSpeed] and
-    [Set LoopOffset] change the animation, and [Set WindowBar] and
-    [Set WindowBarSize] draw VHS's window bar. For a reader who prefers reduced
-    motion, the cursor stops blinking and the frames play on. The image of a
-    [Set MarginFill], read relative to [cwd], is embedded, stretched to the
-    frame as ffmpeg stretches it. A size beyond 100000 pixels, or a terminal
-    beyond 2000 cells a side, is {!Unsupported}. *)
+    Its patterns match as Go's do, case folding, ASCII word boundaries and the
+    Unicode classes of Go's tables included. [Set CursorBlink],
+    [Set BorderRadius], [Set PlaybackSpeed] and [Set LoopOffset] change the
+    animation, and [Set WindowBar] and [Set WindowBarSize] draw VHS's window
+    bar. For a reader who prefers reduced motion, the cursor stops blinking and
+    the frames play on. The image of a [Set MarginFill], read relative to [cwd],
+    is embedded, stretched to the frame as ffmpeg stretches it. A size beyond
+    100000 pixels, or a terminal beyond 2000 cells a side, is {!Unsupported}. *)
 
 val record :
   clock:_ Eio.Time.Mono.t ->

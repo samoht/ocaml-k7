@@ -7,8 +7,6 @@
    tree on code points and matched by a Pike VM, as Go's [regexp] matches:
    in linear time, with ASCII word boundaries and Unicode case folding. *)
 
-exception Unsupported of string
-
 type assertion = Bot | Eot | Bol | Eol | Boundary | Not_boundary
 
 type node =
@@ -113,6 +111,37 @@ let perl_class flags c =
   | 'W' -> Some (negated flags word)
   | _ -> None
 
+(* A Unicode class escape, after its [p] or [P] ([negate]), as ranges: Go's
+   table, folded if [flags] say so, then negated, as in Go's
+   [parseUnicodeClass]. *)
+let unicode_class flags p ~negate:n =
+  let b = Buffer.create 16 in
+  let add c = if c >= 0 then Buffer.add_utf_8_uchar b (Uchar.of_int c) in
+  if peek p = Char.code '{' then (
+    next p;
+    while peek p >= 0 && peek p <> Char.code '}' do
+      add (take p)
+    done;
+    next p)
+  else add (take p);
+  let name = Buffer.contents b in
+  let n, name =
+    if String.starts_with ~prefix:"^" name then
+      (not n, String.sub name 1 (String.length name - 1))
+    else (n, name)
+  in
+  match Unicode.find name with
+  | None -> invalid_arg ("no Unicode class " ^ name)
+  | Some (r, negated') ->
+      if n <> negated' then negated flags r else fold flags r
+
+(* A class escape, after its backslash, as ranges. *)
+let class_escape flags p c =
+  match chr c with
+  | 'p' -> Some (unicode_class flags p ~negate:false)
+  | 'P' -> Some (unicode_class flags p ~negate:true)
+  | _ -> perl_class flags c
+
 (* The code point of a character escape, after its backslash. *)
 let escaped_char p c =
   match chr c with
@@ -135,7 +164,6 @@ let escaped_char p c =
         else acc
       in
       octal (c - 48) 2
-  | 'p' | 'P' -> raise (Unsupported "a Unicode class (\\p or \\P)")
   | _ -> c
 
 (* The ranges of a class item, after [\[]: an escape, a POSIX class, a
@@ -170,7 +198,7 @@ let class_item flags p =
         let c = take p in
         if c = Char.code '\\' then
           let e = take p in
-          match perl_class flags e with
+          match class_escape flags p e with
           | Some r -> Error r
           | None -> Ok (escaped_char p e)
         else Ok c
@@ -236,7 +264,7 @@ let escape p flags =
       Seq (List.rev (quoted []))
   | 'C' -> of_ranges [ (0, max_cp) ]
   | _ -> (
-      match perl_class flags c with
+      match class_escape flags p c with
       | Some r -> of_ranges (fold flags r)
       | None -> literal flags (escaped_char p c))
 
@@ -489,11 +517,10 @@ let matches prog s =
 
 let compile re =
   let p = { cps = code_points re; pos = 0 } in
-  match alternation p { fold = false; dot_nl = false; multi_line = false } with
-  | node ->
-      let code = Dynarray.create () in
-      gen code node;
-      ignore (emit code Match);
-      Ok (Dynarray.to_array code)
-  | exception Unsupported what ->
-      Fmt.kstr Result.error "%s is not supported natively" what
+  let node =
+    alternation p { fold = false; dot_nl = false; multi_line = false }
+  in
+  let code = Dynarray.create () in
+  gen code node;
+  ignore (emit code Match);
+  Dynarray.to_array code

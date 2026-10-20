@@ -123,8 +123,8 @@ match as Go's do. Time follows the tape: typing and sleeping take the time the
 tape says, whatever the machine does around them, so the same output gives the
 same image. A `Screenshot` writes a still SVG image, and `Source` plays the
 lines of another tape. A few things need VHS, such as fish and the other
-shells, a colour name in a JSON theme or a Unicode class in a wait pattern;
-`Vhs.record` names them in its error. `Vhs.svg` draws the image of output given
+shells or a colour name in a JSON theme; `Vhs.record` names them in its
+error. `Vhs.svg` draws the image of output given
 with its times, without running anything.
 
 ## Recording a cram test

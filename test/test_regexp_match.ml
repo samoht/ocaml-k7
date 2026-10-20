@@ -77,12 +77,9 @@ let test_unicode_class () =
 let test_go_semantics () =
   List.iter
     (fun (p, t, expected) ->
-      match Regexp_match.compile p with
-      | Ok re ->
-          Alcotest.(check bool)
-            (Fmt.str "%S on %S" p t) expected
-            (Regexp_match.matches re t)
-      | Error e -> Alcotest.failf "%S: %s" p e)
+      Alcotest.(check bool)
+        (Fmt.str "%S on %S" p t) expected
+        (Regexp_match.matches (Regexp_match.compile p) t))
     [
       ("(?i)k", "\xe2\x84\xaa", true);
       ("(?i)\xc3\xa9", "\xc3\x89", true);
@@ -126,14 +123,11 @@ let test_go_oracle () =
   |> String.split_on_char '\n'
   |> List.iter (fun line ->
       match String.split_on_char '\t' line with
-      | [ v; p; t ] -> (
+      | [ v; p; t ] ->
           let p = unhex p and t = unhex t in
-          match Regexp_match.compile p with
-          | Ok re ->
-              Alcotest.(check bool)
-                (Fmt.str "%S on %S" p t) (v = "1")
-                (Regexp_match.matches re t)
-          | Error e -> Alcotest.failf "%S: %s" p e)
+          Alcotest.(check bool)
+            (Fmt.str "%S on %S" p t) (v = "1")
+            (Regexp_match.matches (Regexp_match.compile p) t)
       | [ "" ] -> ()
       | _ -> Alcotest.failf "bad case %S" line)
 

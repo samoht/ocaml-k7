@@ -18,5 +18,6 @@ let () =
       Test_palette.suite;
       Test_regexp_match.suite;
       Test_casefold.suite;
+      Test_unicode.suite;
       Test_native.suite;
     ]

@@ -79,11 +79,6 @@ let lit = function
   | Keyword s | Str s | Pattern s | Json_value s | Num s -> s
   | Sym c -> String.make 1 c
 
-let compile line re =
-  match Regexp_match.compile re with
-  | Ok r -> r
-  | Error e -> unsupported line "%s" e
-
 (* Settings *)
 
 type config = {
@@ -140,7 +135,7 @@ let default_config () =
     playback_speed = 1.;
     loop_offset = 0.;
     wait_timeout = 15_000;
-    wait_pattern = compile "" ">$";
+    wait_pattern = Regexp_match.compile ">$";
     cursor_blink = true;
   }
 
@@ -211,7 +206,8 @@ let set line c name args =
   | "LoopOffset", _ ->
       { c with loop_offset = float_value line (value ()) /. 100. }
   | "WaitTimeout", _ -> { c with wait_timeout = ms line (fst (time line args)) }
-  | "WaitPattern", _ -> { c with wait_pattern = compile line (value ()) }
+  | "WaitPattern", _ ->
+      { c with wait_pattern = Regexp_match.compile (value ()) }
   | "CursorBlink", _ -> { c with cursor_blink = value () = "true" }
   | "WindowBar", _ -> (
       match value () with
@@ -322,7 +318,9 @@ let wait_command line tokens =
   in
   let timeout, rest = speed line rest in
   let pattern =
-    match rest with Pattern p :: _ -> Some (compile line p) | _ -> None
+    match rest with
+    | Pattern p :: _ -> Some (Regexp_match.compile p)
+    | _ -> None
   in
   Wait { line; scope; timeout; pattern }
 
