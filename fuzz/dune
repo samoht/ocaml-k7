@@ -1,3 +1,7 @@
+; The emulator is private to the library; its properties compile it in.
+
+(copy_files ../lib/screen.{ml,mli})
+
 (executable
  (name fuzz)
  (libraries
@@ -6,6 +10,8 @@
   svg_check
   matrix.ansi
   matrix.glyph
+  matrix.grid
+  matrix.vte
   fmt
   alcobar
   eio

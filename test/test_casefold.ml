@@ -8,7 +8,7 @@
 let mem c ranges = List.exists (fun (lo, hi) -> lo <= c && c <= hi) ranges
 
 let check name c ~folds ~not_folds =
-  let r = Vhs.Casefold.fold [ (c, c) ] in
+  let r = Casefold.fold [ (c, c) ] in
   List.iter
     (fun f -> if not (mem f r) then Alcotest.failf "%s: %x lacks %x" name c f)
     (c :: folds);
@@ -30,7 +30,7 @@ let test_orbits () =
 
 (* A range folds each of its code points, its ends included. *)
 let test_ranges () =
-  let r = Vhs.Casefold.fold [ (0x61, 0x63); (0x3b1, 0x3b1) ] in
+  let r = Casefold.fold [ (0x61, 0x63); (0x3b1, 0x3b1) ] in
   List.iter
     (fun c -> if not (mem c r) then Alcotest.failf "lacks %x" c)
     [ 0x41; 0x42; 0x43; 0x61; 0x63; 0x391 ];

@@ -70,11 +70,11 @@ let test_unicode_class () =
 let test_go_semantics () =
   List.iter
     (fun (p, t, expected) ->
-      match Vhs.Regexp_match.compile p with
+      match Regexp_match.compile p with
       | Ok re ->
           Alcotest.(check bool)
             (Fmt.str "%S on %S" p t) expected
-            (Vhs.Regexp_match.matches re t)
+            (Regexp_match.matches re t)
       | Error e -> Alcotest.failf "%S: %s" p e)
     [
       ("(?i)k", "\xe2\x84\xaa", true);
@@ -107,11 +107,11 @@ let test_go_oracle () =
       match String.split_on_char '\t' line with
       | [ v; p; t ] -> (
           let p = unhex p and t = unhex t in
-          match Vhs.Regexp_match.compile p with
+          match Regexp_match.compile p with
           | Ok re ->
               Alcotest.(check bool)
                 (Fmt.str "%S on %S" p t) (v = "1")
-                (Vhs.Regexp_match.matches re t)
+                (Regexp_match.matches re t)
           | Error e -> Alcotest.failf "%S: %s" p e)
       | [ "" ] -> ()
       | _ -> Alcotest.failf "bad case %S" line)

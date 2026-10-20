@@ -1011,7 +1011,3 @@ let svg ?(settings = []) output =
   List.iter (add_setting b) settings;
   let* tape = native (String.split_on_char '\n' (Buffer.contents b)) in
   Ok (Native.replay tape (List.map (fun (Ms ms, s) -> (ms, s)) output))
-
-module Regexp_match = Regexp_match
-module Casefold = Casefold
-module Screen = Screen

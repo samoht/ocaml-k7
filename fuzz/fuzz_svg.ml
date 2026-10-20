@@ -27,10 +27,10 @@ let xml_text s =
 (* The text of each row of a screen as the image draws it: a hidden cell
    is blank, and trailing spaces do not show. *)
 let drawn screen =
-  Array.to_list (Vhs.Screen.rows screen)
+  Array.to_list (Screen.rows screen)
   |> List.map (fun r ->
-      Array.to_list (Vhs.Screen.cells r)
-      |> List.map (fun (c : Vhs.Screen.cell) ->
+      Array.to_list (Screen.cells r)
+      |> List.map (fun (c : Screen.cell) ->
           if c.width = 0 then ""
           else if Ansi.Attr.mem Hidden c.attrs then " "
           else c.text)
@@ -52,12 +52,12 @@ let test_frames chunks =
       match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows svg with
       | Error e -> failf "not well-formed: %s" e
       | Ok frames ->
-          let term = Vhs.Screen.terminal ~rows ~cols in
+          let term = Screen.terminal ~rows ~cols in
           let expected =
             List.map
               (fun s ->
-                Vhs.Screen.feed term s;
-                drawn (Vhs.Screen.of_terminal term))
+                Screen.feed term s;
+                drawn (Screen.of_terminal term))
               chunks
           in
           let expected =
@@ -137,19 +137,19 @@ let test_saved_charset n dec =
   in
   let b = Buffer.create 4 in
   Buffer.add_utf_8_uchar b (Uchar.of_int (if dec then u else Char.code c));
-  let term = Vhs.Screen.terminal ~rows ~cols in
-  Vhs.Screen.feed term output;
+  let term = Screen.terminal ~rows ~cols in
+  Screen.feed term output;
   check_eq ~pp:pp_string (Buffer.contents b)
-    (Vhs.Screen.line (Vhs.Screen.of_terminal term) 0)
+    (Screen.line (Screen.of_terminal term) 0)
 
 (* Without any tab stops, HT moves to the last column at every width. *)
 let test_clear_tabs n =
   let cols = 10 + (n mod 70) in
-  let term = Vhs.Screen.terminal ~rows:2 ~cols in
-  Vhs.Screen.feed term "a\tX\027[3g\r\tY";
+  let term = Screen.terminal ~rows:2 ~cols in
+  Screen.feed term "a\tX\027[3g\r\tY";
   check_eq ~pp:pp_string
     ("a" ^ String.make 7 ' ' ^ "X" ^ String.make (cols - 10) ' ' ^ "Y")
-    (Vhs.Screen.line (Vhs.Screen.of_terminal term) 0)
+    (Screen.line (Screen.of_terminal term) 0)
 
 (* Deleting one cell cannot shift the suffix by a whole wide character. *)
 let test_delete_wide n glyph =
@@ -160,26 +160,25 @@ let test_delete_wide n glyph =
     Fmt.str "%s%sbc\r\027[%dG\027[P" prefix (Buffer.contents b)
       (String.length prefix + 1)
   in
-  let term = Vhs.Screen.terminal ~rows ~cols in
-  Vhs.Screen.feed term output;
+  let term = Screen.terminal ~rows ~cols in
+  Screen.feed term output;
   check_eq ~pp:pp_string (prefix ^ " bc")
-    (Vhs.Screen.line (Vhs.Screen.of_terminal term) 0)
+    (Screen.line (Screen.of_terminal term) 0)
 
 (* PTY reads may split anywhere, including inside UTF-8 and escape sequences.
    Delivery boundaries must not change the screen, cursor or scrollback. *)
 let test_chunk_boundaries chunks =
   let output = String.concat "" chunks in
-  let whole = Vhs.Screen.terminal ~rows ~cols in
-  let split = Vhs.Screen.terminal ~rows ~cols in
-  Vhs.Screen.feed whole output;
-  String.iter (fun c -> Vhs.Screen.feed split (String.make 1 c)) output;
-  let a = Vhs.Screen.of_terminal whole and b = Vhs.Screen.of_terminal split in
-  check (Vhs.Screen.equal a b);
-  check_eq ~pp:Fmt.int (Vhs.Screen.history whole) (Vhs.Screen.history split);
+  let whole = Screen.terminal ~rows ~cols in
+  let split = Screen.terminal ~rows ~cols in
+  Screen.feed whole output;
+  String.iter (fun c -> Screen.feed split (String.make 1 c)) output;
+  let a = Screen.of_terminal whole and b = Screen.of_terminal split in
+  check (Screen.equal a b);
+  check_eq ~pp:Fmt.int (Screen.history whole) (Screen.history split);
   check_eq
     ~pp:Fmt.(Dump.array string)
-    (Vhs.Screen.buffer whole a)
-    (Vhs.Screen.buffer split b)
+    (Screen.buffer whole a) (Screen.buffer split b)
 
 let suite =
   ( "svg",

@@ -1,3 +1,8 @@
+; The emulator and the pattern matcher are private to the library; their
+; tests compile them in.
+
+(copy_files ../lib/{screen,casefold,casefold_data,regexp_match}.{ml,mli})
+
 (test
  (name test)
  (deps
@@ -11,6 +16,9 @@
   vhs_cram
   svg_check
   matrix.ansi
+  matrix.glyph
+  matrix.grid
+  matrix.vte
   native_test
   fmt
   alcotest

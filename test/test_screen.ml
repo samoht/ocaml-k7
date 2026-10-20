@@ -161,9 +161,9 @@ let test_controls () =
    theirs. *)
 let test_history () =
   let history s =
-    let t = Vhs.Screen.terminal ~rows:2 ~cols:5 in
-    Vhs.Screen.feed t s;
-    Vhs.Screen.history t
+    let t = Screen.terminal ~rows:2 ~cols:5 in
+    Screen.feed t s;
+    Screen.history t
   in
   Alcotest.(check int) "line feed" 1 (history "a\r\nb\r\nc");
   Alcotest.(check int) "delete line" 0 (history "a\r\nb\027[H\027[M");
@@ -193,9 +193,9 @@ let test_charsets () =
 
 (* The colour of the first cell of the screen after [s]. *)
 let first_fg s =
-  let t = Vhs.Screen.terminal ~rows:2 ~cols:5 in
-  Vhs.Screen.feed t s;
-  (Vhs.Screen.cells (Vhs.Screen.rows (Vhs.Screen.of_terminal t)).(0)).(0).fg
+  let t = Screen.terminal ~rows:2 ~cols:5 in
+  Screen.feed t s;
+  (Screen.cells (Screen.rows (Screen.of_terminal t)).(0)).(0).fg
 
 (* As in xterm.js, a restore brings back the colours and the active
    character set the save saw, and the line the save was on, which lines
@@ -306,9 +306,9 @@ let test_cell_edits () =
 
 (* The attributes of the first cell of the screen after [s]. *)
 let first_attrs s =
-  let t = Vhs.Screen.terminal ~rows:2 ~cols:5 in
-  Vhs.Screen.feed t s;
-  (Vhs.Screen.cells (Vhs.Screen.rows (Vhs.Screen.of_terminal t)).(0)).(0).attrs
+  let t = Screen.terminal ~rows:2 ~cols:5 in
+  Screen.feed t s;
+  (Screen.cells (Screen.rows (Screen.of_terminal t)).(0)).(0).attrs
 
 (* xterm.js ignores the escape sequences it has no handler for, such as the
    keypad modes, S7C1T, a CSI sequence with a private prefix that only
