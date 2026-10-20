@@ -201,6 +201,21 @@ let test_settings () =
   (* VHS puts the font list in single quotes in browser code. *)
   rejects "font quote" ~settings:[ Font_family "x'; alert(1); '" ] [];
   rejects "font backslash" ~settings:[ Font_family {|x\|} ] [];
+  (* VHS fits twice the padding and the margin in the frame, and the window
+     bar too in its height. *)
+  error "margin"
+    "Set Margin 300: the frame needs at least 720 x 720 pixels, not 1200 x 600"
+    [ raw "Set Margin 300" ];
+  error "window bar"
+    "Set WindowBar Colorful: the frame needs at least 120 x 150 pixels, not \
+     1200 x 149"
+    ~settings:[ Height 149 ]
+    [ raw "Set WindowBar Colorful" ];
+  expect "negative margin"
+    "Set Padding 400\nSet Width 1000\nSet Margin \"-100\"\n"
+    (body ~settings:[ Padding 400; Width 1000 ] [ raw {|Set Margin "-100"|} ]);
+  expect "bar size without a bar" "Set Height 120\nSet WindowBarSize 100\n"
+    (body ~settings:[ Height 120 ] [ raw "Set WindowBarSize 100" ]);
   (* VHS sizes the frame by its pixels or by its cells, not both. *)
   expect "rows" "Set Width 800\nSet Rows 10\n"
     (body ~settings:[ Width 800 ] [ raw "Set Rows 10" ]);
