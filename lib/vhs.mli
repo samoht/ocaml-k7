@@ -124,8 +124,9 @@ type setting =
       (** The height in pixels, at least twice the padding (defaults to [600]).
       *)
   | Theme of string
-      (** A theme name, as [vhs themes] lists them, or JSON, which VHS checks
-          only when it runs. *)
+      (** The name of a theme of VHS 0.12.1, as [vhs themes] lists them; a theme
+          in JSON, which starts with [{] and which VHS checks only when it runs;
+          or only spaces, for the default theme. *)
   | Padding of int
       (** The padding in pixels, not negative (defaults to [60]). *)
   | Typing_speed of duration

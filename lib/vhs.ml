@@ -283,6 +283,30 @@ let rec check_actions ~started = function
       in
       check_actions ~started rest
 
+(* Go's [unicode.IsSpace]. *)
+let is_space u =
+  let c = Uchar.to_int u in
+  (c >= 0x09 && c <= 0x0d)
+  || (c >= 0x2000 && c <= 0x200a)
+  || List.mem c
+       [ 0x20; 0x85; 0xa0; 0x1680; 0x2028; 0x2029; 0x202f; 0x205f; 0x3000 ]
+
+let is_blank s =
+  let rec go i =
+    i >= String.length s
+    ||
+    let d = String.get_utf_8_uchar s i in
+    is_space (Uchar.utf_decode_uchar d) && go (i + Uchar.utf_decode_length d)
+  in
+  go 0
+
+(* VHS reads a theme that starts with [{] as JSON, and a blank one as its
+   default theme. *)
+let check_theme t =
+  let* () = check_quotable "Set Theme" t in
+  if is_blank t || String.starts_with ~prefix:"{" t || Themes.mem t then Ok ()
+  else err "Set Theme %S: not a VHS theme" t
+
 (* VHS fonts are set by browser code that quotes the list with [']. *)
 let check_setting = function
   | Shell _ -> Ok ()
@@ -292,7 +316,7 @@ let check_setting = function
   | Font_family f when String.exists (fun c -> c = '\'' || c = '\\') f ->
       err "Set FontFamily %S: holds a single quote or a backslash" f
   | Font_family f -> check_quotable "Set FontFamily" f
-  | Theme t -> check_quotable "Set Theme" t
+  | Theme t -> check_theme t
   | Typing_speed (Ms n) -> check_ms "Set TypingSpeed " n
   | Font_size _ | Framerate _ | Padding _ | Width _ | Height _ -> Ok ()
 

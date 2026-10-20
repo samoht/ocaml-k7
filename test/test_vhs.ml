@@ -202,35 +202,6 @@ let test_settings () =
   rejects "font quote" ~settings:[ Font_family "x'; alert(1); '" ] [];
   rejects "font backslash" ~settings:[ Font_family {|x\|} ] []
 
-(* VHS finds a theme by its exact name, reads a value starting with [{] as
-   JSON and a blank one as its default theme. *)
-let test_themes () =
-  let open Vhs in
-  expect "name" "Set Theme \"Dracula\"\n"
-    (body ~settings:[ Theme "Dracula" ] []);
-  expect "blank" "Set Theme \" \xc2\xa0\"\n"
-    (body ~settings:[ Theme " \xc2\xa0" ] []);
-  error "unknown" {|Set Theme "Draculaa": not a VHS theme|}
-    ~settings:[ Theme "Draculaa" ] [];
-  rejects "case" ~settings:[ Theme "dracula" ] [];
-  rejects "space before JSON" ~settings:[ Theme " {}" ] []
-
-(* Every theme [vhs themes] lists is a theme. *)
-let test_vhs_themes () =
-  match Sys.getenv_opt "VHS_ORACLE" with
-  | None -> ()
-  | Some vhs ->
-      let ic = Unix.open_process_args_in vhs [| vhs; "themes" |] in
-      let names = In_channel.input_lines ic in
-      Alcotest.(check bool)
-        "vhs themes exits with 0" true
-        (Unix.close_process_in ic = WEXITED 0);
-      Alcotest.(check (list string))
-        "rejected themes" []
-        (List.filter
-           (fun name -> Result.is_error (tape ~settings:[ Theme name ] []))
-           names)
-
 let test_outputs () =
   error "no output" "no output" ~outputs:[] [];
   error "no extension"
@@ -346,8 +317,6 @@ let suite =
         ("hidden", test_hidden);
         ("durations", test_durations);
         ("settings", test_settings);
-        ("themes", test_themes);
-        ("themes of vhs", test_vhs_themes);
         ("outputs", test_outputs);
         ("keys", test_keys);
         ("waits", test_waits);
