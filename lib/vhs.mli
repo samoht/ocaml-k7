@@ -301,7 +301,7 @@ val render :
     [Copy]), [Screenshot] and [Output] lines, [Source] lines, whose tape it
     reads relative to [cwd] and refuses where VHS does, [Env], [Require], and
     every [Set] but those below. It does not play, and is {!Unsupported} on:
-    - a {!shell} other than {!Bash} and {!Zsh}, which start as in VHS;
+    - a {!shell} other than {!Bash}, {!Zsh} and {!Fish}, which start as in VHS;
     - a colour of a JSON [Theme] other than [#RGB], [#RGBA], [#RRGGBB],
       [#RRGGBBAA], [rgb()] or [rgba()], such as a colour name, which xterm.js
       reads with the browser;

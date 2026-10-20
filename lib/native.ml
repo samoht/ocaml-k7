@@ -164,8 +164,8 @@ let set line c name args =
     match args with v :: _ -> lit v | [] -> unsupported line "no value"
   in
   match (name, args) with
-  | "Shell", [ Str (("bash" | "zsh") as shell) ] -> { c with shell }
-  | "Shell", _ -> unsupported line "only bash and zsh play natively"
+  | "Shell", [ Str (("bash" | "zsh" | "fish") as shell) ] -> { c with shell }
+  | "Shell", _ -> unsupported line "only bash, zsh and fish play natively"
   | "FontSize", _ -> { c with font_size = int_value line (value ()) }
   | "FontFamily", _ -> { c with font_family = value () ^ ",monospace" }
   | "Width", _ -> { c with width = int_value line (value ()) }
@@ -820,6 +820,17 @@ let shell = function
   | "zsh" ->
       ( [ ("PROMPT", "%F{#5B56E0}> %F{reset_color}") ],
         [ "--histnostore"; "--no-rcs" ] )
+  | "fish" ->
+      ( [],
+        [
+          "--login";
+          "--no-config";
+          "--private";
+          "-C";
+          "function fish_greeting; end";
+          "-C";
+          {|function fish_prompt; set_color 5B56E0; echo -n "> "; set_color normal; end|};
+        ] )
   | _ ->
       ( [
           ("PS1", {|\[\e[38;2;90;86;224m\]> \[\e[0m\]|});
