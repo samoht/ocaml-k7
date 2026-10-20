@@ -23,6 +23,10 @@ let test_cursor () =
   let s = svg [ (Ms 0, "ab") ] in
   check_contains "cursor" ~sub:{|<use href="#c" class="k" x="28" y="0"/>|} s;
   check_contains "blink" ~sub:".k{animation:b" s;
+  (* The blink is decoration, which a reader can ask to stop; the frames
+     are the recording and play on. *)
+  check_contains "reduced motion"
+    ~sub:"@media (prefers-reduced-motion:reduce){.k{animation:none}}" s;
   let hidden = svg [ (Ms 0, "ab\027[?25l") ] in
   Alcotest.(check bool)
     "hidden cursor" false
