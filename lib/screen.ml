@@ -287,8 +287,9 @@ let of_terminal ?previous ?(offset = 0) t =
         fun y -> if List.mem y dirty then None else Some p.rows.(y)
     | _ -> fun _ -> None
   in
-  (* matrix 0.1.0 renders the scrollback lines newest first. *)
-  let source y = if y < offset then offset - 1 - y else y in
+  (* matrix 0.1.0 renders the scrollback lines it shows newest first. *)
+  let shown = min offset rows in
+  let source y = if y < shown then shown - 1 - y else y in
   let history =
     if offset = 0 then [||]
     else
@@ -299,7 +300,7 @@ let of_terminal ?previous ?(offset = 0) t =
     Array.init rows (fun y ->
         match reuse y with
         | Some r -> r
-        | None when y < offset -> restore t (row grid (source y)) history.(y)
+        | None when y < shown -> restore t (row grid (source y)) history.(y)
         | None -> row grid (source y))
   in
   let cursor =
