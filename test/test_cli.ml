@@ -423,6 +423,30 @@ let test_invisible_output_order () =
     "command output precedes the next input even after U+200B" true
     (first < second)
 
+(* An unterminated here-document leaves bash at its continuation prompt,
+   where no wait can end; the error names the command that did. *)
+let test_unfinished () =
+  with_files
+    [
+      ("demo.t", 0o644, "  $ cat <<EOF\n  > a\n  $ echo after\n");
+      ("err", 0o644, "");
+    ]
+  @@ fun env path ->
+  let err = Unix.openfile (path "err") [ O_WRONLY; O_TRUNC ] 0 in
+  let code =
+    Fun.protect ~finally:(fun () -> Unix.close err) @@ fun () ->
+    redirect Unix.stderr (Some err) @@ fun () ->
+    Cli.run env ~print:false ~vhs:(Option.get oracle) ~setup:[]
+      ~output:(path "out.txt") (path "demo.t")
+  in
+  let msg = In_channel.with_open_bin (path "err") In_channel.input_all in
+  Alcotest.(check int) "exit code" 123 code;
+  List.iter
+    (fun sub ->
+      if not (contains ~sub msg) then
+        Alcotest.failf "error lacks %S: %s" sub msg)
+    [ "command 1"; "cat <<EOF"; "waiting for more input" ]
+
 let suite =
   ( "cli",
     List.map
@@ -441,5 +465,6 @@ let suite =
           ("history", test_history);
           ("setup prompt command", test_setup_prompt_command);
           ("invisible output order", test_invisible_output_order);
+          ("unfinished command", test_unfinished);
         ]
       else []) )
