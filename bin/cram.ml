@@ -59,8 +59,8 @@ let is_empty t = t = []
 let sh_quote s =
   "'" ^ String.concat {|'\''|} (String.split_on_char '\'' s) ^ "'"
 
-(* [mark ~setup t] is the sixteen zero-width characters that follow the
-   [>] of the prompt, one per bit of a digest of [setup] and [t]: U+200B for
+(* [mark ~setup t] is the sixteen zero-width characters that end the prompt,
+   after its space, one per bit of a digest of [setup] and [t]: U+200B for
    a 0, U+2060 for a 1. The recording looks the same, but a line holds the
    mark only on this prompt, not when a command prints a zero-width space or
    the prompt of another recording. *)
@@ -89,18 +89,20 @@ let var = "VHS_CRAM_PROMPT"
    after the hooks a setup installs, which may rewrite [PS1] before each
    prompt; the hooks of an array, which bash 5.1 and later run in order, are
    joined into one string, run by every bash. [__vhs_prompt] sets [PS1] to
-   the prompt VHS gives bash with [mark] after the [>], and [PS2] to bash's
-   [>] with [mark], then one [tally mark] per prompt shown so far. *)
+   the prompt VHS gives bash followed by [mark], and [PS2] to bash's [> ]
+   followed by [mark] and one [tally mark] per prompt shown so far. The mark
+   follows the space so that it stays on the line under the cursor when the
+   [>] fills the last column. *)
 let init mark =
   String.concat ""
     [
-      {|__vhs_n=; __vhs_prompt() { PS1='\[\e[38;2;90;86;224m\]>\[|};
+      {|__vhs_n=; __vhs_prompt() { PS1='\[\e[38;2;90;86;224m\]> \[|};
       concat_map octal mark;
-      {|\] \[\e[0m\]'; __vhs_n=$__vhs_n'|};
+      {|\e[0m\]'; __vhs_n=$__vhs_n'|};
       octal (tally mark);
-      {|'; PS2='>\[|};
+      {|'; PS2='> \[|};
       concat_map octal mark;
-      {|'$__vhs_n'\] '; }; __vhs=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} __vhs_prompt); unset PROMPT_COMMAND; PROMPT_COMMAND=$__vhs; unset __vhs |};
+      {|'$__vhs_n'\]'; }; __vhs=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} __vhs_prompt); unset PROMPT_COMMAND; PROMPT_COMMAND=$__vhs; unset __vhs |};
       var;
     ]
 
@@ -125,26 +127,29 @@ let actions ~setup t =
   let mark = mark ~setup t in
   prepare mark setup :: List.concat_map (command mark) t
 
-(* [find sub s] is the index of the first [sub] in [s]. *)
-let find sub s =
+(* [find sub s ~from] is the index of the first [sub] in [s] from [from]. *)
+let find sub s ~from =
   let n = String.length sub in
   let rec go i =
     if i + n > String.length s then None
     else if String.sub s i n = sub then Some i
     else go (i + 1)
   in
-  go 0
+  go from
 
 let unfinished ~setup t output =
   let mark = mark ~setup t in
-  let ps2 = "last value was: >" ^ concat_map utf_8 mark in
+  let ps2 = " " ^ concat_map utf_8 mark in
   let tally = utf_8 (tally mark) in
   let n = String.length output in
   let rec count k i =
     if i + 3 <= n && String.sub output i 3 = tally then count (k + 1) (i + 3)
     else (k, i)
   in
-  match find ps2 output with
+  match
+    Option.bind (find "last value was: " output ~from:0) (fun from ->
+        find ps2 output ~from)
+  with
   | None -> None
   | Some i -> (
       let k, j = count 0 (i + String.length ps2) in

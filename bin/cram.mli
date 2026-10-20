@@ -42,7 +42,7 @@ val actions : setup:string list -> t -> Vhs.action list
     typed. A text output of VHS holds the mark after each prompt. A hook that
     rewrites [PS1] runs before the appended command, so the prompt survives it;
     a command that replaces [PROMPT_COMMAND] makes the next wait time out. The
-    appended command also sets [PS2] to bash's [>] followed by the mark and a
+    appended command also sets [PS2] to bash's [> ] followed by the mark and a
     count of the prompts shown, which {!unfinished} reads. *)
 
 val unfinished : setup:string list -> t -> string -> (int * string) option

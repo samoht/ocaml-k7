@@ -38,13 +38,13 @@ let env =
   let z = {|\342\200\213|} in
   String.concat ""
     [
-      {|Env VHS_CRAM_PROMPT `__vhs_n=; __vhs_prompt() { PS1='\[\e[38;2;90;86;224m\]>\[|};
+      {|Env VHS_CRAM_PROMPT `__vhs_n=; __vhs_prompt() { PS1='\[\e[38;2;90;86;224m\]> \[|};
       repeat z;
-      {|\] \[\e[0m\]'; __vhs_n=$__vhs_n'|};
+      {|\e[0m\]'; __vhs_n=$__vhs_n'|};
       z;
-      {|'; PS2='>\[|};
+      {|'; PS2='> \[|};
       repeat z;
-      {|'$__vhs_n'\] '; }; __vhs=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} __vhs_prompt); unset PROMPT_COMMAND; PROMPT_COMMAND=$__vhs; unset __vhs VHS_CRAM_PROMPT`|};
+      {|'$__vhs_n'\]'; }; __vhs=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} __vhs_prompt); unset PROMPT_COMMAND; PROMPT_COMMAND=$__vhs; unset __vhs VHS_CRAM_PROMPT`|};
     ]
 
 (* What every recording starts with, hidden. *)
@@ -176,7 +176,7 @@ let test_unfinished () =
   in
   let tally = if String.ends_with ~suffix:zwsp mark then wj else zwsp in
   let output k =
-    "failed to execute command: timeout waiting for ...; last value was: >"
+    "failed to execute command: timeout waiting for ...; last value was: > "
     ^ mark
     ^ String.concat "" (List.init k (fun _ -> tally))
     ^ "\n"
@@ -190,7 +190,9 @@ let test_unfinished () =
   check "second" (Some (2, "echo b")) (output 2);
   check "primary prompt" None (output 0);
   check "no such command" None (output 3);
-  check "other output" None "last value was: >\n"
+  check "other output" None "last value was: >\n";
+  check "mark before the last value" None
+    ("\x20" ^ mark ^ tally ^ "\nlast value was: >\n")
 
 let suite =
   ( "cram",
