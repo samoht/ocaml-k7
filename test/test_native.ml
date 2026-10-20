@@ -721,6 +721,11 @@ let test_repeat_combining () =
   check_terminal_payload {|a\314\201\033[3b|}
     (String.concat "" (List.init 4 (fun _ -> "a\xcc\x81")))
 
+(* The UTF-8 encodings of C1 CSI, OSC and ST have their control meanings,
+   just like ESC [, ESC ] and ESC backslash in xterm.js. *)
+let test_c1_controls () =
+  check_terminal_payload {|a\302\2332Cb\302\235title\302\234c|} "a  bc"
+
 let suite =
   ( "native",
     List.map
@@ -747,6 +752,7 @@ let suite =
          ("unsupported", test_unsupported);
          ("terminal state recording", test_terminal_state);
          ("repeat combining cell", test_repeat_combining);
+         ("C1 terminal controls", test_c1_controls);
        ]
       @
       if Option.is_some oracle then
