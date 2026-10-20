@@ -35,9 +35,17 @@ let repeat s = String.concat "" (List.init 16 (fun _ -> s))
 let ready = "Wait+Line /" ^ repeat {|\x{200B}|} ^ "$/\n"
 
 let env =
-  {|Env VHS_CRAM_PROMPT `__vhs=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} "PS1='\[\e[38;2;90;86;224m\]>\[|}
-  ^ repeat {|\342\200\213|}
-  ^ {|\] \[\e[0m\]'"); unset PROMPT_COMMAND; PROMPT_COMMAND=$__vhs; unset __vhs VHS_CRAM_PROMPT`|}
+  let z = {|\342\200\213|} in
+  String.concat ""
+    [
+      {|Env VHS_CRAM_PROMPT `__vhs_n=; __vhs_prompt() { PS1='\[\e[38;2;90;86;224m\]>\[|};
+      repeat z;
+      {|\] \[\e[0m\]'; __vhs_n=$__vhs_n'|};
+      z;
+      {|'; PS2='>\[|};
+      repeat z;
+      {|'$__vhs_n'\] '; }; __vhs=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} __vhs_prompt); unset PROMPT_COMMAND; PROMPT_COMMAND=$__vhs; unset __vhs VHS_CRAM_PROMPT`|};
+    ]
 
 (* What every recording starts with, hidden. *)
 let prelude ?(typed = {|Type 'eval "$VHS_CRAM_PROMPT"; clear'|}) () =
@@ -149,6 +157,41 @@ let test_mark () =
     "sixteen characters" true
     (unmarked (wait "  $ false\n") = String.trim ready)
 
+(* After a timeout, vhs prints the line under the cursor; at bash's
+   continuation prompt, it is the mark followed by one more character per
+   prompt shown, which counts the commands. *)
+let test_unfinished () =
+  let t = Result.get_ok (Cram.parse "  $ cat <<EOF\n  $ echo b\n") in
+  let wait =
+    String.split_on_char '\n' (printed "  $ cat <<EOF\n  $ echo b\n")
+    |> List.find (String.starts_with ~prefix:"Wait+Line")
+  in
+  let zwsp = "\xe2\x80\x8b" and wj = "\xe2\x81\xa0" in
+  let mark =
+    wait
+    |> replace ~sub:{|\x{200B}|} ~by:zwsp
+    |> replace ~sub:{|\x{2060}|} ~by:wj
+    |> replace ~sub:"Wait+Line /" ~by:""
+    |> replace ~sub:"$/" ~by:""
+  in
+  let tally = if String.ends_with ~suffix:zwsp mark then wj else zwsp in
+  let output k =
+    "failed to execute command: timeout waiting for ...; last value was: >"
+    ^ mark
+    ^ String.concat "" (List.init k (fun _ -> tally))
+    ^ "\n"
+  in
+  let check name expected out =
+    Alcotest.(check (option (pair int string)))
+      name expected
+      (Cram.unfinished ~setup:[] t out)
+  in
+  check "first" (Some (1, "cat <<EOF")) (output 1);
+  check "second" (Some (2, "echo b")) (output 2);
+  check "primary prompt" None (output 0);
+  check "no such command" None (output 3);
+  check "other output" None "last value was: >\n"
+
 let suite =
   ( "cram",
     List.map
@@ -161,4 +204,5 @@ let suite =
         ("parse errors", test_parse_errors);
         ("setup", test_setup);
         ("mark", test_mark);
+        ("unfinished", test_unfinished);
       ] )

@@ -41,4 +41,14 @@ val actions : setup:string list -> t -> Vhs.action list
     recording: each command's output is complete before the next command is
     typed. A text output of VHS holds the mark after each prompt. A hook that
     rewrites [PS1] runs before the appended command, so the prompt survives it;
-    a command that replaces [PROMPT_COMMAND] makes the next wait time out. *)
+    a command that replaces [PROMPT_COMMAND] makes the next wait time out. The
+    appended command also sets [PS2] to bash's [>] followed by the mark and a
+    count of the prompts shown, which {!unfinished} reads. *)
+
+val unfinished : setup:string list -> t -> string -> (int * string) option
+(** [unfinished ~setup t output] is [Some (n, line)] if [output], what [vhs]
+    printed when a recording of [actions ~setup t] timed out, shows bash waiting
+    for more of command [n], counted from [1], whose first line is [line]: an
+    unterminated quote or here-document, or a line that ends with a backslash,
+    leaves bash at its continuation prompt [PS2], where no wait can end. It is
+    [None] otherwise. *)

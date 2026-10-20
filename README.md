@@ -101,7 +101,7 @@ $ vhs-cram --print --output hello.gif hello.t
 Output "hello.gif"
 Set Shell "bash"
 Hide
-Env VHS_CRAM_PROMPT `__vhs=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} "PS1='\[\e[38;2;90;86;224m\]>\[\342\200\213\342\200\213\342\200\213\342\201\240\342\201\240\342\200\213\342\200\213\342\200\213\342\201\240\342\200\213\342\201\240\342\201\240\342\200\213\342\200\213\342\201\240\342\201\240\] \[\e[0m\]'"); unset PROMPT_COMMAND; PROMPT_COMMAND=$__vhs; unset __vhs VHS_CRAM_PROMPT`
+Env VHS_CRAM_PROMPT `__vhs_n=; __vhs_prompt() { PS1='\[\e[38;2;90;86;224m\]>\[\342\200\213\342\200\213\342\200\213\342\201\240\342\201\240\342\200\213\342\200\213\342\200\213\342\201\240\342\200\213\342\201\240\342\201\240\342\200\213\342\200\213\342\201\240\342\201\240\] \[\e[0m\]'; __vhs_n=$__vhs_n'\342\200\213'; PS2='>\[\342\200\213\342\200\213\342\200\213\342\201\240\342\201\240\342\200\213\342\200\213\342\200\213\342\201\240\342\200\213\342\201\240\342\201\240\342\200\213\342\200\213\342\201\240\342\201\240'$__vhs_n'\] '; }; __vhs=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} __vhs_prompt); unset PROMPT_COMMAND; PROMPT_COMMAND=$__vhs; unset __vhs VHS_CRAM_PROMPT`
 Type 'eval "$VHS_CRAM_PROMPT"; clear'
 Enter
 Wait+Line /\x{200B}\x{200B}\x{200B}\x{2060}\x{2060}\x{200B}\x{200B}\x{200B}\x{2060}\x{200B}\x{2060}\x{2060}\x{200B}\x{200B}\x{2060}\x{2060}$/
@@ -118,7 +118,9 @@ being recorded. `vhs-cram` then makes the last command of bash's
 the one VHS gives bash followed by an invisible mark, sixteen zero-width
 characters that spell a digest of the cram test, and waits for that mark:
 output that ends with `>`, or with a zero-width space, while its command still
-runs is not mistaken for the prompt.
+runs is not mistaken for the prompt. A command that leaves bash waiting for more input,
+such as an unterminated quote or here-document, makes that wait time out, and
+`vhs-cram` then names the command.
 
 ## Credits
 

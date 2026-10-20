@@ -71,32 +71,36 @@ let mark ~setup t =
 
 let concat_map f l = String.concat "" (List.map f l)
 
-(* The prompt VHS gives bash, with [mark] after the [>]. *)
-let ps1 mark =
-  {|PS1='\[\e[38;2;90;86;224m\]>\[|}
-  ^ concat_map (fun b -> if b then {|\342\201\240|} else {|\342\200\213|}) mark
-  ^ {|\] \[\e[0m\]'|}
+(* A bit of the mark as UTF-8, as a prompt escape and as a Go regexp. *)
+let utf_8 b = if b then "\xe2\x81\xa0" else "\xe2\x80\x8b"
+let octal b = if b then {|\342\201\240|} else {|\342\200\213|}
+let regexp b = if b then {|\x{2060}|} else {|\x{200B}|}
 
-let ready mark =
-  Vhs.wait
-    (Line
-       (concat_map (fun b -> if b then {|\x{2060}|} else {|\x{200B}|}) mark
-       ^ "$"))
+(* The character that counts the prompts after the mark in [PS2]: it is not
+   the last of [mark], so that a [PS2] line never ends with [mark]. *)
+let tally mark = not (List.nth mark (List.length mark - 1))
+let ready mark = Vhs.wait (Line (concat_map regexp mark ^ "$"))
 
 (* The variable that hands [init] to bash, through VHS's [Env], which sets it
    before the shell starts; [init] unsets it. *)
 let var = "VHS_CRAM_PROMPT"
 
-(* [init mark] makes [ps1 mark] the last command of [PROMPT_COMMAND], after
-   the hooks a setup installs, which may rewrite [PS1] before each prompt.
-   The hooks of an array, which bash 5.1 and later run in order, are joined
-   into one string, run by every bash. *)
+(* [init mark] makes [__vhs_prompt] the last command of [PROMPT_COMMAND],
+   after the hooks a setup installs, which may rewrite [PS1] before each
+   prompt; the hooks of an array, which bash 5.1 and later run in order, are
+   joined into one string, run by every bash. [__vhs_prompt] sets [PS1] to
+   the prompt VHS gives bash with [mark] after the [>], and [PS2] to bash's
+   [>] with [mark], then one [tally mark] per prompt shown so far. *)
 let init mark =
   String.concat ""
     [
-      {|__vhs=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} "|};
-      ps1 mark;
-      {|"); unset PROMPT_COMMAND; PROMPT_COMMAND=$__vhs; unset __vhs |};
+      {|__vhs_n=; __vhs_prompt() { PS1='\[\e[38;2;90;86;224m\]>\[|};
+      concat_map octal mark;
+      {|\] \[\e[0m\]'; __vhs_n=$__vhs_n'|};
+      octal (tally mark);
+      {|'; PS2='>\[|};
+      concat_map octal mark;
+      {|'$__vhs_n'\] '; }; __vhs=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} __vhs_prompt); unset PROMPT_COMMAND; PROMPT_COMMAND=$__vhs; unset __vhs |};
       var;
     ]
 
@@ -120,3 +124,31 @@ let command mark lines =
 let actions ~setup t =
   let mark = mark ~setup t in
   prepare mark setup :: List.concat_map (command mark) t
+
+(* [find sub s] is the index of the first [sub] in [s]. *)
+let find sub s =
+  let n = String.length sub in
+  let rec go i =
+    if i + n > String.length s then None
+    else if String.sub s i n = sub then Some i
+    else go (i + 1)
+  in
+  go 0
+
+let unfinished ~setup t output =
+  let mark = mark ~setup t in
+  let ps2 = "last value was: >" ^ concat_map utf_8 mark in
+  let tally = utf_8 (tally mark) in
+  let n = String.length output in
+  let rec count k i =
+    if i + 3 <= n && String.sub output i 3 = tally then count (k + 1) (i + 3)
+    else (k, i)
+  in
+  match find ps2 output with
+  | None -> None
+  | Some i -> (
+      let k, j = count 0 (i + String.length ps2) in
+      let ends = j = n || output.[j] = '\n' || output.[j] = '\r' in
+      match if k >= 1 && ends then List.nth_opt t (k - 1) else None with
+      | Some (line :: _) -> Some (k, line)
+      | _ -> None)

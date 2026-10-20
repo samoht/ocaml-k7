@@ -36,6 +36,23 @@ let write flow s =
   | exception Eio.Io (err, _) ->
       Error (Fmt.kstr Option.some "%a" Eio.Exn.pp_err err)
 
+(* A command that leaves bash at its continuation prompt makes the next
+   wait time out; the error then names it. *)
+let render_error ~setup ~name src = function
+  | Vhs.Failed { output; _ } as e -> (
+      match
+        Option.bind
+          (Result.to_option (Cram.parse src))
+          (fun t -> Cram.unfinished ~setup t output)
+      with
+      | Some (n, line) ->
+          Fmt.str
+            "%s: command %d, %S, left bash waiting for more input, such as the \
+             end of a quote or of a here-document"
+            name n line
+      | None -> Fmt.str "%a" Vhs.pp_error e)
+  | e -> Fmt.str "%a" Vhs.pp_error e
+
 let record env ~print ~vhs ~setup ~output input =
   let* src =
     match Eio.Path.(load (Eio.Stdenv.fs env / input)) with
@@ -54,7 +71,7 @@ let record env ~print ~vhs ~setup ~output input =
       ~clock:(Eio.Stdenv.mono_clock env)
       ~proc:(Eio.Stdenv.process_mgr env)
       ~cwd:(Eio.Stdenv.cwd env) tape
-    |> Result.map_error (Fmt.str "%a" Vhs.pp_error)
+    |> Result.map_error (render_error ~setup ~name:input src)
 
 let run env ~print ~vhs ~setup ~output input =
   match record env ~print ~vhs ~setup ~output input with
@@ -108,7 +125,10 @@ let man =
        a zero-width space. It does not show in a GIF or a video, but the text \
        outputs ($(b,.txt), $(b,.ascii) and $(b,.test)) hold it after each \
        prompt. The prompt hooks of the setup scripts still run first; a \
-       command that replaces $(b,PROMPT_COMMAND) makes the next wait time out.";
+       command that replaces $(b,PROMPT_COMMAND) makes the next wait time out. \
+       A command that leaves bash waiting for more input, such as an \
+       unterminated quote or here-document, makes the wait after it time out \
+       too; $(tname) then names that command.";
     `S Manpage.s_examples;
     `Pre
       "$(cmd) --output demo.gif demo.t\n\
