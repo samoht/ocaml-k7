@@ -529,7 +529,7 @@ let type_text st ?speed text =
 
 let scroll st ?speed ~count dir =
   for _ = 1 to count do
-    st.offset <- max 0 (min (Vte.scrollback_size (vte st)) (st.offset + dir));
+    st.offset <- max 0 (min (Screen.history st.term) (st.offset + dir));
     st.shown <-
       (if st.offset = 0 then st.live
        else Screen.of_terminal ~offset:st.offset st.term);
@@ -548,7 +548,12 @@ let within st seconds f =
 
 let wait_text st = function
   | Line -> Screen.line st.live (fst (Vte.cursor_pos (vte st)))
-  | Screen -> Screen.text st.live
+  | Screen ->
+      (* VHS reads as many lines as the screen has rows, from the top. *)
+      Screen.buffer st.term st.live
+      |> Array.to_list
+      |> List.filteri (fun i _ -> i < Vte.rows (vte st))
+      |> String.concat "\n"
 
 let wait st c ~line ~scope ~timeout ~pattern =
   let re = Option.value pattern ~default:c.wait_pattern in

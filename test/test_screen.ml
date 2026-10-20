@@ -66,6 +66,12 @@ let test_zero_width () =
   check_contains "cursor after the sequence"
     ~sub:{|<use href="#c" class="k" x="70" y="0"/>|} s
 
+(* CSI 3 J erases the scrollback, not the screen. *)
+let test_erase_scrollback () =
+  Alcotest.(check string)
+    "kept" (screen [ "ab" ])
+    (last (frames (svg [ (Ms 0, "ab\027[3J") ])))
+
 let suite =
   ( "screen",
     List.map
@@ -76,4 +82,5 @@ let suite =
         ("cursor", test_cursor);
         ("backspace", test_backspace);
         ("zero width", test_zero_width);
+        ("erase scrollback", test_erase_scrollback);
       ] )

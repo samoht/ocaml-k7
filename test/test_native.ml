@@ -147,6 +147,25 @@ let test_buffer () =
         (screen [ "> echo x"; "x"; ">" ])
         (last (frames s))
 
+(* The lines [clear] erases stay erased once the scrollback is full. *)
+let test_full_scrollback () =
+  with_dir @@ fun env cwd ->
+  let shows re = Vhs.wait ~timeout:(Ms 10000) (Screen re) in
+  let t =
+    tape
+      Vhs.
+        [
+          type' "seq 1 9995; clear\n";
+          shows {|^>\n\n|};
+          type' "seq 1 1000\n";
+          shows {|^> seq 1 1000\n1\n2\n|};
+          sleep (Ms 100);
+        ]
+  in
+  match record env cwd t with
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Ok _ -> ()
+
 (* Keys send what xterm sends: the line editor sees arrows, control and alt
    chords. *)
 let test_keys () =
@@ -228,6 +247,7 @@ let suite =
          ("scroll", test_scroll);
          ("scroll far", test_scroll_far);
          ("buffer", test_buffer);
+         ("full scrollback", test_full_scrollback);
          ("keys", test_keys);
          ("unsupported", test_unsupported);
        ]

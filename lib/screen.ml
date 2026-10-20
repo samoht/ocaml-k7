@@ -20,17 +20,32 @@ type terminal = {
   pending : Buffer.t;  (** The first bytes of a character in [Ground]. *)
   out : Buffer.t;  (** The bytes [vte] reads next. *)
   mutable dirty : int list;  (** The rows {!attach} changed. *)
+  seq : Buffer.t;  (** The escape sequence [vte] reads once it ends. *)
+  mutable count : int;  (** The scrollback lines [vte] holds. *)
+  mutable floor : int;  (** The first of them xterm.js still holds. *)
+  mutable lines : string array;  (** The scrollback lines, see {!snapshot}. *)
 }
+
+(* xterm.js keeps a thousand lines of scrollback, VHS's [Buffer] reads its
+   first lines and [CSI 3 J] erases them. matrix 0.1.0 erases the screen on
+   [CSI 3 J] instead, so it never reads one; it keeps more lines, and
+   [floor] skips those erased. *)
+let capacity = 10_000
+let xterm_scrollback = 1_000
 
 let terminal ~rows ~cols =
   {
     vte =
       Vte.create ~default_fg:(color default_fg) ~default_bg:(color default_bg)
-        ~rows ~cols ();
+        ~rows ~cols ~scrollback:capacity ();
     state = Ground;
     pending = Buffer.create 4;
     out = Buffer.create 4096;
     dirty = [];
+    seq = Buffer.create 64;
+    count = 0;
+    floor = 0;
+    lines = [||];
   }
 
 let vte t = t.vte
@@ -40,10 +55,54 @@ let clear_dirty t =
   Vte.clear_dirty t.vte;
   t.dirty <- []
 
+(* The number of lines [lines] drops from its start to become [lines']. *)
+let dropped lines lines' =
+  let n = Array.length lines in
+  let rec shift k =
+    if k >= n then n
+    else
+      let rec same i =
+        i + k >= n || (lines.(i + k) = lines'.(i) && same (i + 1))
+      in
+      if same 0 then k else shift (k + 1)
+  in
+  shift 0
+
+let scrollback t = Array.of_list (Vte.scrollback_lines t.vte)
+
+(* [lines] holds the scrollback while a read can fill it before it pushes
+   [floor] out of the last thousand lines: a full scrollback drops a line
+   for each line it takes, which only its lines tell. *)
+let snapshot t =
+  t.lines <-
+    (if t.floor > 0 && t.count >= capacity - xterm_scrollback then scrollback t
+     else [||])
+
+let track t =
+  if not (Vte.is_alternate_screen t.vte) then (
+    let count = Vte.scrollback_size t.vte in
+    if count < t.count then t.floor <- 0
+    else if t.floor > 0 && t.lines <> [||] then
+      t.floor <- max 0 (t.floor - dropped t.lines (scrollback t));
+    t.count <- count;
+    if t.floor <= count - xterm_scrollback then t.floor <- 0;
+    snapshot t)
+
 let flush t =
   if Buffer.length t.out > 0 then (
     Vte.feed_string t.vte (Buffer.contents t.out);
-    Buffer.clear t.out)
+    Buffer.clear t.out;
+    track t)
+
+let erase_scrollback t =
+  flush t;
+  if not (Vte.is_alternate_screen t.vte) then (
+    t.floor <- t.count;
+    snapshot t)
+
+let history t =
+  if Vte.is_alternate_screen t.vte then 0
+  else min xterm_scrollback (t.count - t.floor)
 
 (* matrix 0.1.0 drops a character of no width, so [attach] appends it to the
    cell before the cursor, the grapheme a wide cell continues, as xterm.js
@@ -130,12 +189,15 @@ let rec byte t c =
   else if t.state = Ground && c >= '\x80' then
     if utf_8_length c > 0 then Buffer.add_char t.pending c
     else Buffer.add_string t.out replacement
-  else (
-    (match (t.state, c) with
+  else
+    let state = t.state in
+    (match (state, c) with
     | Ground, '\b' -> Buffer.add_string t.out "\027[D"
-    | _ -> Buffer.add_char t.out c);
+    | Ground, '\027' -> Buffer.add_char t.seq c
+    | Ground, _ -> Buffer.add_char t.out c
+    | _ -> Buffer.add_char t.seq c);
     t.state <-
-      (match (t.state, c) with
+      (match (state, c) with
       | Ground, '\027' -> Escape
       | Ground, _ -> Ground
       | Escape, c -> escape c
@@ -145,7 +207,11 @@ let rec byte t c =
       | String, '\027' -> String_escape
       | String, _ -> String
       | String_escape, '\\' -> Ground
-      | String_escape, c -> escape c))
+      | String_escape, c -> escape c);
+    if state <> Ground && t.state = Ground then (
+      if Buffer.contents t.seq = "\027[3J" then erase_scrollback t
+      else Buffer.add_buffer t.out t.seq;
+      Buffer.clear t.seq)
 
 let feed t s =
   String.iter (byte t) s;
@@ -268,7 +334,7 @@ let restore t r line =
 let of_terminal ?previous ?(offset = 0) t =
   let vte = t.vte in
   let rows = Vte.rows vte and cols = Vte.cols vte in
-  let offset = max 0 (min offset (Vte.scrollback_size vte)) in
+  let offset = max 0 (min offset (history t)) in
   let grid =
     if offset = 0 then Vte.grid vte
     else
@@ -310,6 +376,16 @@ let of_terminal ?previous ?(offset = 0) t =
     else None
   in
   { rows = rows'; cursor }
+
+let buffer term t =
+  let h = history term in
+  let older =
+    if h = 0 then [||]
+    else
+      let lines = Array.of_list (Vte.scrollback_lines term.vte) in
+      Array.sub lines (Array.length lines - h) h
+  in
+  Array.append older (Array.map (fun r -> r.text) t.rows)
 
 let line t r = if r >= 0 && r < Array.length t.rows then t.rows.(r).text else ""
 

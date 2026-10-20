@@ -68,7 +68,10 @@ type wait =
   | Screen of string
       (** The screen, its lines joined by newlines, matches the regular
           expression, in the {{:https://github.com/google/re2/wiki/Syntax}RE2}
-          syntax of Go and without surrounding slashes. *)
+          syntax of Go and without surrounding slashes. VHS reads as many lines
+          as the terminal has rows from the top of its buffer, so once output
+          scrolls they are the first lines of its scrollback: at most a
+          thousand, since the last [clear]. *)
 
 type action
 (** The type for terminal actions. *)

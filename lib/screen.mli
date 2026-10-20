@@ -61,9 +61,14 @@ val row_equal : row -> row -> bool
 type t
 (** The type for screens. *)
 
+val history : terminal -> int
+(** [history t] is the number of scrollback lines of [t] that xterm.js keeps:
+    those since the last [CSI 3 J], which erases them, at most a thousand, and
+    none on the alternate screen. *)
+
 val of_terminal : ?previous:t -> ?offset:int -> terminal -> t
 (** [of_terminal ~previous ~offset t] is the screen of [t] scrolled [offset]
-    lines into its scrollback (defaults to [0]). Rows that have not changed
+    lines into its {!history} (defaults to [0]). Rows that have not changed
     since the last {!clear_dirty} are those of [previous], if it has the same
     size. *)
 
@@ -75,6 +80,11 @@ val cursor : t -> (int * int) option
 
 val text : t -> string
 (** [text t] is the text of the rows of [t], joined by newlines. *)
+
+val buffer : terminal -> t -> string array
+(** [buffer term t] are the lines of the buffer of xterm.js, as VHS reads them:
+    the {!history} of [term], oldest first, then the {!text} of each row of [t],
+    the screen of [term]. *)
 
 val line : t -> int -> string
 (** [line t r] is the text of row [r] of [t]. *)
