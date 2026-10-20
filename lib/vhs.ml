@@ -279,6 +279,14 @@ let rec is_empty = function
   | Type s -> s = ""
   | Key _ | Sleep _ | Wait _ | Raw _ -> false
 
+(* [records a] is [true] iff VHS runs [a] while it records frames. *)
+let records = function
+  | Type s -> s <> ""
+  | Key _ | Sleep _ | Wait _ -> true
+  | Hidden _ -> false
+  | Raw line -> (
+      match Tape_syntax.check line with Ok Other -> true | _ -> false)
+
 (* [check_actions ~started actions] is whether an action that ends the
    settings has run once [actions] have. *)
 let rec check_actions ~started = function
@@ -435,17 +443,26 @@ let check_mp4 settings paths =
     odd (last "Height" (function Height n -> Some n | _ -> None))
   else Ok ()
 
+let check_outputs = function
+  | [] -> err "no output"
+  | outputs -> iter_result check_output outputs
+
+let check_records actions =
+  if List.exists records actions then Ok ()
+  else err "no action outside hidden, so VHS records no frame"
+
+let check_paths settings paths =
+  let* () = check_kinds paths in
+  check_mp4 settings paths
+
 let tape ?(settings = []) ~outputs actions =
-  let* () =
-    if outputs = [] then err "no output" else iter_result check_output outputs
-  in
+  let* () = check_outputs outputs in
   let* () = iter_result check_setting settings in
   let* _started = check_actions ~started:false actions in
+  let* () = check_records actions in
   let* () = check_cells settings actions in
   let* () = check_size settings actions in
-  let paths = outputs @ raw_outputs actions in
-  let* () = check_kinds paths in
-  let* () = check_mp4 settings paths in
+  let* () = check_paths settings (outputs @ raw_outputs actions) in
   Ok { outputs; settings; actions }
 
 (* Printing *)

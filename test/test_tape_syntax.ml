@@ -5,7 +5,10 @@
 
 (* The checker is internal: test it through [Vhs.raw]. *)
 
-let tape actions = Vhs.tape ~outputs:[ "demo.gif" ] actions |> Result.map ignore
+(* VHS records no frame without a visible action. *)
+let tape actions =
+  Vhs.tape ~outputs:[ "demo.gif" ] (actions @ [ Vhs.sleep (Ms 100) ])
+  |> Result.map ignore
 
 (* A raw line is one command VHS's parser reads without error, and that
    takes nothing from the line after it. *)

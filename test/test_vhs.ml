@@ -6,8 +6,15 @@
 let expect = Alcotest.(check string)
 let outputs = [ "demo.gif" ]
 
+(* VHS records no frame without a visible action, so each tape ends with
+   [last], which [tape] does not print. *)
+let last = "Sleep 100ms\n"
+
 let tape ?settings ?(outputs = outputs) actions =
-  Vhs.tape ?settings ~outputs actions |> Result.map (Fmt.str "%a" Vhs.pp)
+  Vhs.tape ?settings ~outputs (actions @ [ Vhs.sleep (Ms 100) ])
+  |> Result.map (fun t ->
+      let s = Vhs.to_string t in
+      String.sub s 0 (String.length s - String.length last))
 
 let str ?settings ?outputs actions =
   match tape ?settings ?outputs actions with
@@ -239,12 +246,17 @@ let test_settings () =
 (* VHS fails with "no frames" on a recording without a visible action. *)
 let test_frames () =
   let open Vhs in
-  let reason = "no action outside hidden, so VHS records no frame" in
-  error "no action" reason [];
-  error "hidden only" reason [ hidden [ type' "ls\n" ]; type' "" ];
-  error "settings only" reason [ raw "Set Margin 2"; raw "# done" ];
-  expect "sleep" "Output \"demo.gif\"\nSleep 100ms\n" (str [ sleep (Ms 100) ]);
-  expect "raw" "Output \"demo.gif\"\nEnv A \"b\"\n" (str [ raw {|Env A "b"|} ])
+  let frames name expected actions =
+    Alcotest.(check (result string string))
+      name expected
+      (Vhs.tape ~outputs actions |> Result.map Vhs.to_string)
+  in
+  let none = Error "no action outside hidden, so VHS records no frame" in
+  frames "no action" none [];
+  frames "hidden only" none [ hidden [ type' "ls\n" ]; type' "" ];
+  frames "settings only" none [ raw "Set Margin 2"; raw "# done" ];
+  frames "sleep" (Ok "Output \"demo.gif\"\nSleep 100ms\n") [ sleep (Ms 100) ];
+  frames "raw" (Ok "Output \"demo.gif\"\nEnv A \"b\"\n") [ raw {|Env A "b"|} ]
 
 let test_outputs () =
   error "no output" "no output" ~outputs:[] [];

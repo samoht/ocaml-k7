@@ -8,8 +8,16 @@ open Alcobar
 let outputs = [ "demo.gif" ]
 let max_ms = 9_223_372_036_854
 
+(* VHS records no frame without a visible action, so each tape ends with
+   [last], which [tape] does not print. *)
+let last = Vhs.sleep (Ms 100)
+let last_line = "Sleep 100ms\n"
+
 let tape ?settings ?(outputs = outputs) actions =
-  Vhs.tape ?settings ~outputs actions |> Result.map (Fmt.str "%a" Vhs.pp)
+  Vhs.tape ?settings ~outputs (actions @ [ last ])
+  |> Result.map (fun t ->
+      let s = Vhs.to_string t in
+      String.sub s 0 (String.length s - String.length last_line))
 
 (* The printed lines of the actions, without the [Output] line. *)
 let lines ?settings actions =
@@ -333,7 +341,7 @@ let test_validates text n =
   in
   List.iter
     (fun (settings, actions) ->
-      match Vhs.tape ~settings ~outputs:[ "demo.gif" ] actions with
+      match Vhs.tape ~settings ~outputs:[ "demo.gif" ] (actions @ [ last ]) with
       | Error _ -> ()
       | Ok t ->
           if not (vhs_validates t) then
@@ -362,7 +370,7 @@ let test_raw_validates words =
       words
     |> String.concat ""
   in
-  match Vhs.tape ~outputs:[ "demo.gif" ] [ Vhs.raw line ] with
+  match Vhs.tape ~outputs:[ "demo.gif" ] [ Vhs.raw line; last ] with
   | Error _ -> ()
   | Ok t ->
       if not (vhs_validates t) then
@@ -371,7 +379,7 @@ let test_raw_validates words =
 let test_padding_bound padding =
   let settings = Vhs.[ Padding padding; Width 1200; Height 600 ] in
   let expected = padding >= 0 && padding <= 300 in
-  check (Result.is_ok (Vhs.tape ~settings ~outputs []) = expected)
+  check (Result.is_ok (Vhs.tape ~settings ~outputs [ last ]) = expected)
 
 let test_no_injection text =
   let hostile = text ^ "\"'`\\\nOutput injected.gif\nHide\nSet Shell bash\n" in
@@ -416,7 +424,7 @@ let save env path contents =
     Eio.Path.(Eio.Stdenv.fs env / path)
     contents
 
-let render_tape () = Result.get_ok (Vhs.tape ~outputs:[ "demo.gif" ] [])
+let render_tape () = Result.get_ok (Vhs.tape ~outputs:[ "demo.gif" ] [ last ])
 
 (* Supply a manager environment without mutating the test runner's process. *)
 module Inherited = struct

@@ -5,11 +5,12 @@
 
 type t = string list list
 
-(* [Vhs.tape] decides what a terminal can type; a tab would reach bash's
-   completion and a newline would end the line. *)
+(* [Vhs.tape] decides what a terminal can type, given something to type; a
+   tab would reach bash's completion and a newline would end the line. *)
 let is_typeable s =
-  (not (String.exists (fun c -> c = '\t' || c = '\n') s))
-  && Result.is_ok (Vhs.tape ~outputs:[ "x.gif" ] [ Vhs.type' s ])
+  s = ""
+  || (not (String.exists (fun c -> c = '\t' || c = '\n') s))
+     && Result.is_ok (Vhs.tape ~outputs:[ "x.gif" ] [ Vhs.type' s ])
 
 let check_line n line =
   if not (String.is_valid_utf_8 line) then

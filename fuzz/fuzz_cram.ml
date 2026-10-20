@@ -20,8 +20,13 @@ let has_control s =
   in
   go 0
 
+(* A cram test without commands records no frame; the final sleep keeps
+   its tape one VHS can record. *)
 let printed ?(setup = []) cram =
-  match Vhs.tape ~outputs:[ "x.gif" ] (Cram.actions ~setup cram) with
+  match
+    Vhs.tape ~outputs:[ "x.gif" ]
+      (Cram.actions ~setup cram @ [ Vhs.sleep (Ms 100) ])
+  with
   | Ok t -> Fmt.str "%a" Vhs.pp t
   | Error e -> failf "rejected actions: %s" e
 

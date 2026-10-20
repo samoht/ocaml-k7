@@ -8,7 +8,8 @@
 let expect = Alcotest.(check string)
 
 let tape settings =
-  Vhs.tape ~settings ~outputs:[ "demo.gif" ] [] |> Result.map Vhs.to_string
+  Vhs.tape ~settings ~outputs:[ "demo.gif" ] [ Vhs.sleep (Ms 100) ]
+  |> Result.map Vhs.to_string
 
 let body settings =
   match tape settings with
@@ -27,13 +28,14 @@ let rejects name settings =
    JSON and a blank one as its default theme. *)
 let test_names () =
   let open Vhs in
-  expect "name" "Output \"demo.gif\"\nSet Theme \"Dracula\"\n"
+  expect "name" "Output \"demo.gif\"\nSet Theme \"Dracula\"\nSleep 100ms\n"
     (body [ Theme "Dracula" ]);
-  expect "blank" "Output \"demo.gif\"\nSet Theme \" \xc2\xa0\"\n"
+  expect "blank" "Output \"demo.gif\"\nSet Theme \" \xc2\xa0\"\nSleep 100ms\n"
     (body [ Theme " \xc2\xa0" ]);
   error "unknown" {|Set Theme "Draculaa": not a VHS theme|} [ Theme "Draculaa" ];
   rejects "case" [ Theme "dracula" ];
-  expect "JSON" "Output \"demo.gif\"\nSet Theme \"{x\"\n" (body [ Theme "{x" ]);
+  expect "JSON" "Output \"demo.gif\"\nSet Theme \"{x\"\nSleep 100ms\n"
+    (body [ Theme "{x" ]);
   rejects "space before JSON" [ Theme " {}" ];
   rejects "invalid UTF-8" [ Theme " \xff" ];
   rejects "line break" [ Theme "Dracula\n" ]

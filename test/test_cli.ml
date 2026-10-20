@@ -163,7 +163,9 @@ let test_render () =
   let proc = Eio.Stdenv.process_mgr env in
   let mono = Eio.Stdenv.mono_clock env in
   let cwd = Eio.Stdenv.cwd env in
-  let t = Result.get_ok (Vhs.tape ~outputs:[ "x.gif" ] []) in
+  let t =
+    Result.get_ok (Vhs.tape ~outputs:[ "x.gif" ] [ Vhs.sleep (Ms 100) ])
+  in
   (match Vhs.render ~vhs:(path "ko") ~clock:mono ~proc ~cwd t with
   | Error (Failed { status = `Exited 3; _ } as e) ->
       expect "both streams"
