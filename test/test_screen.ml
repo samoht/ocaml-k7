@@ -250,6 +250,26 @@ let test_clear_tabs () =
         [ "a" ^ String.make 7 ' ' ^ "X" ^ String.make 36 ' ' ^ "Y" ] );
     ]
 
+(* HTS sets a tab stop and TBC 0 clears one; CHT and CBT move over several
+   stops; a tab after a character in the last column leaves the next one to
+   wrap; and each screen has its own stops, which leaving the alternate one
+   resets. Real VHS writes the first four screens. *)
+let test_tab_stops () =
+  let full = String.make 46 'a' in
+  check_screens
+    [
+      ("set", "\027[3g\027[11G\027H\r\tX", [ String.make 10 ' ' ^ "X" ]);
+      ("clear one", "\027[9G\027[0g\r\tX", [ String.make 16 ' ' ^ "X" ]);
+      ("forward and back", "a\027[2IX\027[2ZY", [ "a       Y       X" ]);
+      ("pending wrap", full ^ "\tX", [ full; "X" ]);
+      ( "normal screen",
+        "\027[3g\027[?1049h\027[?1049l\tX",
+        [ String.make 45 ' ' ^ "X" ] );
+      ( "alternate screen",
+        "\027[?1049h\027[3g\027[?1049l\027[?1049h\tX",
+        [ String.make 8 ' ' ^ "X" ] );
+    ]
+
 (* DCH deletes one cell, even when it cuts a wide glyph in half. The
    remaining half becomes a blank; VHS leaves the following text at column 2. *)
 let test_delete_wide () =
@@ -276,5 +296,6 @@ let suite =
         ("screens", test_screens);
         ("character sets", test_charsets);
         ("cleared tab stops", test_clear_tabs);
+        ("tab stops", test_tab_stops);
         ("delete wide glyph cell", test_delete_wide);
       ] )
