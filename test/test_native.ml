@@ -166,6 +166,24 @@ let test_full_scrollback () =
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e
   | Ok _ -> ()
 
+(* After a scroll, a line wait reads the line as far above the cursor as
+   the screen scrolled, as VHS does. *)
+let test_scrolled_line () =
+  with_dir @@ fun env cwd ->
+  let t =
+    tape
+      Vhs.
+        [
+          type' "seq 1 30\n";
+          wait (Line "^>$");
+          key Scroll_up;
+          wait ~timeout:(Ms 2000) (Line "^30$");
+        ]
+  in
+  match record env cwd t with
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Ok _ -> ()
+
 (* Keys send what xterm sends: the line editor sees arrows, control and alt
    chords. *)
 let test_keys () =
@@ -248,6 +266,7 @@ let suite =
          ("scroll far", test_scroll_far);
          ("buffer", test_buffer);
          ("full scrollback", test_full_scrollback);
+         ("scrolled line", test_scrolled_line);
          ("keys", test_keys);
          ("unsupported", test_unsupported);
        ]
