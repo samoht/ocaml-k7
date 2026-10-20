@@ -218,10 +218,20 @@ let test_c1_controls n osc =
   in
   check_output_rows ("a" ^ control ^ "b") [ expected ]
 
+(* The right-margin cursor is logically past the last cell until it wraps.
+   ED 0 keeps that cell, and neither ED 0 nor EL 1 cancels the pending wrap. *)
+let test_margin_erasure n display =
+  let c = Char.chr (Char.code 'a' + (n mod 26)) in
+  let line = String.make cols c in
+  let erase, first = if display then ("\027[J", line) else ("\027[1K", "") in
+  check_output_rows (line ^ erase ^ "X") [ first; "X" ]
+
 let suite =
   ( "svg",
     [
       test_case "frames" [ list chunk ] test_frames;
+      test_case "erasure preserves pending right-margin wrap" [ uint8; bool ]
+        test_margin_erasure;
       test_case "UTF-8 C1 controls act as terminal commands" [ uint8; bool ]
         test_c1_controls;
       test_case "REP preserves combining marks" [ uint8; uint8 ]
