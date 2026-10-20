@@ -151,10 +151,26 @@ let test_clear_tabs n =
     ("a" ^ String.make 7 ' ' ^ "X" ^ String.make (cols - 10) ' ' ^ "Y")
     (Vhs.Screen.line (Vhs.Screen.of_terminal term) 0)
 
+(* Deleting one cell cannot shift the suffix by a whole wide character. *)
+let test_delete_wide n glyph =
+  let prefix = String.make (n mod 20) 'a' in
+  let b = Buffer.create 4 in
+  Buffer.add_utf_8_uchar b (Uchar.of_int (if glyph then 0x4e2d else 0x65e5));
+  let output =
+    Fmt.str "%s%sbc\r\027[%dG\027[P" prefix (Buffer.contents b)
+      (String.length prefix + 1)
+  in
+  let term = Vhs.Screen.terminal ~rows ~cols in
+  Vhs.Screen.feed term output;
+  check_eq ~pp:pp_string (prefix ^ " bc")
+    (Vhs.Screen.line (Vhs.Screen.of_terminal term) 0)
+
 let suite =
   ( "svg",
     [
       test_case "frames" [ list chunk ] test_frames;
+      test_case "wide glyph deletion preserves columns" [ uint8; bool ]
+        test_delete_wide;
       test_case "cleared tabs reach the right margin" [ uint8 ] test_clear_tabs;
       test_case "saved character sets survive restore" [ uint8; bool ]
         test_saved_charset;
