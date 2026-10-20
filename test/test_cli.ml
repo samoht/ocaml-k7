@@ -149,6 +149,15 @@ let test_render () =
          cat > /dev/null\n\
          echo > \"$0.ready\"\n\
          while :; do sleep 0.05; done\n" );
+      ( "stubborn",
+        0o755,
+        "#!/bin/sh\n\
+         trap 'echo > \"$0.term\"' TERM\n\
+         cat > /dev/null\n\
+         echo > \"$0.ready\"\n\
+         i=0\n\
+         while [ $i -lt 400 ]; do sleep 0.05; i=$((i + 1)); done\n\
+         echo > \"$0.done\"\n" );
     ]
   @@ fun env path ->
   let proc = Eio.Stdenv.process_mgr env in
@@ -206,7 +215,24 @@ let test_render () =
   | `Rendered _ -> Alcotest.fail "slow vhs finished");
   Alcotest.(check bool)
     "vhs stopped before render returned" true
-    (Sys.file_exists (path "slow.stopped"))
+    (Sys.file_exists (path "slow.stopped"));
+  (* A vhs that ignores SIGTERM is killed, not waited for until it exits. *)
+  (match
+     Eio.Fiber.first
+       (fun () -> `Rendered (Vhs.render ~vhs:(path "stubborn") ~proc ~cwd t))
+       (fun () ->
+         Eio.Time.with_timeout_exn clock 10. (fun () ->
+             while not (Sys.file_exists (path "stubborn.ready")) do
+               Eio.Time.sleep clock 0.01
+             done);
+         `Timeout)
+   with
+  | `Timeout -> ()
+  | `Rendered _ -> Alcotest.fail "stubborn vhs finished");
+  Alcotest.(check (pair bool bool))
+    "vhs sent SIGTERM, then killed" (true, false)
+    ( Sys.file_exists (path "stubborn.term"),
+      Sys.file_exists (path "stubborn.done") )
 
 let test_command () =
   let help_buffer = Buffer.create 256 in
