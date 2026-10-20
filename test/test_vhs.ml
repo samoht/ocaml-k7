@@ -200,7 +200,17 @@ let test_settings () =
   rejects "framerate" ~settings:[ Framerate 0 ] [];
   (* VHS puts the font list in single quotes in browser code. *)
   rejects "font quote" ~settings:[ Font_family "x'; alert(1); '" ] [];
-  rejects "font backslash" ~settings:[ Font_family {|x\|} ] []
+  rejects "font backslash" ~settings:[ Font_family {|x\|} ] [];
+  (* VHS sizes the frame by its pixels or by its cells, not both. *)
+  expect "rows" "Set Width 800\nSet Rows 10\n"
+    (body ~settings:[ Width 800 ] [ raw "Set Rows 10" ]);
+  error "rows and height" "Set Rows 10: VHS cannot set both Height and Rows"
+    ~settings:[ Height 400 ]
+    [ raw "Set Rows 10" ];
+  error "columns and width"
+    "Set Columns 80: VHS cannot set both Width and Columns"
+    ~settings:[ Width 800 ]
+    [ raw "Set Columns 80" ]
 
 let test_outputs () =
   error "no output" "no output" ~outputs:[] [];
