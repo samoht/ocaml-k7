@@ -121,8 +121,9 @@ let exits =
            early.";
       info some_error
         ~doc:
-          "on a cram test that cannot be recorded, or when $(b,vhs) cannot run \
-           or fails; the reason is on standard error.";
+          "on a cram test that cannot be recorded, when $(b,vhs) cannot run or \
+           fails, or when the tape of $(b,--print) cannot be written; the \
+           reason is on standard error.";
       info cli_error ~doc:"on command line parsing errors.";
       info internal_error ~doc:"on unexpected internal errors (bugs).";
     ]
