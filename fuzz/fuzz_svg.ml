@@ -209,10 +209,21 @@ let test_repeat_combining n mark =
   let expected = String.concat "" (List.init (count + 1) (fun _ -> glyph)) in
   check_output_rows output [ expected ]
 
+(* C1 controls, encoded as UTF-8, are equivalent to their ESC forms. *)
+let test_c1_controls n osc =
+  let count = 1 + (n mod 20) in
+  let control, expected =
+    if osc then ("\xc2\x9d" ^ String.make count 't' ^ "\xc2\x9c", "ab")
+    else (Fmt.str "\xc2\x9b%dC" count, "a" ^ String.make count ' ' ^ "b")
+  in
+  check_output_rows ("a" ^ control ^ "b") [ expected ]
+
 let suite =
   ( "svg",
     [
       test_case "frames" [ list chunk ] test_frames;
+      test_case "UTF-8 C1 controls act as terminal commands" [ uint8; bool ]
+        test_c1_controls;
       test_case "REP preserves combining marks" [ uint8; uint8 ]
         test_repeat_combining;
       test_case "PTY chunk boundaries preserve terminal state"
