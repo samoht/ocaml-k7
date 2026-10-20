@@ -37,9 +37,17 @@ let write flow s =
       Error (Fmt.kstr Option.some "%a" Eio.Exn.pp_err err)
 
 (* A command that leaves bash at its continuation prompt makes the next
-   wait time out; the error then names it. *)
-let render_error ~setup ~name src = function
-  | Vhs.Failed { output; _ } as e -> (
+   wait time out; the error then names it. A native timeout carries the line
+   that [vhs] prints after "last value was: ". *)
+let render_error ~setup ~name src e =
+  let output =
+    match e with
+    | Vhs.Failed { output; _ } -> Some output
+    | Timeout { last; _ } -> Some ("last value was: " ^ last)
+    | _ -> None
+  in
+  match output with
+  | Some output -> (
       match
         Option.bind
           (Result.to_option (Cram.parse src))
@@ -51,7 +59,7 @@ let render_error ~setup ~name src = function
              end of a quote or of a here-document"
             name n line
       | None -> Fmt.str "%a" Vhs.pp_error e)
-  | e -> Fmt.str "%a" Vhs.pp_error e
+  | None -> Fmt.str "%a" Vhs.pp_error e
 
 let record env ~print ~vhs ~setup ~output input =
   let* src =
@@ -67,10 +75,14 @@ let record env ~print ~vhs ~setup ~output input =
     | Ok () | Error None -> Ok ()
     | Error (Some msg) -> Fmt.error "standard output: %s" msg
   else
-    Vhs.render ~vhs
-      ~clock:(Eio.Stdenv.mono_clock env)
-      ~proc:(Eio.Stdenv.process_mgr env)
-      ~cwd:(Eio.Stdenv.cwd env) tape
+    let clock = Eio.Stdenv.mono_clock env
+    and proc = Eio.Stdenv.process_mgr env
+    and cwd = Eio.Stdenv.cwd env in
+    (if Filename.extension output = ".svg" then
+       (* [vhs] writes absolute paths too. *)
+       let cwd = Eio.Path.(Eio.Stdenv.fs env / ".") in
+       Result.map ignore (Vhs.record ~clock ~proc ~cwd tape)
+     else Vhs.render ~vhs ~clock ~proc ~cwd tape)
     |> Result.map_error (render_error ~setup ~name:input src)
 
 let run env ~print ~vhs ~setup ~output input =
@@ -85,7 +97,9 @@ open Cmdliner
 
 let output =
   let doc =
-    "Write the recording to $(docv); VHS picks the format from its extension."
+    "Write the recording to $(docv), in the format of its extension: an \
+     animated SVG image for $(b,.svg), which $(tname) records itself, and what \
+     VHS writes for the others."
   in
   Arg.(
     required & opt (some string) None & info [ "o"; "output" ] ~docv:"FILE" ~doc)
@@ -114,8 +128,13 @@ let man =
     `P
       "$(tname) types each $(b,\\$) command of the cram test $(i,CRAM) into a \
        VHS terminal running bash, waits for the prompt to come back, and \
-       records the session with $(b,vhs). Expected output and exit codes are \
-       ignored; other settings are the VHS defaults.";
+       records the session. Expected output and exit codes are ignored; other \
+       settings are the VHS defaults.";
+    `P
+      "An $(b,.svg) output is recorded without $(b,vhs): $(tname) runs bash on \
+       a pseudo-terminal itself and draws its screens as an animated SVG \
+       image, which plays in an HTML $(i,img) element. The other outputs are \
+       recorded by $(b,vhs), which needs $(b,ttyd), $(b,ffmpeg) and a browser.";
     `P
       "Before the first command, and after the setup scripts, $(tname) makes \
        the last command of $(b,PROMPT_COMMAND) set $(b,PS1) to the VHS prompt \
@@ -131,7 +150,8 @@ let man =
        too; $(tname) then names that command.";
     `S Manpage.s_examples;
     `Pre
-      "$(cmd) --output demo.gif demo.t\n\
+      "$(cmd) --output demo.svg demo.t\n\
+       $(cmd) --output demo.gif demo.t\n\
        $(cmd) --print --output demo.gif demo.t   # show the tape";
   ]
 

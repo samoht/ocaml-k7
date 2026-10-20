@@ -89,3 +89,20 @@ resetting the prompt that the waits rely on.
   Enter
   Wait+Line /\x{2060}\x{2060}\x{2060}\x{200B}\x{2060}\x{200B}\x{2060}\x{2060}\x{2060}\x{2060}\x{200B}\x{2060}\x{200B}\x{2060}\x{200B}\x{200B}$/
   Sleep 1000ms
+
+An .svg output is recorded without vhs, with the same prompt and mark.
+
+  $ vhs-cram --print --output demo.svg demo.t | grep -v '^Env'
+  Set Shell "bash"
+  Hide
+  Type 'eval "$VHS_CRAM_PROMPT"; clear'
+  Enter
+  Wait+Line /\x{2060}\x{2060}\x{200B}\x{2060}\x{200B}\x{200B}\x{200B}\x{2060}\x{200B}\x{2060}\x{200B}\x{200B}\x{2060}\x{200B}\x{2060}\x{2060}$/
+  Show
+  Type "echo hi"
+  Enter
+  Wait+Line /\x{2060}\x{2060}\x{200B}\x{2060}\x{200B}\x{200B}\x{200B}\x{2060}\x{200B}\x{2060}\x{200B}\x{200B}\x{2060}\x{200B}\x{2060}\x{2060}$/
+  Sleep 1000ms
+  $ vhs-cram --vhs ./missing-vhs --output demo.svg demo.t
+  $ grep -c '<svg xmlns' demo.svg
+  1
