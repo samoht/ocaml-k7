@@ -1,7 +1,19 @@
 (library
  (name vhs)
  (public_name vhs)
- (libraries cstruct eio fmt))
+ (libraries
+  cstruct
+  eio
+  eio.unix
+  fmt
+  matrix.ansi
+  matrix.glyph
+  matrix.grid
+  matrix.pty
+  matrix.vte
+  mtime
+  re
+  unix))
 
 (mdx
  (package vhs)

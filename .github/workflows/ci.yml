@@ -12,7 +12,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        ocaml-compiler: ['5.4', '5.3']
+        ocaml-compiler: ['5.4']
         include:
           - os: macos-latest
             ocaml-compiler: '5.4'
@@ -36,7 +36,7 @@ jobs:
 
       - uses: ocaml/setup-ocaml@v3
         with:
-          ocaml-compiler: '5.2'
+          ocaml-compiler: '5.4'
 
       # Resolve every dependency to the oldest version its lower bound allows,
       # so a call that only compiles against a newer API fails here rather than
