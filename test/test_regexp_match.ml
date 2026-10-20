@@ -57,11 +57,18 @@ let test_not_matching () =
       | Error e -> Alcotest.failf "%S: %a" p Vhs.pp_error e)
     [ "helloo"; "^hello"; "W[^\\x{f6}]rld"; "end.>"; {|\bell|}; "x{3}" ]
 
+(* Unicode classes match as Go's tables say: a lower-case letter, a digit
+   and a script the text has hold; a script it lacks times out. *)
 let test_unicode_class () =
-  match record_waits [ Vhs.wait (Screen {|\p{Greek}|}) ] with
-  | Error (Unsupported why) ->
-      check_contains "says why" ~sub:"Unicode class" why
-  | Ok _ -> Alcotest.fail "a Unicode class played natively"
+  (match
+     record_waits
+       [ Vhs.wait ~timeout:(Ms 3000) (Screen {|W\p{Ll}rld \pN+ \p{Latin}|}) ]
+   with
+  | Ok _ -> ()
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+  match record_waits [ Vhs.wait ~timeout:(Ms 200) (Screen {|\p{Greek}|}) ] with
+  | Error (Timeout _) -> ()
+  | Ok _ -> Alcotest.fail "\\p{Greek} matched"
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e
 
 (* Go folds case with Unicode's simple folding, counts ASCII word
@@ -90,6 +97,20 @@ let test_go_semantics () =
       ("(a(?i))B", "aB", true);
       ("(a(?i))b", "aB", false);
       ("a(?s){2}", "aa", true);
+      ("\\p{Greek}", "\xce\xb1", true);
+      ("\\pL", "1", false);
+      ("\\PL", "1", true);
+      ("(?i)\\p{Lu}", "a", true);
+      ("\\P{Lu}", "A", false);
+      ("[\\p{^Lu}]", "a", true);
+      ("(?i)[\\P{Lu}]", "a", false);
+      ("\\p{Assigned}", "\xcd\xb8", false);
+      ("\\p{Any}", "\n", true);
+      ("(?i)\\p{Ascii}", "\xc5\xbf", true);
+      ("\\p{Ascii}", "\xc5\xbf", false);
+      ("\\p{Letter}", "\xc3\xa9", true);
+      ("\\p{old_italic}", "\xf0\x90\x8c\x80", true);
+      ("\\p{Lc}", "a", true);
     ]
 
 (* Patterns and texts Go's MatchString judged, written by match_oracle.go.

@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: ISC
 
 // match_oracle writes match_cases.txt: random patterns, built from RE2
-// fragments that stress case folding and word boundaries, and random texts,
-// each with 1 if Go's regexp MatchString (what VHS's Wait runs) holds and 0
-// otherwise, the pattern and the text in hexadecimal. Patterns Go does not
-// compile are left out. Regenerate with
+// fragments that stress case folding, word boundaries and Unicode classes,
+// and random texts, each with 1 if Go's regexp MatchString (what VHS's Wait
+// runs) holds and 0 otherwise, the pattern and the text in hexadecimal.
+// Patterns Go does not compile are left out. Regenerate with
 //
 //	go run match_oracle.go 4000 > match_cases.txt
 package main
@@ -18,9 +18,9 @@ import (
 	"strconv"
 )
 
-var toks = []string{"(?i)", "(?i:", "(?-i)", ")", "(", "|", "\\b", "\\B", "^", "$", "(?m)", "(?s)", ".", "*", "+", "?", "{2}", "{1,2}", "a", "A", "s", "S", "k", "K", "e", "é", "É", "ſ", "K", "ß", "ẞ", "σ", "Σ", "ς", "ǅ", "ǆ", "Ǆ", "\\w", "\\W", "\\d", "\\s", "[a-z]", "[^a-z]", "[[:alpha:]]", "[[:^alpha:]]", "[\\W]", "[^\\w]", "x", "_", "1", " ", "\\x{212a}", "[é-ë]", "[A-Z]"}
+var toks = []string{"(?i)", "(?i:", "(?-i)", ")", "(", "|", "\\b", "\\B", "^", "$", "(?m)", "(?s)", ".", "*", "+", "?", "{2}", "{1,2}", "a", "A", "s", "S", "k", "K", "e", "é", "É", "ſ", "K", "ß", "ẞ", "σ", "Σ", "ς", "ǅ", "ǆ", "Ǆ", "\\w", "\\W", "\\d", "\\s", "[a-z]", "[^a-z]", "[[:alpha:]]", "[[:^alpha:]]", "[\\W]", "[^\\w]", "x", "_", "1", " ", "\\x{212a}", "[é-ë]", "[A-Z]", "\\p{Greek}", "\\pL", "\\PL", "\\p{Lu}", "[\\p{^Lu}]", "\\p{Latin}", "[\\P{Ll}]", "\\p{Assigned}", "\\p{Ascii}", "\\pN", "\\p{Common}", "\\p{Any}", "\\P{Lt}"}
 
-var texts = []string{"a", "A", "s", "S", "k", "K", "e", "é", "É", "ſ", "K", "ß", "ẞ", "σ", "Σ", "ς", "ǅ", "ǆ", "Ǆ", "x", "_", "1", " ", "\n", "-", "中", "́"}
+var texts = []string{"a", "A", "s", "S", "k", "K", "e", "é", "É", "ſ", "K", "ß", "ẞ", "σ", "Σ", "ς", "ǅ", "ǆ", "Ǆ", "x", "_", "1", " ", "\n", "-", "中", "́", "α", "Ω", "\u0378", "٣", "𐌀"}
 
 func main() {
 	n, _ := strconv.Atoi(os.Args[1])
