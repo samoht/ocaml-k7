@@ -236,6 +236,16 @@ let test_settings () =
     ~settings:[ Width 800 ]
     [ raw "Set Columns 80" ]
 
+(* VHS fails with "no frames" on a recording without a visible action. *)
+let test_frames () =
+  let open Vhs in
+  let reason = "no action outside hidden, so VHS records no frame" in
+  error "no action" reason [];
+  error "hidden only" reason [ hidden [ type' "ls\n" ]; type' "" ];
+  error "settings only" reason [ raw "Set Margin 2"; raw "# done" ];
+  expect "sleep" "Output \"demo.gif\"\nSleep 100ms\n" (str [ sleep (Ms 100) ]);
+  expect "raw" "Output \"demo.gif\"\nEnv A \"b\"\n" (str [ raw {|Env A "b"|} ])
+
 let test_outputs () =
   error "no output" "no output" ~outputs:[] [];
   error "no extension"
@@ -351,6 +361,7 @@ let suite =
         ("hidden", test_hidden);
         ("durations", test_durations);
         ("settings", test_settings);
+        ("frames", test_frames);
         ("outputs", test_outputs);
         ("keys", test_keys);
         ("waits", test_waits);
