@@ -180,10 +180,41 @@ let test_chunk_boundaries chunks =
     ~pp:Fmt.(Dump.array string)
     (Screen.buffer whole a) (Screen.buffer split b)
 
+(* Check both the matrix.vte scenario and the public SVG output against text
+   specified independently of the emulator. *)
+let check_output_rows output lines =
+  let expected =
+    String.concat "\n"
+      (lines @ List.init (rows - List.length lines) (fun _ -> ""))
+  in
+  let term = Screen.terminal ~rows ~cols in
+  Screen.feed term output;
+  check_eq ~pp:pp_string expected (Screen.text (Screen.of_terminal term));
+  match Vhs.svg ~settings [ (Ms 0, output) ] with
+  | Error e -> failf "%a" Vhs.pp_error e
+  | Ok svg -> (
+      match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows svg with
+      | Error e -> failf "%s" e
+      | Ok frames -> check_eq ~pp:pp_string expected (List.hd frames))
+
+(* REP copies a cell's complete grapheme, rather than its base code point. *)
+let test_repeat_combining n mark =
+  let marks = [| 0x0301; 0x0308; 0x0327 |] in
+  let b = Buffer.create 8 in
+  Buffer.add_char b 'a';
+  Buffer.add_utf_8_uchar b (Uchar.of_int marks.(mark mod Array.length marks));
+  let glyph = Buffer.contents b in
+  let count = 1 + (n mod 10) in
+  let output = glyph ^ Fmt.str "\027[%db" count in
+  let expected = String.concat "" (List.init (count + 1) (fun _ -> glyph)) in
+  check_output_rows output [ expected ]
+
 let suite =
   ( "svg",
     [
       test_case "frames" [ list chunk ] test_frames;
+      test_case "REP preserves combining marks" [ uint8; uint8 ]
+        test_repeat_combining;
       test_case "PTY chunk boundaries preserve terminal state"
         [ list chunk ]
         test_chunk_boundaries;
