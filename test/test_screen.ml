@@ -276,6 +276,29 @@ let test_delete_wide () =
   check_screens
     [ ("delete half of a wide glyph", "\xe4\xb8\xadab\r\027[P", [ " ab" ]) ]
 
+(* As in xterm.js, an edit of characters splits a wide glyph it cuts into
+   blank cells and keeps the other columns: DCH and ICH from its second
+   cell, ECH from it or up to its first, and DCH up to its first. The column
+   edits, SL, SR, DECIC and DECDC, edit each row of the scroll region. Real
+   VHS writes these screens. *)
+let test_cell_edits () =
+  let wide = "\xe4\xb8\xad" in
+  check_screens
+    [
+      ("delete from the second cell", wide ^ "ab\027[2G\027[P", [ " ab" ]);
+      ("erase from the second cell", wide ^ "ab\027[2G\027[X", [ "  ab" ]);
+      ("erase up to the first cell", "a" ^ wide ^ "b\r\027[2X", [ "   b" ]);
+      ("insert at the second cell", wide ^ "ab\027[2G\027[@", [ "   ab" ]);
+      ("delete up to the first cell", "a" ^ wide ^ "b\r\027[2P", [ " b" ]);
+      ( "insert at the right margin",
+        String.make 44 'a' ^ wide ^ "\r\027[@",
+        [ " " ^ String.make 44 'a' ] );
+      ("scroll left", "ab\r\ncd\027[ @", [ "b"; "d" ]);
+      ("scroll right", "ab\r\ncd\027[ A", [ " ab"; " cd" ]);
+      ("insert column", "abc\r\ndef\027[2G\027['}", [ "a bc"; "d ef" ]);
+      ("delete column", "abc\r\ndef\027[2G\027['~", [ "ac"; "df" ]);
+    ]
+
 let suite =
   ( "screen",
     List.map
@@ -298,4 +321,5 @@ let suite =
         ("cleared tab stops", test_clear_tabs);
         ("tab stops", test_tab_stops);
         ("delete wide glyph cell", test_delete_wide);
+        ("cell edits", test_cell_edits);
       ] )
