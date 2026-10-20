@@ -40,6 +40,32 @@ let test_backspace () =
     [ screen [ "ab" ] ]
     (frames (svg [ (Ms 0, "a\027]0;t\bitle\007b") ]))
 
+(* A zero-width character joins the cell before it, as in xterm.js, also
+   when it arrives on its own, after a wide glyph or in the last column. *)
+let test_zero_width () =
+  let check name expected output =
+    Alcotest.(check string) name expected (last (frames (svg output)))
+  in
+  check "combining mark" (screen [ "e\xcc\x81x" ]) [ (Ms 0, "e\xcc\x81x") ];
+  check "alone" (screen [ "e\xcc\x81" ]) [ (Ms 0, "e"); (Ms 20, "\xcc\x81") ];
+  check "split code point" (screen [ "e\xcc\x81" ])
+    [ (Ms 0, "e\xcc"); (Ms 20, "\x81") ];
+  check "wide"
+    (screen [ "\xe4\xb8\xad\xcc\x81a" ])
+    [ (Ms 0, "\xe4\xb8\xad\xcc\x81a") ];
+  check "zero-width space"
+    (screen [ "> \xe2\x80\x8b" ])
+    [ (Ms 0, "> \xe2\x80\x8b") ];
+  check "last column"
+    (screen [ String.make 45 'a' ^ "b\xcc\x81" ])
+    [ (Ms 0, String.make 45 'a' ^ "b\xcc\x81") ];
+  (* xterm.js gives each emoji of a ZWJ sequence its two cells. *)
+  let zwj = "\xf0\x9f\x91\xa8\xe2\x80\x8d\xf0\x9f\x91\xa9" in
+  let s = svg [ (Ms 0, zwj ^ "x") ] in
+  Alcotest.(check string) "joiner" (screen [ zwj ^ "x" ]) (last (frames s));
+  check_contains "cursor after the sequence"
+    ~sub:{|<use href="#c" class="k" x="70" y="0"/>|} s
+
 let suite =
   ( "screen",
     List.map
@@ -49,4 +75,5 @@ let suite =
         ("default foreground", test_default_fg);
         ("cursor", test_cursor);
         ("backspace", test_backspace);
+        ("zero width", test_zero_width);
       ] )

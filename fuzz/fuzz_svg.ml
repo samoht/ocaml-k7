@@ -56,6 +56,24 @@ let backspaces state s =
     s;
   Buffer.contents b
 
+(* The zero-width characters, which the terminal drops but the recorder
+   keeps on the cell before them. *)
+let is_zero_width s =
+  let u = Uchar.to_int (Uchar.utf_decode_uchar (String.get_utf_8_uchar s 0)) in
+  u >= 0xa0 && Glyph.String.measure ~width_method:`Unicode ~tab_width:2 s = 0
+
+let strip_zero_width s =
+  let b = Buffer.create (String.length s) in
+  let rec go i =
+    if i < String.length s then (
+      let n = Uchar.utf_decode_length (String.get_utf_8_uchar s i) in
+      let c = String.sub s i n in
+      if not (is_zero_width c) then Buffer.add_string b c;
+      go (i + n))
+  in
+  go 0;
+  Buffer.contents b
+
 let rec collapse = function
   | a :: (b :: _ as rest) when a = b -> collapse rest
   | a :: rest -> a :: collapse rest
@@ -77,7 +95,8 @@ let test_frames chunks =
             List.map
               (fun s ->
                 Vte.feed_string vte (backspaces state s);
-                xml_text (Svg_check.trim_rows (Vte.to_string vte)))
+                strip_zero_width
+                  (xml_text (Svg_check.trim_rows (Vte.to_string vte))))
               chunks
           in
           let expected =
@@ -85,7 +104,8 @@ let test_frames chunks =
           in
           check_eq
             ~pp:Fmt.(Dump.list string)
-            (collapse expected) (collapse frames))
+            (collapse expected)
+            (collapse (List.map strip_zero_width frames)))
 
 let chunk =
   choose
@@ -102,4 +122,46 @@ let chunk =
       const "\027]0;t\bitle\007";
     ]
 
-let suite = ("svg", [ test_case "frames" [ list chunk ] test_frames ])
+let bases = [| "a"; " "; "\xc3\xa9"; "\xe4\xb8\xad"; "\xf0\x9f\x91\xa8" |]
+
+let marks =
+  [|
+    "\xcc\x81"; "\xe2\x80\x8d"; "\xe2\x80\x8b"; "\xe2\x81\xa0"; "\xef\xb8\x8f";
+  |]
+
+(* Each character followed by a zero-width one shows both, whether they
+   arrive together or apart: the first row holds them all, in order. *)
+let test_zero_width items =
+  let items = List.filteri (fun i _ -> i < 20) items in
+  let pieces =
+    List.map
+      (fun (b, m, apart) ->
+        let b = bases.(b mod Array.length bases)
+        and m = marks.(m mod Array.length marks) in
+        if apart then [ b; m ] else [ b ^ m ])
+      items
+  in
+  let output =
+    List.mapi (fun i s -> (Vhs.Ms (i * 20), s)) (List.concat pieces)
+  in
+  match Vhs.svg ~settings output with
+  | Error e -> failf "%a" Vhs.pp_error e
+  | Ok svg -> (
+      match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows svg with
+      | Error e -> failf "not well-formed: %s" e
+      | Ok frames ->
+          let last = List.nth frames (List.length frames - 1) in
+          let first = List.hd (String.split_on_char '\n' last) in
+          let expected =
+            Svg_check.trim_rows (String.concat "" (List.concat pieces))
+          in
+          check_eq ~pp:pp_string expected first)
+
+let suite =
+  ( "svg",
+    [
+      test_case "frames" [ list chunk ] test_frames;
+      test_case "zero width"
+        [ list (map [ uint8; uint8; bool ] (fun b m a -> (b, m, a))) ]
+        test_zero_width;
+    ] )
