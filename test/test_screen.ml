@@ -183,6 +183,12 @@ let test_clear_tabs () =
         [ "a" ^ String.make 7 ' ' ^ "X" ^ String.make 36 ' ' ^ "Y" ] );
     ]
 
+(* DCH deletes one cell, even when it cuts a wide glyph in half. The
+   remaining half becomes a blank; VHS leaves the following text at column 2. *)
+let test_delete_wide () =
+  check_screens
+    [ ("delete half of a wide glyph", "\xe4\xb8\xadab\r\027[P", [ " ab" ]) ]
+
 let suite =
   ( "screen",
     List.map
@@ -200,4 +206,5 @@ let suite =
         ("history", test_history);
         ("saved character set", test_saved_charset);
         ("cleared tab stops", test_clear_tabs);
+        ("delete wide glyph cell", test_delete_wide);
       ] )
