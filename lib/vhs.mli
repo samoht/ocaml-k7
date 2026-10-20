@@ -246,11 +246,11 @@ val render :
 
 (** {1:native Recording natively}
 
-    {!record} plays a tape in bash on a pseudo-terminal, reads what bash prints
-    with a terminal emulator and draws the screens it shows as an animated SVG
-    image. It needs no [vhs], browser or [ffmpeg]. The image holds text, no
-    script and no external resource, and animates with CSS only, so it plays in
-    an HTML [<img>].
+    {!record} plays a tape in bash or zsh on a pseudo-terminal, reads what the
+    shell prints with a terminal emulator and draws the screens it shows as an
+    animated SVG image. It needs no [vhs], browser or [ffmpeg]. The image holds
+    text, no script and no external resource, and animates with CSS only, so it
+    plays in an HTML [<img>].
 
     The terminal has the size VHS gives it with JetBrains Mono, VHS's first
     font: [Width], [Height], [Font_size], [Padding] and the raw [Set Margin],
@@ -282,7 +282,7 @@ val render :
     [Alt], [Shift], [Sleep], [Wait], [Copy] and [Paste] lines ([Paste] types the
     last [Copy]), [Env], [Require], and every [Set] but those below. It does not
     play, and is {!Unsupported} on:
-    - a {!shell} other than {!Bash};
+    - a {!shell} other than {!Bash} and {!Zsh}, which start as in VHS;
     - a colour of a JSON [Theme] other than [#RGB], [#RGBA], [#RRGGBB],
       [#RRGGBBAA], [rgb()] or [rgba()], such as a colour name, which xterm.js
       reads with the browser;
@@ -303,12 +303,12 @@ val record :
   cwd:_ Eio.Path.t ->
   t ->
   (string, error) result
-(** [record ~clock ~proc ~cwd t] plays [t] in bash in the directory [cwd], with
-    the environment {!render} gives [vhs], and is the SVG image of what it
+(** [record ~clock ~proc ~cwd t] plays [t] in its shell in the directory [cwd],
+    with the environment {!render} gives [vhs], and is the SVG image of what it
     showed. [record] also writes the image to each [.svg] output of [t] and the
     {{!native}text output} to the [.txt], [.ascii] or [.test] output of [t],
     relative to [cwd], and writes no other output. The waits of [t] time out by
-    [clock]. It is {!Executable_not_found} if [bash] or the executable of a
+    [clock]. It is {!Executable_not_found} if the shell or the executable of a
     [Require] line is not on the [PATH]. *)
 
 val svg :

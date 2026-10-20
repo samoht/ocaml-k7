@@ -275,6 +275,28 @@ let test_window_bar () =
       {|<svg x="65" y="105" |};
     ]
 
+(* zsh plays natively, with VHS's prompt. *)
+let test_zsh () =
+  with_dir @@ fun env cwd ->
+  let t =
+    match
+      Vhs.tape
+        ~settings:(Shell Zsh :: Typing_speed (Ms 5) :: settings)
+        ~outputs:[ "demo.svg" ]
+        Vhs.[ type' "echo $ZSH_NAME\n"; wait Prompt; sleep (Ms 100) ]
+    with
+    | Ok t -> t
+    | Error e -> Alcotest.fail e
+  in
+  match record env cwd t with
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Ok s ->
+      check_contains "prompt colour" ~sub:{|fill="#5b56e0">&gt;|} s;
+      Alcotest.(check string)
+        "final"
+        (screen [ "> echo $ZSH_NAME"; "zsh"; ">" ])
+        (last (frames s))
+
 (* Keys send what xterm sends: the line editor sees arrows, control and alt
    chords. *)
 let test_keys () =
@@ -347,35 +369,10 @@ let after_settings tape txt =
   in
   skip n 0
 
-(* The native text output is VHS's, byte for byte, but for the screens VHS
-   reads before it sizes the terminal, for a 60 x 12 terminal. *)
-let test_oracle () =
-  with_dir @@ fun env cwd ->
-  let t =
-    match
-      Vhs.tape
-        ~outputs:[ "oracle.txt"; "oracle.svg" ]
-        Vhs.
-          [
-            raw "Set Columns 60";
-            raw "Set Rows 12";
-            type' "sleep 1; echo hello";
-            key Enter;
-            wait Prompt;
-            type'
-              "sleep 1; printf '\\033[31mred\\033[0m wide: \\346\\227\\245 \
-               e\\314\\201nd\\302\\240\\n'";
-            key Enter;
-            wait Prompt;
-            type' "sleep 1; seq 1 20";
-            key Enter;
-            wait Prompt;
-            sleep (Ms 500);
-          ]
-    with
-    | Ok t -> t
-    | Error e -> Alcotest.fail e
-  in
+(* [same_text env cwd t] records [t] with VHS and natively and checks
+   that the native text output is VHS's, byte for byte, but for the screens
+   VHS reads before it sizes the terminal. It is the native image. *)
+let same_text env cwd t =
   let clock = Eio.Stdenv.mono_clock env and proc = Eio.Stdenv.process_mgr env in
   (match Vhs.render ?vhs:oracle ~clock ~proc ~cwd t with
   | Ok () -> ()
@@ -383,18 +380,70 @@ let test_oracle () =
   let vhs = Eio.Path.load Eio.Path.(cwd / "oracle.txt") in
   match record env cwd t with
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e
-  | Ok s -> (
+  | Ok s ->
       let native = Eio.Path.load Eio.Path.(cwd / "oracle.txt") in
-      Alcotest.(check int) "screens" 10 (List.length (screens native));
       Alcotest.(check string) "text output" (after_settings t vhs) native;
-      match Svg_check.frames ~cell_width ~cell_height ~rows:12 s with
-      | Error e -> Alcotest.fail e
-      | Ok frames ->
-          Alcotest.(check string)
-            "final screen"
-            (String.concat "\n"
-               (List.init 11 (fun i -> Int.to_string (i + 10)) @ [ ">" ]))
-            (last frames))
+      (native, s)
+
+let oracle_tape ?(settings = []) actions =
+  match
+    Vhs.tape ~settings
+      ~outputs:[ "oracle.txt"; "oracle.svg" ]
+      (Vhs.raw "Set Columns 60" :: Vhs.raw "Set Rows 12" :: actions)
+  with
+  | Ok t -> t
+  | Error e -> Alcotest.fail e
+
+(* For a 60 x 12 terminal, with colours, a wide character, a combining mark,
+   a trailing no-break space and scrolling. *)
+let test_oracle () =
+  with_dir @@ fun env cwd ->
+  let t =
+    oracle_tape
+      Vhs.
+        [
+          type' "sleep 1; echo hello";
+          key Enter;
+          wait Prompt;
+          type'
+            "sleep 1; printf '\\033[31mred\\033[0m wide: \\346\\227\\245 \
+             e\\314\\201nd\\302\\240\\n'";
+          key Enter;
+          wait Prompt;
+          type' "sleep 1; seq 1 20";
+          key Enter;
+          wait Prompt;
+          sleep (Ms 500);
+        ]
+  in
+  let native, s = same_text env cwd t in
+  Alcotest.(check int) "screens" 10 (List.length (screens native));
+  match Svg_check.frames ~cell_width ~cell_height ~rows:12 s with
+  | Error e -> Alcotest.fail e
+  | Ok frames ->
+      Alcotest.(check string)
+        "final screen"
+        (String.concat "\n"
+           (List.init 11 (fun i -> Int.to_string (i + 10)) @ [ ">" ]))
+        (last frames)
+
+(* zsh, started as VHS starts it. *)
+let test_oracle_zsh () =
+  with_dir @@ fun env cwd ->
+  let t =
+    oracle_tape ~settings:[ Shell Zsh ]
+      Vhs.
+        [
+          type' "sleep 1; echo hello";
+          key Enter;
+          wait Prompt;
+          type' "print -P '%F{red}red%f'";
+          key Enter;
+          wait Prompt;
+          sleep (Ms 500);
+        ]
+  in
+  ignore (same_text env cwd t)
 
 let suite =
   ( "native",
@@ -412,8 +461,11 @@ let suite =
          ("trim", test_trim);
          ("text", test_text);
          ("window bar", test_window_bar);
+         ("zsh", test_zsh);
          ("keys", test_keys);
          ("unsupported", test_unsupported);
        ]
-      @ if Option.is_some oracle then [ ("vhs oracle", test_oracle) ] else [])
-  )
+      @
+      if Option.is_some oracle then
+        [ ("vhs oracle", test_oracle); ("vhs oracle zsh", test_oracle_zsh) ]
+      else []) )

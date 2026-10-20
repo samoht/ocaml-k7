@@ -5,12 +5,12 @@
 
 (** Playing tapes without VHS.
 
-    A tape runs in bash on a pseudo-terminal whose output a {!Vte.t} reads, and
-    its screens make an {!Svg} image. Time is counted by the tape: typing, a key
-    and a sleep take the time the tape gives them, whatever the recorder spends
-    around them, and a wait takes the time the program makes it wait. Output
-    gets the time it arrives at within the action that runs, rounded down to a
-    frame. *)
+    A tape runs in bash or zsh on a pseudo-terminal whose output a {!Vte.t}
+    reads, and its screens make an {!Svg} image. Time is counted by the tape:
+    typing, a key and a sleep take the time the tape gives them, whatever the
+    recorder spends around them, and a wait takes the time the program makes it
+    wait. Output gets the time it arrives at within the action that runs,
+    rounded down to a frame. *)
 
 (** The type for the reasons a tape does not play. *)
 type error =
@@ -38,12 +38,12 @@ val play :
   cwd:string ->
   t ->
   (string * string, error) result
-(** [play ~clock ~env ~cwd t] runs [t] in bash in the directory [cwd] and is the
-    SVG image of what it showed and the text of {!text_output}, in VHS's format:
-    the first lines of the buffer, as many as the screen has rows, after each
-    command that runs while recording, from the first action or from the
+(** [play ~clock ~env ~cwd t] runs [t] in its shell in the directory [cwd] and
+    is the SVG image of what it showed and the text of {!text_output}, in VHS's
+    format: the first lines of the buffer, as many as the screen has rows, after
+    each command that runs while recording, from the first action or from the
     [Output] line that names it, each screen followed by a line of 80 U+2500
-    characters. Bash gets [env] with the prompt VHS gives it,
+    characters. The shell gets [env] with the prompt VHS gives it,
     [TERM=xterm-256color] and the [Env] lines of [t]. *)
 
 val replay : t -> (int * string) list -> string

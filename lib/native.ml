@@ -86,6 +86,7 @@ let compile line re =
 (* Settings *)
 
 type config = {
+  shell : string;
   font_size : int;
   font_family : string;
   width : int;
@@ -117,6 +118,7 @@ let default_font =
 
 let default_config () =
   {
+    shell = "bash";
     font_size = 22;
     font_family = default_font;
     width = 1200;
@@ -168,8 +170,8 @@ let set line c name args =
     match args with v :: _ -> lit v | [] -> unsupported line "no value"
   in
   match (name, args) with
-  | "Shell", [ Str "bash" ] -> c
-  | "Shell", _ -> unsupported line "only bash plays natively"
+  | "Shell", [ Str (("bash" | "zsh") as shell) ] -> { c with shell }
+  | "Shell", _ -> unsupported line "only bash and zsh play natively"
   | "FontSize", _ -> { c with font_size = int_value line (value ()) }
   | "FontFamily", _ -> { c with font_family = value () ^ ",monospace" }
   | "Width", _ -> { c with width = int_value line (value ()) }
@@ -719,28 +721,36 @@ let close clock pty =
       reap 100)
     pid
 
-(* The prompt and the bash VHS starts. *)
-let ps1 = {|\[\e[38;2;90;86;224m\]> \[\e[0m\]|}
-let bash = [ "--noprofile"; "--norc"; "--login"; "+o"; "history" ]
+(* The shells VHS starts, from its shell.go: the environment it gives
+   them before the tape's, their arguments, and their prompts. *)
+let shell = function
+  | "zsh" ->
+      ( [ ("PROMPT", "%F{#5B56E0}> %F{reset_color}") ],
+        [ "--histnostore"; "--no-rcs" ] )
+  | _ ->
+      ( [
+          ("PS1", {|\[\e[38;2;90;86;224m\]> \[\e[0m\]|});
+          ("BASH_SILENCE_DEPRECATION_WARNING", "1");
+        ],
+        [ "--noprofile"; "--norc"; "--login"; "+o"; "history" ] )
 
 let spawn ~env ~cwd t s =
+  let prog = t.config.shell in
+  let vars, args = shell prog in
   let env =
     Eio.Process.Env.override
-      ([
-         ("PS1", Some ps1);
-         ("BASH_SILENCE_DEPRECATION_WARNING", Some "1");
-         ("TERM", Some "xterm-256color");
-       ]
-      @ List.map (fun (k, v) -> (k, Some v)) t.env)
+      (List.map
+         (fun (k, v) -> (k, Some v))
+         (vars @ [ ("TERM", "xterm-256color") ] @ t.env))
       env
   in
   List.iter
     (fun exe -> if not (on_path env exe) then stop (Not_found exe))
-    ("bash" :: t.requires);
+    (prog :: t.requires);
   match
     Pty.spawn ~env ~cwd
       ~winsize:{ rows = s.Svg.rows; cols = s.cols; xpixel = 0; ypixel = 0 }
-      ~prog:"bash" ~args:bash ()
+      ~prog ~args ()
   with
   | pty -> pty
   | exception Unix.Unix_error (e, f, _) ->
