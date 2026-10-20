@@ -136,8 +136,10 @@ type setting =
           them, is at most 10,000,000 pixels, as for {!Width}. *)
   | Theme of string
       (** The name of a theme of VHS 0.12.1, as [vhs themes] lists them; a theme
-          in JSON, which starts with [{] and which VHS checks only when it runs;
-          or only spaces, for the default theme. *)
+          in JSON, which starts with [{], an object whose fields VHS reads as
+          strings, matching keys ignoring case, and xterm.js as colours, its
+          default for a missing or empty one; or only spaces, for the default
+          theme. *)
   | Padding of int
       (** The padding in pixels, not negative (defaults to [60]). *)
   | Typing_speed of duration
@@ -281,7 +283,10 @@ val render :
     last [Copy]), [Env], [Require], and every [Set] but those below. It does not
     play, and is {!Unsupported} on:
     - a {!shell} other than {!Bash};
-    - a JSON [Theme] and [Set MarginFill] with an image;
+    - a colour of a JSON [Theme] other than [#RGB], [#RGBA], [#RRGGBB],
+      [#RRGGBBAA], [rgb()] or [rgba()], such as a colour name, which xterm.js
+      reads with the browser;
+    - [Set MarginFill] with an image;
     - [Screenshot] and [Source];
     - a wait pattern with a Unicode class ([\p] or [\P]).
 
@@ -310,5 +315,5 @@ val svg :
   ?settings:setting list -> (duration * string) list -> (string, error) result
 (** [svg ~settings output] is the SVG image of a terminal with [settings]
     (defaults to [[]]) that receives each string of [output] at its time, which
-    increases. It is [Error (Unsupported _)] on a JSON {!Theme} and on the sizes
-    {!record} refuses. *)
+    increases. It is [Error (Unsupported _)] on the {!Theme} colours and the
+    sizes {!record} refuses. *)

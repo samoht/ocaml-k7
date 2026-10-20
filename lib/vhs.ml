@@ -340,7 +340,12 @@ let is_blank s =
    default theme. *)
 let check_theme t =
   let* () = check_quotable "Set Theme" t in
-  if is_blank t || String.starts_with ~prefix:"{" t || Themes.mem t then Ok ()
+  if is_blank t || Themes.mem t then Ok ()
+  else if String.starts_with ~prefix:"{" t then
+    match Palette.of_json t with
+    | Ok _ | Error (`Colour _) -> Ok ()
+    | Error (`Json msg) ->
+        Fmt.error "Set Theme %S: VHS cannot read it: %s" t msg
   else Fmt.error "Set Theme %S: not a VHS theme" t
 
 (* VHS fonts are set by browser code that quotes the list with [']. *)

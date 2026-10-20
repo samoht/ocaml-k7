@@ -705,6 +705,17 @@ let test_setup_prompt_hook n =
   if not (String.split_on_char '\n' screen |> List.mem "READY") then
     fail "setup prevented the command from running"
 
+(* A JSON theme is accepted or refused, never an exception, and a tape that
+   accepts it plays it or names why not. *)
+let test_json_theme s =
+  let theme = Vhs.Theme ("{" ^ s) in
+  match Vhs.tape ~settings:[ theme ] ~outputs:[ "a.gif" ] [ Vhs.type' "x" ] with
+  | Error _ -> ()
+  | Ok _ -> (
+      match Vhs.svg ~settings:[ theme ] [] with
+      | Ok _ | Error (Unsupported _) -> ()
+      | Error e -> failf "%a" Vhs.pp_error e)
+
 (* Properties that run [vhs] itself, so need [oracle]. *)
 let with_vhs =
   [
@@ -731,53 +742,65 @@ let with_processes =
       test_no_publication;
   ]
 
+(* Properties of the frame and of the values [tape] accepts. *)
+let bounds =
+  [
+    test_case "raw margin fits the frame"
+      [ choose [ int; const max_int; const (max_int - 59); const 240 ] ]
+      test_raw_margin_bound;
+    test_case "errors identify the invalid item" [ int ] test_error_item;
+    test_case "typed text cannot inject commands"
+      [ choose [ bytes; const ""; const "λ中文👩🏽‍💻é"; const "\000"; const "\xff" ] ]
+      test_no_injection;
+    test_case "padding fits the frame"
+      [ choose [ int; const max_int; const ((max_int / 2) + 1); const 300 ] ]
+      test_padding_bound;
+    test_case "type is exact"
+      [ choose [ bytes; const "\xff"; const {|a"b'c`d|} ] ]
+      test_type;
+  ]
+
+(* Properties of the tapes [tape] makes. *)
+let tapes =
+  [
+    test_case "tape is total" [ bytes; bytes; int ] test_total;
+    test_case "JSON themes"
+      [
+        choose
+          [
+            bytes;
+            const {|"background": "#123"}|};
+            const {|"red": "\ud83d\ude00", "RED": null}|};
+          ];
+      ]
+      test_json_theme;
+    test_case "durations"
+      [ choose [ int; const max_ms; const (max_ms + 1); const 0 ] ]
+      test_durations;
+    test_case "screen tokens"
+      [ choose [ bytes; const {|\Q/\E|}; const {|\Qa\|} ] ]
+      test_screen;
+    test_case "raw lines"
+      [
+        choose
+          [ bytes; const "Set Width 300"; const "Require x"; const " Hide" ];
+      ]
+      test_raw;
+    test_case "hidden" [ list bytes; int ] test_hidden;
+    test_case "sizes" [ int16; int16; int8 ] test_sizes;
+    test_case "outputs"
+      [
+        bytes;
+        choose [ const ""; const ".gif"; const ".png"; const "/"; const ".gfi" ];
+      ]
+      test_output;
+    test_case "pp_error" [ bytes; int ] test_pp_error;
+    test_case "keys" [ char ] test_keys;
+    test_case "settings" [ int; bytes ] test_settings;
+    test_case "order" [ bytes; bytes ] test_order;
+  ]
+
 let suite =
   ( "vhs",
     (if Option.is_some oracle then with_vhs else [])
-    @ with_processes
-    @ [
-        test_case "raw margin fits the frame"
-          [ choose [ int; const max_int; const (max_int - 59); const 240 ] ]
-          test_raw_margin_bound;
-        test_case "errors identify the invalid item" [ int ] test_error_item;
-        test_case "typed text cannot inject commands"
-          [
-            choose
-              [ bytes; const ""; const "λ中文👩🏽‍💻é"; const "\000"; const "\xff" ];
-          ]
-          test_no_injection;
-        test_case "padding fits the frame"
-          [
-            choose [ int; const max_int; const ((max_int / 2) + 1); const 300 ];
-          ]
-          test_padding_bound;
-        test_case "type is exact"
-          [ choose [ bytes; const "\xff"; const {|a"b'c`d|} ] ]
-          test_type;
-        test_case "tape is total" [ bytes; bytes; int ] test_total;
-        test_case "durations"
-          [ choose [ int; const max_ms; const (max_ms + 1); const 0 ] ]
-          test_durations;
-        test_case "screen tokens"
-          [ choose [ bytes; const {|\Q/\E|}; const {|\Qa\|} ] ]
-          test_screen;
-        test_case "raw lines"
-          [
-            choose
-              [ bytes; const "Set Width 300"; const "Require x"; const " Hide" ];
-          ]
-          test_raw;
-        test_case "hidden" [ list bytes; int ] test_hidden;
-        test_case "sizes" [ int16; int16; int8 ] test_sizes;
-        test_case "outputs"
-          [
-            bytes;
-            choose
-              [ const ""; const ".gif"; const ".png"; const "/"; const ".gfi" ];
-          ]
-          test_output;
-        test_case "pp_error" [ bytes; int ] test_pp_error;
-        test_case "keys" [ char ] test_keys;
-        test_case "settings" [ int; bytes ] test_settings;
-        test_case "order" [ bytes; bytes ] test_order;
-      ] )
+    @ with_processes @ bounds @ tapes )

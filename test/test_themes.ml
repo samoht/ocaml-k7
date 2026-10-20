@@ -25,7 +25,7 @@ let rejects name settings =
   | Error _ -> ()
 
 (* VHS finds a theme by its exact name, reads a value starting with [{] as
-   JSON and a blank one as its default theme. *)
+   JSON, which Go must read, and a blank one as its default theme. *)
 let test_names () =
   let open Vhs in
   expect "name" "Output \"demo.gif\"\nSet Theme \"Dracula\"\nSleep 100ms\n"
@@ -34,8 +34,9 @@ let test_names () =
     (body [ Theme " \xc2\xa0" ]);
   error "unknown" {|Set Theme "Draculaa": not a VHS theme|} [ Theme "Draculaa" ];
   rejects "case" [ Theme "dracula" ];
-  expect "JSON" "Output \"demo.gif\"\nSet Theme \"{x\"\nSleep 100ms\n"
-    (body [ Theme "{x" ]);
+  expect "JSON" "Output \"demo.gif\"\nSet Theme \"{}\"\nSleep 100ms\n"
+    (body [ Theme "{}" ]);
+  rejects "invalid JSON" [ Theme "{x" ];
   rejects "space before JSON" [ Theme " {}" ];
   rejects "invalid UTF-8" [ Theme " \xff" ];
   rejects "line break" [ Theme "Dracula\n" ]

@@ -21,5 +21,14 @@ val default : t
 val find : string -> t option
 (** [find name] is the theme VHS v0.12.1 names [name], if any. *)
 
+val of_json : string -> (t, [ `Json of string | `Colour of string ]) result
+(** [of_json s] is the theme of the JSON object [s], as VHS reads it with Go's
+    [encoding/json] and gives it to xterm.js: a field, matched to a key ignoring
+    case, is xterm.js's default colour if it is missing, [null] or empty. It is
+    [Error (`Json msg)] if Go does not read [s], such as invalid JSON or a field
+    that is not a string, and [Error (`Colour c)] if a colour [c] is not [#RGB],
+    [#RGBA], [#RRGGBB], [#RRGGBBAA], [rgb()] or [rgba()], the forms xterm.js
+    reads without a browser. *)
+
 val pp : t Fmt.t
 (** [pp] formats a theme's colours for humans. *)

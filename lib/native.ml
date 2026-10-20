@@ -185,10 +185,15 @@ let set line c name args =
   | "LineHeight", _ -> { c with line_height = float_value line (value ()) }
   | "Rows", _ -> { c with rows = int_value line (value ()) }
   | "Columns", _ -> { c with columns = int_value line (value ()) }
-  | "Theme", [ Json_value _ ] -> unsupported line "a JSON theme needs vhs"
   | "Theme", _ -> (
       let name = value () in
       if String.trim name = "" then { c with palette = Palette.default }
+      else if name.[0] = '{' then
+        match Palette.of_json name with
+        | Ok palette -> { c with palette }
+        | Error (`Json msg) -> unsupported line "VHS cannot read it: %s" msg
+        | Error (`Colour c) ->
+            unsupported line "%s is a colour only a browser reads" c
       else
         match Palette.find name with
         | Some palette -> { c with palette }
