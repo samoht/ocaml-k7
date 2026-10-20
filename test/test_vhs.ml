@@ -389,6 +389,31 @@ let test_viewport () =
   rejects "rows in an empty viewport" ~settings:[ Vhs.Padding 0 ]
     [ Vhs.raw "Set Margin 300"; Vhs.raw "Set Rows 1" ]
 
+(* ffmpeg encodes a GIF of at most 65535 pixels a side, libx264 an MP4 of
+   16384 and libvpx a WebM of 65536, and takes a frame of at most about
+   268 million pixels: (8 width + 1024) (height + 128) below 2{^31}. *)
+let test_encoders () =
+  let accepts name ~outputs settings =
+    match Vhs.tape ~settings ~outputs [ Vhs.sleep (Ms 100) ] with
+    | Ok _ -> ()
+    | Error e -> Alcotest.failf "%s: %s" name e
+  and refuses name ~outputs settings =
+    match Vhs.tape ~settings ~outputs [ Vhs.sleep (Ms 100) ] with
+    | Ok _ -> Alcotest.failf "%s: accepted" name
+    | Error _ -> ()
+  in
+  let open Vhs in
+  accepts "GIF" ~outputs:[ "a.gif" ] [ Width 65535 ];
+  refuses "wide GIF" ~outputs:[ "a.gif" ] [ Width 65536 ];
+  refuses "tall GIF" ~outputs:[ "a.gif" ] [ Height 65536 ];
+  accepts "MP4" ~outputs:[ "a.mp4" ] [ Width 16384; Height 16000 ];
+  refuses "wide MP4" ~outputs:[ "a.mp4" ] [ Width 16386 ];
+  refuses "tall MP4" ~outputs:[ "a.mp4" ] [ Height 16386 ];
+  accepts "WebM" ~outputs:[ "a.webm" ] [ Width 65536 ];
+  refuses "wide WebM" ~outputs:[ "a.webm" ] [ Width 65538 ];
+  refuses "too many pixels" ~outputs:[ "a.gif" ] [ Width 65534; Height 4000 ];
+  accepts "text" ~outputs:[ "a.txt" ] [ Width 70000 ]
+
 let suite =
   ( "vhs",
     List.map
@@ -397,6 +422,7 @@ let suite =
         ("padding overflow", test_padding_overflow);
         ("raw margin overflow", test_raw_margin_overflow);
         ("viewport", test_viewport);
+        ("encoders", test_encoders);
         ("raw validation", test_raw_validation);
         ("basic tape", test_basic_tape);
         ("quotes", test_quotes);
