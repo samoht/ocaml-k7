@@ -378,7 +378,16 @@ let test_viewport () =
       Vhs.raw "Set WindowBar Colorful";
       Vhs.raw {|Set WindowBarSize "-20000000"|};
       Vhs.raw "Set Rows 10";
-    ]
+    ];
+  (* VHS measures the cells at up to 32 times the viewport, where a cell
+     takes at least a pixel: the 1080 x 480 pixels of the default frame
+     less its padding hold at most 34560 columns and 15360 rows. *)
+  ignore (body [ Vhs.raw "Set Columns 34560" ]);
+  ignore (body [ Vhs.raw "Set Rows 15360" ]);
+  rejects "more columns than VHS measures" [ Vhs.raw "Set Columns 34561" ];
+  rejects "more rows than VHS measures" [ Vhs.raw "Set Rows 15361" ];
+  rejects "rows in an empty viewport" ~settings:[ Vhs.Padding 0 ]
+    [ Vhs.raw "Set Margin 300"; Vhs.raw "Set Rows 1" ]
 
 let suite =
   ( "vhs",
