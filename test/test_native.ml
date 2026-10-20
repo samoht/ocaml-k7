@@ -94,6 +94,29 @@ let test_scroll () =
         (String.concat "\n" (List.init 9 (fun i -> Int.to_string (i + 10))))
         (last (frames s))
 
+(* Scrolling further up than the screen is high shows the scrollback in
+   order. *)
+let test_scroll_far () =
+  with_dir @@ fun env cwd ->
+  let t =
+    tape
+      Vhs.
+        [
+          type' "seq 1 30\n";
+          wait (Line "^>$");
+          key Scroll_up;
+          raw "ScrollUp 11";
+          sleep (Ms 100);
+        ]
+  in
+  match record env cwd t with
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Ok s ->
+      Alcotest.(check string)
+        "scrolled"
+        (String.concat "\n" (List.init 9 (fun i -> Int.to_string (i + 11))))
+        (last (frames s))
+
 (* Keys send what xterm sends: the line editor sees arrows, control and alt
    chords. *)
 let test_keys () =
@@ -173,6 +196,7 @@ let suite =
          ("timeout", test_timeout);
          ("hidden", test_hidden);
          ("scroll", test_scroll);
+         ("scroll far", test_scroll_far);
          ("keys", test_keys);
          ("unsupported", test_unsupported);
        ]
