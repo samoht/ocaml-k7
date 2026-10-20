@@ -525,6 +525,44 @@ let test_oracle () =
            (List.init 11 (fun i -> Int.to_string (i + 10)) @ [ ">" ]))
         (last frames)
 
+(* xterm's controls, which the native screen emulates where matrix 0.1.0
+   lacks them: raw line feeds and indexes, a reverse index, scroll regions,
+   line edits, character erases and repeats, no auto-wrap, origin mode, the
+   cursor in the last column and DEC line drawing. *)
+let test_oracle_controls () =
+  with_dir @@ fun env cwd ->
+  (* Each printf leaves the cursor at the start of the cleared last row,
+     for the prompt. *)
+  let printf s =
+    Vhs.type'
+      ("sleep 1; stty -onlcr; printf '" ^ s ^ {|\033[12;1H\033[K'; stty onlcr|})
+  in
+  let t =
+    oracle_tape
+      Vhs.
+        [
+          type' "sleep 1; clear";
+          key Enter;
+          wait Prompt;
+          printf
+            {|ab\ncd\033Dx\033Ey\r\n\033[2Mz\033[2;4r\033[4;1Hq\033Mr\033[r|};
+          key Enter;
+          wait Prompt;
+          printf {|\033[8;1H12345\033[3D\033[2X\033[1b\033[L\033(0lqqk\033(B|};
+          key Enter;
+          wait Prompt;
+          printf
+            {|\033[?7l\033[10;55Habcdefghij\033[?7h\033[?6h\033[5;8r\033[2;3Ho\033[?6l\033[r|};
+          key Enter;
+          wait Prompt;
+          printf {|\033[11;59Hxyz\bW\033[60GV|};
+          key Enter;
+          wait Prompt;
+          sleep (Ms 500);
+        ]
+  in
+  ignore (same_text env cwd t)
+
 (* zsh, started as VHS starts it. *)
 let test_oracle_zsh () =
   with_dir @@ fun env cwd ->
@@ -568,5 +606,9 @@ let suite =
        ]
       @
       if Option.is_some oracle then
-        [ ("vhs oracle", test_oracle); ("vhs oracle zsh", test_oracle_zsh) ]
+        [
+          ("vhs oracle", test_oracle);
+          ("vhs oracle zsh", test_oracle_zsh);
+          ("vhs oracle controls", test_oracle_controls);
+        ]
       else []) )

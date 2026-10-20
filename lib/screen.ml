@@ -26,6 +26,12 @@ type terminal = {
   mutable lines : string array;  (** The scrollback lines, see {!snapshot}. *)
   mutable top : int;  (** The first row of the scroll region. *)
   mutable bottom : int;  (** The last row of the scroll region. *)
+  mutable wrap : bool;  (** Auto-wrap mode. *)
+  mutable origin : bool;  (** Origin mode. *)
+  mutable g0 : bool;  (** Whether G0 is DEC line drawing. *)
+  mutable g1 : bool;  (** Whether G1 is DEC line drawing. *)
+  mutable shifted : bool;  (** Whether SO selected G1. *)
+  mutable last : string;  (** The last character printed, for REP. *)
 }
 
 (* xterm.js keeps a thousand lines of scrollback, VHS's [Buffer] reads its
@@ -50,6 +56,12 @@ let terminal ~rows ~cols =
     lines = [||];
     top = 0;
     bottom = rows - 1;
+    wrap = true;
+    origin = false;
+    g0 = false;
+    g1 = false;
+    shifted = false;
+    last = "";
   }
 
 let vte t = t.vte
@@ -147,21 +159,17 @@ let move t ~row ~col =
   flush t;
   Vte.set_cursor_pos t.vte ~row ~col
 
-(* A line feed scrolls the region at its last row, and moves down a row
-   elsewhere, in the same column. *)
-let index t =
+(* [index t dir] moves the cursor a row down ([dir = 1]) or up ([-1]) in
+   its column, as a line feed or a reverse index does: at the region's edge
+   it scrolls the region instead, and at the screen's it stays. *)
+let index t dir =
   flush t;
   move_to_last_column t;
   let row, col = Vte.cursor_pos t.vte in
-  if row = t.bottom then scroll t 1
-  else if row < Vte.rows t.vte - 1 then move t ~row:(row + 1) ~col
-
-let reverse_index t =
-  flush t;
-  move_to_last_column t;
-  let row, col = Vte.cursor_pos t.vte in
-  if row = t.top then scroll t (-1)
-  else if row > 0 then move t ~row:(row - 1) ~col
+  let edge = if dir > 0 then t.bottom else t.top in
+  if row = edge then scroll t dir
+  else if row + dir >= 0 && row + dir < Vte.rows t.vte then
+    move t ~row:(row + dir) ~col
 
 (* [CSI top ; bottom r] sets the scroll region and homes the cursor; a
    region of less than two rows is ignored. *)
@@ -176,8 +184,7 @@ let set_region t params =
   let top = n 0 1 - 1 and bottom = min rows (n 1 rows) - 1 in
   if top < bottom then (
     t.top <- top;
-    t.bottom <- bottom;
-    move t ~row:0 ~col:0)
+    t.bottom <- bottom)
 
 let params s = String.sub s 2 (String.length s - 3)
 
@@ -245,9 +252,57 @@ let is_zero_width t s =
        ~tab_width:2 s
      = 0
 
+(* VT100's DEC Special Graphics, as xterm.js maps them, from ['`'] to
+   ['~']. *)
+let dec_graphics =
+  [| "\u{25c6}"; "\u{2592}"; "\u{2409}"; "\u{240c}"; "\u{240d}"; "\u{240a}";
+     "\u{b0}"; "\u{b1}"; "\u{2424}"; "\u{240b}"; "\u{2518}"; "\u{2510}";
+     "\u{250c}"; "\u{2514}"; "\u{253c}"; "\u{23ba}"; "\u{23bb}"; "\u{2500}";
+     "\u{23bc}"; "\u{23bd}"; "\u{251c}"; "\u{2524}"; "\u{2534}"; "\u{252c}";
+     "\u{2502}"; "\u{2264}"; "\u{2265}"; "\u{3c0}"; "\u{2260}"; "\u{a3}";
+     "\u{b7}" |]
+[@@ocamlformat "disable"]
+
+let full_region t = t.top = 0 && t.bottom = Vte.rows t.vte - 1
+
+let width t s =
+  Glyph.String.measure
+    ~width_method:(Grid.width_method (Vte.grid t.vte))
+    ~tab_width:2 s
+
+(* A character that does not fit the line wraps, or overwrites the last
+   column without auto-wrap. matrix 0.1.0 wraps it with a full-screen
+   scroll, and writes nothing without auto-wrap, so the screen places it
+   itself in a scroll region and without auto-wrap. *)
+let place t s =
+  flush t;
+  let _, col = Vte.cursor_pos t.vte in
+  if col + max 1 (width t s) > Vte.cols t.vte then
+    if t.wrap then (
+      index t 1;
+      move t ~row:(fst (Vte.cursor_pos t.vte)) ~col:0)
+    else
+      let row, _ = Vte.cursor_pos t.vte in
+      move t ~row ~col:(Vte.cols t.vte - max 1 (width t s))
+
 (* A character outside escape sequences. *)
 let character t s =
-  if is_zero_width t s then attach t s else Buffer.add_string t.out s
+  if is_zero_width t s then attach t s
+  else (
+    t.last <- s;
+    if t.wrap && full_region t then Buffer.add_string t.out s
+    else (
+      place t s;
+      Buffer.add_string t.out s;
+      flush t))
+
+let ascii = Array.init 128 (fun i -> String.make 1 (Char.chr i))
+
+let print_ascii t c =
+  let dec = if t.shifted then t.g1 else t.g0 in
+  if dec && c >= '`' && c <= '~' then
+    character t dec_graphics.(Char.code c - Char.code '`')
+  else character t ascii.(Char.code c)
 
 let replacement = "\xef\xbf\xbd"
 
@@ -259,26 +314,116 @@ let escape = function
   | ' ' .. '/' -> Escape
   | _ -> Ground
 
-(* The cursor moves and the edits that read the cursor's column. *)
+let int_param s ~default =
+  match int_of_string_opt s with Some n when n > 0 -> n | _ -> default
+
+let csi_params s =
+  List.map (int_param ~default:1) (String.split_on_char ';' (params s))
+
+(* A move up or down stops at the scroll region's edge when the cursor is
+   in the region. *)
+let vertical t n ~col =
+  flush t;
+  move_to_last_column t;
+  let row, c = Vte.cursor_pos t.vte in
+  let lo = if row >= t.top then t.top else 0
+  and hi = if row <= t.bottom then t.bottom else Vte.rows t.vte - 1 in
+  move t ~row:(max lo (min hi (row + n))) ~col:(Option.value col ~default:c)
+
+(* In origin mode, rows count from the top of the scroll region and stop at
+   its bottom. *)
+let position t ~row ~col =
+  flush t;
+  let row =
+    if t.origin then min t.bottom (t.top + row - 1)
+    else min (Vte.rows t.vte) row - 1
+  in
+  move t ~row ~col:(min (Vte.cols t.vte) col - 1)
+
+(* An inserted or deleted line scrolls the region from the cursor's row,
+   which it leaves in the first column; outside the region it does
+   nothing. *)
+let edit_lines t n =
+  flush t;
+  move_to_last_column t;
+  let row, _ = Vte.cursor_pos t.vte in
+  if row >= t.top && row <= t.bottom then (
+    let top = t.top in
+    t.top <- row;
+    scroll t n;
+    t.top <- top;
+    move t ~row ~col:0)
+
+let home t = move t ~row:(if t.origin then t.top else 0) ~col:0
+
+let reset t =
+  t.top <- 0;
+  t.bottom <- Vte.rows t.vte - 1;
+  t.wrap <- true;
+  t.origin <- false;
+  t.g0 <- false;
+  t.g1 <- false;
+  t.shifted <- false
+
+(* The sequences matrix 0.1.0 misreads or lacks, and the cursor moves and
+   edits that read the cursor's column. *)
 let sequence t s =
-  if s = "\027[3J" then erase_scrollback t
-  else
-    match (csi_final s, s) with
-    | Some ('A' .. 'H' | 'J' | 'K' | 'L' | 'M' | 'P' | '@' | 'f'), _ ->
-        control t s
-    | Some 'S', _ -> scroll t (count s)
-    | Some 'T', _ -> scroll t (-count s)
-    | Some 'r', _ -> set_region t (params s)
-    | None, "\027D" -> index t
-    | None, "\027E" ->
-        index t;
-        move t ~row:(fst (Vte.cursor_pos t.vte)) ~col:0
-    | None, "\027M" -> reverse_index t
-    | None, "\027c" ->
-        t.top <- 0;
-        t.bottom <- Vte.rows t.vte - 1;
-        Buffer.add_string t.out s
-    | _ -> Buffer.add_string t.out s
+  let n () = count s in
+  let last = t.last in
+  (* REP repeats the character just before it, as in xterm.js. *)
+  t.last <- "";
+  match (csi_final s, s) with
+  | _, "\027[3J" -> erase_scrollback t
+  | Some ('A' | 'F'), _ ->
+      vertical t (-n ()) ~col:(if csi_final s = Some 'F' then Some 0 else None)
+  | Some ('B' | 'e' | 'E'), _ ->
+      vertical t (n ()) ~col:(if csi_final s = Some 'E' then Some 0 else None)
+  | Some ('H' | 'f'), _ -> (
+      match csi_params s with
+      | [] | [ _ ] -> position t ~row:(int_param (params s) ~default:1) ~col:1
+      | row :: col :: _ -> position t ~row ~col)
+  | Some 'd', _ ->
+      let _, col = Vte.cursor_pos t.vte in
+      position t ~row:(n ()) ~col:(col + 1)
+  | Some '`', _ -> control t ("\027[" ^ params s ^ "G")
+  | Some 'a', _ -> control t ("\027[" ^ params s ^ "C")
+  | Some 'X', _ ->
+      let n = string_of_int (n ()) in
+      control t ("\027[" ^ n ^ "P\027[" ^ n ^ "@")
+  | Some 'b', _ ->
+      if last <> "" then
+        for _ = 1 to n () do
+          character t last
+        done
+  | Some 'L', _ -> edit_lines t (-n ())
+  | Some 'M', _ -> edit_lines t (n ())
+  | Some ('C' | 'D' | 'G' | 'J' | 'K' | 'P' | '@'), _ -> control t s
+  | Some 'S', _ -> scroll t (n ())
+  | Some 'T', _ -> scroll t (-n ())
+  | Some 'r', _ ->
+      set_region t (params s);
+      home t
+  | Some ('h' | 'l'), _ ->
+      let set = csi_final s = Some 'h' in
+      (match params s with
+      | "?6" ->
+          t.origin <- set;
+          home t
+      | "?7" -> t.wrap <- set
+      | _ -> ());
+      Buffer.add_string t.out s
+  | None, "\027D" -> index t 1
+  | None, "\027E" ->
+      index t 1;
+      move t ~row:(fst (Vte.cursor_pos t.vte)) ~col:0
+  | None, "\027M" -> index t (-1)
+  | None, ("\027(0" | "\027(B" | "\027)0" | "\027)B") ->
+      let dec = s.[2] = '0' in
+      if s.[1] = '(' then t.g0 <- dec else t.g1 <- dec
+  | None, "\027c" ->
+      reset t;
+      Buffer.add_string t.out s
+  | _ -> Buffer.add_string t.out s
 
 (* The terminal reads valid UTF-8 outside escape sequences: each maximal
    invalid subsequence is U+FFFD, as for [String.get_utf_8_uchar], wherever
@@ -294,17 +439,24 @@ let rec byte t c =
       Buffer.add_char t.pending c
     else (
       Buffer.clear t.pending;
-      Buffer.add_string t.out replacement;
+      character t replacement;
       byte t c)
   else if t.state = Ground && c >= '\x80' then
     if utf_8_length c > 0 then Buffer.add_char t.pending c
-    else Buffer.add_string t.out replacement
+    else character t replacement
   else
     let state = t.state in
     (match (state, c) with
-    | Ground, '\b' -> control t "\027[D"
-    | Ground, ('\n' | '\011' | '\012') -> index t
+    | Ground, '\b' ->
+        t.last <- "";
+        control t "\027[D"
+    | Ground, ('\n' | '\011' | '\012') ->
+        t.last <- "";
+        index t 1
+    | Ground, '\014' -> t.shifted <- true
+    | Ground, '\015' -> t.shifted <- false
     | Ground, '\027' -> Buffer.add_char t.seq c
+    | Ground, (' ' .. '~' as c) -> print_ascii t c
     | Ground, _ -> Buffer.add_char t.out c
     | _ -> Buffer.add_char t.seq c);
     t.state <-

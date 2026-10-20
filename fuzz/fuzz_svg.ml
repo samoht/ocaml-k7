@@ -80,6 +80,13 @@ let chunk =
       const "e\xcc\x81";
       const "abc\b\bX";
       const "\027]0;t\bitle\007";
+      const "\027[2;5r";
+      const "\027M\027D\027E";
+      const "\027(0lqk\027(B";
+      const "\027[?7l";
+      const "\027[?6h\027[H";
+      const "\027[3b\027[2X\027[L\027[M";
+      const "\027[S\027[T";
     ]
 
 let bases = [| "a"; " "; "\xc3\xa9"; "\xe4\xb8\xad"; "\xf0\x9f\x91\xa8" |]

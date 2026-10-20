@@ -132,6 +132,7 @@ let test_controls () =
       ("row relative", "\027[2ex", [ ""; ""; "x" ]);
       ("erase characters", "abcde\r\027[2X", [ "  cde" ]);
       ("repeat", "a\027[3b", [ "aaaa" ]);
+      ("repeat after a control", "a\027[D\027[3b", [ "a" ]);
       ("no auto-wrap", "\027[?7l" ^ full ^ "bc", [ String.make 45 'a' ^ "c" ]);
       ("origin", "\027[2;3r\027[?6h\027[1;1Hx", [ ""; "x" ]);
       ("insert line", "a\r\nb\027[A\027[Lc", [ "c"; "a"; "b" ]);
