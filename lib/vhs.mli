@@ -5,9 +5,10 @@
 
 (** Terminal recordings with VHS.
 
-    {{:https://github.com/charmbracelet/vhs}VHS}, by Charm, records a terminal
-    session as a GIF or a video from a tape: a script of settings, followed by
-    actions such as typing text, pressing keys and waiting for output.
+    {{:https://github.com/charmbracelet/vhs}VHS}, by
+    {{:https://charm.land/}Charm}, records a terminal session as a GIF or a
+    video from a tape: a script of settings, followed by actions such as typing
+    text, pressing keys and waiting for output.
 
     [Vhs] builds the actions as values, checks them once when {!val-tape}
     assembles a tape, prints tapes in the [.tape] syntax and {{!running}runs}
