@@ -197,11 +197,12 @@ val pp_error : error Fmt.t
 
 val render :
   ?vhs:string ->
+  clock:_ Eio.Time.Mono.t ->
   proc:_ Eio.Process.mgr ->
   cwd:_ Eio.Path.t ->
   t ->
   (unit, error) result
-(** [render ~vhs ~proc ~cwd t] runs [vhs -q] (defaults to ["vhs"]) in the
+(** [render ~vhs ~clock ~proc ~cwd t] runs [vhs -q] (defaults to ["vhs"]) in the
     directory [cwd] with the tape [t] on its standard input, so the outputs of
     [t] are relative to [cwd]. [vhs] gets the environment of [proc] without
     [VHS_PUBLISH], which would upload the recording, [rod], which configures the
@@ -209,4 +210,6 @@ val render :
     replace the prompt {!Prompt} waits for. What [vhs] prints is kept for
     {!Failed} and dropped on success. If the calling fiber is cancelled,
     [render] sends [vhs] [SIGTERM], which makes it stop the terminal and the
-    browser it started, and waits for it to exit, however long that takes. *)
+    browser it started, and waits for it to exit. If [vhs] still runs ten
+    seconds later by [clock], [render] sends it [SIGKILL], which can leave the
+    terminal and the browser running, and waits for it to exit. *)

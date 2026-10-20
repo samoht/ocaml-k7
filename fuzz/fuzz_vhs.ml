@@ -473,7 +473,9 @@ let test_no_publication term =
       (Inherited.{ base; inherited }, Eio.Process.Pi.mgr (module Inherited))
   in
   match
-    Vhs.render ~vhs:executable ~proc ~cwd:(Eio.Stdenv.cwd env) (render_tape ())
+    Vhs.render ~vhs:executable
+      ~clock:(Eio.Stdenv.mono_clock env)
+      ~proc ~cwd:(Eio.Stdenv.cwd env) (render_tape ())
   with
   | Ok () -> ()
   | Error e -> failf "ambient environment enables upload: %a" Vhs.pp_error e
@@ -494,6 +496,7 @@ let test_cancel_reaps delay =
           (fun () ->
             `Rendered
               (Vhs.render ~vhs:executable
+                 ~clock:(Eio.Stdenv.mono_clock env)
                  ~proc:(Eio.Stdenv.process_mgr env)
                  ~cwd:(Eio.Stdenv.cwd env) (render_tape ())))
           (fun () ->
@@ -595,6 +598,7 @@ let test_output_order n =
   let result =
     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 40. (fun () ->
         Vhs.render ?vhs:oracle
+          ~clock:(Eio.Stdenv.mono_clock env)
           ~proc:(Eio.Stdenv.process_mgr env)
           ~cwd:(Eio.Stdenv.cwd env) t)
   in

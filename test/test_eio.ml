@@ -144,6 +144,9 @@ let manager ?(inherited = [||])
 let cwd = (Eio.Resource.T ((), Eio.Resource.handler []), "mock-cwd")
 let read_all flow = Eio.Buf_read.(take_all (of_flow flow ~max_size:1_000_000))
 
+(* A clock nothing advances, for a render that is not cancelled. *)
+let clock () = Eio_mock.Clock.Mono.make ()
+
 (* [run ~status writes t] renders [t] with a child that checks its arguments
    and its standard input, writes [writes] and exits with [status]. *)
 let run ?vhs ?(status = `Exited 3) writes t =
@@ -167,7 +170,7 @@ let run ?vhs ?(status = `Exited 3) writes t =
         in
         { run; on_signal = (fun _ -> Alcotest.fail "signalled") })
   in
-  Vhs.render ?vhs ~proc ~cwd t
+  Vhs.render ?vhs ~clock:(clock ()) ~proc ~cwd t
 
 let failed expected = function
   | Error (Vhs.Failed { output; status = `Exited 3; _ }) ->
@@ -281,7 +284,7 @@ let test_spawn_errors () =
   List.iter
     (fun (error, expected) ->
       let proc = manager ~sw (fun _ _ -> raise (Eio.Process.err error)) in
-      match Vhs.render ~proc ~cwd (tape []) with
+      match Vhs.render ~clock:(clock ()) ~proc ~cwd (tape []) with
       | Error e ->
           expect "mapped spawn error" expected (Fmt.str "%a" Vhs.pp_error e)
       | Ok () -> Alcotest.fail "lost spawn failure")
@@ -314,12 +317,46 @@ let test_cancel () =
   in
   (match
      Eio.Fiber.first
-       (fun () -> `Rendered (Vhs.render ~proc ~cwd (tape [])))
+       (fun () -> `Rendered (Vhs.render ~clock:(clock ()) ~proc ~cwd (tape [])))
        (fun () -> `Cancelled)
    with
   | `Cancelled -> ()
   | `Rendered _ -> Alcotest.fail "render finished");
   Alcotest.(check bool) "child exited before render returned" true !exited
+
+(* A vhs that ignores SIGTERM gets SIGKILL ten seconds later. *)
+let test_cancel_kill () =
+  Eio_mock.Backend.run_full @@ fun env ->
+  Eio.Switch.run @@ fun sw ->
+  let killed, kill = Eio.Promise.create () in
+  let signals = ref [] in
+  let proc =
+    manager ~sw (fun _ _ ->
+        let run ~stdin ~output:_ =
+          ignore (read_all stdin);
+          Eio.Promise.await killed
+        in
+        let on_signal n =
+          signals := n :: !signals;
+          if Int.equal n Sys.sigkill then Eio.Promise.resolve kill (`Signaled n)
+        in
+        { run; on_signal })
+  in
+  let clock = env#mono_clock in
+  (match
+     Eio.Fiber.first
+       (fun () -> `Rendered (Vhs.render ~clock ~proc ~cwd (tape [])))
+       (fun () -> `Cancelled)
+   with
+  | `Cancelled -> ()
+  | `Rendered _ -> Alcotest.fail "render finished");
+  Alcotest.(check (list int))
+    "SIGTERM, then SIGKILL"
+    [ Sys.sigterm; Sys.sigkill ]
+    (List.rev !signals);
+  Alcotest.(check int64)
+    "ten seconds apart" 10_000_000_000L
+    (Mtime.to_uint64_ns (Eio.Time.Mono.now clock))
 
 let test_publish_environment () =
   Eio_mock.Backend.run @@ fun () ->
@@ -356,7 +393,7 @@ let test_publish_environment () =
           on_signal = (fun _ -> ());
         })
   in
-  match Vhs.render ~proc ~cwd (tape []) with
+  match Vhs.render ~clock:(clock ()) ~proc ~cwd (tape []) with
   | Ok () -> ()
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e
 
@@ -375,5 +412,6 @@ let suite =
         ("error names", test_pp_error_names);
         ("spawn errors", test_spawn_errors);
         ("cancel", test_cancel);
+        ("cancel a vhs ignoring SIGTERM", test_cancel_kill);
         ("publish environment", test_publish_environment);
       ] )

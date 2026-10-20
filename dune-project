@@ -25,6 +25,7 @@
   (fmt (>= 0.8.7))
   (cmdliner (>= 2.0.0))
   (alcotest :with-test)
+  (mtime (and (>= 2.0.0) :with-test))
   (cstruct (>= 6.0.1))
   (alcobar :with-test)
   (mdx :with-test)

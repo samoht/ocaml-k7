@@ -79,8 +79,8 @@ when `vhs` is not installed or fails:
 
 ```ocaml
 let make_gif env tape =
-  let proc = Eio.Stdenv.process_mgr env and cwd = Eio.Stdenv.cwd env in
-  match Vhs.render ~proc ~cwd tape with
+  let clock = Eio.Stdenv.mono_clock env and cwd = Eio.Stdenv.cwd env in
+  match Vhs.render ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd tape with
   | Ok () -> ()
   | Error e -> Fmt.epr "%a@." Vhs.pp_error e
 ```

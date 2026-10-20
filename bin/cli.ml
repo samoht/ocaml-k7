@@ -51,6 +51,7 @@ let record env ~print ~vhs ~setup ~output input =
     | Error (Some msg) -> Fmt.error "standard output: %s" msg
   else
     Vhs.render ~vhs
+      ~clock:(Eio.Stdenv.mono_clock env)
       ~proc:(Eio.Stdenv.process_mgr env)
       ~cwd:(Eio.Stdenv.cwd env) tape
     |> Result.map_error (Fmt.str "%a" Vhs.pp_error)

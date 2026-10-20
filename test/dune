@@ -10,6 +10,7 @@
   eio
   eio_main
   eio.mock
+  mtime
   cmdliner
   unix))
 

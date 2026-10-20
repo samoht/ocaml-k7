@@ -161,16 +161,17 @@ let test_render () =
     ]
   @@ fun env path ->
   let proc = Eio.Stdenv.process_mgr env in
+  let mono = Eio.Stdenv.mono_clock env in
   let cwd = Eio.Stdenv.cwd env in
   let t = Result.get_ok (Vhs.tape ~outputs:[ "x.gif" ] []) in
-  (match Vhs.render ~vhs:(path "ko") ~proc ~cwd t with
+  (match Vhs.render ~vhs:(path "ko") ~clock:mono ~proc ~cwd t with
   | Error (Failed { status = `Exited 3; _ } as e) ->
       expect "both streams"
         (path "ko" ^ " exited with code 3\n  from stdout\n  from stderr")
         (Fmt.str "%a" Vhs.pp_error e)
   | _ -> Alcotest.fail "lost the failure");
   (match
-     Vhs.render ~vhs:(path "pwd") ~proc
+     Vhs.render ~vhs:(path "pwd") ~clock:mono ~proc
        ~cwd:Eio.Path.(Eio.Stdenv.fs env / "/")
        t
    with
@@ -184,12 +185,12 @@ let test_render () =
       (Vhs.tape ~outputs:[ "x.gif" ]
          (List.init 20_000 (fun _ -> Vhs.type' "echo hello")))
   in
-  (match Vhs.render ~vhs:(path "early") ~proc ~cwd big with
+  (match Vhs.render ~vhs:(path "early") ~clock:mono ~proc ~cwd big with
   | Error (Failed { status = `Exited 2; _ }) -> ()
   | Error e -> Alcotest.failf "early exit: %a" Vhs.pp_error e
   | Ok () -> Alcotest.fail "early exit succeeded");
   (match
-     Vhs.render ~vhs:(path "ko") ~proc
+     Vhs.render ~vhs:(path "ko") ~clock:mono ~proc
        ~cwd:Eio.Path.(Eio.Stdenv.fs env / path "missing-dir")
        t
    with
@@ -203,7 +204,8 @@ let test_render () =
   let clock = Eio.Stdenv.clock env in
   (match
      Eio.Fiber.first
-       (fun () -> `Rendered (Vhs.render ~vhs:(path "slow") ~proc ~cwd t))
+       (fun () ->
+         `Rendered (Vhs.render ~vhs:(path "slow") ~clock:mono ~proc ~cwd t))
        (fun () ->
          Eio.Time.with_timeout_exn clock 10. (fun () ->
              while not (Sys.file_exists (path "slow.ready")) do
@@ -216,19 +218,34 @@ let test_render () =
   Alcotest.(check bool)
     "vhs stopped before render returned" true
     (Sys.file_exists (path "slow.stopped"));
-  (* A vhs that ignores SIGTERM is killed, not waited for until it exits. *)
+  (* A vhs that ignores SIGTERM is killed once the grace period is over. *)
+  let grace = Eio_mock.Clock.Mono.make () in
+  let rec advance () =
+    if
+      not
+        (Sys.file_exists (path "stubborn.term")
+        && Eio_mock.Clock.Mono.try_advance grace)
+    then (
+      Eio.Time.sleep clock 0.01;
+      advance ())
+  in
   (match
-     Eio.Fiber.first
-       (fun () -> `Rendered (Vhs.render ~vhs:(path "stubborn") ~proc ~cwd t))
+     Eio.Fiber.pair
        (fun () ->
-         Eio.Time.with_timeout_exn clock 10. (fun () ->
-             while not (Sys.file_exists (path "stubborn.ready")) do
-               Eio.Time.sleep clock 0.01
-             done);
-         `Timeout)
+         Eio.Fiber.first
+           (fun () ->
+             `Rendered
+               (Vhs.render ~vhs:(path "stubborn") ~clock:grace ~proc ~cwd t))
+           (fun () ->
+             Eio.Time.with_timeout_exn clock 10. (fun () ->
+                 while not (Sys.file_exists (path "stubborn.ready")) do
+                   Eio.Time.sleep clock 0.01
+                 done);
+             `Timeout))
+       (fun () -> Eio.Time.with_timeout_exn clock 10. advance)
    with
-  | `Timeout -> ()
-  | `Rendered _ -> Alcotest.fail "stubborn vhs finished");
+  | `Timeout, () -> ()
+  | `Rendered _, () -> Alcotest.fail "stubborn vhs finished");
   Alcotest.(check (pair bool bool))
     "vhs sent SIGTERM, then killed" (true, false)
     ( Sys.file_exists (path "stubborn.term"),
@@ -290,6 +307,7 @@ let test_output_order () =
   let result =
     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 30. (fun () ->
         Vhs.render ?vhs:oracle
+          ~clock:(Eio.Stdenv.mono_clock env)
           ~proc:(Eio.Stdenv.process_mgr env)
           ~cwd:(Eio.Stdenv.cwd env) t)
   in
@@ -325,6 +343,7 @@ let test_history () =
   let result =
     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 60. (fun () ->
         Vhs.render ?vhs:oracle
+          ~clock:(Eio.Stdenv.mono_clock env)
           ~proc:(Eio.Stdenv.process_mgr env)
           ~cwd:(Eio.Stdenv.cwd env) t)
   in

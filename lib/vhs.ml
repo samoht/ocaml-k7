@@ -612,10 +612,14 @@ let io_message ~cwd = function
    prompt that [Prompt] waits for. *)
 let cleared = [ "VHS_PUBLISH"; "rod"; "PS1"; "PROMPT"; "PROMPT_COMMAND" ]
 
+(* The seconds a cancelled [vhs] has to clean up before SIGKILL. *)
+let grace = 10.
+
 (* [run_vhs] runs protected from cancellation, so that its switch keeps
    reaping [vhs] until it exits; [cancelled] makes it send [vhs] SIGTERM,
-   which [vhs] cleans up after. *)
-let run_vhs ~vhs ~proc ~cwd ~cancelled ~sink tape =
+   which [vhs] cleans up after, and SIGKILL if it is still running [grace]
+   seconds later. *)
+let run_vhs ~vhs ~clock ~proc ~cwd ~cancelled ~sink tape =
   Eio.Switch.run @@ fun sw ->
   let stdin, feed = Eio.Process.pipe ~sw proc in
   let env =
@@ -637,6 +641,8 @@ let run_vhs ~vhs ~proc ~cwd ~cancelled ~sink tape =
     (fun () ->
       Eio.Promise.await cancelled;
       Eio.Process.signal child Sys.sigterm;
+      Eio.Time.Mono.sleep clock grace;
+      Eio.Process.signal child Sys.sigkill;
       Eio.Process.await child)
 
 (* A sink that keeps the last [kept] bytes written to it, in amortised
@@ -661,7 +667,7 @@ module Tail = struct
     if n <= kept then Buffer.contents b else Buffer.sub b (n - kept) kept
 end
 
-let render ?(vhs = "vhs") ~proc ~cwd t =
+let render ?(vhs = "vhs") ~clock ~proc ~cwd t =
   let output = Buffer.create 256 in
   let sink = Eio.Resource.T (output, Eio.Flow.Pi.sink (module Tail)) in
   let tape = to_string t in
@@ -670,7 +676,7 @@ let render ?(vhs = "vhs") ~proc ~cwd t =
   let supervise () =
     Eio.Cancel.protect @@ fun () ->
     Eio.Promise.resolve finish
-      (match run_vhs ~vhs ~proc ~cwd ~cancelled ~sink tape with
+      (match run_vhs ~vhs ~clock ~proc ~cwd ~cancelled ~sink tape with
       | status -> Ok status
       | exception (Eio.Io _ as e) -> Error e)
   in
