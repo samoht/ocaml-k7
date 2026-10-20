@@ -122,11 +122,14 @@ type setting =
   | Width of int
       (** The width in pixels, at least twice the padding and the margin of a
           {!raw} [Set Margin], and even with an MP4 output (defaults to [1200]).
-      *)
+          The browser VHS drives takes what is left after the padding, and the
+          margin unless a {!raw} [Set MarginFill] is empty, as its viewport, of
+          at most 10,000,000 pixels. *)
   | Height of int
       (** The height in pixels, at least twice the padding and the margin, plus
           the size of the window bar of a {!raw} [Set WindowBar], and even with
-          an MP4 output (defaults to [600]). *)
+          an MP4 output (defaults to [600]). Its viewport, what is left after
+          them, is at most 10,000,000 pixels, as for {!Width}. *)
   | Theme of string
       (** The name of a theme of VHS 0.12.1, as [vhs themes] lists them; a theme
           in JSON, which starts with [{] and which VHS checks only when it runs;

@@ -396,6 +396,43 @@ let sum ns =
    height; a quoted value can be negative. VHS checks the frame in wrapping
    64-bit arithmetic, which a huge margin passes before the browser refuses
    the viewport, so a sum that overflows does not fit. *)
+(* The longest side of a viewport the browser VHS drives accepts. *)
+let max_viewport = 10_000_000L
+
+(* VHS sizes the browser's viewport to the frame less twice the padding,
+   twice the margin unless [MarginFill] is empty, and the window bar in the
+   height; vhs panics if the browser refuses a side. A raw [Set Columns] or
+   [Set Rows] has VHS size that side itself. *)
+let check_viewport actions ~padding ~margin ~bar ~width ~height =
+  let p = Int64.of_int (Option.value padding ~default:60) in
+  let m = if raw_set actions "MarginFill" = Some "" then 0L else margin in
+  let check name size default cells border =
+    let n = Int64.of_int (Option.value size ~default) in
+    let fits =
+      match sum [ p; p; m; m; border ] with
+      | Some b ->
+          Int64.compare b n <= 0
+          && Int64.compare b (Int64.sub n max_viewport) >= 0
+      | None -> false
+    in
+    if fits || Option.is_some (raw_set actions cells) then Ok ()
+    else
+      let culprit =
+        match size with
+        | Some n -> Fmt.str "%s %d" name n
+        | None when Int64.equal margin 0L -> Fmt.str "Padding %Ld" p
+        | None -> Fmt.str "Margin %Ld" margin
+      in
+      Fmt.error
+        "Set %s: the browser's viewport, the %s less the padding, margin and \
+         window bar, must be 0 to %Ld pixels"
+        culprit
+        (String.lowercase_ascii name)
+        max_viewport
+  in
+  let* () = check "Width" width 1200 "Columns" 0L in
+  check "Height" height 600 "Rows" bar
+
 let check_size settings actions =
   let last f = List.find_map f (List.rev settings) in
   let padding = last (function Padding n -> Some n | _ -> None) in
@@ -411,31 +448,34 @@ let check_size settings actions =
     | None | Some "" -> 0L
     | Some _ -> int "WindowBarSize" 30L
   in
-  if Int64.equal margin 0L && Int64.equal bar 0L then
-    check_padding ~padding ~width ~height
-  else
-    let p = Int64.of_int (Option.value padding ~default:60) in
-    let min_width = sum [ p; p; margin; margin ] in
-    let min_height = Option.bind min_width (fun m -> sum [ m; bar ]) in
-    let w = Option.value width ~default:1200 in
-    let h = Option.value height ~default:600 in
-    let fits size = function
-      | Some m -> Int64.compare (Int64.of_int size) m >= 0
-      | None -> false
-    in
-    if fits w min_width && fits h min_height then Ok ()
+  let* () =
+    if Int64.equal margin 0L && Int64.equal bar 0L then
+      check_padding ~padding ~width ~height
     else
-      let culprit =
-        if Int64.equal margin 0L then
-          "WindowBar " ^ Option.value window_bar ~default:""
-        else Fmt.str "Margin %Ld" margin
+      let p = Int64.of_int (Option.value padding ~default:60) in
+      let min_width = sum [ p; p; margin; margin ] in
+      let min_height = Option.bind min_width (fun m -> sum [ m; bar ]) in
+      let w = Option.value width ~default:1200 in
+      let h = Option.value height ~default:600 in
+      let fits size = function
+        | Some m -> Int64.compare (Int64.of_int size) m >= 0
+        | None -> false
       in
-      match (min_width, min_height) with
-      | Some mw, Some mh ->
-          Fmt.error
-            "Set %s: the frame needs at least %Ld x %Ld pixels, not %d x %d"
-            culprit mw mh w h
-      | _ -> Fmt.error "Set %s: the frame size overflows 64 bits" culprit
+      if fits w min_width && fits h min_height then Ok ()
+      else
+        let culprit =
+          if Int64.equal margin 0L then
+            "WindowBar " ^ Option.value window_bar ~default:""
+          else Fmt.str "Margin %Ld" margin
+        in
+        match (min_width, min_height) with
+        | Some mw, Some mh ->
+            Fmt.error
+              "Set %s: the frame needs at least %Ld x %Ld pixels, not %d x %d"
+              culprit mw mh w h
+        | _ -> Fmt.error "Set %s: the frame size overflows 64 bits" culprit
+  in
+  check_viewport actions ~padding ~margin ~bar ~width ~height
 
 (* VHS encodes an MP4 in yuv420p, which ffmpeg refuses for an odd width or
    height. *)
