@@ -167,6 +167,12 @@ let test_history () =
     "after a clear, a wrap" 2
     (history "a\r\nb\r\nc\027[3J\r\n0123456789")
 
+(* DECSC saves the active character set as well as the cursor position.
+   Real VHS writes U+2500 for this stream. *)
+let test_saved_charset () =
+  check_screens
+    [ ("restored line drawing", "\027(0\0277\027(B\0278q", [ "\xe2\x94\x80" ]) ]
+
 let suite =
   ( "screen",
     List.map
@@ -182,4 +188,5 @@ let suite =
         ("line feeds", test_line_feeds);
         ("controls", test_controls);
         ("history", test_history);
+        ("saved character set", test_saved_charset);
       ] )
