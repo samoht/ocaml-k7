@@ -5,18 +5,11 @@
 
 type t = string list list
 
-(* C1 controls are U+0080 to U+009F, [\xc2\x80] to [\xc2\x9f] in UTF-8. *)
+(* [Vhs.tape] decides what a terminal can type; a tab would reach bash's
+   completion and a newline would end the line. *)
 let is_typeable s =
-  let n = String.length s in
-  let rec go i =
-    i >= n
-    ||
-    match s.[i] with
-    | '\xc2' when i + 1 < n && Char.code s.[i + 1] land 0xe0 = 0x80 -> false
-    | c when c < ' ' || c = '\x7f' -> false
-    | _ -> go (i + 1)
-  in
-  String.is_valid_utf_8 s && go 0
+  (not (String.exists (fun c -> c = '\t' || c = '\n') s))
+  && Result.is_ok (Vhs.tape ~outputs:[ "x.gif" ] [ Vhs.type' s ])
 
 let check_line n line =
   if not (String.is_valid_utf_8 line) then
