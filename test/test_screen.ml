@@ -72,6 +72,30 @@ let test_erase_scrollback () =
     "kept" (screen [ "ab" ])
     (last (frames (svg [ (Ms 0, "ab\027[3J") ])))
 
+let check_screens cases =
+  List.iter
+    (fun (name, output, expected) ->
+      Alcotest.(check string)
+        name (screen expected)
+        (last (frames (svg [ (Ms 0, output) ]))))
+    cases
+
+(* After a character in the last column, the cursor waits there for the
+   next one to wrap it, as in xterm: a control moves it from the last
+   column, and a move beyond it stops there. *)
+let test_pending_wrap () =
+  let full = String.make 46 'a' in
+  check_screens
+    [
+      ("backspace", full ^ "\bX", [ String.make 44 'a' ^ "Xa" ]);
+      ("cursor back", full ^ "\027[DX", [ String.make 44 'a' ^ "Xa" ]);
+      ("erase line", full ^ "\027[K", [ String.make 45 'a' ]);
+      ("cursor position", "\027[1;99HX", [ String.make 45 ' ' ^ "X" ]);
+      ("column", "\027[99GX", [ String.make 45 ' ' ^ "X" ]);
+      ("cursor forward", "ab\027[99CX", [ "ab" ^ String.make 43 ' ' ^ "X" ]);
+      ("character", full ^ "\027[31mX", [ full; "X" ]);
+    ]
+
 let suite =
   ( "screen",
     List.map
@@ -83,4 +107,5 @@ let suite =
         ("backspace", test_backspace);
         ("zero width", test_zero_width);
         ("erase scrollback", test_erase_scrollback);
+        ("pending wrap", test_pending_wrap);
       ] )
