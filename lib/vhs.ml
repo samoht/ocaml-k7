@@ -842,7 +842,7 @@ let pp_error ppf = function
         |> List.filter (( <> ) "")
       in
       List.iter (Fmt.pf ppf "@\n  %s")
-        (List.drop (List.length lines - last_lines) lines)
+        (List.drop (max 0 (List.length lines - last_lines)) lines)
   | Io msg -> Fmt.string ppf (one_line msg)
   | Unsupported why -> Fmt.pf ppf "not recorded natively: %s" (one_line why)
   | Timeout { wait; last } ->
