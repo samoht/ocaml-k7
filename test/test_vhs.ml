@@ -216,6 +216,15 @@ let test_settings () =
     (body ~settings:[ Padding 400; Width 1000 ] [ raw {|Set Margin "-100"|} ]);
   expect "bar size without a bar" "Set Height 120\nSet WindowBarSize 100\n"
     (body ~settings:[ Height 120 ] [ raw "Set WindowBarSize 100" ]);
+  (* ffmpeg encodes an MP4 only with an even width and height. *)
+  error "odd MP4 width" "Set Width 601: odd, which an MP4 output cannot have"
+    ~outputs:[ "a.mp4" ] ~settings:[ Width 601 ] [];
+  error "odd MP4 height" "Set Height 301: odd, which an MP4 output cannot have"
+    ~settings:[ Height 301 ]
+    [ raw "Output a.mp4" ];
+  expect "odd GIF and WebM"
+    "Output \"a.gif\"\nOutput \"a.webm\"\nSet Width 601\n"
+    (str ~outputs:[ "a.gif"; "a.webm" ] ~settings:[ Width 601 ] []);
   (* VHS sizes the frame by its pixels or by its cells, not both. *)
   expect "rows" "Set Width 800\nSet Rows 10\n"
     (body ~settings:[ Width 800 ] [ raw "Set Rows 10" ]);
