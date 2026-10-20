@@ -8,8 +8,8 @@
     A cram test is a [.t] file in the format of Mercurial's test runner,
     popularised by Brodie Rao's {{:https://bitheap.org/cram/}cram} and run by
     dune: a line [  $ cmd] starts a command, the [  > ] lines right after it
-    continue it, and the other lines, expected output and exit codes included,
-    are what the commands must print. *)
+    continue it, a bare [  >] with an empty line, and the other lines, expected
+    output and exit codes included, are what the commands must print. *)
 
 type t
 (** The type for cram tests: a sequence of commands, each a non-empty list of

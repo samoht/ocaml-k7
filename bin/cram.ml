@@ -19,15 +19,19 @@ let check_line n line =
     Fmt.error "line %d: %S holds a control character" n line
   else Ok line
 
-(* [parse] scans [src] once, line by line, without splitting it. *)
+(* [parse] scans [src] once, line by line, without splitting it. As in
+   dune, a line [  > ] continues the command and a bare [  >] continues it
+   with an empty line. *)
 let parse src =
   let n = String.length src in
-  let marker i last c =
-    last - i >= 4
+  (* [lead i last c] is [true] iff the line [src.[i..last-1]] starts with
+     [  c], then a space or nothing. *)
+  let lead i last c =
+    last - i >= 3
     && src.[i] = ' '
     && src.[i + 1] = ' '
     && src.[i + 2] = c
-    && src.[i + 3] = ' '
+    && (last - i = 3 || src.[i + 3] = ' ')
   in
   let flush cmds = function [] -> cmds | cmd -> List.rev cmd :: cmds in
   (* [cmds] are the finished commands and [cmd] the lines of the current one,
@@ -37,9 +41,12 @@ let parse src =
     else
       let stop = Option.value (String.index_from_opt src i '\n') ~default:n in
       let last = if stop > i && src.[stop - 1] = '\r' then stop - 1 else stop in
-      let start = marker i last '$' in
-      if start || (cmd <> [] && marker i last '>') then
-        match check_line no (String.sub src (i + 4) (last - i - 4)) with
+      let start = last - i >= 4 && lead i last '$' in
+      if start || (cmd <> [] && lead i last '>') then
+        let text =
+          if last - i = 3 then "" else String.sub src (i + 4) (last - i - 4)
+        in
+        match check_line no text with
         | Ok l when start -> line (no + 1) (stop + 1) (flush cmds cmd) [ l ]
         | Ok l -> line (no + 1) (stop + 1) cmds (l :: cmd)
         | Error _ as e -> e
