@@ -21,6 +21,9 @@ type saved = { col : int; line : int; style : Ansi.Style.t; charset : char }
 
 let unsaved = { col = 0; line = 0; style = Ansi.Style.default; charset = 'B' }
 
+(* xterm.js sets a tab stop every eight columns. *)
+let reset_stops stops = Array.iteri (fun i _ -> stops.(i) <- i mod 8 = 0) stops
+
 type terminal = {
   vte : Vte.t;
   mutable state : state;
@@ -42,6 +45,8 @@ type terminal = {
   mutable style : Ansi.Style.t;  (** The colours and attributes of [vte]. *)
   mutable saved : saved;  (** The save of the normal screen. *)
   mutable saved_alternate : saved;  (** The save of the alternate screen. *)
+  stops : bool array;  (** The tab stops of the normal screen. *)
+  stops_alternate : bool array;  (** The tab stops of the alternate screen. *)
   mutable last : string;  (** The last character printed, for REP. *)
 }
 
@@ -75,6 +80,8 @@ let terminal ~rows ~cols =
     style = Ansi.Style.default;
     saved = unsaved;
     saved_alternate = unsaved;
+    stops = Array.init cols (fun i -> i mod 8 = 0);
+    stops_alternate = Array.init cols (fun i -> i mod 8 = 0);
     last = "";
   }
 
@@ -459,6 +466,31 @@ let edit_lines t n =
 
 let home t = move t ~row:(if t.origin then t.top else 0) ~col:0
 
+let stops t =
+  if Vte.is_alternate_screen t.vte then t.stops_alternate else t.stops
+
+(* [tab t n] moves the cursor to the [n]th tab stop after it, or before it
+   if [n] is negative, as xterm.js's [nextStop] and [prevStop] do, and not
+   from beyond the last column. *)
+let tab t n =
+  flush t;
+  let row, col = Vte.cursor_pos t.vte in
+  let cols = Vte.cols t.vte and stops = stops t in
+  let rec stop step x =
+    let x = x + step in
+    if x > 0 && x < cols && not stops.(x) then stop step x else x
+  in
+  if col < cols then
+    let rec go k x = if k = 0 then x else go (k - 1) (stop (compare n 0) x) in
+    move t ~row ~col:(max 0 (min (cols - 1) (go (abs n) col)))
+
+(* [set_stop t b] sets the tab stop at the cursor ([b]) or clears it. *)
+let set_stop t b =
+  flush t;
+  let _, col = Vte.cursor_pos t.vte in
+  let stops = stops t in
+  if col < Array.length stops then stops.(col) <- b
+
 let reset t =
   t.top <- 0;
   t.bottom <- Vte.rows t.vte - 1;
@@ -469,7 +501,9 @@ let reset t =
   invoke t 0;
   t.style <- Ansi.Style.default;
   t.saved <- unsaved;
-  t.saved_alternate <- unsaved
+  t.saved_alternate <- unsaved;
+  reset_stops t.stops;
+  reset_stops t.stops_alternate
 
 (* Whether the CSI sequence [s] has neither a private prefix nor an
    intermediate byte. *)
@@ -477,7 +511,8 @@ let plain s =
   String.for_all (fun c -> String.contains "0123456789;:" c) (params s)
 
 (* A switch of screens gives the alternate one a full scroll region, and
-   the normal one back its own. matrix 0.1.0 also restores the cursor's
+   the normal one back its own; leaving the alternate one resets its tab
+   stops. matrix 0.1.0 also restores the cursor's
    visibility when it leaves the alternate screen, which xterm.js keeps. *)
 let switched t ~visible =
   if Vte.cursor_visible t.vte <> visible then
@@ -489,7 +524,8 @@ let switched t ~visible =
   else
     let top, bottom = t.region in
     t.top <- top;
-    t.bottom <- bottom
+    t.bottom <- bottom;
+    reset_stops t.stops_alternate
 
 (* [mode t ~dec ~set p] sets ([set]) or resets the ANSI or DEC ([dec]) mode
    [p] as xterm.js does; mode 1049 saves the cursor before it enters the
@@ -559,6 +595,14 @@ let sequence t s =
   | Some 's', _ when plain s -> save t
   | Some 'u', _ when plain s -> restore t
   | Some ('s' | 'u'), _ -> ()
+  | Some 'I', _ when plain s -> tab t (n ())
+  | Some 'Z', _ when plain s -> tab t (-n ())
+  | Some 'g', _ when plain s -> (
+      match params s with
+      | "" | "0" -> set_stop t false
+      | "3" -> Array.fill (stops t) 0 (Array.length (stops t)) false
+      | _ -> ())
+  | None, "\027H" -> set_stop t true
   | Some 'm', _ ->
       read_sgr t s;
       Buffer.add_string t.out s
@@ -614,6 +658,9 @@ let rec byte t c =
     | Ground, ('\n' | '\011' | '\012') ->
         t.last <- "";
         index t 1
+    | Ground, '\t' ->
+        t.last <- "";
+        tab t 1
     | Ground, '\014' -> invoke t 1
     | Ground, '\015' -> invoke t 0
     | Ground, '\027' -> Buffer.add_char t.seq c
