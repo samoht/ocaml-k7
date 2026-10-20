@@ -96,6 +96,29 @@ let test_pending_wrap () =
       ("character", full ^ "\027[31mX", [ full; "X" ]);
     ]
 
+(* A line feed, a vertical tab and a form feed move down a row and keep the
+   column, as an index does; a next line also returns; a reverse index moves
+   up a row, and scrolls the scroll region down at its top; and CSI S and T
+   scroll it, as in xterm. *)
+let test_line_feeds () =
+  let full = String.make 46 'a' in
+  check_screens
+    [
+      ("line feed", "ab\ncd", [ "ab"; "  cd" ]);
+      ("vertical tab", "ab\011cd", [ "ab"; "  cd" ]);
+      ("form feed", "ab\012cd", [ "ab"; "  cd" ]);
+      ("last column", full ^ "\nX", [ full; String.make 45 ' ' ^ "X" ]);
+      ("index", "ab\027Dc", [ "ab"; "  c" ]);
+      ("next line", "ab\027Ec", [ "ab"; "c" ]);
+      ("reverse index", "\r\n\r\nab\027Mc", [ ""; "  c"; "ab" ]);
+      ("reverse index at the top", "ab\027Mc", [ "  c"; "ab" ]);
+      ( "reverse index in a region",
+        "a\r\nb\r\nc\027[2;3r\027[2;1H\027Mx",
+        [ "a"; "x"; "b" ] );
+      ("scroll up", "a\r\nb\r\nc\027[S", [ "b"; "c" ]);
+      ("scroll down", "a\r\nb\r\nc\027[T", [ ""; "a"; "b"; "c" ]);
+    ]
+
 let suite =
   ( "screen",
     List.map
@@ -108,4 +131,5 @@ let suite =
         ("zero width", test_zero_width);
         ("erase scrollback", test_erase_scrollback);
         ("pending wrap", test_pending_wrap);
+        ("line feeds", test_line_feeds);
       ] )
