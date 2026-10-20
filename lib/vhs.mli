@@ -291,15 +291,18 @@ val render :
     - a colour of a JSON [Theme] other than [#RGB], [#RGBA], [#RRGGBB],
       [#RRGGBBAA], [rgb()] or [rgba()], such as a colour name, which xterm.js
       reads with the browser;
-    - [Set MarginFill] with an image;
+    - [Set MarginFill] with an image other than PNG, JPEG, GIF, WebP, BMP or
+      SVG, by its extension;
     - a wait pattern with a Unicode class ([\p] or [\P]).
 
     Its patterns match as Go's do, except that [(?i)] folds ASCII letters only
     and [\b] counts Latin-1 letters as word characters next to a non-ASCII
     character. [Set CursorBlink], [Set BorderRadius], [Set PlaybackSpeed] and
     [Set LoopOffset] change the animation, and [Set WindowBar] and
-    [Set WindowBarSize] draw VHS's window bar. A size beyond 100000 pixels, or a
-    terminal beyond 2000 cells a side, is {!Unsupported}. *)
+    [Set WindowBarSize] draw VHS's window bar. The image of a [Set MarginFill],
+    read relative to [cwd], is embedded, stretched to the frame as ffmpeg
+    stretches it. A size beyond 100000 pixels, or a terminal beyond 2000 cells a
+    side, is {!Unsupported}. *)
 
 val record :
   clock:_ Eio.Time.Mono.t ->

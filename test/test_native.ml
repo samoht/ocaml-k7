@@ -275,6 +275,26 @@ let test_window_bar () =
       {|<svg x="65" y="105" |};
     ]
 
+(* The margin is an image, stretched to the frame, or none without a
+   fill. *)
+let test_margin_fill () =
+  with_dir @@ fun env cwd ->
+  Eio.Path.save ~create:(`Or_truncate 0o644) Eio.Path.(cwd / "m.png") "abcd";
+  let play raws =
+    match record env cwd (tape (List.map Vhs.raw raws @ [ Vhs.type' "x" ])) with
+    | Ok s -> s
+    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  in
+  let s = play [ "Set Margin 20"; {|Set MarginFill "m.png"|} ] in
+  check_contains "image"
+    ~sub:
+      {|<image width="800" height="400" preserveAspectRatio="none" href="data:image/png;base64,YWJjZA=="/>|}
+    s;
+  check_contains "inside the margin" ~sub:{|<svg x="80" y="80" |} s;
+  let s = play [ "Set Margin 20"; {|Set MarginFill ""|} ] in
+  check_contains "no margin" ~sub:{|<svg x="60" y="60" |} s;
+  Alcotest.(check bool) "no image" false (contains ~sub:"<image" s)
+
 (* zsh plays natively, with VHS's prompt. *)
 let test_zsh () =
   with_dir @@ fun env cwd ->
@@ -538,6 +558,7 @@ let suite =
          ("trim", test_trim);
          ("text", test_text);
          ("window bar", test_window_bar);
+         ("margin fill", test_margin_fill);
          ("zsh", test_zsh);
          ("screenshot", test_screenshot);
          ("source", test_source);

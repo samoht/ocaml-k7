@@ -19,6 +19,12 @@ type bar = {
 }
 (** The type for VHS's window bars. *)
 
+(** The type for the fills of the margin. *)
+type fill =
+  | Colour of int  (** A colour, as [0xRRGGBB]. *)
+  | Image of string
+      (** An image, as a [data:] URI, stretched to the size of the image. *)
+
 type t = {
   width : int;  (** The width of the image, in pixels. *)
   height : int;  (** The height of the image, in pixels. *)
@@ -33,7 +39,7 @@ type t = {
   font_family : string;
   palette : Palette.t;
   margin : int;  (** The width of the margin around the window. *)
-  margin_fill : int;  (** The colour of the margin. *)
+  margin_fill : fill;  (** The fill of the margin. *)
   radius : int;  (** The radius of the window's corners. *)
   bar : bar option;  (** The bar at the top of the window, if any. *)
   blink : bool;  (** Whether the cursor blinks. *)

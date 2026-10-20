@@ -94,7 +94,7 @@ type config = {
   height : int;
   padding : int;
   margin : int;
-  margin_fill : int;
+  margin_fill : Svg.fill option;  (** [None] without a margin. *)
   border_radius : int;
   window_bar : string;
   bar_size : int;
@@ -126,7 +126,7 @@ let default_config () =
     height = 600;
     padding = 60;
     margin = 0;
-    margin_fill = Palette.default.background;
+    margin_fill = Some (Colour Palette.default.background);
     border_radius = 0;
     window_bar = "";
     bar_size = 30;
@@ -180,8 +180,9 @@ let set line c name args =
   | "Padding", _ -> { c with padding = int_value line (value ()) }
   | "Margin", _ -> { c with margin = int_value line (value ()) }
   | "MarginFill", _ when is_hex_colour (value ()) ->
-      { c with margin_fill = int_of_string ("0x" ^ String.sub (value ()) 1 6) }
-  | "MarginFill", _ -> unsupported line "an image margin needs vhs"
+      let c' = int_of_string ("0x" ^ String.sub (value ()) 1 6) in
+      { c with margin_fill = Some (Colour c') }
+  | "MarginFill", _ when value () = "" -> { c with margin_fill = None }
   | "BorderRadius", _ -> { c with border_radius = int_value line (value ()) }
   | "LetterSpacing", _ ->
       { c with letter_spacing = float_value line (value ()) }
@@ -230,25 +231,28 @@ let round f = int_of_float (Float.round f)
 let max_cells = 2_000
 let even n = if n mod 2 = 0 then n else n + 1
 
+let bar c =
+  match c.window_bar with
+  | "" -> None
+  | style ->
+      Some
+        Svg.
+          {
+            rings = String.starts_with ~prefix:"Rings" style;
+            right = String.ends_with ~suffix:"Right" style;
+            size = c.bar_size;
+          }
+
 let style c =
   let fs = float c.font_size in
   let ascent = round (1.02 *. fs) and descent = round (0.3 *. fs) in
   let char_height = ascent + descent in
   let cell_width = max 1 ((c.font_size * 6 / 10) + round c.letter_spacing) in
   let cell_height = max 1 (int_of_float (float char_height *. c.line_height)) in
-  let frame = 2 * (c.padding + c.margin) in
-  let bar =
-    match c.window_bar with
-    | "" -> None
-    | style ->
-        Some
-          Svg.
-            {
-              rings = String.starts_with ~prefix:"Rings" style;
-              right = String.ends_with ~suffix:"Right" style;
-              size = c.bar_size;
-            }
-  in
+  (* VHS draws no margin without a fill. *)
+  let margin = if c.margin_fill = None then 0 else c.margin in
+  let frame = 2 * (c.padding + margin) in
+  let bar = bar c in
   let bar_height = match bar with Some b -> b.size | None -> 0 in
   let cols =
     if c.columns > 0 then c.columns
@@ -273,8 +277,8 @@ let style c =
     {
       width;
       height;
-      x = c.margin + c.padding;
-      y = c.margin + bar_height + c.padding;
+      x = margin + c.padding;
+      y = margin + bar_height + c.padding;
       cols;
       rows;
       cell_width;
@@ -283,8 +287,9 @@ let style c =
       font_size = c.font_size;
       font_family = c.font_family;
       palette = c.palette;
-      margin = c.margin;
-      margin_fill = c.margin_fill;
+      margin;
+      margin_fill =
+        Option.value c.margin_fill ~default:(Colour Palette.default.background);
       radius = c.border_radius;
       bar;
       blink = c.cursor_blink;
@@ -344,6 +349,45 @@ let sourced ~source line path =
       | Ok _ -> Some l)
     (String.split_on_char '\n' src)
 
+let base64 s =
+  let alphabet =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+  in
+  let n = String.length s in
+  let b = Buffer.create (((n + 2) / 3 * 4) + 1) in
+  let byte i = if i < n then Char.code s.[i] else 0 in
+  let rec go i =
+    if i < n then (
+      let v = (byte i lsl 16) lor (byte (i + 1) lsl 8) lor byte (i + 2) in
+      (* One byte left makes two characters, two make three. *)
+      let chars = min 4 (n - i + 1) in
+      for k = 0 to 3 do
+        if k < chars then
+          Buffer.add_char b alphabet.[(v lsr (18 - (6 * k))) land 63]
+        else Buffer.add_char b '='
+      done;
+      go (i + 3))
+  in
+  go 0;
+  Buffer.contents b
+
+(* The image of [Set MarginFill], which ffmpeg reads; the image holds the
+   types a browser draws. *)
+let data_uri ~source line path =
+  let mime =
+    match String.lowercase_ascii (extension path) with
+    | ".png" -> "image/png"
+    | ".jpg" | ".jpeg" -> "image/jpeg"
+    | ".gif" -> "image/gif"
+    | ".webp" -> "image/webp"
+    | ".bmp" -> "image/bmp"
+    | ".svg" -> "image/svg+xml"
+    | _ -> unsupported line "a margin image a browser may not draw"
+  in
+  match source path with
+  | Ok data -> "data:" ^ mime ^ ";base64," ^ base64 data
+  | Error msg -> stop (Io msg)
+
 let rec read ~source line t =
   match tokens line with
   | [] -> t
@@ -360,6 +404,10 @@ let rec read ~source line t =
       let c = set line t.config "TypingSpeed" args in
       { t with actions = Set_typing_speed c.typing_speed :: t.actions }
   | Keyword ("Set" | "Require") :: _ when t.actions <> [] -> t
+  | [ Keyword "Set"; Keyword "MarginFill"; Str p ] when p <> "" && p.[0] <> '#'
+    ->
+      let fill = Svg.Image (data_uri ~source line p) in
+      { t with config = { t.config with margin_fill = Some fill } }
   | Keyword "Set" :: Keyword name :: args ->
       { t with config = set line t.config name args }
   | Keyword "Env" :: k :: v :: _ ->

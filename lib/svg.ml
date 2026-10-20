@@ -4,6 +4,7 @@
   ---------------------------------------------------------------------------*)
 
 type bar = { rings : bool; right : bool; size : int }
+type fill = Colour of int | Image of string
 
 type t = {
   width : int;
@@ -19,7 +20,7 @@ type t = {
   font_family : string;
   palette : Palette.t;
   margin : int;
-  margin_fill : int;
+  margin_fill : fill;
   radius : int;
   bar : bar option;
   blink : bool;
@@ -436,10 +437,17 @@ let to_string t ~duration frames =
   Fmt.kstr (Buffer.add_string b) "\" font-size=\"%d\" xml:space=\"preserve\">"
     t.font_size;
   add_style t b ~duration frames;
-  if t.margin > 0 then
-    Fmt.kstr (Buffer.add_string b)
-      "<rect width=\"%d\" height=\"%d\" fill=\"%s\"/>" t.width t.height
-      (hex t.margin_fill);
+  (if t.margin > 0 then
+     match t.margin_fill with
+     | Colour c ->
+         Fmt.kstr (Buffer.add_string b)
+           "<rect width=\"%d\" height=\"%d\" fill=\"%s\"/>" t.width t.height
+           (hex c)
+     | Image uri ->
+         Fmt.kstr (Buffer.add_string b)
+           "<image width=\"%d\" height=\"%d\" preserveAspectRatio=\"none\" \
+            href=\"%s\"/>"
+           t.width t.height uri);
   Fmt.kstr (Buffer.add_string b)
     "<rect x=\"%d\" y=\"%d\" width=\"%d\" height=\"%d\" rx=\"%d\" class=\"e\"/>"
     t.margin t.margin
