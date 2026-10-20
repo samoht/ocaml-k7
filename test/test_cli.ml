@@ -283,7 +283,16 @@ let test_command () =
    oracle alias sets it, runtest does not. *)
 let oracle = Sys.getenv_opt "VHS_ORACLE"
 
-let test_output_order () =
+(* [play ~native env t] records [t] natively if [native], or with the vhs
+   of [oracle]. *)
+let play ~native env t =
+  let clock = Eio.Stdenv.mono_clock env and proc = Eio.Stdenv.process_mgr env in
+  if native then
+    let cwd = Eio.Path.(Eio.Stdenv.fs env / ".") in
+    Result.map ignore (Vhs.record ~clock ~proc ~cwd t)
+  else Vhs.render ?vhs:oracle ~clock ~proc ~cwd:(Eio.Stdenv.cwd env) t
+
+let test_output_order ~native () =
   with_files [] @@ fun env path ->
   let output = path "order.txt" in
   let src =
@@ -309,10 +318,7 @@ let test_output_order () =
   in
   let result =
     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 30. (fun () ->
-        Vhs.render ?vhs:oracle
-          ~clock:(Eio.Stdenv.mono_clock env)
-          ~proc:(Eio.Stdenv.process_mgr env)
-          ~cwd:(Eio.Stdenv.cwd env) t)
+        play ~native env t)
   in
   (match result with
   | Ok () -> ()
@@ -335,7 +341,7 @@ let test_output_order () =
 
 (* VHS starts bash without history, and a typed [!] is not expanded even
    after a setup turns history expansion back on. *)
-let test_history () =
+let test_history ~native () =
   with_files [ ("history.sh", 0o644, "set -o history -H\n") ] @@ fun env path ->
   let output = path "history.txt" in
   let src = "  $ echo one\n  $ echo \"x!!y\"\n" in
@@ -345,10 +351,7 @@ let test_history () =
   in
   let result =
     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 60. (fun () ->
-        Vhs.render ?vhs:oracle
-          ~clock:(Eio.Stdenv.mono_clock env)
-          ~proc:(Eio.Stdenv.process_mgr env)
-          ~cwd:(Eio.Stdenv.cwd env) t)
+        play ~native env t)
   in
   (match result with
   | Ok () -> ()
@@ -357,7 +360,7 @@ let test_history () =
   if not (contains ~sub:"\nx!!y" screen) then
     Alcotest.failf "history expanded: %s" screen
 
-let record_cram ?(setup = []) env path src =
+let record_cram ~native ?(setup = []) env path src =
   let output = path "recording.txt" in
   let cram = Result.get_ok (Cram.parse src) in
   let t =
@@ -380,10 +383,7 @@ let record_cram ?(setup = []) env path src =
   in
   (match
      Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 40. (fun () ->
-         Vhs.render ?vhs:oracle
-           ~clock:(Eio.Stdenv.mono_clock env)
-           ~proc:(Eio.Stdenv.process_mgr env)
-           ~cwd:(Eio.Stdenv.cwd env) t)
+         play ~native env t)
    with
   | Ok () -> ()
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
@@ -391,23 +391,23 @@ let record_cram ?(setup = []) env path src =
 
 (* A setup may install bash's usual dynamic prompt hook. The recorder must
    establish its own prompt after the hook has run, before waiting for it. *)
-let test_setup_prompt_command () =
+let test_setup_prompt_command ~native () =
   with_files [ ("setup.sh", 0o644, "PROMPT_COMMAND='PS1=custom'\n") ]
   @@ fun env path ->
   let screen =
-    record_cram ~setup:[ path "setup.sh" ] env path "  $ echo READY\n"
+    record_cram ~native ~setup:[ path "setup.sh" ] env path "  $ echo READY\n"
   in
   if not (contains ~sub:"\nREADY" screen) then
     Alcotest.failf "setup prevented the command from running: %s" screen
 
 (* The invisible prompt marker is also ordinary output from user programs. *)
-let test_invisible_output_order () =
+let test_invisible_output_order ~native () =
   with_files [] @@ fun env path ->
   let src =
-    "  $ printf '\\342\\200\\213'; sleep 3; printf '\\nFIRST_DONE\\n'\n\
+    "  $ printf '\\342\\200\\213'; sleep 1; printf '\\nFIRST_DONE\\n'\n\
     \  $ echo SECOND_DONE\n"
   in
-  let screen = record_cram env path src in
+  let screen = record_cram ~native env path src in
   let position sub =
     let rec scan i =
       if i + String.length sub > String.length screen then
@@ -425,17 +425,18 @@ let test_invisible_output_order () =
 
 (* Output one column short of the width puts the prompt's [>] in the last
    column, and its space on the next line, under the cursor. *)
-let test_wrapped_prompt () =
+let test_wrapped_prompt ~native () =
   with_files [] @@ fun env path ->
   let screen =
-    record_cram env path "  $ printf \"%$((COLUMNS-1))s\" x\n  $ echo after\n"
+    record_cram ~native env path
+      "  $ printf \"%$((COLUMNS-1))s\" x\n  $ echo after\n"
   in
   if not (contains ~sub:"\nafter" screen) then
     Alcotest.failf "the prompt after a full line was missed: %s" screen
 
 (* An unterminated here-document leaves bash at its continuation prompt,
    where no wait can end; the error names the command that did. *)
-let test_unfinished () =
+let test_unfinished ~native () =
   with_files
     [
       ("demo.t", 0o644, "  $ cat <<EOF\n  > a\n  $ echo after\n");
@@ -446,8 +447,11 @@ let test_unfinished () =
   let code =
     Fun.protect ~finally:(fun () -> Unix.close err) @@ fun () ->
     redirect Unix.stderr (Some err) @@ fun () ->
-    Cli.run env ~print:false ~vhs:(Option.get oracle) ~setup:[]
-      ~output:(path "out.txt") (path "demo.t")
+    Cli.run env ~print:false
+      ~vhs:(Option.value oracle ~default:"vhs")
+      ~setup:[]
+      ~output:(path (if native then "out.svg" else "out.txt"))
+      (path "demo.t")
   in
   let msg = In_channel.with_open_bin (path "err") In_channel.input_all in
   Alcotest.(check int) "exit code" 123 code;
@@ -456,6 +460,19 @@ let test_unfinished () =
       if not (contains ~sub msg) then
         Alcotest.failf "error lacks %S: %s" sub msg)
     [ "command 1"; "cat <<EOF"; "waiting for more input" ]
+
+(* The tests of the readiness of the prompt, with each recorder. *)
+let readiness ~native =
+  List.map
+    (fun (name, fn) -> ((if native then "native " else "") ^ name, fn ~native))
+    [
+      ("output order", test_output_order);
+      ("history", test_history);
+      ("setup prompt command", test_setup_prompt_command);
+      ("invisible output order", test_invisible_output_order);
+      ("unfinished command", test_unfinished);
+      ("wrapped prompt", test_wrapped_prompt);
+    ]
 
 let suite =
   ( "cli",
@@ -468,14 +485,5 @@ let suite =
          ("render real processes", test_render);
          ("command line", test_command);
        ]
-      @
-      if Option.is_some oracle then
-        [
-          ("output order", test_output_order);
-          ("history", test_history);
-          ("setup prompt command", test_setup_prompt_command);
-          ("invisible output order", test_invisible_output_order);
-          ("unfinished command", test_unfinished);
-          ("wrapped prompt", test_wrapped_prompt);
-        ]
-      else []) )
+      @ readiness ~native:true
+      @ if Option.is_some oracle then readiness ~native:false else []) )
