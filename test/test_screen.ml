@@ -221,6 +221,25 @@ let test_restore () =
     "hidden cursor" false
     (contains ~sub:{|href="#c"|} (svg [ (Ms 0, "\0277\027[?25l\0278") ]))
 
+(* Each screen of xterm.js has its own scroll region, and leaving the
+   alternate one keeps the cursor's visibility. A CSI sequence with a
+   private prefix, such as a query of the kitty keyboard, restores
+   nothing. *)
+let test_screens () =
+  check_screens
+    [
+      ( "scroll regions",
+        "\027[?1049h\027[1;2r\027[?1049la\r\nb\r\nc",
+        [ "a"; "b"; "c" ] );
+      ( "private prefix",
+        "\0277\027[5;5Habc\027[?uX",
+        [ ""; ""; ""; ""; "    abcX" ] );
+    ];
+  Alcotest.(check bool)
+    "hidden cursor" false
+    (contains ~sub:{|href="#c"|}
+       (svg [ (Ms 0, "\027[?1049h\027[?25l\027[?1049l") ]))
+
 (* TBC removes all tab stops; the next tab reaches the right margin.
    VHS keeps X at column 9 and puts Y in column 46. *)
 let test_clear_tabs () =
@@ -254,6 +273,7 @@ let suite =
         ("history", test_history);
         ("saved character set", test_saved_charset);
         ("restore", test_restore);
+        ("screens", test_screens);
         ("character sets", test_charsets);
         ("cleared tab stops", test_clear_tabs);
         ("delete wide glyph cell", test_delete_wide);
