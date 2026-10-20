@@ -28,8 +28,8 @@ val check : string -> (command, string) result
     newline. A [Source] line's tape is not read. *)
 
 val no_extension : string
-(** [no_extension] is the error message for an [Output] path without an
-    extension or a trailing slash. *)
+(** [no_extension] is the error message for an {!constructor-Output} path
+    without an extension or a trailing slash. *)
 
 val extension : string -> string
 (** [extension path] is Go's [filepath.Ext path]: the suffix of [path] from the
