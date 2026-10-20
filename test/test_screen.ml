@@ -151,6 +151,22 @@ let test_controls () =
       ("shift out", "\027)0\014q\015q", [ "\xe2\x94\x80q" ]);
     ]
 
+(* Only a line feed at the bottom of the screen keeps the line it scrolls
+   out in the scrollback, as in xterm.js: deleted lines and CSI S drop
+   theirs. *)
+let test_history () =
+  let history s =
+    let t = Vhs.Screen.terminal ~rows:2 ~cols:5 in
+    Vhs.Screen.feed t s;
+    Vhs.Screen.history t
+  in
+  Alcotest.(check int) "line feed" 1 (history "a\r\nb\r\nc");
+  Alcotest.(check int) "delete line" 0 (history "a\r\nb\027[H\027[M");
+  Alcotest.(check int) "scroll up" 0 (history "a\r\nb\027[S");
+  Alcotest.(check int)
+    "after a clear, a wrap" 2
+    (history "a\r\nb\r\nc\027[3J\r\n0123456789")
+
 let suite =
   ( "screen",
     List.map
@@ -165,4 +181,5 @@ let suite =
         ("pending wrap", test_pending_wrap);
         ("line feeds", test_line_feeds);
         ("controls", test_controls);
+        ("history", test_history);
       ] )
