@@ -581,6 +581,55 @@ let test_oracle_zsh () =
   in
   ignore (same_text env cwd t)
 
+(* Stable screens isolate terminal interpretation from echo timing. The same
+   tape, when VHS_ORACLE is set, checks the expected text against real VHS
+   before checking both outputs of the native recorder. *)
+let test_terminal_state () =
+  with_dir @@ fun env cwd ->
+  let command =
+    String.concat ""
+      [
+        {|printf '\033[2J\033[H\033(0\0337\033(B\0338q\033(B|};
+        {|\033[2;1Ha\tX\033[3g\r\tY|};
+        {|\033[3;1H\344\270\255ab\r\033[P\033[10;1H'|};
+      ]
+  in
+  let t =
+    oracle_tape ~settings:[ Typing_speed (Ms 1) ]
+      Vhs.[ hidden [ type' command; key Enter; wait Prompt ]; sleep (Ms 100) ]
+  in
+  let expected =
+    String.concat "\n"
+      ([
+         "\xe2\x94\x80";
+         "a" ^ String.make 7 ' ' ^ "X" ^ String.make 50 ' ' ^ "Y";
+         " ab";
+       ]
+      @ List.init 6 (fun _ -> "")
+      @ [ ">"; ""; "" ])
+  in
+  let text () = last_screen (Eio.Path.load Eio.Path.(cwd / "oracle.txt")) in
+  (match oracle with
+  | None -> ()
+  | Some vhs -> (
+      match
+        Vhs.render ~vhs
+          ~clock:(Eio.Stdenv.mono_clock env)
+          ~proc:(Eio.Stdenv.process_mgr env)
+          ~cwd t
+      with
+      | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+      | Ok () -> Alcotest.(check string) "VHS oracle" expected (text ())));
+  match record env cwd t with
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Ok s -> (
+      match Svg_check.frames ~cell_width ~cell_height ~rows:12 s with
+      | Error e -> Alcotest.fail e
+      | Ok images ->
+          Alcotest.(check (pair string string))
+            "native text and SVG" (expected, expected)
+            (text (), last images))
+
 let suite =
   ( "native",
     List.map
@@ -603,6 +652,7 @@ let suite =
          ("source", test_source);
          ("keys", test_keys);
          ("unsupported", test_unsupported);
+         ("terminal state recording", test_terminal_state);
        ]
       @
       if Option.is_some oracle then
