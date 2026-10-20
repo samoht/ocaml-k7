@@ -682,14 +682,13 @@ let check_output_order decoy =
   | Some first, Some second when first < second -> ()
   | _ -> failf "next command was typed before the first output for %S" src
 
-let test_output_order n =
-  check_output_order (Fmt.str "progress-%d>" (n land 255))
+let test_output_order n = Fmt.kstr check_output_order "progress-%d>" (n land 255)
 
 (* U+200B is ordinary Unicode output, even though the recorder uses it as
    the suffix of its private prompt. *)
 let test_invisible_output_order n =
   let decoy = Buffer.create 32 in
-  Buffer.add_string decoy (Fmt.str "progress-%d>" (n land 255));
+  Fmt.kstr (Buffer.add_string decoy) "progress-%d>" (n land 255);
   Buffer.add_utf_8_uchar decoy (Uchar.of_int 0x200b);
   check_output_order (Buffer.contents decoy)
 
