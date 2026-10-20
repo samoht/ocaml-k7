@@ -110,6 +110,41 @@ let test_durations () =
   fails "huge integer" "Sleep 99999999999999999999ms"
     "time 99999999999999999999ms: not a Go duration"
 
+(* Values judged by Go's strconv.Atoi and strconv.ParseFloat, written by
+   number_oracle.go: VHS fails the recording on a value its setting cannot
+   parse. *)
+let test_numbers () =
+  let cases =
+    In_channel.with_open_bin "number_cases.txt" In_channel.input_all
+  in
+  let accepts setting value =
+    Result.is_ok (tape [ Fmt.kstr Vhs.raw "Set %s \"%s\"" setting value ])
+  in
+  String.split_on_char '\n' cases
+  |> List.iter (fun l ->
+      if l <> "" then
+        let value = String.sub l 3 (String.length l - 3) in
+        List.iter
+          (fun (setting, go) ->
+            if accepts setting value <> go then
+              Alcotest.failf "Set %s %S: Go %s it" setting value
+                (if go then "accepts" else "rejects"))
+          [
+            ("Margin", l.[0] = '1');
+            ("BorderRadius", l.[0] = '1');
+            ("LetterSpacing", l.[1] = '1');
+            ("PlaybackSpeed", l.[1] = '1');
+          ]);
+  fails "zero rows" "Set Rows 0" "rows must be a positive integer";
+  fails "negative columns" "Set Columns -1" "columns must be a positive integer";
+  fails "loop offset" "Set LoopOffset x%" "LoopOffset x%: not a Go float";
+  List.iter
+    (fun line ->
+      match tape [ Vhs.raw line ] with
+      | Ok () -> ()
+      | Error e -> Alcotest.failf "rejected %S: %s" line e)
+    [ "Set Rows 5"; "Set LoopOffset 20"; {|Set LoopOffset "1.5%%"|} ]
+
 let suite =
   ( "tape_syntax",
     List.map
@@ -118,5 +153,6 @@ let suite =
         ("accepted", test_accepted);
         ("rejected", test_rejected);
         ("durations", test_durations);
+        ("numbers", test_numbers);
         ("vhs validate oracle", test_oracle);
       ] )
