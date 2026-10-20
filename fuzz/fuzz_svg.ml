@@ -235,10 +235,21 @@ let test_alternate_cursor n mode =
   in
   check_output_rows output [ "abc" ^ String.make count ' ' ^ "X" ]
 
+(* Mode 1049, used by full-screen programs, restores the original cursor
+   and main-screen text regardless of what they wrote to the other buffer. *)
+let test_alternate_restore prefix_len alternate_len =
+  let prefix = String.make (1 + (prefix_len mod 20)) 'a' in
+  let alternate = String.make (1 + (alternate_len mod 20)) 'z' in
+  check_output_rows
+    (prefix ^ "\027[?1049h" ^ alternate ^ "\027[?1049lX")
+    [ prefix ^ "X" ]
+
 let suite =
   ( "svg",
     [
       test_case "frames" [ list chunk ] test_frames;
+      test_case "1049 restores the main screen and cursor" [ uint8; uint8 ]
+        test_alternate_restore;
       test_case "47 and 1047 share the alternate-screen cursor" [ uint8; bool ]
         test_alternate_cursor;
       test_case "erasure preserves pending right-margin wrap" [ uint8; bool ]
