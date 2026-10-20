@@ -226,10 +226,21 @@ let test_margin_erasure n display =
   let erase, first = if display then ("\027[J", line) else ("\027[1K", "") in
   check_output_rows (line ^ erase ^ "X") [ first; "X" ]
 
+(* Modes 47 and 1047 share the cursor; they do not restore a saved one. *)
+let test_alternate_cursor n mode =
+  let count = 1 + (n mod 10) in
+  let mode = if mode then 47 else 1047 in
+  let output =
+    Fmt.str "abc\027[?%dh%s\027[?%dlX" mode (String.make count 'z') mode
+  in
+  check_output_rows output [ "abc" ^ String.make count ' ' ^ "X" ]
+
 let suite =
   ( "svg",
     [
       test_case "frames" [ list chunk ] test_frames;
+      test_case "47 and 1047 share the alternate-screen cursor" [ uint8; bool ]
+        test_alternate_cursor;
       test_case "erasure preserves pending right-margin wrap" [ uint8; bool ]
         test_margin_erasure;
       test_case "UTF-8 C1 controls act as terminal commands" [ uint8; bool ]
