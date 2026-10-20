@@ -203,7 +203,15 @@ let test_hidden texts depth =
 let test_sizes w h p =
   (* [2 * p] overflows for large [p]; compare in a wider type. *)
   let fits size = Int64.(compare (of_int size) (mul 2L (of_int p))) >= 0 in
-  let ok = p >= 0 && fits w && fits h in
+  (* The GIF output's encoder takes at most 65535 pixels a side, and ffmpeg
+     a frame below (8 w + 1024) (h + 128) = 2{^31}. *)
+  let encodes =
+    w <= 65535 && h <= 65535
+    && Int64.(
+         compare (mul (of_int ((8 * w) + 1024)) (of_int (h + 128))) 2147483647L)
+       < 0
+  in
+  let ok = p >= 0 && fits w && fits h && encodes in
   let settings = Vhs.[ Padding p; Width w; Height h ] in
   match lines ~settings [] with
   | Some l ->

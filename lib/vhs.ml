@@ -469,8 +469,11 @@ let check_viewport actions ~padding ~margin ~bar ~width ~height =
   let* () = cells "Columns" width 1200 0L in
   cells "Rows" height 600 bar
 
+(* The value of the last setting [f] reads. *)
+let last settings f = List.find_map f (List.rev settings)
+
 let check_size settings actions =
-  let last f = List.find_map f (List.rev settings) in
+  let last = last settings in
   let padding = last (function Padding n -> Some n | _ -> None) in
   let width = last (function Width n -> Some n | _ -> None) in
   let height = last (function Height n -> Some n | _ -> None) in
@@ -537,9 +540,44 @@ let check_records actions =
   if List.exists records actions then Ok ()
   else Fmt.error "no action outside hidden, so VHS records no frame"
 
+(* The largest side of a frame each encoder of ffmpeg 9 takes: GIF's
+   16-bit sizes, libx264's and libvpx-vp9's. *)
+let encoders = [ ("GIF", 65535); ("MP4", 16384); ("WebM", 65536) ]
+
+(* ffmpeg's [av_image_check_size2] refuses a frame unless
+   (8 width + 1024) (height + 128) is below 2{^31}. *)
+let check_encoders settings paths =
+  let last = last settings in
+  let width =
+    Option.value ~default:1200 (last (function Width n -> Some n | _ -> None))
+  and height =
+    Option.value ~default:600 (last (function Height n -> Some n | _ -> None))
+  in
+  iter_result
+    (fun (k, limit) ->
+      if not (List.exists (fun p -> kind p = k) paths) then Ok ()
+      else if width > limit then
+        Fmt.error "Set Width %d: a %s is at most %d pixels wide" width k limit
+      else if height > limit then
+        Fmt.error "Set Height %d: a %s is at most %d pixels high" height k limit
+      else if
+        Int64.compare
+          (Int64.mul
+             (Int64.of_int ((8 * width) + 1024))
+             (Int64.of_int (height + 128)))
+          2147483647L
+        >= 0
+      then
+        Fmt.error
+          "Set Width %d: a %d x %d frame has more pixels than ffmpeg takes"
+          width width height
+      else Ok ())
+    encoders
+
 let check_paths settings paths =
   let* () = check_kinds paths in
-  check_mp4 settings paths
+  let* () = check_mp4 settings paths in
+  check_encoders settings paths
 
 let tape ?(settings = []) ~outputs actions =
   let* () = check_outputs outputs in

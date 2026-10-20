@@ -183,6 +183,11 @@ val tape :
       doubled up to five times, and fails with "could not fit" if the terminal
       there is still smaller. Fewer can still not fit with a large font, which
       [tape] does not check;
+    - the {!Width} or {!Height} of a GIF output is beyond 65535 pixels, of an
+      MP4 output beyond 16384 or of a WebM output beyond 65536, the sizes the
+      encoders of ffmpeg 9 take, or the frame of such an output has more pixels
+      than ffmpeg's image check takes, about 268 million: (8 width + 1024)
+      (height + 128) must be below 2{^ 31};
     - a {!raw} line is [Hide] or [Show] (use {!hidden}), [Set] for a setting of
       {!setting} other than [TypingSpeed] (use the setting), an [Output] that
       breaks the rules of [outputs] or ends with [.svg], or is [Require] or
