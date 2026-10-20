@@ -461,6 +461,20 @@ let test_unfinished ~native () =
         Alcotest.failf "error lacks %S: %s" sub msg)
     [ "command 1"; "cat <<EOF"; "waiting for more input" ]
 
+(* Without a UTF-8 locale, bash's readline still takes and shows typed
+   non-ASCII text. *)
+let test_non_ascii ~native () =
+  with_files [] @@ fun env path ->
+  let saved = Sys.getenv_opt "LC_ALL" in
+  Unix.putenv "LC_ALL" "C";
+  let screen =
+    Fun.protect ~finally:(fun () ->
+        Unix.putenv "LC_ALL" (Option.value saved ~default:""))
+    @@ fun () -> record_cram ~native env path "  $ echo caf\xc3\xa9\n"
+  in
+  if not (contains ~sub:"\ncaf\xc3\xa9\n" screen) then
+    Alcotest.failf "typed text lost: %s" screen
+
 (* The tests of the readiness of the prompt, with each recorder. *)
 let readiness ~native =
   List.map
@@ -472,6 +486,7 @@ let readiness ~native =
       ("invisible output order", test_invisible_output_order);
       ("unfinished command", test_unfinished);
       ("wrapped prompt", test_wrapped_prompt);
+      ("non-ASCII", test_non_ascii);
     ]
 
 let suite =
