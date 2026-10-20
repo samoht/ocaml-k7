@@ -3,7 +3,7 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(* The terminal stores resolved colours only, so its defaults are colours no
+(* matrix 0.1.0 stores resolved colours only, so its defaults are colours no
    theme uses. Its SGR 39 sets the foreground to the default background, so
    either default reads as default. *)
 let default_fg = 0x010203
@@ -23,7 +23,6 @@ type terminal = {
   seq : Buffer.t;  (** The escape sequence [vte] reads once it ends. *)
   mutable count : int;  (** The scrollback lines [vte] holds. *)
   mutable floor : int;  (** The first of them xterm.js still holds. *)
-  mutable lines : string array;  (** The scrollback lines, see {!snapshot}. *)
   mutable top : int;  (** The first row of the scroll region. *)
   mutable bottom : int;  (** The last row of the scroll region. *)
   mutable wrap : bool;  (** Auto-wrap mode. *)
@@ -53,7 +52,6 @@ let terminal ~rows ~cols =
     seq = Buffer.create 64;
     count = 0;
     floor = 0;
-    lines = [||];
     top = 0;
     bottom = rows - 1;
     wrap = true;
@@ -71,38 +69,20 @@ let clear_dirty t =
   Vte.clear_dirty t.vte;
   t.dirty <- []
 
-(* The number of lines [lines] drops from its start to become [lines']. *)
-let dropped lines lines' =
-  let n = Array.length lines in
-  let rec shift k =
-    if k >= n then n
-    else
-      let rec same i =
-        i + k >= n || (lines.(i + k) = lines'.(i) && same (i + 1))
-      in
-      if same 0 then k else shift (k + 1)
-  in
-  shift 0
-
-let scrollback t = Array.of_list (Vte.scrollback_lines t.vte)
-
-(* [lines] holds the scrollback while a read can fill it before it pushes
-   [floor] out of the last thousand lines: a full scrollback drops a line
-   for each line it takes, which only its lines tell. *)
-let snapshot t =
-  t.lines <-
-    (if t.floor > 0 && t.count >= capacity - xterm_scrollback then scrollback t
-     else [||])
-
-let track t =
+(* Lines a full scrollback drops for those it takes push [floor] down, so
+   the screen counts them: the lines its own scrolls push, and the growth of
+   the scrollback, which counts matrix's own pushes until the scrollback is
+   full. From then on, while [floor] still matters, the screen writes the
+   characters that could make matrix scroll itself, see {!careful}. *)
+let track ?(pushed = 0) t =
   if not (Vte.is_alternate_screen t.vte) then (
     let count = Vte.scrollback_size t.vte in
     if count < t.count then t.floor <- 0
-    else if t.floor > 0 && t.lines <> [||] then
-      t.floor <- max 0 (t.floor - dropped t.lines (scrollback t));
+    else t.floor <- max 0 (t.floor - max 0 (t.count + pushed - count));
     t.count <- count;
-    if t.floor <= count - xterm_scrollback then t.floor <- 0;
-    snapshot t)
+    if t.floor <= count - xterm_scrollback then t.floor <- 0)
+
+let careful t = t.floor > 0 && t.count >= capacity - xterm_scrollback
 
 let flush t =
   if Buffer.length t.out > 0 then (
@@ -112,9 +92,7 @@ let flush t =
 
 let erase_scrollback t =
   flush t;
-  if not (Vte.is_alternate_screen t.vte) then (
-    t.floor <- t.count;
-    snapshot t)
+  if not (Vte.is_alternate_screen t.vte) then t.floor <- t.count
 
 (* After a character in the last column, xterm keeps the cursor there and
    wraps the next character; matrix 0.1.0 puts the cursor one column beyond
@@ -144,7 +122,8 @@ let scroll t n =
   move_to_last_column t;
   let rows = Vte.rows t.vte in
   let n = max (-(t.bottom - t.top + 1)) (min n (t.bottom - t.top + 1)) in
-  if n > 0 && t.top = 0 && t.bottom = rows - 1 then Vte.scroll_up t.vte n
+  let full = n > 0 && t.top = 0 && t.bottom = rows - 1 in
+  if full then Vte.scroll_up t.vte n
   else Grid.scroll (Vte.grid t.vte) ~top:t.top ~bottom:t.bottom n;
   (* The scrolled-in rows are blank, not of the colour the rows had. *)
   let first = if n > 0 then t.bottom - n + 1 else t.top in
@@ -153,7 +132,7 @@ let scroll t n =
   for r = t.top to t.bottom do
     t.dirty <- r :: t.dirty
   done;
-  track t
+  track ~pushed:(if full then n else 0) t
 
 let move t ~row ~col =
   flush t;
@@ -290,7 +269,7 @@ let character t s =
   if is_zero_width t s then attach t s
   else (
     t.last <- s;
-    if t.wrap && full_region t then Buffer.add_string t.out s
+    if t.wrap && full_region t && not (careful t) then Buffer.add_string t.out s
     else (
       place t s;
       Buffer.add_string t.out s;
@@ -448,6 +427,8 @@ let rec byte t c =
     let state = t.state in
     (match (state, c) with
     | Ground, '\b' ->
+        (* matrix 0.1.0 erases the character a backspace moves over, and
+           not the one a cursor move does. *)
         t.last <- "";
         control t "\027[D"
     | Ground, ('\n' | '\011' | '\012') ->
