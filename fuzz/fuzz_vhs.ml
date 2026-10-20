@@ -616,9 +616,8 @@ let record_cram ?(setup = []) ?(prefix = []) env path src =
   (match result with Ok () -> () | Error e -> failf "%a" Vhs.pp_error e);
   Eio.Path.load Eio.Path.(Eio.Stdenv.fs env / output)
 
-let test_output_order n =
+let check_output_order decoy =
   with_dir @@ fun env path ->
-  let decoy = Fmt.str "progress-%d>" (n land 255) in
   let src =
     Fmt.str "  $ printf '%s'; sleep 3; echo FIRST_DONE\n  $ echo SECOND_DONE\n"
       decoy
@@ -637,6 +636,17 @@ let test_output_order n =
   | Some first, Some second when first < second -> ()
   | _ -> failf "next command was typed before the first output for %S" src
 
+let test_output_order n =
+  check_output_order (Fmt.str "progress-%d>" (n land 255))
+
+(* U+200B is ordinary Unicode output, even though the recorder uses it as
+   the suffix of its private prompt. *)
+let test_invisible_output_order n =
+  let decoy = Buffer.create 32 in
+  Buffer.add_string decoy (Fmt.str "progress-%d>" (n land 255));
+  Buffer.add_utf_8_uchar decoy (Uchar.of_int 0x200b);
+  check_output_order (Buffer.contents decoy)
+
 (* A setup's prompt hook must not undo the recorder's readiness prompt. *)
 let test_setup_prompt_hook n =
   with_dir @@ fun env path ->
@@ -653,6 +663,8 @@ let test_setup_prompt_hook n =
 (* Properties that run [vhs] itself, so need [oracle]. *)
 let with_vhs =
   [
+    test_case "invisible output precedes next input" [ int8 ]
+      test_invisible_output_order;
     test_case "setup prompt hooks preserve readiness" [ int8 ]
       test_setup_prompt_hook;
     test_case "command output precedes next input" [ int8 ] test_output_order;
