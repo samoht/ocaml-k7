@@ -142,10 +142,20 @@ let test_saved_charset n dec =
   check_eq ~pp:pp_string (Buffer.contents b)
     (Vhs.Screen.line (Vhs.Screen.of_terminal term) 0)
 
+(* Without any tab stops, HT moves to the last column at every width. *)
+let test_clear_tabs n =
+  let cols = 10 + (n mod 70) in
+  let term = Vhs.Screen.terminal ~rows:2 ~cols in
+  Vhs.Screen.feed term "a\tX\027[3g\r\tY";
+  check_eq ~pp:pp_string
+    ("a" ^ String.make 7 ' ' ^ "X" ^ String.make (cols - 10) ' ' ^ "Y")
+    (Vhs.Screen.line (Vhs.Screen.of_terminal term) 0)
+
 let suite =
   ( "svg",
     [
       test_case "frames" [ list chunk ] test_frames;
+      test_case "cleared tabs reach the right margin" [ uint8 ] test_clear_tabs;
       test_case "saved character sets survive restore" [ uint8; bool ]
         test_saved_charset;
       test_case "zero width"
