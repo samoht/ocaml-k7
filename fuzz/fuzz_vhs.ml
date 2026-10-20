@@ -497,6 +497,52 @@ let test_no_publication term =
   | Ok () -> ()
   | Error e -> failf "ambient environment enables upload: %a" Vhs.pp_error e
 
+(* All documented ambient overrides are removed, while an unrelated
+   application variable survives byte for byte. *)
+let test_environment_isolation n =
+  with_dir @@ fun env path ->
+  let executable = path "recorder" in
+  let value = string_of_int n in
+  save env executable
+    (Fmt.str
+       "#!/bin/sh\n\
+        cat > /dev/null\n\
+        [ -z \
+        \"${VHS_PUBLISH+x}${rod+x}${PS1+x}${PROMPT+x}${PROMPT_COMMAND+x}\" ] \
+        && [ \"$VHS_TEST_KEEP\" = '%s' ]\n"
+       value);
+  let base =
+    (Eio.Stdenv.process_mgr env
+      :> [ `Generic ] Eio.Process.mgr_ty Eio.Resource.t)
+  in
+  let cleared = [ "VHS_PUBLISH"; "rod"; "PS1"; "PROMPT"; "PROMPT_COMMAND" ] in
+  let inherited =
+    Eio.Process.environment base
+    |> Array.to_list
+    |> List.filter (fun entry ->
+        not
+          (List.exists
+             (fun key -> String.starts_with ~prefix:(key ^ "=") entry)
+             ("VHS_TEST_KEEP" :: cleared)))
+  in
+  let inherited =
+    Array.of_list
+      (("VHS_TEST_KEEP=" ^ value)
+       :: List.map (fun key -> key ^ "=" ^ value) cleared
+      @ inherited)
+  in
+  let proc =
+    Eio.Resource.T
+      (Inherited.{ base; inherited }, Eio.Process.Pi.mgr (module Inherited))
+  in
+  match
+    Vhs.render ~vhs:executable
+      ~clock:(Eio.Stdenv.mono_clock env)
+      ~proc ~cwd:(Eio.Stdenv.cwd env) (render_tape ())
+  with
+  | Ok () -> ()
+  | Error e -> failf "environment contract: %a" Vhs.pp_error e
+
 let test_cancel_reaps delay =
   with_dir @@ fun env path ->
   let executable = path "recorder" in
@@ -677,6 +723,8 @@ let with_vhs =
 (* Properties that run stand-ins for vhs and vhs-cram. *)
 let with_processes =
   [
+    test_case "recording environment isolation" [ int ]
+      test_environment_isolation;
     test_case "documented executable exit codes" [ int16 ] test_exit_codes;
     test_case "cancelled render reaps the child" [ int8 ] test_cancel_reaps;
     test_case "never publish implicitly"
