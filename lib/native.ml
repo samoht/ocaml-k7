@@ -547,7 +547,15 @@ let within st seconds f =
       false)
 
 let wait_text st = function
-  | Line -> Screen.line st.live (fst (Vte.cursor_pos (vte st)))
+  | Line ->
+      let row = fst (Vte.cursor_pos (vte st)) in
+      if st.offset = 0 then Screen.line st.live row
+      else
+        (* VHS reads the line of the cursor's row on the viewport, which a
+           scroll moves up. *)
+        let lines = Screen.buffer st.term st.live
+        and i = Screen.history st.term + row - st.offset in
+        if i >= 0 && i < Array.length lines then lines.(i) else ""
   | Screen ->
       (* VHS reads as many lines as the screen has rows, from the top. *)
       Screen.buffer st.term st.live
