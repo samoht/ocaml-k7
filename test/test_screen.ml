@@ -119,6 +119,37 @@ let test_line_feeds () =
       ("scroll down", "a\r\nb\r\nc\027[T", [ ""; "a"; "b"; "c" ]);
     ]
 
+(* The controls of xterm that matrix 0.1.0 lacks or reads otherwise: the
+   relative and absolute moves, erasing and repeating characters, no
+   auto-wrap, origin mode, line edits in the scroll region and from its
+   first column, wrapping at the region's last row, and DEC line drawing. *)
+let test_controls () =
+  let full = String.make 46 'a' in
+  check_screens
+    [
+      ("column absolute", "\027[3`x", [ "  x" ]);
+      ("column relative", "ab\027[2ax", [ "ab  x" ]);
+      ("row relative", "\027[2ex", [ ""; ""; "x" ]);
+      ("erase characters", "abcde\r\027[2X", [ "  cde" ]);
+      ("repeat", "a\027[3b", [ "aaaa" ]);
+      ("no auto-wrap", "\027[?7l" ^ full ^ "bc", [ String.make 45 'a' ^ "c" ]);
+      ("origin", "\027[2;3r\027[?6h\027[1;1Hx", [ ""; "x" ]);
+      ("insert line", "a\r\nb\027[A\027[Lc", [ "c"; "a"; "b" ]);
+      ("delete line", "ab\027[Mc", [ "c" ]);
+      ( "insert line in a region",
+        "a\r\nb\r\nc\r\nd\027[1;3r\027[1;1H\027[L",
+        [ ""; "a"; "b"; "d" ] );
+      ( "delete line in a region",
+        "a\r\nb\r\nc\r\nd\027[1;3r\027[1;1H\027[M",
+        [ "b"; "c"; ""; "d" ] );
+      ( "wrap at the region's end",
+        "a\r\nb\r\nc\027[1;2r\027[2;1H" ^ full ^ "X",
+        [ full; "X"; "c" ] );
+      ("down in a region", "\027[1;2r\027[5Bx", [ ""; "x" ]);
+      ("line drawing", "\027(0qx\027(Bq", [ "\xe2\x94\x80\xe2\x94\x82q" ]);
+      ("shift out", "\027)0\014q\015q", [ "\xe2\x94\x80q" ]);
+    ]
+
 let suite =
   ( "screen",
     List.map
@@ -132,4 +163,5 @@ let suite =
         ("erase scrollback", test_erase_scrollback);
         ("pending wrap", test_pending_wrap);
         ("line feeds", test_line_feeds);
+        ("controls", test_controls);
       ] )
