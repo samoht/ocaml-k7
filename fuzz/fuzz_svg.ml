@@ -124,10 +124,30 @@ let test_zero_width items =
           in
           check_eq ~pp:pp_string expected first)
 
+(* Saving and restoring a cursor also restores its active G0 character set.
+   These DEC mappings were checked against native and VHS text recordings. *)
+let test_saved_charset n dec =
+  let glyphs =
+    [| ('q', 0x2500); ('x', 0x2502); ('l', 0x250c); ('k', 0x2510) |]
+  in
+  let c, u = glyphs.(n mod Array.length glyphs) in
+  let select dec = if dec then "\027(0" else "\027(B" in
+  let output =
+    select dec ^ "\0277" ^ select (not dec) ^ "\0278" ^ String.make 1 c
+  in
+  let b = Buffer.create 4 in
+  Buffer.add_utf_8_uchar b (Uchar.of_int (if dec then u else Char.code c));
+  let term = Vhs.Screen.terminal ~rows ~cols in
+  Vhs.Screen.feed term output;
+  check_eq ~pp:pp_string (Buffer.contents b)
+    (Vhs.Screen.line (Vhs.Screen.of_terminal term) 0)
+
 let suite =
   ( "svg",
     [
       test_case "frames" [ list chunk ] test_frames;
+      test_case "saved character sets survive restore" [ uint8; bool ]
+        test_saved_charset;
       test_case "zero width"
         [ list (map [ uint8; uint8; bool ] (fun b m a -> (b, m, a))) ]
         test_zero_width;
