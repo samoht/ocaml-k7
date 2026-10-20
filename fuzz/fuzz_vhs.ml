@@ -381,6 +381,15 @@ let test_padding_bound padding =
   let expected = padding >= 0 && padding <= 300 in
   check (Result.is_ok (Vhs.tape ~settings ~outputs [ last ]) = expected)
 
+(* With the default frame and padding, a nonnegative margin fits iff it
+   is at most 240; no multiplication of a generated margin is needed. *)
+let test_raw_margin_bound margin =
+  let margin = margin land max_int in
+  let line = Fmt.str "Set Margin %d" margin in
+  let result = Vhs.tape ~outputs [ Vhs.raw line; last ] in
+  if Result.is_ok result <> (margin <= 240) then
+    failf "wrong frame bounds for %S" line
+
 let test_no_injection text =
   let hostile = text ^ "\"'`\\\nOutput injected.gif\nHide\nSet Shell bash\n" in
   (* Decoding must recover only typed text, tabs and Enter, never a new
@@ -650,6 +659,9 @@ let suite =
     (if Option.is_some oracle then with_vhs else [])
     @ with_processes
     @ [
+        test_case "raw margin fits the frame"
+          [ choose [ int; const max_int; const (max_int - 59); const 240 ] ]
+          test_raw_margin_bound;
         test_case "errors identify the invalid item" [ int ] test_error_item;
         test_case "typed text cannot inject commands"
           [
