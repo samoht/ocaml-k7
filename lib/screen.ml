@@ -100,6 +100,30 @@ let erase_scrollback t =
     t.floor <- t.count;
     snapshot t)
 
+(* After a character in the last column, xterm keeps the cursor there and
+   wraps the next character; matrix 0.1.0 puts the cursor one column beyond
+   the screen, where its controls misplace it (invariant-hq/mosaic#24). So
+   [control] brings it back before a control, and after a move that ends
+   beyond the last column. *)
+let move_to_last_column t =
+  let row, col = Vte.cursor_pos t.vte in
+  let last = Vte.cols t.vte - 1 in
+  if col > last then Vte.set_cursor_pos t.vte ~row ~col:last
+
+(* [control t s] makes the terminal read the control [s] from the column
+   xterm reads it at. *)
+let control t s =
+  flush t;
+  move_to_last_column t;
+  Buffer.add_string t.out s;
+  flush t;
+  move_to_last_column t
+
+(* The final byte of the CSI sequence [s], if it is one. *)
+let csi_final s =
+  let n = String.length s in
+  if n >= 3 && s.[1] = '[' then Some s.[n - 1] else None
+
 let history t =
   if Vte.is_alternate_screen t.vte then 0
   else min xterm_scrollback (t.count - t.floor)
@@ -170,6 +194,14 @@ let escape = function
   | ' ' .. '/' -> Escape
   | _ -> Ground
 
+(* The cursor moves and the edits that read the cursor's column. *)
+let sequence t s =
+  if s = "\027[3J" then erase_scrollback t
+  else
+    match csi_final s with
+    | Some ('A' .. 'H' | 'J' | 'K' | 'L' | 'M' | 'P' | '@' | 'f') -> control t s
+    | _ -> Buffer.add_string t.out s
+
 (* The terminal reads valid UTF-8 outside escape sequences: each maximal
    invalid subsequence is U+FFFD, as for [String.get_utf_8_uchar], wherever
    the reads split it. *)
@@ -192,7 +224,7 @@ let rec byte t c =
   else
     let state = t.state in
     (match (state, c) with
-    | Ground, '\b' -> Buffer.add_string t.out "\027[D"
+    | Ground, '\b' -> control t "\027[D"
     | Ground, '\027' -> Buffer.add_char t.seq c
     | Ground, _ -> Buffer.add_char t.out c
     | _ -> Buffer.add_char t.seq c);
@@ -209,9 +241,9 @@ let rec byte t c =
       | String_escape, '\\' -> Ground
       | String_escape, c -> escape c);
     if state <> Ground && t.state = Ground then (
-      if Buffer.contents t.seq = "\027[3J" then erase_scrollback t
-      else Buffer.add_buffer t.out t.seq;
-      Buffer.clear t.seq)
+      let s = Buffer.contents t.seq in
+      Buffer.clear t.seq;
+      sequence t s)
 
 let feed t s =
   String.iter (byte t) s;

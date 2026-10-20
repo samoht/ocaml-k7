@@ -328,3 +328,4 @@ val svg :
 
 module Regexp_match = Regexp_match
 module Casefold = Casefold
+module Screen = Screen

@@ -24,75 +24,18 @@ let xml_text s =
   go 0;
   Buffer.contents b
 
-(* The terminal erases the character a backspace moves over, so the
-   recorder sends it a cursor move instead outside escape sequences, where it
-   also replaces invalid UTF-8 with U+FFFD, as [String.get_utf_8_uchar] reads
-   it, the characters of a sequence split across chunks included. This is
-   the same rewrite, which the expected screens go through too. *)
-type state = Ground | Escape | Csi | String | String_escape
-
-let escape = function
-  | '[' -> Csi
-  | ']' | 'P' | 'X' | '^' | '_' -> String
-  | ' ' .. '/' -> Escape
-  | _ -> Ground
-
-let is_lead c = c >= '\xc2' && c <= '\xf4'
-
-let rewrite (state, pending) s =
-  let b = Buffer.create (String.length s) in
-  let rec byte c =
-    if Buffer.length pending > 0 then
-      let s = Buffer.contents pending ^ String.make 1 c in
-      let d = String.get_utf_8_uchar s 0 in
-      if Uchar.utf_decode_is_valid d then (
-        Buffer.clear pending;
-        Buffer.add_string b s)
-      else if Uchar.utf_decode_length d = String.length s then
-        Buffer.add_char pending c
-      else (
-        Buffer.clear pending;
-        Buffer.add_string b "\xef\xbf\xbd";
-        byte c)
-    else if !state = Ground && c >= '\x80' then
-      if is_lead c then Buffer.add_char pending c
-      else Buffer.add_string b "\xef\xbf\xbd"
-    else (
-      if !state = Ground && c = '\b' then Buffer.add_string b "\027[D"
-      else Buffer.add_char b c;
-      state :=
-        match (!state, c) with
-        | Ground, '\027' -> Escape
-        | Ground, _ -> Ground
-        | Escape, c -> escape c
-        | String_escape, '\\' -> Ground
-        | String_escape, c -> escape c
-        | Csi, '@' .. '~' -> Ground
-        | Csi, _ -> Csi
-        | String, '\007' -> Ground
-        | String, '\027' -> String_escape
-        | String, _ -> String)
-  in
-  String.iter byte s;
-  Buffer.contents b
-
-(* The zero-width characters, which the terminal drops but the recorder
-   keeps on the cell before them. *)
-let is_zero_width s =
-  let u = Uchar.to_int (Uchar.utf_decode_uchar (String.get_utf_8_uchar s 0)) in
-  u >= 0xa0 && Glyph.String.measure ~width_method:`Unicode ~tab_width:2 s = 0
-
-let strip_zero_width s =
-  let b = Buffer.create (String.length s) in
-  let rec go i =
-    if i < String.length s then (
-      let n = Uchar.utf_decode_length (String.get_utf_8_uchar s i) in
-      let c = String.sub s i n in
-      if not (is_zero_width c) then Buffer.add_string b c;
-      go (i + n))
-  in
-  go 0;
-  Buffer.contents b
+(* The text of each row of a screen as the image draws it: a hidden cell
+   is blank, and trailing spaces do not show. *)
+let drawn screen =
+  Array.to_list (Vhs.Screen.rows screen)
+  |> List.map (fun r ->
+      Array.to_list (Vhs.Screen.cells r)
+      |> List.map (fun (c : Vhs.Screen.cell) ->
+          if c.width = 0 then ""
+          else if Ansi.Attr.mem Hidden c.attrs then " "
+          else c.text)
+      |> String.concat "")
+  |> String.concat "\n" |> Svg_check.trim_rows |> xml_text
 
 let rec collapse = function
   | a :: (b :: _ as rest) when a = b -> collapse rest
@@ -100,7 +43,7 @@ let rec collapse = function
   | [] -> []
 
 (* Whatever a program prints, the image is well-formed XML and each of its
-   screens has the text the terminal shows, in order. *)
+   screens has the text the screen shows, in order. *)
 let test_frames chunks =
   let output = List.mapi (fun i s -> (Vhs.Ms (i * 20), s)) chunks in
   match Vhs.svg ~settings output with
@@ -109,14 +52,12 @@ let test_frames chunks =
       match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows svg with
       | Error e -> failf "not well-formed: %s" e
       | Ok frames ->
-          let vte = Vte.create ~rows ~cols () in
-          let state = (ref Ground, Buffer.create 4) in
+          let term = Vhs.Screen.terminal ~rows ~cols in
           let expected =
             List.map
               (fun s ->
-                Vte.feed_string vte (rewrite state s);
-                strip_zero_width
-                  (xml_text (Svg_check.trim_rows (Vte.to_string vte))))
+                Vhs.Screen.feed term s;
+                drawn (Vhs.Screen.of_terminal term))
               chunks
           in
           let expected =
@@ -124,8 +65,7 @@ let test_frames chunks =
           in
           check_eq
             ~pp:Fmt.(Dump.list string)
-            (collapse expected)
-            (collapse (List.map strip_zero_width frames)))
+            (collapse expected) (collapse frames))
 
 let chunk =
   choose
