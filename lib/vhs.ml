@@ -951,3 +951,4 @@ let svg ?(settings = []) output =
   Ok (Native.replay tape (List.map (fun (Ms ms, s) -> (ms, s)) output))
 
 module Regexp_match = Regexp_match
+module Casefold = Casefold

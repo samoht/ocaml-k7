@@ -17,5 +17,6 @@ let () =
       Test_screen.suite;
       Test_palette.suite;
       Test_regexp_match.suite;
+      Test_casefold.suite;
       Test_native.suite;
     ]

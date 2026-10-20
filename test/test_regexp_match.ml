@@ -116,14 +116,53 @@ let test_go_oracle () =
       | [ "" ] -> ()
       | _ -> Alcotest.failf "bad case %S" line)
 
+(* VHS and the native recorder agree on Unicode case folding and ASCII word
+   boundaries: the waits that hold end both recordings, and one that does not
+   hold makes both time out. *)
+let test_vhs_oracle () =
+  with_dir @@ fun env cwd ->
+  let clock = Eio.Stdenv.mono_clock env and proc = Eio.Stdenv.process_mgr env in
+  let text = {|\307\204 \305\277tra\303\237e K caf\303\251|} in
+  let tape waits =
+    match
+      Vhs.tape ~outputs:[ "out.txt" ]
+        (Vhs.type' ("printf '" ^ text ^ "\\n'\n") :: Vhs.wait Prompt :: waits)
+    with
+    | Ok t -> t
+    | Error e -> Alcotest.fail e
+  in
+  let both t =
+    (Vhs.render ?vhs:oracle ~clock ~proc ~cwd t, Native_test.record env cwd t)
+  in
+  let holds =
+    List.map
+      (fun re -> Vhs.wait ~timeout:(Ms 2000) (Screen re))
+      [
+        "(?i)\xc7\x86 ";
+        "(?i)STRA\xe1\xba\x9eE";
+        "(?i)\xe2\x84\xaa ";
+        {|\bcaf\b|};
+        {|(?i)[^\W]af|};
+      ]
+  in
+  (match both (tape holds) with
+  | Ok (), Ok _ -> ()
+  | Error e, _ | _, Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+  match both (tape [ Vhs.wait ~timeout:(Ms 1000) (Screen {|caf\B|}) ]) with
+  | Error (Failed _), Error (Timeout _) -> ()
+  | _ -> Alcotest.fail "a wait that does not hold ended a recording"
+
 let suite =
   ( "regexp_match",
     List.map
       (fun (name, fn) -> Alcotest.test_case name `Quick fn)
-      [
-        ("matching", test_matching);
-        ("not matching", test_not_matching);
-        ("Unicode class", test_unicode_class);
-        ("Go semantics", test_go_semantics);
-        ("Go oracle", test_go_oracle);
-      ] )
+      ([
+         ("matching", test_matching);
+         ("not matching", test_not_matching);
+         ("Unicode class", test_unicode_class);
+         ("Go semantics", test_go_semantics);
+         ("Go oracle", test_go_oracle);
+       ]
+      @
+      if Option.is_some oracle then [ ("vhs oracle", test_vhs_oracle) ] else []
+      ) )

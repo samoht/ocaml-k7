@@ -6,10 +6,10 @@
 (** Matching VHS wait patterns.
 
     A pattern is in the syntax of Go's [regexp] package, which
-    {!Regexp_syntax.check} accepts. Matching is Go's [MatchString] on UTF-8
-    text, with two differences: [(?i)] folds ASCII letters only, and [\b] and
-    [\B] also count Latin-1 letters as word characters next to a non-ASCII
-    character. *)
+    {!Regexp_syntax.check} accepts. Matching is Go's [MatchString] on the code
+    points of UTF-8 text, in linear time: [(?i)] folds case as Go's
+    [unicode.SimpleFold] does, and [\b] and [\B] count ASCII letters, digits and
+    the underscore only as word characters. *)
 
 type t
 (** The type for compiled patterns. *)

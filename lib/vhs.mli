@@ -295,9 +295,8 @@ val render :
       SVG, by its extension;
     - a wait pattern with a Unicode class ([\p] or [\P]).
 
-    Its patterns match as Go's do, except that [(?i)] folds ASCII letters only
-    and [\b] counts Latin-1 letters as word characters next to a non-ASCII
-    character. [Set CursorBlink], [Set BorderRadius], [Set PlaybackSpeed] and
+    Its patterns match as Go's do, case folding and ASCII word boundaries
+    included. [Set CursorBlink], [Set BorderRadius], [Set PlaybackSpeed] and
     [Set LoopOffset] change the animation, and [Set WindowBar] and
     [Set WindowBarSize] draw VHS's window bar. The image of a [Set MarginFill],
     read relative to [cwd], is embedded, stretched to the frame as ffmpeg
@@ -328,3 +327,4 @@ val svg :
 (**/**)
 
 module Regexp_match = Regexp_match
+module Casefold = Casefold

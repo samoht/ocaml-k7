@@ -15,6 +15,19 @@
   re
   unix))
 
+;; The case folding orbits of Go, as an OCaml string.
+
+(rule
+ (targets casefold_data.ml)
+ (deps casefold.txt)
+ (action
+  (with-stdout-to
+   %{targets}
+   (progn
+    (echo "let table = {|")
+    (cat casefold.txt)
+    (echo "|}\n")))))
+
 (mdx
  (package vhs)
  (files vhs.mli)

@@ -3,12 +3,20 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(* Go's syntax, as in [regexp/syntax/parse.go] (BSD-3-Clause), translated to
-   an ocaml-re expression on the UTF-8 bytes of the text. *)
-
-type t = Re.re
+(* Go's syntax, as in [regexp/syntax/parse.go] (BSD-3-Clause), parsed to a
+   tree on code points and matched by a Pike VM, as Go's [regexp] matches:
+   in linear time, with ASCII word boundaries and Unicode case folding. *)
 
 exception Unsupported of string
+
+type assertion = Bot | Eot | Bol | Eol | Boundary | Not_boundary
+
+type node =
+  | Set of (int * int) list
+  | Seq of node list
+  | Alt of node list
+  | Repeat of node * int * int option
+  | Assert of assertion
 
 (* Code point sets are sorted lists of disjoint inclusive ranges. *)
 
@@ -30,58 +38,7 @@ let negate ranges =
   in
   go 0 (normalise ranges)
 
-(* The other case of each ASCII letter of [ranges]. *)
-let fold_case ranges =
-  let shift lo hi base delta =
-    let lo = max lo base and hi = min hi (base + 25) in
-    if lo <= hi then [ (lo + delta, hi + delta) ] else []
-  in
-  ranges
-  @ List.concat_map
-      (fun (lo, hi) ->
-        shift lo hi (Char.code 'a') (-32) @ shift lo hi (Char.code 'A') 32)
-      ranges
-
-let utf_8 cp =
-  let b = Buffer.create 4 in
-  Buffer.add_utf_8_uchar b (Uchar.of_int cp);
-  Buffer.contents b
-
-let length cp =
-  if cp < 0x80 then 1
-  else if cp < 0x800 then 2
-  else if cp < 0x10000 then 3
-  else 4
-
-(* The byte sequences of the code points [lo..hi], split so that each is a
-   sequence of byte ranges, as Go's [utf8] range compiler does. *)
-let rec utf_8_ranges lo hi =
-  let split at = utf_8_ranges lo at @ utf_8_ranges (at + 1) hi in
-  if lo > hi then []
-  else if lo < 0xd800 && hi > 0xdfff then
-    utf_8_ranges lo 0xd7ff @ utf_8_ranges 0xe000 hi
-  else if lo >= 0xd800 && lo <= 0xdfff then utf_8_ranges 0xe000 hi
-  else if hi >= 0xd800 && hi <= 0xdfff then utf_8_ranges lo 0xd7ff
-  else if length lo <> length hi then
-    split (match length lo with 1 -> 0x7f | 2 -> 0x7ff | _ -> 0xffff)
-  else
-    let n = length lo in
-    let rec cut i =
-      if i >= n then
-        let a = utf_8 lo and b = utf_8 hi in
-        [ Re.seq (List.init n (fun k -> Re.rg a.[k] b.[k])) ]
-      else
-        let m = (1 lsl (6 * i)) - 1 in
-        if lo land lnot m = hi land lnot m then cut (i + 1)
-        else if lo land m <> 0 then split (lo lor m)
-        else if hi land m <> m then split ((hi land lnot m) - 1)
-        else cut (i + 1)
-    in
-    cut 1
-
-let of_ranges ranges =
-  Re.alt
-    (List.concat_map (fun (lo, hi) -> utf_8_ranges lo hi) (normalise ranges))
+let of_ranges ranges = Set (normalise ranges)
 
 (* Parsing *)
 
@@ -145,16 +102,21 @@ let rec hex_digits p acc n =
   else acc
 
 let is_octal c = c >= Char.code '0' && c <= Char.code '7'
+let fold flags ranges = if flags.fold then Casefold.fold ranges else ranges
+
+(* A negated class is the complement of the folded one, as in Go's
+   [appendGroup]. *)
+let negated flags ranges = negate (fold flags ranges)
 
 (* A Perl class escape, after its backslash, as ranges. *)
-let perl_class c =
+let perl_class flags c =
   match chr c with
   | 'd' -> Some digit
-  | 'D' -> Some (negate digit)
+  | 'D' -> Some (negated flags digit)
   | 's' -> Some space
-  | 'S' -> Some (negate space)
+  | 'S' -> Some (negated flags space)
   | 'w' -> Some word
-  | 'W' -> Some (negate word)
+  | 'W' -> Some (negated flags word)
   | _ -> None
 
 (* The code point of a character escape, after its backslash. *)
@@ -182,11 +144,9 @@ let escaped_char p c =
   | 'p' | 'P' -> raise (Unsupported "a Unicode class (\\p or \\P)")
   | _ -> c
 
-let fold flags ranges = if flags.fold then fold_case ranges else ranges
-
 (* The ranges of a class item, after [\[]: an escape, a POSIX class, a
    character or a range. *)
-let class_item p =
+let class_item flags p =
   let close =
     let rec find i =
       if i + 1 >= Array.length p.cps then None
@@ -204,7 +164,7 @@ let class_item p =
         let neg = p.cps.(p.pos + 2) = Char.code '^' in
         let first = p.pos + if neg then 3 else 2 in
         Option.map
-          (fun r -> (j, if neg then negate r else r))
+          (fun r -> (j, if neg then negated flags r else r))
           (List.assoc_opt (name first j) posix))
   in
   match posix_class with
@@ -216,7 +176,7 @@ let class_item p =
         let c = take p in
         if c = Char.code '\\' then
           let e = take p in
-          match perl_class e with
+          match perl_class flags e with
           | Some r -> Error r
           | None -> Ok (escaped_char p e)
         else Ok c
@@ -244,7 +204,7 @@ let char_class flags p =
       next p;
       acc)
     else if peek p < 0 then acc
-    else items (class_item p @ acc) false
+    else items (class_item flags p @ acc) false
   in
   let r = fold flags (items [] true) in
   of_ranges (if neg then negate r else r)
@@ -267,10 +227,10 @@ let flag_group p flags =
 let escape p flags =
   let c = take p in
   match chr c with
-  | 'A' -> Re.bos
-  | 'z' -> Re.eos
-  | 'b' -> Re.alt [ Re.bow; Re.eow ]
-  | 'B' -> Re.not_boundary
+  | 'A' -> Assert Bot
+  | 'z' -> Assert Eot
+  | 'b' -> Assert Boundary
+  | 'B' -> Assert Not_boundary
   | 'Q' ->
       let rec quoted acc =
         if peek p < 0 then acc
@@ -279,10 +239,10 @@ let escape p flags =
           acc)
         else quoted (literal flags (take p) :: acc)
       in
-      Re.seq (List.rev (quoted []))
+      Seq (List.rev (quoted []))
   | 'C' -> of_ranges [ (0, max_cp) ]
   | _ -> (
-      match perl_class c with
+      match perl_class flags c with
       | Some r -> of_ranges (fold flags r)
       | None -> literal flags (escaped_char p c))
 
@@ -328,37 +288,44 @@ let rec repeat p r =
   match peek p with
   | 42 ->
       next p;
-      quantified (Re.rep r)
+      quantified (Repeat (r, 0, None))
   | 43 ->
       next p;
-      quantified (Re.rep1 r)
+      quantified (Repeat (r, 1, None))
   | 63 ->
       next p;
-      quantified (Re.opt r)
+      quantified (Repeat (r, 0, Some 1))
   | 123 -> (
       match bounds p with
-      | Some (n, m) -> quantified (Re.repn r n m)
+      | Some (n, m) -> quantified (Repeat (r, n, m))
       | None -> r)
   | _ -> r
 
+(* The flags a branch sets hold in the branches after it, up to the end of
+   the group, as in Go. *)
 let rec alternation p flags =
-  let rec branches acc =
-    let b = sequence p flags in
+  let rec branches flags acc =
+    let b, flags = sequence p flags in
     if peek p = Char.code '|' then (
       next p;
-      branches (b :: acc))
+      branches flags (b :: acc))
     else List.rev (b :: acc)
   in
-  match branches [] with [ b ] -> b | bs -> Re.alt bs
+  match branches flags [] with [ b ] -> b | bs -> Alt bs
 
 and sequence p flags =
   let rec go flags acc =
     let c = peek p in
     if c < 0 || c = Char.code '|' || c = Char.code ')' then
-      Re.seq (List.rev acc)
+      (Seq (List.rev acc), flags)
     else
       match atom p flags with
-      | `Flags flags -> go flags acc
+      | `Flags flags -> (
+          (* A flag group is no item: a repetition after it repeats the item
+             before it, as in Go. *)
+          match acc with
+          | r :: rest -> go flags (repeat p r :: rest)
+          | [] -> go flags [])
       | `Re r -> go flags (repeat p r :: acc)
   in
   go flags []
@@ -384,8 +351,8 @@ and atom p flags =
       `Re
         (of_ranges
            (if flags.dot_nl then [ (0, max_cp) ] else negate [ (10, 10) ]))
-  | '^' -> `Re (if flags.multi_line then Re.bol else Re.bos)
-  | '$' -> `Re (if flags.multi_line then Re.eol else Re.eos)
+  | '^' -> `Re (Assert (if flags.multi_line then Bol else Bot))
+  | '$' -> `Re (Assert (if flags.multi_line then Eol else Eot))
   | '\\' -> `Re (escape p flags)
   | _ -> `Re (literal flags c)
 
@@ -405,11 +372,137 @@ let code_points s =
   in
   go [] 0
 
+(* Programs *)
+
+type inst =
+  | Char of (int * int) array
+  | Split of int * int
+  | Jmp of int
+  | Check of assertion
+  | Match
+
+type t = inst array
+
+let emit code i =
+  Dynarray.add_last code i;
+  Dynarray.length code - 1
+
+let set code pc i = Dynarray.set code pc i
+
+let rec gen code = function
+  | Set r -> ignore (emit code (Char (Array.of_list r)))
+  | Seq ns -> List.iter (gen code) ns
+  | Assert a -> ignore (emit code (Check a))
+  | Alt [] -> ()
+  | Alt [ n ] -> gen code n
+  | Alt (n :: ns) ->
+      let split = emit code (Jmp 0) in
+      gen code n;
+      let jmp = emit code (Jmp 0) in
+      set code split (Split (split + 1, Dynarray.length code));
+      gen code (Alt ns);
+      set code jmp (Jmp (Dynarray.length code))
+  | Repeat (n, lo, hi) -> (
+      for _ = 1 to lo do
+        gen code n
+      done;
+      match hi with
+      | None ->
+          let split = emit code (Jmp 0) in
+          gen code n;
+          ignore (emit code (Jmp split));
+          set code split (Split (split + 1, Dynarray.length code))
+      | Some hi ->
+          let splits =
+            List.init (hi - lo) (fun _ ->
+                let split = emit code (Jmp 0) in
+                gen code n;
+                split)
+          in
+          List.iter
+            (fun split ->
+              set code split (Split (split + 1, Dynarray.length code)))
+            splits)
+
+(* Go's [isWordChar]: ASCII letters, digits and the underscore. *)
+let is_word c =
+  (c >= 0x30 && c <= 0x39)
+  || (c >= 0x41 && c <= 0x5a)
+  || (c >= 0x61 && c <= 0x7a)
+  || c = 0x5f
+
+let holds a cps i =
+  let n = Array.length cps in
+  let before = if i > 0 then cps.(i - 1) else -1
+  and after = if i < n then cps.(i) else -1 in
+  match a with
+  | Bot -> i = 0
+  | Eot -> i = n
+  | Bol -> i = 0 || before = 10
+  | Eol -> i = n || after = 10
+  | Boundary -> is_word before <> is_word after
+  | Not_boundary -> is_word before = is_word after
+
+let mem ranges c =
+  let rec go lo hi =
+    lo < hi
+    &&
+    let mid = (lo + hi) / 2 in
+    let a, b = ranges.(mid) in
+    if c < a then go lo mid else if c > b then go (mid + 1) hi else true
+  in
+  go 0 (Array.length ranges)
+
+exception Matched
+
+(* [add prog cps i marks list pc] adds the thread at [pc] and those its
+   jumps and true assertions lead to at position [i], each once. *)
+let add prog cps i marks list pc =
+  let stack = ref [ pc ] in
+  while !stack <> [] do
+    let pc = List.hd !stack in
+    stack := List.tl !stack;
+    if marks.(pc) <> i then (
+      marks.(pc) <- i;
+      match prog.(pc) with
+      | Jmp x -> stack := x :: !stack
+      | Split (x, y) -> stack := x :: y :: !stack
+      | Check a -> if holds a cps i then stack := (pc + 1) :: !stack
+      | Match -> raise_notrace Matched
+      | Char _ -> Dynarray.add_last list pc)
+  done
+
+(* [marks.(pc)] is the last position whose list holds [pc]. *)
+let matches prog s =
+  let cps = code_points s in
+  let n = Array.length cps in
+  let marks = Array.make (Array.length prog) (-1) in
+  let current = Dynarray.create () and following = Dynarray.create () in
+  match
+    for i = 0 to n do
+      add prog cps i marks current 0;
+      Dynarray.iter
+        (fun pc ->
+          match prog.(pc) with
+          | Char r when i < n && mem r cps.(i) ->
+              add prog cps (i + 1) marks following (pc + 1)
+          | _ -> ())
+        current;
+      Dynarray.clear current;
+      Dynarray.append current following;
+      Dynarray.clear following
+    done
+  with
+  | () -> false
+  | exception Matched -> true
+
 let compile re =
   let p = { cps = code_points re; pos = 0 } in
   match alternation p { fold = false; dot_nl = false; multi_line = false } with
-  | r -> Ok (Re.compile r)
+  | node ->
+      let code = Dynarray.create () in
+      gen code node;
+      ignore (emit code Match);
+      Ok (Dynarray.to_array code)
   | exception Unsupported what ->
       Fmt.kstr Result.error "%s is not supported natively" what
-
-let matches t s = Re.execp t s
