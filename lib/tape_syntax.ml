@@ -212,6 +212,95 @@ let duration s =
   in
   if s = "0" then Some 0L else if s = "" then None else terms 0L 0
 
+(* Numbers: Go's strconv.Atoi, on 64 bits, and strconv.ParseFloat (s, 64). *)
+
+let without_sign s =
+  if s <> "" && (s.[0] = '+' || s.[0] = '-') then
+    String.sub s 1 (String.length s - 1)
+  else s
+
+let atoi s =
+  let digits = without_sign s in
+  if digits = "" || not (String.for_all is_digit digits) then None
+  else Int64.of_string_opt (if s.[0] = '+' then digits else s)
+
+(* Go's [special]: an infinity, with a sign or not, or a NaN, without. *)
+let is_special s =
+  let l = String.lowercase_ascii s in
+  let body = without_sign l in
+  body = "inf" || body = "infinity" || l = "nan"
+
+(* Go's [underscoreOK]: each [_] follows a digit or the base prefix, and
+   precedes a digit. *)
+let underscore_ok s =
+  let s = without_sign s in
+  let n = String.length s in
+  let base =
+    if n >= 2 && s.[0] = '0' then Char.lowercase_ascii s.[1] else ' '
+  in
+  let prefix = String.contains "box" base in
+  let rec go saw i =
+    if i = n then saw <> '_'
+    else
+      match s.[i] with
+      | '0' .. '9' -> go '0' (i + 1)
+      | ('a' .. 'f' | 'A' .. 'F') when base = 'x' -> go '0' (i + 1)
+      | '_' -> saw = '0' && go '_' (i + 1)
+      | _ -> saw <> '_' && go '!' (i + 1)
+  in
+  go (if prefix then '0' else '^') (if prefix then 2 else 0)
+
+(* Go's [readFloat] reads all of [s]: digits with at most one dot, then an
+   exponent, which a hexadecimal mantissa must have. *)
+let is_float_syntax s =
+  let n = String.length s in
+  let lower i = Char.lowercase_ascii s.[i] in
+  let i = if n > 0 && (s.[0] = '+' || s.[0] = '-') then 1 else 0 in
+  let hex = i + 2 < n && s.[i] = '0' && lower (i + 1) = 'x' in
+  let is_mantissa c =
+    is_digit c
+    || hex
+       && match Char.lowercase_ascii c with 'a' .. 'f' -> true | _ -> false
+  in
+  let rec mantissa i ~dot ~digits =
+    if i < n && s.[i] = '_' then mantissa (i + 1) ~dot ~digits
+    else if i < n && s.[i] = '.' && not dot then
+      mantissa (i + 1) ~dot:true ~digits
+    else if i < n && is_mantissa s.[i] then mantissa (i + 1) ~dot ~digits:true
+    else if digits then Some i
+    else None
+  in
+  let exponent i =
+    if i < n && lower i = if hex then 'p' else 'e' then
+      let i =
+        if i + 1 < n && (s.[i + 1] = '+' || s.[i + 1] = '-') then i + 2
+        else i + 1
+      in
+      if i < n && is_digit s.[i] then
+        Some (span s (fun c -> is_digit c || c = '_') i)
+      else None
+    else if hex then None
+    else Some i
+  in
+  match
+    Option.bind
+      (mantissa (if hex then i + 2 else i) ~dot:false ~digits:false)
+      exponent
+  with
+  | Some i -> i = n && ((not (String.contains s '_')) || underscore_ok s)
+  | None -> false
+
+(* A well-formed value fails only if it rounds beyond the largest float. *)
+let is_float s =
+  is_special s
+  || is_float_syntax s
+     &&
+     match
+       float_of_string_opt (String.concat "" (String.split_on_char '_' s))
+     with
+     | Some f -> Float.is_finite f
+     | None -> true
+
 (* Parsing *)
 
 type parser = { tokens : token array; mutable pos : int }
@@ -290,8 +379,25 @@ let set p =
         (fun _ -> fail "Invalid regexp pattern: %s" re)
         (Regexp_syntax.check re)
   | "LoopOffset" ->
-      ignore (take p);
-      if (peek p).kind = Punct '%' then next p
+      let v = take p in
+      if (peek p).kind = Punct '%' then next p;
+      let n = String.length v in
+      let rec last i = if i > 0 && v.[i - 1] = '%' then last (i - 1) else i in
+      if not (is_float (String.sub v 0 (last n))) then
+        fail "LoopOffset %s: not a Go float" v
+  | "LetterSpacing" | "LineHeight" | "PlaybackSpeed" ->
+      let v = take p in
+      if not (is_float v) then fail "%s %s: not a Go float" name v
+  | "Margin" | "WindowBarSize" | "BorderRadius" ->
+      let v = take p in
+      if Option.is_none (atoi v) then fail "%s %s: not a Go integer" name v
+  | "Rows" | "Columns" -> (
+      let v = take p in
+      match atoi v with
+      | None -> fail "%s %s: not a Go integer" name v
+      | Some n when n <= 0L ->
+          fail "%s must be a positive integer" (String.lowercase_ascii name)
+      | Some _ -> ())
   | "TypingSpeed" ->
       let t = take p in
       let t =

@@ -23,9 +23,11 @@ val check : string -> (command, string) result
 (** [check line] is the command of [line], or [Error msg] if VHS's parser
     reports an error on it, if it holds more than one command, or if it ends
     before a string, a regular expression, a JSON value or an argument it
-    starts. It is also [Error msg] on a duration Go's [time.ParseDuration]
-    rejects, which VHS only finds when it runs the command. [line] holds no
-    newline. A [Source] line's tape is not read. *)
+    starts. It is also [Error msg] on what VHS only finds when it runs the
+    command: a duration Go's [time.ParseDuration] rejects, the value of an
+    integer or float setting Go's [strconv.Atoi] or [strconv.ParseFloat]
+    rejects, and a [Rows] or [Columns] value that is not positive. [line]
+    holds no newline. A [Source] line's tape is not read. *)
 
 val no_extension : string
 (** [no_extension] is the error message for an {!constructor-Output} path

@@ -160,6 +160,9 @@ val tape :
     - a {!raw} line is not exactly one command VHS's parser accepts, ends inside
       a string, a regular expression or a JSON value, or lacks the argument of
       its command;
+    - a {!raw} [Set] has a value its setting cannot parse: a duration, an
+      integer, a float or a regular expression in Go's syntax, or a positive
+      integer for [Rows] and [Columns];
     - a {!raw} line is [Hide] or [Show] (use {!hidden}), [Set] for a setting of
       {!setting} other than [TypingSpeed] (use the setting), an [Output] that
       breaks the rules of [outputs], or is [Require] or [Set], other than

@@ -136,7 +136,8 @@ let test_numbers () =
             ("PlaybackSpeed", l.[1] = '1');
           ]);
   fails "zero rows" "Set Rows 0" "rows must be a positive integer";
-  fails "negative columns" "Set Columns -1" "columns must be a positive integer";
+  fails "negative columns" {|Set Columns "-1"|}
+    "columns must be a positive integer";
   fails "loop offset" "Set LoopOffset x%" "LoopOffset x%: not a Go float";
   List.iter
     (fun line ->
