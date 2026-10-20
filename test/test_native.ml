@@ -684,7 +684,7 @@ let test_terminal_state () =
 
 (* The expected screen is checked against real VHS when VHS_ORACLE is set.
    Keep the prompt below the payload so shell echo cannot affect its cells. *)
-let check_terminal_payload payload first =
+let check_terminal_payload payload lines =
   with_dir @@ fun env cwd ->
   let command = "printf '\\033[2J\\033[H" ^ payload ^ "\\033[10;1H'" in
   let t =
@@ -692,7 +692,8 @@ let check_terminal_payload payload first =
       Vhs.[ hidden [ type' command; key Enter; wait Prompt ]; sleep (Ms 200) ]
   in
   let expected =
-    String.concat "\n" ([ first ] @ List.init 8 (fun _ -> "") @ [ ">"; ""; "" ])
+    String.concat "\n"
+      (lines @ List.init (9 - List.length lines) (fun _ -> "") @ [ ">"; ""; "" ])
   in
   let text () = last_screen (Eio.Path.load Eio.Path.(cwd / "oracle.txt")) in
   (match oracle with
@@ -719,12 +720,18 @@ let check_terminal_payload payload first =
 (* REP repeats the complete preceding cell, including its combining marks. *)
 let test_repeat_combining () =
   check_terminal_payload {|a\314\201\033[3b|}
-    (String.concat "" (List.init 4 (fun _ -> "a\xcc\x81")))
+    [ String.concat "" (List.init 4 (fun _ -> "a\xcc\x81")) ]
 
 (* The UTF-8 encodings of C1 CSI, OSC and ST have their control meanings,
    just like ESC [, ESC ] and ESC backslash in xterm.js. *)
 let test_c1_controls () =
-  check_terminal_payload {|a\302\2332Cb\302\235title\302\234c|} "a  bc"
+  check_terminal_payload {|a\302\2332Cb\302\235title\302\234c|} [ "a  bc" ]
+
+(* Erasure does not consume a pending wrap. ED starts beyond the final cell;
+   EL 1 clears the row, but the following glyph still wraps to the next row. *)
+let test_margin_erasure () =
+  check_terminal_payload {|\033[60GX\033[JY\033[3;60HX\033[1KY|}
+    [ String.make 59 ' ' ^ "X"; "Y"; ""; "Y" ]
 
 let suite =
   ( "native",
@@ -753,6 +760,7 @@ let suite =
          ("terminal state recording", test_terminal_state);
          ("repeat combining cell", test_repeat_combining);
          ("C1 terminal controls", test_c1_controls);
+         ("right-margin erasure", test_margin_erasure);
        ]
       @
       if Option.is_some oracle then
