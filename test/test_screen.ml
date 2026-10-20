@@ -130,6 +130,7 @@ let test_controls () =
       ("column absolute", "\027[3`x", [ "  x" ]);
       ("column relative", "ab\027[2ax", [ "ab  x" ]);
       ("row relative", "\027[2ex", [ ""; ""; "x" ]);
+      ("row absolute", "ab\027[3dx", [ "ab"; ""; "  x" ]);
       ("erase characters", "abcde\r\027[2X", [ "  cde" ]);
       ("repeat", "a\027[3b", [ "aaaa" ]);
       ("repeat after a control", "a\027[D\027[3b", [ "a" ]);
