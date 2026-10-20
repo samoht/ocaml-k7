@@ -423,6 +423,16 @@ let test_invisible_output_order () =
     "command output precedes the next input even after U+200B" true
     (first < second)
 
+(* Output one column short of the width puts the prompt's [>] in the last
+   column, and its space on the next line, under the cursor. *)
+let test_wrapped_prompt () =
+  with_files [] @@ fun env path ->
+  let screen =
+    record_cram env path "  $ printf \"%$((COLUMNS-1))s\" x\n  $ echo after\n"
+  in
+  if not (contains ~sub:"\nafter" screen) then
+    Alcotest.failf "the prompt after a full line was missed: %s" screen
+
 (* An unterminated here-document leaves bash at its continuation prompt,
    where no wait can end; the error names the command that did. *)
 let test_unfinished () =
@@ -466,5 +476,6 @@ let suite =
           ("setup prompt command", test_setup_prompt_command);
           ("invisible output order", test_invisible_output_order);
           ("unfinished command", test_unfinished);
+          ("wrapped prompt", test_wrapped_prompt);
         ]
       else []) )
