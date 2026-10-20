@@ -401,12 +401,12 @@ let max_viewport = 10_000_000L
 
 (* VHS sizes the browser's viewport to the frame less twice the padding,
    twice the margin unless [MarginFill] is empty, and the window bar in the
-   height; vhs panics if the browser refuses a side. A raw [Set Columns] or
-   [Set Rows] has VHS size that side itself. *)
+   height, also to measure the cells a raw [Set Rows] or [Set Columns] asks
+   for; vhs panics if the browser refuses a side. *)
 let check_viewport actions ~padding ~margin ~bar ~width ~height =
   let p = Int64.of_int (Option.value padding ~default:60) in
   let m = if raw_set actions "MarginFill" = Some "" then 0L else margin in
-  let check name size default cells border =
+  let check name size default border =
     let n = Int64.of_int (Option.value size ~default) in
     let fits =
       match sum [ p; p; m; m; border ] with
@@ -415,7 +415,7 @@ let check_viewport actions ~padding ~margin ~bar ~width ~height =
           && Int64.compare b (Int64.sub n max_viewport) >= 0
       | None -> false
     in
-    if fits || Option.is_some (raw_set actions cells) then Ok ()
+    if fits then Ok ()
     else
       let culprit =
         match size with
@@ -430,8 +430,8 @@ let check_viewport actions ~padding ~margin ~bar ~width ~height =
         (String.lowercase_ascii name)
         max_viewport
   in
-  let* () = check "Width" width 1200 "Columns" 0L in
-  check "Height" height 600 "Rows" bar
+  let* () = check "Width" width 1200 0L in
+  check "Height" height 600 bar
 
 let check_size settings actions =
   let last f = List.find_map f (List.rev settings) in
