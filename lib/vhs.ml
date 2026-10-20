@@ -207,15 +207,35 @@ let check_kinds paths =
   in
   go [] paths
 
-(* The paths of the raw [Output] lines of [actions], in order. *)
-let rec raw_outputs actions =
+(* The commands of the raw lines of [actions] VHS's parser accepts, in
+   order. *)
+let rec raw_commands actions =
   List.concat_map
     (function
-      | Raw line -> (
-          match Tape_syntax.check line with Ok (Output p) -> [ p ] | _ -> [])
-      | Hidden actions -> raw_outputs actions
+      | Raw line -> Result.to_list (Tape_syntax.check line)
+      | Hidden actions -> raw_commands actions
       | Type _ | Key _ | Sleep _ | Wait _ -> [])
     actions
+
+let raw_outputs actions =
+  List.filter_map
+    (function Tape_syntax.Output p -> Some p | _ -> None)
+    (raw_commands actions)
+
+(* VHS refuses a frame sized both by its pixels and by its cells in one
+   direction. *)
+let check_cells settings actions =
+  let sets p = List.exists p settings in
+  let height = sets (function Height _ -> true | _ -> false)
+  and width = sets (function Width _ -> true | _ -> false) in
+  iter_result
+    (function
+      | Tape_syntax.Set ("Rows", arg) when height ->
+          err "Set Rows %s: VHS cannot set both Height and Rows" arg
+      | Tape_syntax.Set ("Columns", arg) when width ->
+          err "Set Columns %s: VHS cannot set both Width and Columns" arg
+      | _ -> Ok ())
+    (raw_commands actions)
 
 (* The constructor that writes each setting [Set] can also write, but
    [Shell], which VHS applies wherever it is. *)
@@ -238,15 +258,16 @@ let check_raw ~started line =
     match Tape_syntax.check line with
     | Error e -> err "raw line %S: %s" line e
     | Ok (Hide | Show) -> err "raw line %S: use hidden instead" line
-    | Ok (Blank | Set "TypingSpeed") -> Ok started
+    | Ok (Blank | Set ("TypingSpeed", _)) -> Ok started
     | Ok (Output path) -> (
         match output_problem path with
         | None -> Ok started
         | Some why -> err "raw line %S: %s" line why)
-    | Ok (Set "Shell") -> err "raw line %S: use the setting Shell instead" line
+    | Ok (Set ("Shell", _)) ->
+        err "raw line %S: use the setting Shell instead" line
     | Ok (Set _ | Require) when started ->
         err "raw line %S: VHS ignores it after the first action" line
-    | Ok (Set name) when List.mem_assoc name constructors ->
+    | Ok (Set (name, _)) when List.mem_assoc name constructors ->
         err "raw line %S: use the setting %s instead" line
           (List.assoc name constructors)
     | Ok (Set _ | Require) -> Ok false
@@ -358,6 +379,7 @@ let tape ?(settings = []) ~outputs actions =
   let* () = iter_result check_setting settings in
   let* () = check_size settings in
   let* _started = check_actions ~started:false actions in
+  let* () = check_cells settings actions in
   let* () = check_kinds (outputs @ raw_outputs actions) in
   Ok { outputs; settings; actions }
 

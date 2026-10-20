@@ -16,7 +16,8 @@ type command =
   | Show
   | Require
   | Output of string  (** [Output path]. *)
-  | Set of string  (** [Set name ...], with [name] a VHS setting. *)
+  | Set of string * string
+      (** [Set (name, arg)]: the VHS setting [name] and the token after it. *)
   | Other  (** Any other command. *)
 
 val check : string -> (command, string) result
@@ -26,8 +27,8 @@ val check : string -> (command, string) result
     starts. It is also [Error msg] on what VHS only finds when it runs the
     command: a duration Go's [time.ParseDuration] rejects, the value of an
     integer or float setting Go's [strconv.Atoi] or [strconv.ParseFloat]
-    rejects, and a [Rows] or [Columns] value that is not positive. [line]
-    holds no newline. A [Source] line's tape is not read. *)
+    rejects, and a [Rows] or [Columns] value that is not positive. [line] holds
+    no newline. A [Source] line's tape is not read. *)
 
 val no_extension : string
 (** [no_extension] is the error message for an {!constructor-Output} path

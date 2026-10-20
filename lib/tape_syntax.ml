@@ -12,7 +12,7 @@ type command =
   | Show
   | Require
   | Output of string
-  | Set of string
+  | Set of string * string
   | Other
 
 (* Lexing *)
@@ -371,6 +371,7 @@ let set p =
   if not ((peek p).kind = Word && List.mem name settings) then
     fail "Unknown setting: %s" name;
   next p;
+  let arg = (peek p).lit in
   (match name with
   | "WaitTimeout" -> ignore (time p)
   | "WaitPattern" ->
@@ -427,7 +428,7 @@ let set p =
       if not (is_word "true" (cur p) || is_word "false" (cur p)) then
         fail "expected boolean value."
   | _ -> ignore (take p));
-  Set name
+  Set (name, arg)
 
 let wait p =
   if (peek p).kind = Punct '+' then (

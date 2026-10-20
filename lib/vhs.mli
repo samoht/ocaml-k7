@@ -163,6 +163,8 @@ val tape :
     - a {!raw} [Set] has a value its setting cannot parse: a duration, an
       integer, a float or a regular expression in Go's syntax, or a positive
       integer for [Rows] and [Columns];
+    - a {!raw} [Set Rows] or [Set Columns] sizes the frame in the direction that
+      {!Height} or {!Width} does;
     - a {!raw} line is [Hide] or [Show] (use {!hidden}), [Set] for a setting of
       {!setting} other than [TypingSpeed] (use the setting), an [Output] that
       breaks the rules of [outputs], or is [Require] or [Set], other than
