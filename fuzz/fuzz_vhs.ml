@@ -586,14 +586,8 @@ let test_exit_codes n =
   eval 0 [ "--help=plain" ];
   eval 124 [ "--unknown-adversarial-flag" ]
 
-let test_output_order n =
-  with_dir @@ fun env path ->
+let record_cram ?(setup = []) ?(prefix = []) env path src =
   let output = path "order.txt" in
-  let decoy = Fmt.str "progress-%d>" (n land 255) in
-  let src =
-    Fmt.str "  $ printf '%s'; sleep 3; echo FIRST_DONE\n  $ echo SECOND_DONE\n"
-      decoy
-  in
   let cram = Result.get_ok (Vhs_cram.Cram.parse src) in
   let t =
     Result.get_ok
@@ -610,7 +604,7 @@ let test_output_order n =
                Typing_speed (Ms 5);
              ]
          ~outputs:[ output ]
-         (Vhs_cram.Cram.actions ~setup:[] cram @ [ Vhs.sleep (Ms 3500) ]))
+         (prefix @ Vhs_cram.Cram.actions ~setup cram @ [ Vhs.sleep (Ms 3500) ]))
   in
   let result =
     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 40. (fun () ->
@@ -620,7 +614,16 @@ let test_output_order n =
           ~cwd:(Eio.Stdenv.cwd env) t)
   in
   (match result with Ok () -> () | Error e -> failf "%a" Vhs.pp_error e);
-  let screen = Eio.Path.load Eio.Path.(Eio.Stdenv.fs env / output) in
+  Eio.Path.load Eio.Path.(Eio.Stdenv.fs env / output)
+
+let test_output_order n =
+  with_dir @@ fun env path ->
+  let decoy = Fmt.str "progress-%d>" (n land 255) in
+  let src =
+    Fmt.str "  $ printf '%s'; sleep 3; echo FIRST_DONE\n  $ echo SECOND_DONE\n"
+      decoy
+  in
+  let screen = record_cram env path src in
   let position sub =
     let rec scan i =
       if i + String.length sub > String.length screen then None
@@ -634,9 +637,24 @@ let test_output_order n =
   | Some first, Some second when first < second -> ()
   | _ -> failf "next command was typed before the first output for %S" src
 
+(* A setup's prompt hook must not undo the recorder's readiness prompt. *)
+let test_setup_prompt_hook n =
+  with_dir @@ fun env path ->
+  let script = path "setup.sh" in
+  save env script (Fmt.str "PROMPT_COMMAND='PS1=custom-%d'\n" (n land 255));
+  let screen =
+    record_cram ~setup:[ script ]
+      ~prefix:[ Vhs.raw "Set WaitTimeout 3s" ]
+      env path "  $ echo READY\n"
+  in
+  if not (String.split_on_char '\n' screen |> List.mem "READY") then
+    fail "setup prevented the command from running"
+
 (* Properties that run [vhs] itself, so need [oracle]. *)
 let with_vhs =
   [
+    test_case "setup prompt hooks preserve readiness" [ int8 ]
+      test_setup_prompt_hook;
     test_case "command output precedes next input" [ int8 ] test_output_order;
     test_case "accepted tapes validate" [ bytes; int ] test_validates;
     test_case "accepted raw lines validate"
