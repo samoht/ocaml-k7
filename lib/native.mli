@@ -32,19 +32,29 @@ val text_output : t -> string option
 (** [text_output t] is the path of the text output of [t], its [Output] line
     with a [.txt], [.ascii] or [.test] extension, if any. *)
 
+type recording = {
+  svg : string;  (** The animated image. *)
+  text : string;  (** The text output, in VHS's format. *)
+  stills : (string * string) list;
+      (** The [.svg] path and the image of each [Screenshot]. *)
+}
+(** The type for what a tape records. *)
+
 val play :
   clock:_ Eio.Time.Mono.t ->
   env:Eio.Process.Env.t ->
   cwd:string ->
   t ->
-  (string * string, error) result
+  (recording, error) result
 (** [play ~clock ~env ~cwd t] runs [t] in its shell in the directory [cwd] and
-    is the SVG image of what it showed and the text of {!text_output}, in VHS's
-    format: the first lines of the buffer, as many as the screen has rows, after
-    each command that runs while recording, from the first action or from the
+    is what it recorded. The text of {!text_output} is in VHS's format: the
+    first lines of the buffer, as many as the screen has rows, after each
+    command that runs while recording, from the first action or from the
     [Output] line that names it, each screen followed by a line of 80 U+2500
-    characters. The shell gets [env] with the prompt VHS gives it,
-    [TERM=xterm-256color] and the [Env] lines of [t]. *)
+    characters. A [Screenshot] of [shot.png], which VHS writes as a PNG image of
+    the next frame it records, is a still SVG image of that frame, without the
+    cursor blinking, for [shot.svg]. The shell gets [env] with the prompt VHS
+    gives it, [TERM=xterm-256color] and the [Env] lines of [t]. *)
 
 val replay : t -> (int * string) list -> string
 (** [replay t output] is the SVG image of a terminal with the settings of [t]

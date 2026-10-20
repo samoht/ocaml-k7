@@ -326,12 +326,50 @@ let test_keys () =
 
 let test_unsupported () =
   with_dir @@ fun env cwd ->
-  let t = tape Vhs.[ raw "Screenshot shot.png"; type' "x" ] in
+  let t =
+    match
+      Vhs.tape ~settings:[ Shell Fish ] ~outputs:[ "demo.svg" ]
+        [ Vhs.type' "x" ]
+    with
+    | Ok t -> t
+    | Error e -> Alcotest.fail e
+  in
   match record env cwd t with
-  | Error (Unsupported why) ->
-      check_contains "names the line" ~sub:"Screenshot" why
-  | Ok _ -> Alcotest.fail "played a screenshot"
+  | Error (Unsupported why) -> check_contains "names the line" ~sub:"Shell" why
+  | Ok _ -> Alcotest.fail "played fish"
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+
+(* A screenshot is a still SVG image of the next frame, also when it is
+   taken while hidden, for the path with [.svg] in place of [.png]. *)
+let test_screenshot () =
+  with_dir @@ fun env cwd ->
+  let t =
+    tape
+      Vhs.
+        [
+          hidden
+            [ raw "Screenshot \"hidden.png\""; type' "true\n"; wait Prompt ];
+          type' "echo one\n";
+          wait Prompt;
+          raw "Screenshot \"shot.png\"";
+          type' "echo two\n";
+          wait Prompt;
+        ]
+  in
+  match record env cwd t with
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Ok _ ->
+      let still name = Eio.Path.load Eio.Path.(cwd / name) in
+      let s = still "shot.svg" in
+      Alcotest.(check (list string))
+        "still"
+        [ screen [ "> true"; "> echo one"; "one"; ">" ] ]
+        (frames s);
+      Alcotest.(check bool) "no blink" false (contains ~sub:".k{animation" s);
+      Alcotest.(check (list string))
+        "hidden"
+        [ screen [ "> true"; ">" ] ]
+        (frames (still "hidden.svg"))
 
 (* [after_settings tape txt] is [txt], a text output of VHS for [tape],
    without the screens it reads while it applies the settings, before it
@@ -462,6 +500,7 @@ let suite =
          ("text", test_text);
          ("window bar", test_window_bar);
          ("zsh", test_zsh);
+         ("screenshot", test_screenshot);
          ("keys", test_keys);
          ("unsupported", test_unsupported);
        ]

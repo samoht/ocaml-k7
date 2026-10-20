@@ -916,7 +916,7 @@ let record ~clock ~proc ~cwd t =
     Option.to_result ~none:(Io "the directory is not a native path")
       (Eio.Path.native cwd)
   in
-  let* svg, text =
+  let* { svg; text; stills } =
     Result.map_error native_error
       (Native.play ~clock ~env:(environment proc) ~cwd:dir tape)
   in
@@ -933,6 +933,7 @@ let record ~clock ~proc ~cwd t =
   let* () =
     iter_result (save text) (Option.to_list (Native.text_output tape))
   in
+  let* () = iter_result (fun (path, s) -> save s path) stills in
   Ok svg
 
 let svg ?(settings = []) output =

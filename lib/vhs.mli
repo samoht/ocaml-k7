@@ -278,16 +278,20 @@ val render :
     before it sizes the terminal, from the text output's line on, whose rows
     depend on its browser's window; the native output leaves them out.
 
+    A [Screenshot] of [shot.png], which VHS writes as a PNG image of the next
+    frame it records, writes a still SVG image of that frame to [shot.svg],
+    without the cursor blinking.
+
     {!record} plays the actions of {!action}, the raw [Type], key, [Ctrl],
-    [Alt], [Shift], [Sleep], [Wait], [Copy] and [Paste] lines ([Paste] types the
-    last [Copy]), [Env], [Require], and every [Set] but those below. It does not
-    play, and is {!Unsupported} on:
+    [Alt], [Shift], [Sleep], [Wait], [Copy], [Paste] ([Paste] types the last
+    [Copy]), [Screenshot] and [Output] lines, [Env], [Require], and every [Set]
+    but those below. It does not play, and is {!Unsupported} on:
     - a {!shell} other than {!Bash} and {!Zsh}, which start as in VHS;
     - a colour of a JSON [Theme] other than [#RGB], [#RGBA], [#RRGGBB],
       [#RRGGBBAA], [rgb()] or [rgba()], such as a colour name, which xterm.js
       reads with the browser;
     - [Set MarginFill] with an image;
-    - [Screenshot] and [Source];
+    - [Source];
     - a wait pattern with a Unicode class ([\p] or [\P]).
 
     Its patterns match as Go's do, except that [(?i)] folds ASCII letters only
@@ -306,10 +310,10 @@ val record :
 (** [record ~clock ~proc ~cwd t] plays [t] in its shell in the directory [cwd],
     with the environment {!render} gives [vhs], and is the SVG image of what it
     showed. [record] also writes the image to each [.svg] output of [t] and the
-    {{!native}text output} to the [.txt], [.ascii] or [.test] output of [t],
-    relative to [cwd], and writes no other output. The waits of [t] time out by
-    [clock]. It is {!Executable_not_found} if the shell or the executable of a
-    [Require] line is not on the [PATH]. *)
+    {{!native}text output} to the [.txt], [.ascii] or [.test] output of [t] and
+    the {{!native}screenshots} of [t], relative to [cwd], and writes no other
+    output. The waits of [t] time out by [clock]. It is {!Executable_not_found}
+    if the shell or the executable of a [Require] line is not on the [PATH]. *)
 
 val svg :
   ?settings:setting list -> (duration * string) list -> (string, error) result

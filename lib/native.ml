@@ -45,6 +45,7 @@ type command =
   | Paste
   | Output of string
   | Env
+  | Screenshot of string
 
 let keys =
   [ "Enter"; "Tab"; "Space"; "Backspace"; "Delete"; "Insert"; "Escape"; "Up";
@@ -303,6 +304,9 @@ type t = {
   dumps : bool;  (** Whether the text output starts with the first action. *)
 }
 
+(* A screenshot is an SVG image: [shot.png] is [shot.svg]. *)
+let still_path p = Filename.remove_extension p ^ ".svg"
+
 let is_text path =
   match extension path with ".txt" | ".ascii" | ".test" -> true | _ -> false
 
@@ -356,7 +360,7 @@ let read line t =
         | [ Keyword "Show" ] -> Show
         | Keyword "Copy" :: rest -> Copy (strings rest)
         | [ Keyword "Paste" ] -> Paste
-        | Keyword "Screenshot" :: _ -> unsupported line "a screenshot needs vhs"
+        | Keyword "Screenshot" :: p :: _ -> Screenshot (still_path (lit p))
         | Keyword "Source" :: _ -> unsupported line "sourcing a tape needs vhs"
         | _ -> unsupported line "not a command this module knows"
       in
@@ -425,7 +429,14 @@ let svg t tl ~end_ms =
   Svg.to_string { s with loop_offset } ~duration frames
 
 let timeline c = { quantum = max 1 (1000 / c.framerate); frames = [] }
-let text_output t = t.text
+
+type recording = {
+  svg : string;
+  text : string;
+  stills : (string * string) list;
+}
+
+let text_output (t : t) = t.text
 
 let replay t output =
   let s = t.look in
@@ -516,6 +527,8 @@ type state = {
   mutable clipboard : string;
   text : Buffer.t;
   mutable dumps : bool;  (** Whether a command adds its screen to [text]. *)
+  mutable still : string option;  (** The screenshot of the next frame. *)
+  mutable stills : (string * Screen.t) list;
 }
 
 let now st = Eio.Time.Mono.now st.clock
@@ -531,7 +544,15 @@ let stamp st =
   st.logical
   + match st.cap with Some c -> min c (elapsed st) | None -> elapsed st
 
-let record st = if not st.hidden then add st.tl (stamp st) st.shown
+(* VHS takes a screenshot of the next frame it records. *)
+let record st =
+  if not st.hidden then (
+    add st.tl (stamp st) st.shown;
+    Option.iter
+      (fun path ->
+        st.stills <- (path, st.shown) :: List.remove_assoc path st.stills;
+        st.still <- None)
+      st.still)
 
 let refresh st =
   if Screen.is_dirty st.term then (
@@ -686,6 +707,9 @@ let run_command st c = function
   | Copy s -> st.clipboard <- s
   | Paste -> write st st.clipboard
   | Output path -> if is_text path then st.dumps <- true
+  | Screenshot path ->
+      st.still <- Some path;
+      record st
   | Env -> ()
 
 let run st c command =
@@ -766,37 +790,54 @@ let await_prompt st =
   in
   ignore (within st 5. loop)
 
+let state t ~clock pty =
+  let s = t.look in
+  let term = Screen.terminal ~rows:s.rows ~cols:s.cols in
+  let screen = Screen.of_terminal term in
+  {
+    term;
+    pty;
+    clock;
+    tl = timeline t.config;
+    changed = Eio.Condition.create ();
+    live = screen;
+    shown = screen;
+    offset = 0;
+    hidden = true;
+    logical = 0;
+    started = Eio.Time.Mono.now clock;
+    cap = Some 0;
+    typing_speed = t.config.typing_speed;
+    clipboard = "";
+    text = Buffer.create 4096;
+    dumps = t.dumps;
+    still = None;
+    stills = [];
+  }
+
+let recording t st =
+  let still (path, screen) =
+    ( path,
+      Svg.to_string
+        { t.look with blink = false }
+        ~duration:st.tl.quantum
+        [ (0, screen) ] )
+  in
+  {
+    svg = svg t st.tl ~end_ms:st.logical;
+    text = Buffer.contents st.text;
+    stills = List.rev_map still st.stills;
+  }
+
 let play ~clock ~env ~cwd t =
   let clock = (clock :> Eio.Time.Mono.ty Eio.Resource.t) in
   match
-    let s = t.look in
-    let pty = spawn ~env ~cwd t s in
+    let pty = spawn ~env ~cwd t t.look in
     Fun.protect ~finally:(fun () ->
         Eio.Cancel.protect (fun () -> close clock pty))
     @@ fun () ->
     Pty.set_nonblock pty;
-    let term = Screen.terminal ~rows:s.rows ~cols:s.cols in
-    let screen = Screen.of_terminal term in
-    let st =
-      {
-        term;
-        pty;
-        clock;
-        tl = timeline t.config;
-        changed = Eio.Condition.create ();
-        live = screen;
-        shown = screen;
-        offset = 0;
-        hidden = true;
-        logical = 0;
-        started = Eio.Time.Mono.now clock;
-        cap = Some 0;
-        typing_speed = t.config.typing_speed;
-        clipboard = "";
-        text = Buffer.create 4096;
-        dumps = t.dumps;
-      }
-    in
+    let st = state t ~clock pty in
     Eio.Fiber.first
       (fun () -> reader st (Bytes.create 65536))
       (fun () ->
@@ -805,7 +846,7 @@ let play ~clock ~env ~cwd t =
         st.started <- now st;
         record st;
         List.iter (run st t.config) t.actions);
-    (svg t st.tl ~end_ms:st.logical, Buffer.contents st.text)
+    recording t st
   with
   | r -> Ok r
   | exception Stop e -> Error e
