@@ -121,11 +121,12 @@ type setting =
       (** A font list, which holds no ['] and no backslash. *)
   | Width of int
       (** The width in pixels, at least twice the padding and the margin of a
-          {!raw} [Set Margin] (defaults to [1200]). *)
+          {!raw} [Set Margin], and even with an MP4 output (defaults to [1200]).
+      *)
   | Height of int
       (** The height in pixels, at least twice the padding and the margin, plus
-          the size of the window bar of a {!raw} [Set WindowBar] (defaults to
-          [600]). *)
+          the size of the window bar of a {!raw} [Set WindowBar], and even with
+          an MP4 output (defaults to [600]). *)
   | Theme of string
       (** The name of a theme of VHS 0.12.1, as [vhs themes] lists them; a theme
           in JSON, which starts with [{] and which VHS checks only when it runs;

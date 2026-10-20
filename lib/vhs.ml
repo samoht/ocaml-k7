@@ -417,6 +417,24 @@ let check_size settings actions =
       err "Set %s: the frame needs at least %Ld x %Ld pixels, not %d x %d"
         culprit min_width min_height w h
 
+(* VHS encodes an MP4 in yuv420p, which ffmpeg refuses for an odd width or
+   height. *)
+let check_mp4 settings paths =
+  let last name f =
+    List.fold_left
+      (fun v s -> Option.fold ~none:v ~some:(fun n -> Some (name, n)) (f s))
+      None settings
+  in
+  let odd = function
+    | Some (name, n) when n land 1 <> 0 ->
+        err "Set %s %d: odd, which an MP4 output cannot have" name n
+    | _ -> Ok ()
+  in
+  if List.exists (fun p -> kind p = "MP4") paths then
+    let* () = odd (last "Width" (function Width n -> Some n | _ -> None)) in
+    odd (last "Height" (function Height n -> Some n | _ -> None))
+  else Ok ()
+
 let tape ?(settings = []) ~outputs actions =
   let* () =
     if outputs = [] then err "no output" else iter_result check_output outputs
@@ -425,7 +443,9 @@ let tape ?(settings = []) ~outputs actions =
   let* _started = check_actions ~started:false actions in
   let* () = check_cells settings actions in
   let* () = check_size settings actions in
-  let* () = check_kinds (outputs @ raw_outputs actions) in
+  let paths = outputs @ raw_outputs actions in
+  let* () = check_kinds paths in
+  let* () = check_mp4 settings paths in
   Ok { outputs; settings; actions }
 
 (* Printing *)
