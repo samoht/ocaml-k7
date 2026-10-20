@@ -357,12 +357,18 @@ let test_padding_overflow () =
   rejects "padding exceeds the default frame" ~settings:[ Vhs.Padding max_int ]
     []
 
+(* Adding twice a raw margin to the default padding must not wrap. *)
+let test_raw_margin_overflow () =
+  rejects "raw margin exceeds the default frame"
+    [ Vhs.raw "Set Margin 4611686018427387903" ]
+
 let suite =
   ( "vhs",
     List.map
       (fun (name, fn) -> Alcotest.test_case name `Quick fn)
       [
         ("padding overflow", test_padding_overflow);
+        ("raw margin overflow", test_raw_margin_overflow);
         ("raw validation", test_raw_validation);
         ("basic tape", test_basic_tape);
         ("quotes", test_quotes);
