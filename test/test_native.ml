@@ -353,6 +353,23 @@ let test_fish () =
       Alcotest.(check bool) "no greeting" false (contains ~sub:"Welcome" text);
       check_contains "command" ~sub:"> echo fish-$status" text
 
+(* A program that asks the terminal for its attributes gets xterm.js's
+   answer. *)
+let test_replies () =
+  with_dir @@ fun env cwd ->
+  let t =
+    tape
+      Vhs.
+        [
+          type' {|printf '\033[c'; IFS= read -rsd c da; echo "da${da#*[}"|};
+          key Enter;
+          wait ~timeout:(Ms 5000) (Screen {|(?m)^da\?1;2$|});
+        ]
+  in
+  match record env cwd t with
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Ok _ -> ()
+
 (* Keys send what xterm sends: the line editor sees arrows, control and alt
    chords. *)
 let test_keys () =
@@ -684,6 +701,7 @@ let suite =
          ("margin fill", test_margin_fill);
          ("zsh", test_zsh);
          ("fish", test_fish);
+         ("replies", test_replies);
          ("screenshot", test_screenshot);
          ("source", test_source);
          ("keys", test_keys);

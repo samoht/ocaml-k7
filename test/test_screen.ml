@@ -337,6 +337,34 @@ let test_sequences () =
     "modifyOtherKeys" true
     (Ansi.Attr.is_empty (first_attrs "\027[>4;2mx"))
 
+(* The terminal answers the queries xterm.js answers, once each: the
+   primary and secondary device attributes, the status report and the
+   cursor position, which counts the column beyond the last after a
+   character there, as xterm.js does. *)
+let test_replies () =
+  let replies s =
+    let t = Screen.terminal ~rows:9 ~cols:46 in
+    Screen.feed t s;
+    let r = Screen.take_replies t in
+    Alcotest.(check string) (Fmt.str "%S taken" s) "" (Screen.take_replies t);
+    r
+  in
+  List.iter
+    (fun (s, expected) ->
+      Alcotest.(check string) (Fmt.str "%S" s) expected (replies s))
+    [
+      ("\027[c", "\027[?1;2c");
+      ("\027[0c", "\027[?1;2c");
+      ("\027[1c", "");
+      ("\027[>c", "\027[>0;276;0c");
+      ("\027[5n", "\027[0n");
+      ("ab\r\nc\027[6n", "\027[2;2R");
+      ("ab\r\nc\027[?6n", "\027[?2;2R");
+      (String.make 46 'a' ^ "\027[6n", "\027[1;47R");
+      ("\027[c\027[5n", "\027[?1;2c\027[0n");
+      ("\027[=c\027[?5n", "");
+    ]
+
 let suite =
   ( "screen",
     List.map
@@ -361,4 +389,5 @@ let suite =
         ("delete wide glyph cell", test_delete_wide);
         ("cell edits", test_cell_edits);
         ("sequences", test_sequences);
+        ("replies", test_replies);
       ] )
