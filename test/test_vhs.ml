@@ -362,6 +362,17 @@ let test_raw_margin_overflow () =
   rejects "raw margin exceeds the default frame"
     [ Vhs.raw "Set Margin 4611686018427387903" ]
 
+(* The browser VHS drives takes a viewport, the frame less twice the padding
+   and, unless [MarginFill] is empty, twice the margin, from 0 to 10,000,000
+   pixels a side; vhs panics on another. *)
+let test_viewport () =
+  rejects "wider than the browser" ~settings:[ Vhs.Width 10_000_121 ] [];
+  rejects "taller than the browser" ~settings:[ Vhs.Height 10_000_121 ] [];
+  rejects "widened by a negative margin" [ Vhs.raw {|Set Margin "-5000000"|} ];
+  rejects "negative without a margin fill" ~settings:[ Vhs.Width 100 ]
+    [ Vhs.raw {|Set MarginFill ""|}; Vhs.raw {|Set Margin "-100"|} ];
+  ignore (body ~settings:[ Vhs.Width 10_000_120 ] [])
+
 let suite =
   ( "vhs",
     List.map
@@ -369,6 +380,7 @@ let suite =
       [
         ("padding overflow", test_padding_overflow);
         ("raw margin overflow", test_raw_margin_overflow);
+        ("viewport", test_viewport);
         ("raw validation", test_raw_validation);
         ("basic tape", test_basic_tape);
         ("quotes", test_quotes);
