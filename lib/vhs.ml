@@ -911,20 +911,23 @@ let record ~clock ~proc ~cwd t =
     Option.to_result ~none:(Io "the directory is not a native path")
       (Eio.Path.native cwd)
   in
-  let* svg =
+  let* svg, text =
     Result.map_error native_error
       (Native.play ~clock ~env:(environment proc) ~cwd:dir tape)
   in
-  let save path =
+  let save contents path =
     match
-      Eio.Path.save ~create:(`Or_truncate 0o644) Eio.Path.(cwd / path) svg
+      Eio.Path.save ~create:(`Or_truncate 0o644) Eio.Path.(cwd / path) contents
     with
     | () -> Ok ()
     | exception Eio.Io (Eio.Fs.E e, _) -> Error (Io (fs_message path e))
     | exception Eio.Io (err, _) ->
         Error (Io (path ^ ": " ^ Fmt.to_to_string Eio.Exn.pp_err err))
   in
-  let* () = iter_result save (List.filter is_svg t.outputs) in
+  let* () = iter_result (save svg) (List.filter is_svg t.outputs) in
+  let* () =
+    iter_result (save text) (Option.to_list (Native.text_output tape))
+  in
   Ok svg
 
 let svg ?(settings = []) output =

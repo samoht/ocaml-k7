@@ -62,5 +62,13 @@ val last : 'a list -> 'a
 val oracle : string option
 (** [oracle] is the [vhs] the oracle alias names in [VHS_ORACLE]. *)
 
+val separator : string
+(** [separator] is the line that ends each screen of a VHS text output: 80
+    U+2500 characters. *)
+
+val screens : string -> string list
+(** [screens txt] are the screens of the VHS text output [txt], in order: the
+    lines VHS read after a command, joined by newlines. *)
+
 val last_screen : string -> string
 (** [last_screen txt] is the last screen of the VHS text output [txt]. *)

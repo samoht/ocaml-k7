@@ -69,19 +69,18 @@ let last l = List.nth l (List.length l - 1)
 (* The vhs executable of the tests that run it, from [VHS_ORACLE]: the
    oracle alias sets it, runtest does not. *)
 let oracle = Sys.getenv_opt "VHS_ORACLE"
+let separator = String.concat "" (List.init 80 (fun _ -> "\xe2\x94\x80"))
 
-(* The last screen of a VHS text output: the screen after each command, then
-   a line of 80 box-drawing characters. *)
+let screens txt =
+  String.split_on_char '\n' txt
+  |> List.fold_left
+       (fun (cur, acc) l ->
+         if l = separator then ([], String.concat "\n" (List.rev cur) :: acc)
+         else (l :: cur, acc))
+       ([], [])
+  |> snd |> List.rev
+
 let last_screen txt =
-  let separator = String.concat "" (List.init 80 (fun _ -> "\xe2\x94\x80")) in
-  let screens =
-    String.split_on_char '\n' txt
-    |> List.fold_left
-         (fun (cur, acc) l ->
-           if l = separator then ([], List.rev cur :: acc) else (l :: cur, acc))
-         ([], [])
-    |> snd
-  in
-  match screens with
-  | s :: _ -> String.concat "\n" s
+  match List.rev (screens txt) with
+  | s :: _ -> s
   | [] -> Alcotest.fail "no screen"

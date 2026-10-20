@@ -43,6 +43,8 @@ type command =
   | Set_typing_speed of int
   | Copy of string
   | Paste
+  | Output of string
+  | Env
 
 let keys =
   [ "Enter"; "Tab"; "Space"; "Backspace"; "Delete"; "Insert"; "Escape"; "Up";
@@ -266,7 +268,12 @@ type t = {
   actions : command list;
   env : (string * string) list;
   requires : string list;
+  text : string option;  (** The text output of the settings. *)
+  dumps : bool;  (** Whether the text output starts with the first action. *)
 }
+
+let is_text path =
+  match extension path with ".txt" | ".ascii" | ".test" -> true | _ -> false
 
 let wait_command line tokens =
   let scope, rest =
@@ -284,13 +291,18 @@ let wait_command line tokens =
 (* The settings, environment and requirements a line adds, or its action. *)
 let read line t =
   match tokens line with
-  | [] | Keyword "Output" :: _ -> t
+  | [] -> t
+  | Keyword "Output" :: p :: _ when t.actions = [] ->
+      if is_text (lit p) then { t with text = Some (lit p) } else t
+  | Keyword "Output" :: p :: _ ->
+      { t with actions = Output (lit p) :: t.actions }
   | Keyword "Set" :: Keyword "TypingSpeed" :: args when t.actions <> [] ->
       let c = set line t.config "TypingSpeed" args in
       { t with actions = Set_typing_speed c.typing_speed :: t.actions }
   | Keyword "Set" :: Keyword name :: args ->
       { t with config = set line t.config name args }
-  | Keyword "Env" :: k :: v :: _ -> { t with env = (lit k, lit v) :: t.env }
+  | Keyword "Env" :: k :: v :: _ ->
+      { t with env = (lit k, lit v) :: t.env; actions = Env :: t.actions }
   | Keyword "Require" :: p :: _ -> { t with requires = lit p :: t.requires }
   | tokens ->
       let action =
@@ -322,13 +334,35 @@ let read line t =
 let of_lines lines =
   let config = default_config () in
   let empty =
-    { config; look = style config; actions = []; env = []; requires = [] }
+    {
+      config;
+      look = style config;
+      actions = [];
+      env = [];
+      requires = [];
+      text = None;
+      dumps = false;
+    }
   in
   match
     let t = List.fold_left (fun t line -> read line t) empty lines in
     { t with look = style t.config }
   with
-  | t -> Ok { t with actions = List.rev t.actions; env = List.rev t.env }
+  | t ->
+      let actions = List.rev t.actions in
+      let later =
+        List.find_map
+          (function Output p when is_text p -> Some p | _ -> None)
+          actions
+      in
+      Ok
+        {
+          t with
+          actions;
+          env = List.rev t.env;
+          text = (match t.text with Some _ -> t.text | None -> later);
+          dumps = Option.is_some t.text;
+        }
   | exception Stop e -> Error e
 
 (* Timelines *)
@@ -360,6 +394,7 @@ let svg t tl ~end_ms =
   Svg.to_string { s with loop_offset } ~duration frames
 
 let timeline c = { quantum = max 1 (1000 / c.framerate); frames = [] }
+let text_output t = t.text
 
 let replay t output =
   let s = t.look in
@@ -448,6 +483,8 @@ type state = {
   mutable cap : int option;  (** The tape's duration of the action. *)
   mutable typing_speed : int;
   mutable clipboard : string;
+  text : Buffer.t;
+  mutable dumps : bool;  (** Whether a command adds its screen to [text]. *)
 }
 
 let now st = Eio.Time.Mono.now st.clock
@@ -546,6 +583,13 @@ let within st seconds f =
       Eio.Time.Mono.sleep st.clock seconds;
       false)
 
+(* VHS reads as many lines as the screen has rows, from the top of the
+   buffer. *)
+let top st =
+  Screen.buffer st.term st.live
+  |> Array.to_list
+  |> List.filteri (fun i _ -> i < Vte.rows (vte st))
+
 let wait_text st = function
   | Line ->
       let row = fst (Vte.cursor_pos (vte st)) in
@@ -556,12 +600,7 @@ let wait_text st = function
         let lines = Screen.buffer st.term st.live
         and i = Screen.history st.term + row - st.offset in
         if i >= 0 && i < Array.length lines then lines.(i) else ""
-  | Screen ->
-      (* VHS reads as many lines as the screen has rows, from the top. *)
-      Screen.buffer st.term st.live
-      |> Array.to_list
-      |> List.filteri (fun i _ -> i < Vte.rows (vte st))
-      |> String.concat "\n"
+  | Screen -> String.concat "\n" (top st)
 
 let wait st c ~line ~scope ~timeout ~pattern =
   let re = Option.value pattern ~default:c.wait_pattern in
@@ -580,7 +619,21 @@ let wait st c ~line ~scope ~timeout ~pattern =
   st.started <- now st;
   st.cap <- Some 0
 
-let run st c = function
+(* VHS's text output: the lines {!top} reads after each command it records,
+   each followed by a newline, then a line of 80 box-drawing characters. *)
+let separator = String.concat "" (List.init 80 (fun _ -> "\xe2\x94\x80"))
+
+let dump st =
+  if st.dumps && not st.hidden then (
+    List.iter
+      (fun l ->
+        Buffer.add_string st.text l;
+        Buffer.add_char st.text '\n')
+      (top st);
+    Buffer.add_string st.text separator;
+    Buffer.add_char st.text '\n')
+
+let run_command st c = function
   | Type { speed; text } -> type_text st ?speed text
   | Key { speed; count; key = "ScrollUp" } -> scroll st ?speed ~count 1
   | Key { speed; count; key = "ScrollDown" } -> scroll st ?speed ~count (-1)
@@ -601,6 +654,12 @@ let run st c = function
   | Set_typing_speed ms -> st.typing_speed <- ms
   | Copy s -> st.clipboard <- s
   | Paste -> write st st.clipboard
+  | Output path -> if is_text path then st.dumps <- true
+  | Env -> ()
+
+let run st c command =
+  run_command st c command;
+  dump st
 
 let on_path env exe =
   if String.contains exe '/' then Sys.file_exists exe
@@ -695,6 +754,8 @@ let play ~clock ~env ~cwd t =
         cap = Some 0;
         typing_speed = t.config.typing_speed;
         clipboard = "";
+        text = Buffer.create 4096;
+        dumps = t.dumps;
       }
     in
     Eio.Fiber.first
@@ -705,7 +766,7 @@ let play ~clock ~env ~cwd t =
         st.started <- now st;
         record st;
         List.iter (run st t.config) t.actions);
-    svg t st.tl ~end_ms:st.logical
+    (svg t st.tl ~end_ms:st.logical, Buffer.contents st.text)
   with
-  | svg -> Ok svg
+  | r -> Ok r
   | exception Stop e -> Error e

@@ -28,14 +28,22 @@ val of_lines : string list -> (t, error) result
     {!Tape_syntax.check} accepts. It is [Error (Unsupported _)] on a line this
     module cannot play. *)
 
+val text_output : t -> string option
+(** [text_output t] is the path of the text output of [t], its [Output] line
+    with a [.txt], [.ascii] or [.test] extension, if any. *)
+
 val play :
   clock:_ Eio.Time.Mono.t ->
   env:Eio.Process.Env.t ->
   cwd:string ->
   t ->
-  (string, error) result
+  (string * string, error) result
 (** [play ~clock ~env ~cwd t] runs [t] in bash in the directory [cwd] and is the
-    SVG image of what it showed. Bash gets [env] with the prompt VHS gives it,
+    SVG image of what it showed and the text of {!text_output}, in VHS's format:
+    the first lines of the buffer, as many as the screen has rows, after each
+    command that runs while recording, from the first action or from the
+    [Output] line that names it, each screen followed by a line of 80 U+2500
+    characters. Bash gets [env] with the prompt VHS gives it,
     [TERM=xterm-256color] and the [Env] lines of [t]. *)
 
 val replay : t -> (int * string) list -> string

@@ -200,6 +200,51 @@ let test_trim () =
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e
   | Ok _ -> ()
 
+(* The text output holds the first lines of the buffer after each command
+   VHS records, from the first action, or from the [Output] line that names
+   it. *)
+let test_text () =
+  with_dir @@ fun env cwd ->
+  let tape outputs actions =
+    match
+      Vhs.tape ~settings:(Vhs.Typing_speed (Ms 5) :: settings) ~outputs actions
+    with
+    | Ok t -> t
+    | Error e -> Alcotest.fail e
+  in
+  let actions =
+    Vhs.
+      [
+        hidden [ type' "x=1\n"; wait Prompt ];
+        type' "sleep 1; echo hi";
+        key Enter;
+        wait Prompt;
+      ]
+  in
+  let text path = screens (Eio.Path.load Eio.Path.(cwd / path)) in
+  (match record env cwd (tape [ "demo.svg"; "demo.txt" ] actions) with
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Ok _ ->
+      Alcotest.(check (list string))
+        "screens"
+        [
+          screen [ "> x=1"; ">" ];
+          screen [ "> x=1"; "> sleep 1; echo hi" ];
+          screen [ "> x=1"; "> sleep 1; echo hi"; "" ];
+          screen [ "> x=1"; "> sleep 1; echo hi"; "hi"; ">" ];
+        ]
+        (text "demo.txt"));
+  match
+    record env cwd
+      (tape [ "demo.svg" ]
+         (Vhs.raw "Sleep 0" :: Vhs.raw "Output \"later.ascii\"" :: actions))
+  with
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Ok _ ->
+      Alcotest.(check int)
+        "from the output" 5
+        (List.length (text "later.ascii"))
+
 (* Keys send what xterm sends: the line editor sees arrows, control and alt
    chords. *)
 let test_keys () =
@@ -236,21 +281,64 @@ let test_unsupported () =
   | Ok _ -> Alcotest.fail "played a screenshot"
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e
 
-(* The native final screen is the one VHS shows, for a 60 x 12 terminal. *)
+(* [after_settings tape txt] is [txt], a text output of VHS for [tape],
+   without the screens it reads while it applies the settings, before it
+   sizes the terminal: one per [Set], [Output] and [Require] line from the
+   line of the text output, but [Set Shell]. *)
+let after_settings tape txt =
+  let lines = String.split_on_char '\n' (Vhs.to_string tape) in
+  let rec header = function
+    | l :: rest when String.starts_with ~prefix:"Set Shell " l -> header rest
+    | l :: rest
+      when List.exists
+             (fun prefix -> String.starts_with ~prefix l)
+             [ "Set "; "Output "; "Require " ] ->
+        1 + header rest
+    | _ -> 0
+  in
+  let rec from = function
+    | l :: rest when String.ends_with ~suffix:".txt\"" l -> l :: rest
+    | _ :: rest -> from rest
+    | [] -> []
+  in
+  let n = header (from lines) in
+  let sep = "\n" ^ separator ^ "\n" in
+  let rec skip k i =
+    if k = 0 then String.sub txt i (String.length txt - i)
+    else
+      let rec find j =
+        if j + String.length sep > String.length txt then
+          Alcotest.fail "fewer screens than settings"
+        else if String.sub txt j (String.length sep) = sep then
+          j + String.length sep
+        else find (j + 1)
+      in
+      skip (k - 1) (find (max 0 (i - 1)))
+  in
+  skip n 0
+
+(* The native text output is VHS's, byte for byte, but for the screens VHS
+   reads before it sizes the terminal, for a 60 x 12 terminal. *)
 let test_oracle () =
   with_dir @@ fun env cwd ->
   let t =
     match
-      Vhs.tape ~settings:[ Typing_speed (Ms 10) ]
+      Vhs.tape
         ~outputs:[ "oracle.txt"; "oracle.svg" ]
         Vhs.
           [
             raw "Set Columns 60";
             raw "Set Rows 12";
-            type' "echo hello\n";
+            type' "sleep 1; echo hello";
+            key Enter;
             wait Prompt;
-            type' "printf '\\033[31mred\\033[0m wide: \\346\\227\\245 end\\n'\n";
-            wait (Screen "end");
+            type'
+              "sleep 1; printf '\\033[31mred\\033[0m wide: \\346\\227\\245 \
+               e\\314\\201nd\\302\\240\\n'";
+            key Enter;
+            wait Prompt;
+            type' "sleep 1; seq 1 20";
+            key Enter;
             wait Prompt;
             sleep (Ms 500);
           ]
@@ -262,13 +350,21 @@ let test_oracle () =
   (match Vhs.render ?vhs:oracle ~clock ~proc ~cwd t with
   | Ok () -> ()
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
-  let vhs = last_screen (Eio.Path.load Eio.Path.(cwd / "oracle.txt")) in
+  let vhs = Eio.Path.load Eio.Path.(cwd / "oracle.txt") in
   match record env cwd t with
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e
   | Ok s -> (
+      let native = Eio.Path.load Eio.Path.(cwd / "oracle.txt") in
+      Alcotest.(check int) "screens" 10 (List.length (screens native));
+      Alcotest.(check string) "text output" (after_settings t vhs) native;
       match Svg_check.frames ~cell_width ~cell_height ~rows:12 s with
       | Error e -> Alcotest.fail e
-      | Ok frames -> Alcotest.(check string) "final screen" vhs (last frames))
+      | Ok frames ->
+          Alcotest.(check string)
+            "final screen"
+            (String.concat "\n"
+               (List.init 11 (fun i -> Int.to_string (i + 10)) @ [ ">" ]))
+            (last frames))
 
 let suite =
   ( "native",
@@ -284,6 +380,7 @@ let suite =
          ("full scrollback", test_full_scrollback);
          ("scrolled line", test_scrolled_line);
          ("trim", test_trim);
+         ("text", test_text);
          ("keys", test_keys);
          ("unsupported", test_unsupported);
        ]

@@ -269,6 +269,13 @@ val render :
     print, including how the machine schedules it, changes the frames its output
     lands in.
 
+    The text output, [.txt], [.ascii] or [.test], is VHS's: after each command
+    that runs while recording, the first lines of the terminal's buffer, as many
+    as it has rows, as a {!Screen} wait reads them, then a line of 80 U+2500
+    characters. VHS also adds a screen for each [Output] and [Set] line it reads
+    before it sizes the terminal, from the text output's line on, whose rows
+    depend on its browser's window; the native output leaves them out.
+
     {!record} plays the actions of {!action}, the raw [Type], key, [Ctrl],
     [Alt], [Shift], [Sleep], [Wait], [Copy] and [Paste] lines ([Paste] types the
     last [Copy]), [Env], [Require], and every [Set] but those below. It does not
@@ -293,7 +300,8 @@ val record :
   (string, error) result
 (** [record ~clock ~proc ~cwd t] plays [t] in bash in the directory [cwd], with
     the environment {!render} gives [vhs], and is the SVG image of what it
-    showed. [record] also writes the image to each [.svg] output of [t],
+    showed. [record] also writes the image to each [.svg] output of [t] and the
+    {{!native}text output} to the [.txt], [.ascii] or [.test] output of [t],
     relative to [cwd], and writes no other output. The waits of [t] time out by
     [clock]. It is {!Executable_not_found} if [bash] or the executable of a
     [Require] line is not on the [PATH]. *)
