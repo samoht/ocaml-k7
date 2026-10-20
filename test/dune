@@ -1,6 +1,11 @@
 (test
  (name test)
- (deps regexp_cases.txt tape_cases.txt number_cases.txt theme_cases.txt)
+ (deps
+  regexp_cases.txt
+  tape_cases.txt
+  number_cases.txt
+  theme_cases.txt
+  match_cases.txt)
  (libraries
   vhs
   vhs_cram
@@ -21,7 +26,12 @@
 
 (rule
  (alias oracle)
- (deps regexp_cases.txt tape_cases.txt number_cases.txt theme_cases.txt)
+ (deps
+  regexp_cases.txt
+  tape_cases.txt
+  number_cases.txt
+  theme_cases.txt
+  match_cases.txt)
  (action
   (setenv
    VHS_ORACLE

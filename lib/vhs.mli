@@ -324,3 +324,7 @@ val svg :
     (defaults to [[]]) that receives each string of [output] at its time, which
     increases. It is [Error (Unsupported _)] on the {!Theme} colours and the
     sizes {!record} refuses. *)
+
+(**/**)
+
+module Regexp_match = Regexp_match
