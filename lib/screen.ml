@@ -24,6 +24,8 @@ type terminal = {
   mutable count : int;  (** The scrollback lines [vte] holds. *)
   mutable floor : int;  (** The first of them xterm.js still holds. *)
   mutable lines : string array;  (** The scrollback lines, see {!snapshot}. *)
+  mutable top : int;  (** The first row of the scroll region. *)
+  mutable bottom : int;  (** The last row of the scroll region. *)
 }
 
 (* xterm.js keeps a thousand lines of scrollback, VHS's [Buffer] reads its
@@ -46,6 +48,8 @@ let terminal ~rows ~cols =
     count = 0;
     floor = 0;
     lines = [||];
+    top = 0;
+    bottom = rows - 1;
   }
 
 let vte t = t.vte
@@ -118,6 +122,67 @@ let control t s =
   Buffer.add_string t.out s;
   flush t;
   move_to_last_column t
+
+(* matrix 0.1.0 has no scroll region, returns the cursor on a line feed and
+   reads neither an index nor CSI S and T, so the screen moves the cursor
+   and scrolls the region itself, as xterm does. A full-screen scroll keeps
+   the line it scrolls out in the scrollback. *)
+let scroll t n =
+  flush t;
+  move_to_last_column t;
+  let rows = Vte.rows t.vte in
+  let n = max (-(t.bottom - t.top + 1)) (min n (t.bottom - t.top + 1)) in
+  if n > 0 && t.top = 0 && t.bottom = rows - 1 then Vte.scroll_up t.vte n
+  else Grid.scroll (Vte.grid t.vte) ~top:t.top ~bottom:t.bottom n;
+  (* The scrolled-in rows are blank, not of the colour the rows had. *)
+  let first = if n > 0 then t.bottom - n + 1 else t.top in
+  Grid.fill_rect (Vte.grid t.vte) ~x:0 ~y:first ~width:(Vte.cols t.vte)
+    ~height:(abs n) ~color:(color default_bg);
+  for r = t.top to t.bottom do
+    t.dirty <- r :: t.dirty
+  done;
+  track t
+
+let move t ~row ~col =
+  flush t;
+  Vte.set_cursor_pos t.vte ~row ~col
+
+(* A line feed scrolls the region at its last row, and moves down a row
+   elsewhere, in the same column. *)
+let index t =
+  flush t;
+  move_to_last_column t;
+  let row, col = Vte.cursor_pos t.vte in
+  if row = t.bottom then scroll t 1
+  else if row < Vte.rows t.vte - 1 then move t ~row:(row + 1) ~col
+
+let reverse_index t =
+  flush t;
+  move_to_last_column t;
+  let row, col = Vte.cursor_pos t.vte in
+  if row = t.top then scroll t (-1)
+  else if row > 0 then move t ~row:(row - 1) ~col
+
+(* [CSI top ; bottom r] sets the scroll region and homes the cursor; a
+   region of less than two rows is ignored. *)
+let set_region t params =
+  let rows = Vte.rows t.vte in
+  let n i d =
+    match List.nth_opt (String.split_on_char ';' params) i with
+    | Some s -> (
+        match int_of_string_opt s with Some v when v > 0 -> v | _ -> d)
+    | None -> d
+  in
+  let top = n 0 1 - 1 and bottom = min rows (n 1 rows) - 1 in
+  if top < bottom then (
+    t.top <- top;
+    t.bottom <- bottom;
+    move t ~row:0 ~col:0)
+
+let params s = String.sub s 2 (String.length s - 3)
+
+let count s =
+  match int_of_string_opt (params s) with Some n when n > 0 -> n | _ -> 1
 
 (* The final byte of the CSI sequence [s], if it is one. *)
 let csi_final s =
@@ -198,8 +263,21 @@ let escape = function
 let sequence t s =
   if s = "\027[3J" then erase_scrollback t
   else
-    match csi_final s with
-    | Some ('A' .. 'H' | 'J' | 'K' | 'L' | 'M' | 'P' | '@' | 'f') -> control t s
+    match (csi_final s, s) with
+    | Some ('A' .. 'H' | 'J' | 'K' | 'L' | 'M' | 'P' | '@' | 'f'), _ ->
+        control t s
+    | Some 'S', _ -> scroll t (count s)
+    | Some 'T', _ -> scroll t (-count s)
+    | Some 'r', _ -> set_region t (params s)
+    | None, "\027D" -> index t
+    | None, "\027E" ->
+        index t;
+        move t ~row:(fst (Vte.cursor_pos t.vte)) ~col:0
+    | None, "\027M" -> reverse_index t
+    | None, "\027c" ->
+        t.top <- 0;
+        t.bottom <- Vte.rows t.vte - 1;
+        Buffer.add_string t.out s
     | _ -> Buffer.add_string t.out s
 
 (* The terminal reads valid UTF-8 outside escape sequences: each maximal
@@ -225,6 +303,7 @@ let rec byte t c =
     let state = t.state in
     (match (state, c) with
     | Ground, '\b' -> control t "\027[D"
+    | Ground, ('\n' | '\011' | '\012') -> index t
     | Ground, '\027' -> Buffer.add_char t.seq c
     | Ground, _ -> Buffer.add_char t.out c
     | _ -> Buffer.add_char t.seq c);
