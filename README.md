@@ -101,7 +101,8 @@ $ vhs-cram --print --output hello.gif hello.t
 Output "hello.gif"
 Set Shell "bash"
 Hide
-Type "PS1='\[\e[38;2;90;86;224m\]>\[\342\200\213\] \[\e[0m\]'; clear"
+Env VHS_CRAM_PROMPT `__vhs=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} "PS1='\[\e[38;2;90;86;224m\]>\[\342\200\213\] \[\e[0m\]'"); unset PROMPT_COMMAND; PROMPT_COMMAND=$__vhs; unset __vhs VHS_CRAM_PROMPT`
+Type 'eval "$VHS_CRAM_PROMPT"; clear'
 Enter
 Wait+Line /\x{200B}$/
 Show
@@ -112,9 +113,11 @@ Sleep 1000ms
 ```
 
 A setup script, given with `--setup`, runs before the first command without
-being recorded. `vhs-cram` then sets the prompt to the one VHS gives bash
-followed by an invisible zero-width space, and waits for that prompt: output
-that ends with `>` while its command still runs is not mistaken for it.
+being recorded. `vhs-cram` then makes the last command of bash's
+`PROMPT_COMMAND`, after any prompt hook the setup installs, set the prompt to
+the one VHS gives bash followed by an invisible zero-width space, and waits for
+that prompt: output that ends with `>` while its command still runs is not
+mistaken for it.
 
 ## Credits
 

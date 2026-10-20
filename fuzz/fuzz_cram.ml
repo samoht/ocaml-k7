@@ -129,7 +129,7 @@ let test_setup scripts command =
         String.concat ""
           (List.map (fun s -> "source " ^ Filename.quote s ^ "; ") scripts)
       in
-      check (String.starts_with ~prefix:(sources ^ "PS1=") prelude);
+      check (String.starts_with ~prefix:(sources ^ "eval ") prelude);
       check (String.ends_with ~suffix:"; clear" prelude)
   | l -> failf "submitted %d lines" (List.length l)
 

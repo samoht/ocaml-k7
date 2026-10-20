@@ -7,11 +7,13 @@ open Vhs_cram
 
 let expect = Alcotest.(check string)
 let ready = {|Wait+Line /\x{200B}$/|} ^ "\n"
-let ps1 = {|PS1='\[\e[38;2;90;86;224m\]>\[\342\200\213\] \[\e[0m\]'|}
+
+let env =
+  {|Env VHS_CRAM_PROMPT `__vhs=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} "PS1='\[\e[38;2;90;86;224m\]>\[\342\200\213\] \[\e[0m\]'"); unset PROMPT_COMMAND; PROMPT_COMMAND=$__vhs; unset __vhs VHS_CRAM_PROMPT`|}
 
 (* What every recording starts with, hidden. *)
-let prelude ?(sources = "") () =
-  "Hide\nType \"" ^ sources ^ ps1 ^ "; clear\"\nEnter\n" ^ ready ^ "Show\n"
+let prelude ?(typed = {|Type 'eval "$VHS_CRAM_PROMPT"; clear'|}) () =
+  "Hide\n" ^ env ^ "\n" ^ typed ^ "\nEnter\n" ^ ready ^ "Show\n"
 
 let cram ?(setup = []) src =
   match Cram.parse src with
@@ -74,7 +76,10 @@ let test_parse_errors () =
    prompt [ready] relies on survives a setup that changes [PS1]. *)
 let test_setup () =
   expect "setup"
-    (prelude ~sources:{|source 'slow.sh'; source 'it'\''s.sh'; |} ()
+    (prelude
+       ~typed:
+         {|Type `source 'slow.sh'; source 'it'\''s.sh'; eval "$VHS_CRAM_PROMPT"; clear`|}
+       ()
     ^ "Type \"echo ready\"\nEnter\n" ^ ready ^ "Sleep 1000ms\n")
     (cram ~setup:[ "slow.sh"; "it's.sh" ] "  $ echo ready\n")
 
