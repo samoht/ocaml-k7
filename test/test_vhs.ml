@@ -371,7 +371,14 @@ let test_viewport () =
   rejects "widened by a negative margin" [ Vhs.raw {|Set Margin "-5000000"|} ];
   rejects "negative without a margin fill" ~settings:[ Vhs.Width 100 ]
     [ Vhs.raw {|Set MarginFill ""|}; Vhs.raw {|Set Margin "-100"|} ];
-  ignore (body ~settings:[ Vhs.Width 10_000_120 ] [])
+  ignore (body ~settings:[ Vhs.Width 10_000_120 ] []);
+  (* With [Set Rows], VHS first measures the cells in that viewport. *)
+  rejects "rows measured in a viewport the browser refuses"
+    [
+      Vhs.raw "Set WindowBar Colorful";
+      Vhs.raw {|Set WindowBarSize "-20000000"|};
+      Vhs.raw "Set Rows 10";
+    ]
 
 let suite =
   ( "vhs",
