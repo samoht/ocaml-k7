@@ -38,7 +38,7 @@ let env =
   let z = {|\342\200\213|} in
   String.concat ""
     [
-      {|Env VHS_CRAM_PROMPT `__vhs_n=; __vhs_prompt() { PS1='\[\e[38;2;90;86;224m\]> \[|};
+      {|Env VHS_CRAM_PROMPT `bind 'set input-meta on'; bind 'set output-meta on'; bind 'set convert-meta off'; __vhs_n=; __vhs_prompt() { PS1='\[\e[38;2;90;86;224m\]> \[|};
       repeat z;
       {|\e[0m\]'; __vhs_n=$__vhs_n'|};
       z;

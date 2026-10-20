@@ -92,11 +92,12 @@ let var = "VHS_CRAM_PROMPT"
    the prompt VHS gives bash followed by [mark], and [PS2] to bash's [> ]
    followed by [mark] and one [tally mark] per prompt shown so far. The mark
    follows the space so that it stays on the line under the cursor when the
-   [>] fills the last column. *)
+   [>] fills the last column. [init] also makes readline take, show and
+   keep 8-bit input, which it drops without a UTF-8 locale. *)
 let init mark =
   String.concat ""
     [
-      {|__vhs_n=; __vhs_prompt() { PS1='\[\e[38;2;90;86;224m\]> \[|};
+      {|bind 'set input-meta on'; bind 'set output-meta on'; bind 'set convert-meta off'; __vhs_n=; __vhs_prompt() { PS1='\[\e[38;2;90;86;224m\]> \[|};
       concat_map octal mark;
       {|\e[0m\]'; __vhs_n=$__vhs_n'|};
       octal (tally mark);

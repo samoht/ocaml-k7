@@ -43,7 +43,9 @@ val actions : setup:string list -> t -> Vhs.action list
     rewrites [PS1] runs before the appended command, so the prompt survives it;
     a command that replaces [PROMPT_COMMAND] makes the next wait time out. The
     appended command also sets [PS2] to bash's [> ] followed by the mark and a
-    count of the prompts shown, which {!unfinished} reads. *)
+    count of the prompts shown, which {!unfinished} reads, and makes readline
+    take and show typed non-ASCII text, which bash 3.2 drops without a UTF-8
+    locale. *)
 
 val unfinished : setup:string list -> t -> string -> (int * string) option
 (** [unfinished ~setup t output] is [Some (n, line)] if [output], what [vhs]
