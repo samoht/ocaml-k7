@@ -52,8 +52,9 @@ val cells : row -> cell array
 (** [cells r] are the cells of [r], one per column. *)
 
 val row_text : row -> string
-(** [row_text r] is the text of [r] without its trailing spaces, as xterm.js's
-    [translateToString] and [trimEnd] give it. *)
+(** [row_text r] is the text of [r] as xterm.js's [translateToString] and
+    JavaScript's [trimEnd] give it: without its trailing white space, such as
+    spaces and no-break spaces. *)
 
 val row_equal : row -> row -> bool
 (** [row_equal r0 r1] is [true] iff [r0] and [r1] have equal cells. *)

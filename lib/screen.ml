@@ -286,8 +286,25 @@ let cell grid idx =
       }
     else { text; width; fg; bg; attrs }
 
+(* The white space and line terminators of JavaScript, which VHS's
+   [trimEnd] removes. *)
+let is_js_space = function
+  | 0x09 | 0x0a | 0x0b | 0x0c | 0x0d | 0x20 | 0xa0 | 0x1680 | 0x2028 | 0x2029
+  | 0x202f | 0x205f | 0x3000 | 0xfeff ->
+      true
+  | u -> u >= 0x2000 && u <= 0x200a
+
 let trim_end s =
-  let rec go n = if n > 0 && s.[n - 1] = ' ' then go (n - 1) else n in
+  let rec start i =
+    if i > 0 && Char.code s.[i] land 0xc0 = 0x80 then start (i - 1) else i
+  in
+  let rec go n =
+    if n = 0 then 0
+    else
+      let i = start (n - 1) in
+      let d = String.get_utf_8_uchar s i in
+      if is_js_space (Uchar.to_int (Uchar.utf_decode_uchar d)) then go i else n
+  in
   String.sub s 0 (go (String.length s))
 
 let row grid y =
@@ -385,7 +402,7 @@ let buffer term t =
       let lines = Array.of_list (Vte.scrollback_lines term.vte) in
       Array.sub lines (Array.length lines - h) h
   in
-  Array.append older (Array.map (fun r -> r.text) t.rows)
+  Array.append (Array.map trim_end older) (Array.map (fun r -> r.text) t.rows)
 
 let line t r = if r >= 0 && r < Array.length t.rows then t.rows.(r).text else ""
 
