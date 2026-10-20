@@ -379,8 +379,23 @@ let check_padding ~padding ~width ~height =
   let* () = check "Width" width 1200 in
   check "Height" height 600
 
+(* [sum ns] is the sum of [ns], or [None] if it overflows 64 bits. *)
+let sum ns =
+  let add a n =
+    let s = Int64.add a n in
+    (* A sum overflows iff its terms share a sign the sum does not have. *)
+    if
+      Int64.compare a 0L < 0 = (Int64.compare n 0L < 0)
+      && Int64.compare s 0L < 0 <> (Int64.compare a 0L < 0)
+    then None
+    else Some s
+  in
+  List.fold_left (fun acc n -> Option.bind acc (fun a -> add a n)) (Some 0L) ns
+
 (* A raw margin also counts twice, and a raw window bar its size in the
-   height, in Go's wrapping 64-bit arithmetic. *)
+   height; a quoted value can be negative. VHS checks the frame in wrapping
+   64-bit arithmetic, which a huge margin passes before the browser refuses
+   the viewport, so a sum that overflows does not fit. *)
 let check_size settings actions =
   let last f =
     List.fold_left
@@ -403,27 +418,27 @@ let check_size settings actions =
   if Int64.equal margin 0L && Int64.equal bar 0L then
     check_padding ~padding ~width ~height
   else
-    let twice n = Int64.mul 2L n in
-    let min_width =
-      Int64.add
-        (twice (Int64.of_int (Option.value padding ~default:60)))
-        (twice margin)
-    in
-    let min_height = Int64.add min_width bar in
+    let p = Int64.of_int (Option.value padding ~default:60) in
+    let min_width = sum [ p; p; margin; margin ] in
+    let min_height = Option.bind min_width (fun m -> sum [ m; bar ]) in
     let w = Option.value width ~default:1200 in
     let h = Option.value height ~default:600 in
-    if
-      Int64.compare (Int64.of_int w) min_width >= 0
-      && Int64.compare (Int64.of_int h) min_height >= 0
-    then Ok ()
+    let fits size = function
+      | Some m -> Int64.compare (Int64.of_int size) m >= 0
+      | None -> false
+    in
+    if fits w min_width && fits h min_height then Ok ()
     else
       let culprit =
         if Int64.equal margin 0L then
           "WindowBar " ^ Option.value window_bar ~default:""
         else Fmt.str "Margin %Ld" margin
       in
-      err "Set %s: the frame needs at least %Ld x %Ld pixels, not %d x %d"
-        culprit min_width min_height w h
+      match (min_width, min_height) with
+      | Some mw, Some mh ->
+          err "Set %s: the frame needs at least %Ld x %Ld pixels, not %d x %d"
+            culprit mw mh w h
+      | _ -> err "Set %s: the frame size overflows 64 bits" culprit
 
 (* VHS encodes an MP4 in yuv420p, which ffmpeg refuses for an odd width or
    height. *)
