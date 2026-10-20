@@ -27,9 +27,9 @@ val feed : terminal -> string -> unit
     the cursor, and the first column, which has none, drops it; after a
     character in the last column the cursor stays there until the next character
     wraps; line feeds keep the column; and the scroll region of each screen,
-    indexes, line and character edits, REP, the modes of auto-wrap and origin,
-    the saved cursor, the tab stops and the character sets work as in xterm.js.
-*)
+    indexes, line, character and column edits, REP, the modes of auto-wrap and
+    origin, the saved cursor, the tab stops and the character sets work as in
+    xterm.js. *)
 
 val is_dirty : terminal -> bool
 (** [is_dirty t] is [true] iff the screen or the cursor of [t] changed since the

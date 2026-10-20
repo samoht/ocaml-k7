@@ -194,6 +194,13 @@ let params s = String.sub s 2 (String.length s - 3)
 let count s =
   match int_of_string_opt (params s) with Some n when n > 0 -> n | _ -> 1
 
+(* The count of a CSI sequence [s] with an intermediate byte. *)
+let edit_count s =
+  let p = params s in
+  match int_of_string_opt (String.sub p 0 (String.length p - 1)) with
+  | Some n when n > 0 -> n
+  | _ -> 1
+
 (* The final byte of the CSI sequence [s], if it is one. *)
 let csi_final s =
   let n = String.length s in
@@ -203,6 +210,16 @@ let history t =
   if Vte.is_alternate_screen t.vte then 0
   else min xterm_scrollback (t.count - t.floor)
 
+(* The first column and the width of the glyph at column [x] of [row]. *)
+let glyph t ~row x =
+  let g = Vte.grid t.vte in
+  let rec start x =
+    if x > 0 && Grid.is_continuation g (Grid.idx g ~x ~y:row) then start (x - 1)
+    else x
+  in
+  let x = start x in
+  (x, max 1 (Grid.cell_width g (Grid.idx g ~x ~y:row)))
+
 (* matrix 0.1.0 drops a character of no width, so [attach] appends it to the
    cell before the cursor, the grapheme a wide cell continues, as xterm.js
    does. In the first column there is no such cell. *)
@@ -211,15 +228,9 @@ let attach t s =
   let g = Vte.grid t.vte in
   let row, col = Vte.cursor_pos t.vte in
   if col > 0 && row < Grid.height g then (
-    let rec start x =
-      if x > 0 && Grid.is_continuation g (Grid.idx g ~x ~y:row) then
-        start (x - 1)
-      else x
-    in
-    let x = start (min col (Grid.width g) - 1) in
+    let x, width = glyph t ~row (min col (Grid.width g) - 1) in
     let i = Grid.idx g ~x ~y:row in
     let text = (if Grid.is_empty g i then " " else Grid.get_text g i) ^ s in
-    let width = max 1 (Grid.cell_width g i) in
     let glyph =
       Glyph.Pool.intern_sub (Grid.glyph_pool g)
         ~width_method:(Grid.width_method g) ~tab_width:2 text ~pos:0
@@ -450,6 +461,56 @@ let position t ~row ~col =
   in
   move t ~row ~col:(min (Vte.cols t.vte) col - 1)
 
+(* [edit t ~row ~col s] makes matrix read the edit [s] at [row] and [col]. *)
+let edit t ~row ~col s =
+  flush t;
+  Vte.set_cursor_pos t.vte ~row ~col;
+  Buffer.add_string t.out s;
+  flush t
+
+(* matrix 0.1.0 deletes and inserts whole glyphs, where xterm.js edits
+   cells and blanks the cells left of a wide glyph it cuts. [split t ~row x]
+   blanks the wide glyph that column [x] of [row] cuts, if any, so that an
+   edit from [x] cuts none. *)
+let split t ~row x =
+  if x > 0 && x < Vte.cols t.vte then
+    let start, width = glyph t ~row x in
+    if start < x then
+      edit t ~row ~col:start (Fmt.str "\027[%dP\027[%d@" width width)
+
+(* [cells t ~row ~col op n] deletes ([`Delete]), inserts or erases [n]
+   cells of [row] from [col], as xterm.js does. *)
+let cells t ~row ~col op n =
+  split t ~row col;
+  if op <> `Insert then split t ~row (col + n);
+  edit t ~row ~col
+    (match op with
+    | `Delete -> Fmt.str "\027[%dP" n
+    | `Insert -> Fmt.str "\027[%d@" n
+    | `Erase -> Fmt.str "\027[%dP\027[%d@" n n)
+
+(* A character edit starts from the cursor, which moves from beyond the
+   last column. *)
+let edit_chars t op n =
+  flush t;
+  move_to_last_column t;
+  let row, col = Vte.cursor_pos t.vte in
+  cells t ~row ~col op n
+
+(* A column edit, of SL, SR, DECIC or DECDC, edits each row of the scroll
+   region from the first column, or from the cursor's ([at_cursor]), when
+   the cursor is in the region. As in xterm.js, the cursor beyond the last
+   column edits from the first. *)
+let edit_columns ?(at_cursor = false) t op n =
+  flush t;
+  let row, x = Vte.cursor_pos t.vte in
+  let col = if at_cursor then x mod Vte.cols t.vte else 0 in
+  if row >= t.top && row <= t.bottom then (
+    for r = t.top to t.bottom do
+      cells t ~row:r ~col op n
+    done;
+    Vte.set_cursor_pos t.vte ~row ~col:x)
+
 (* An inserted or deleted line scrolls the region from the cursor's row,
    which it leaves in the first column; outside the region it does
    nothing. *)
@@ -562,6 +623,14 @@ let sequence t s =
   t.last <- "";
   match (csi_final s, s) with
   | _, "\027[3J" -> erase_scrollback t
+  | Some '@', _ when String.ends_with ~suffix:" @" s ->
+      edit_columns t `Delete (edit_count s)
+  | Some 'A', _ when String.ends_with ~suffix:" A" s ->
+      edit_columns t `Insert (edit_count s)
+  | Some '}', _ when String.ends_with ~suffix:"'}" s ->
+      edit_columns t ~at_cursor:true `Insert (edit_count s)
+  | Some '~', _ when String.ends_with ~suffix:"'~" s ->
+      edit_columns t ~at_cursor:true `Delete (edit_count s)
   | Some ('A' | 'F'), _ ->
       vertical t (-n ()) ~col:(if csi_final s = Some 'F' then Some 0 else None)
   | Some ('B' | 'e' | 'E'), _ ->
@@ -575,9 +644,9 @@ let sequence t s =
       position t ~row:(n ()) ~col:(col + 1)
   | Some '`', _ -> control t ("\027[" ^ params s ^ "G")
   | Some 'a', _ -> control t ("\027[" ^ params s ^ "C")
-  | Some 'X', _ ->
-      let n = string_of_int (n ()) in
-      control t ("\027[" ^ n ^ "P\027[" ^ n ^ "@")
+  | Some 'P', _ when plain s -> edit_chars t `Delete (n ())
+  | Some '@', _ when plain s -> edit_chars t `Insert (n ())
+  | Some 'X', _ when plain s -> edit_chars t `Erase (n ())
   | Some 'b', _ ->
       if last <> "" then
         for _ = 1 to n () do
