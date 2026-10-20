@@ -318,6 +318,41 @@ let test_zsh () =
         (screen [ "> echo $ZSH_NAME"; "zsh"; ">" ])
         (last (frames s))
 
+(* fish plays natively, started as VHS starts it: no greeting, VHS's
+   prompt and its typed command. fish is in CI; the test skips where it is
+   not on the [PATH]. *)
+let test_fish () =
+  let on_path =
+    List.exists
+      (fun dir -> dir <> "" && Sys.file_exists (Filename.concat dir "fish"))
+      (String.split_on_char ':'
+         (Option.value (Sys.getenv_opt "PATH") ~default:""))
+  in
+  if not on_path then Alcotest.skip ();
+  with_dir @@ fun env cwd ->
+  let t =
+    match
+      Vhs.tape
+        ~settings:(Shell Fish :: Typing_speed (Ms 5) :: settings)
+        ~outputs:[ "demo.svg" ]
+        Vhs.
+          [
+            type' "echo fish-$status\n";
+            wait ~timeout:(Ms 10000) (Screen "(?m)^fish-0$");
+            wait Prompt;
+            sleep (Ms 100);
+          ]
+    with
+    | Ok t -> t
+    | Error e -> Alcotest.fail e
+  in
+  match record env cwd t with
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Ok s ->
+      let text = last (frames s) in
+      Alcotest.(check bool) "no greeting" false (contains ~sub:"Welcome" text);
+      check_contains "command" ~sub:"> echo fish-$status" text
+
 (* Keys send what xterm sends: the line editor sees arrows, control and alt
    chords. *)
 let test_keys () =
@@ -349,7 +384,7 @@ let test_unsupported () =
   with_dir @@ fun env cwd ->
   let t =
     match
-      Vhs.tape ~settings:[ Shell Fish ] ~outputs:[ "demo.svg" ]
+      Vhs.tape ~settings:[ Shell Nushell ] ~outputs:[ "demo.svg" ]
         [ Vhs.type' "x" ]
     with
     | Ok t -> t
@@ -357,7 +392,7 @@ let test_unsupported () =
   in
   match record env cwd t with
   | Error (Unsupported why) -> check_contains "names the line" ~sub:"Shell" why
-  | Ok _ -> Alcotest.fail "played fish"
+  | Ok _ -> Alcotest.fail "played nushell"
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e
 
 (* A screenshot is a still SVG image of the next frame, also when it is
@@ -648,6 +683,7 @@ let suite =
          ("window bar", test_window_bar);
          ("margin fill", test_margin_fill);
          ("zsh", test_zsh);
+         ("fish", test_fish);
          ("screenshot", test_screenshot);
          ("source", test_source);
          ("keys", test_keys);
