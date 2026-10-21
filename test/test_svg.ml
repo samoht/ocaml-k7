@@ -91,6 +91,20 @@ let test_svg_output () =
            (Vhs.tape ~outputs:[ "a.gif" ]
               [ Vhs.raw "Output b.svg"; Vhs.type' "x" ]))
 
+(* Times are a tape's durations, in increasing order. *)
+let test_times () =
+  List.iter
+    (fun output ->
+      match Vhs.svg output with
+      | Error (Invalid _) -> ()
+      | Ok _ -> Alcotest.fail "drawn"
+      | Error e -> Alcotest.failf "%a" Vhs.pp_error e)
+    [
+      [ (Ms (-1), "a") ];
+      [ (Ms 10, "a"); (Ms 5, "b") ];
+      [ (Ms 0, "a"); (Ms max_int, "b") ];
+    ]
+
 let suite =
   ( "svg",
     List.map
@@ -104,4 +118,5 @@ let suite =
         ("huge sizes", test_huge);
         ("deterministic", test_deterministic);
         ("svg output", test_svg_output);
+        ("times", test_times);
       ] )
