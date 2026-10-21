@@ -279,10 +279,39 @@ let test_reverse_wrap n enabled =
   check_eq ~pp:pp_string expected (Matrix_grid.to_text (Vte.grid term));
   check_output_rows output lines
 
+(* Input grouping must not change a Unicode Prepend character's placement.
+   Compare the underlying emulator and the public image independently. *)
+let test_prepend_boundaries n =
+  let b = Buffer.create 8 in
+  Buffer.add_string b "\027[?7l";
+  Buffer.add_utf_8_uchar b (Uchar.of_int 0x06dd);
+  Buffer.add_char b (Char.chr (Char.code 'a' + (n mod 26)));
+  let output = Buffer.contents b in
+  let whole = Vte.create ~rows ~cols () and split = Vte.create ~rows ~cols () in
+  Vte.feed_string whole output;
+  String.iter (fun c -> Vte.feed_string split (String.make 1 c)) output;
+  check_eq ~pp:pp_string
+    (Matrix_grid.to_text (Vte.grid whole))
+    (Matrix_grid.to_text (Vte.grid split));
+  let final chunks =
+    let output = List.mapi (fun i s -> (Vhs.Ms (i * 20), s)) chunks in
+    match Vhs.svg ~settings output with
+    | Error e -> failf "%a" Vhs.pp_error e
+    | Ok image -> (
+        match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows image with
+        | Error e -> fail e
+        | Ok frames -> List.hd (List.rev frames))
+  in
+  check_eq ~pp:pp_string (final [ output ])
+    (final
+       (List.init (String.length output) (fun i -> String.make 1 output.[i])))
+
 let suite =
   ( "svg",
     [
       test_case "frames" [ list chunk ] test_frames;
+      test_case "Unicode Prepend survives delivery boundaries" [ uint8 ]
+        test_prepend_boundaries;
       test_case "reverse wrap crosses automatic line breaks" [ uint8; bool ]
         test_reverse_wrap;
       test_case "selective erasure preserves protected cells" [ uint8; bool ]
