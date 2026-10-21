@@ -747,6 +747,11 @@ let test_alternate_cursor () =
 let test_selective_erase () =
   check_terminal_payload {|\033[1"qabc\033[0"qdef\r\033[?2K|} [ "abc" ]
 
+(* Reverse-wrap mode lets backspace cross a line that auto-wrap produced. *)
+let test_reverse_wrap () =
+  check_terminal_payload {|\033[?45h\033[60GAZ\b\bX|}
+    [ String.make 59 ' ' ^ "X"; "Z" ]
+
 (* The native terminal follows xterm, as matrix emulates it, where VHS's
    xterm.js departs from it. These are the differences that show in a
    recording, each with what VHS writes and what the native recorder does:
@@ -844,6 +849,7 @@ let suite =
          ("C1 terminal controls", test_c1_controls);
          ("alternate-screen shared cursor", test_alternate_cursor);
          ("selective erasure preserves protected text", test_selective_erase);
+         ("reverse wrap crosses an automatic line break", test_reverse_wrap);
        ]
       @ known_differences
       @
