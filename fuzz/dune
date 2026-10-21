@@ -9,8 +9,8 @@
   vhs_cram
   svg_check
   matrix.ansi
-  matrix.glyph
   matrix.grid
+  matrix.text
   matrix.vte
   fmt
   alcobar

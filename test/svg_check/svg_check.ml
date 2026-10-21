@@ -41,7 +41,7 @@ let graphemes s =
   in
   go [] 0
 
-let measure = Glyph.String.measure ~width_method:`Unicode ~tab_width:2
+let measure = Matrix_text.measure ~width_method:`Unicode ~tab_width:2
 
 (* The cells a grapheme takes: those of its characters, without the
    zero-width ones that join a cell, such as a variation selector, which

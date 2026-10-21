@@ -198,6 +198,14 @@ let first_fg s =
   Screen.feed t s;
   (Screen.cells (Screen.rows (Screen.of_terminal t)).(0)).(0).fg
 
+let colour =
+  Alcotest.testable
+    (fun ppf -> function
+      | Screen.Default -> Fmt.string ppf "default"
+      | Indexed i -> Fmt.pf ppf "index %d" i
+      | Rgb c -> Fmt.pf ppf "#%06x" c)
+    ( = )
+
 (* As in xterm.js, a restore brings back the colours and the active
    character set the save saw, and the line the save was on, which lines
    scrolled out since moved up; it leaves the cursor's visibility alone,
@@ -217,11 +225,9 @@ let test_restore () =
         "\027(0\027[?1049h\027(B\027[?1049lq",
         [ "\xe2\x94\x80" ] );
     ];
-  Alcotest.(check int)
-    "saved colour" (first_fg "\027[31mx")
+  Alcotest.check colour "saved colour" (first_fg "\027[31mx")
     (first_fg "\027[31m\0277\027[0m\0278x");
-  Alcotest.(check int)
-    "colour after the save" (first_fg "x")
+  Alcotest.check colour "colour after the save" (first_fg "x")
     (first_fg "\0277\027[31m\0278x");
   Alcotest.(check bool)
     "hidden cursor" false

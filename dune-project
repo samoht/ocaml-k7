@@ -27,7 +27,9 @@
   (alcotest :with-test)
   (mtime (>= 2.0.0))
   (cstruct (>= 6.0.1))
-  (matrix (and (>= 0.1.0) (< 0.2.0)))
+  ; The terminal fixes vhs needs are unreleased: CI pins them from
+  ; samoht/mosaic until matrix 0.2.0 is on opam.
+  (matrix (>= 0.2.0))
   (re (>= 1.10.0))
   (markup (and (>= 1.0.0) :with-test))
   (alcobar :with-test)

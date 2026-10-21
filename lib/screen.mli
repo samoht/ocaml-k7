@@ -5,31 +5,25 @@
 
 (** Snapshots of a terminal screen.
 
-    A snapshot holds the cells of each row of a {!Vte.t} and its cursor. A
-    colour is [-1] for the terminal's default, or [0xRRGGBB] as the terminal
-    resolved it: an ANSI colour is xterm's RGB value for it. *)
+    A snapshot holds the cells of each row of a {!Vte.t} and its cursor. *)
 
 type terminal
 (** The type for terminals: a {!Vte.t} and the state of the bytes it reads. *)
 
 val terminal : rows:int -> cols:int -> terminal
-(** [terminal ~rows ~cols] is a terminal that has read nothing, whose default
-    colours {!of_terminal} reads as [-1]. *)
+(** [terminal ~rows ~cols] is a terminal that has read nothing. *)
 
 val vte : terminal -> Vte.t
 (** [vte t] is the emulator of [t], to query; {!feed} is how it reads. *)
 
 val feed : terminal -> string -> unit
 (** [feed t s] makes [t] read [s], the next bytes after those it read, as
-    xterm.js reads them where {!Vte.feed} does not: a backspace moves the cursor
-    without erasing; a character of no width, such as a combining mark, a
-    zero-width space or joiner or a variation selector, joins the cell before
-    the cursor, and the first column, which has none, drops it; after a
-    character in the last column the cursor stays there until the next character
-    wraps; line feeds keep the column; and the scroll region of each screen,
-    indexes, line, character and column edits, REP, the modes of auto-wrap and
-    origin, the saved cursor, the tab stops and the character sets work as in
-    xterm.js, and the sequences xterm.js ignores change nothing. *)
+    xterm.js reads them where {!Vte.feed} does not: each screen has its own
+    scroll region and tab stops, and those of the alternate one are reset each
+    time it shows; a restore returns the cursor to the line of the buffer that
+    the save was on; after a character in the last column, an erasure keeps that
+    column and the wrap pending; CSI S keeps no scrollback; and deleting cells
+    up to the middle of a wide glyph blanks its other half. *)
 
 val take_replies : terminal -> string
 (** [take_replies t] is what [t] answers, as xterm.js does, to the queries it
@@ -43,13 +37,19 @@ val is_dirty : terminal -> bool
 val clear_dirty : terminal -> unit
 (** [clear_dirty t] marks [t] unchanged. *)
 
+(** The type for colours. *)
+type colour =
+  | Default  (** The terminal's default colour. *)
+  | Indexed of int  (** The colour of a palette index, in \[0;255\]. *)
+  | Rgb of int  (** A colour [0xRRGGBB]. *)
+
 type cell = {
   text : string;
       (** The grapheme, [""] on the second cell of a wide one. Valid UTF-8
           without control characters. *)
   width : int;  (** [2] for a wide grapheme, [0] after one, [1] otherwise. *)
-  fg : int;
-  bg : int;
+  fg : colour;
+  bg : colour;
   attrs : Ansi.Attr.t;
 }
 (** The type for cells. *)

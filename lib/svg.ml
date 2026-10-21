@@ -32,26 +32,17 @@ let pp ppf t =
   Fmt.pf ppf "@[<h>%dx%d image, %dx%d cells of %dx%d at (%d, %d)@]" t.width
     t.height t.cols t.rows t.cell_width t.cell_height t.x t.y
 
-(* xterm's sixteen colours, which the terminal resolves the ANSI colours to
-   and the theme replaces. *)
-let xterm =
-  [| 0x000000; 0xcd0000; 0x00cd00; 0xcdcd00; 0x0000ee; 0xcd00cd; 0x00cdcd;
-     0xe5e5e5; 0x7f7f7f; 0xff0000; 0x00ff00; 0xffff00; 0x5c5cff; 0xff00ff;
-     0x00ffff; 0xffffff |]
-[@@ocamlformat "disable"]
-
 type paint = Foreground | Background | Ansi of int | Rgb of int
 
-(* xterm.js draws bold text in the bright variant of the first eight. *)
-let paint ~bold ~default rgb =
-  if rgb < 0 then default
-  else
-    let rec find i =
-      if i = 16 then Rgb rgb
-      else if xterm.(i) = rgb then Ansi (if bold && i < 8 then i + 8 else i)
-      else find (i + 1)
-    in
-    find 0
+(* The theme replaces the first sixteen colours of the palette, and xterm.js
+   draws bold text in the bright variant of the first eight. *)
+let paint ~bold ~default : Screen.colour -> paint = function
+  | Default -> default
+  | Indexed i when i < 16 -> Ansi (if bold && i < 8 then i + 8 else i)
+  | Indexed i ->
+      let r, g, b = Ansi.Color.to_rgb (Ansi.Color.indexed i) in
+      Rgb ((r lsl 16) lor (g lsl 8) lor b)
+  | Rgb c -> Rgb c
 
 let has flag (c : Screen.cell) = Ansi.Attr.mem flag c.attrs
 
@@ -230,7 +221,7 @@ type defs = {
 }
 
 let is_blank (c : Screen.cell) =
-  c.text = " " && c.bg < 0 && Ansi.Attr.is_empty c.attrs
+  c.text = " " && c.bg = Default && Ansi.Attr.is_empty c.attrs
 
 (* The cells up to the last one that is not blank. *)
 let used cells =

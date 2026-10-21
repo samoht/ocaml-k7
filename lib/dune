@@ -7,8 +7,8 @@
   eio.unix
   fmt
   matrix.ansi
-  matrix.glyph
   matrix.grid
+  matrix.text
   matrix.pty
   matrix.vte
   mtime

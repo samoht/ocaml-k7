@@ -2,4 +2,4 @@
 
 (library
  (name svg_check)
- (libraries fmt markup matrix.glyph))
+ (libraries fmt markup matrix.text))
