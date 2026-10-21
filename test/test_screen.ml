@@ -380,12 +380,27 @@ let test_prepend_chunk_boundaries () =
   let split = last (frames (svg [ (Ms 0, "\xdb"); (Ms 20, "\x9dq") ])) in
   Alcotest.(check string) "same terminal text across a UTF-8 split" whole split
 
+let test_prepend_no_wrap_boundaries () =
+  let whole = last (frames (svg [ (Ms 0, "\027[?7l\xdb\x9dq") ])) in
+  let split =
+    last
+      (frames
+         (svg
+            [
+              (Ms 0, "\027[?7l"); (Ms 20, "\xdb"); (Ms 40, "\x9d"); (Ms 60, "q");
+            ]))
+  in
+  Alcotest.(check string)
+    "same text with automatic wrapping disabled" whole split
+
 let suite =
   ( "screen",
     List.map
       (fun (name, fn) -> Alcotest.test_case name `Quick fn)
       [
         ("wide glyphs", test_wide);
+        ( "Arabic prepend with wrapping disabled",
+          test_prepend_no_wrap_boundaries );
         ( "Arabic prepend survives a PTY read boundary",
           test_prepend_chunk_boundaries );
         ("default foreground", test_default_fg);
