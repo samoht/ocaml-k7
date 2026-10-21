@@ -13,7 +13,8 @@
   folding and ASCII word boundaries, and its waits read the lines VHS reads.
 - The native terminal is matrix's emulator, read as VHS's xterm.js reads
   bytes where it departs from xterm: each screen has its own scroll region
-  and tab stops, a restore returns to the line of the buffer, an erasure at
+  and tab stops, a restore returns to the line of the buffer and leaves the
+  designations of the character sets, `ESC % G` selects ASCII, an erasure at
   the right margin keeps the wrap pending, the cursor reports count the
   column beyond the last, and `CSI S` keeps no scrollback.
 - `Vhs.tape` refuses a JSON theme that Go does not read, more rows or

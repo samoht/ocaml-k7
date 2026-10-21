@@ -5,8 +5,10 @@
 
 (* xterm.js keeps a buffer per screen, with its own scroll region and tab
    stops, and saves the cursor's line in the buffer, where matrix shares the
-   region and the stops and saves a row of the screen. A terminal keeps what
-   the normal screen gets back when it shows again. *)
+   region and the stops and saves a row of the screen. Its restore brings back
+   the character set in use, where matrix also restores the designations of
+   G0 to G3. A terminal keeps what the normal screen gets back when it shows
+   again, and xterm.js's designations. *)
 type terminal = {
   vte : Vte.t;
   scan : Ansi.Parser.t;  (** Reads the bytes [vte] reads, for {!quirk}. *)
@@ -16,6 +18,8 @@ type terminal = {
   mutable region : int * int;  (** The normal screen's scroll region. *)
   mutable stops : int list;  (** The normal screen's tab stops. *)
   mutable line : int option;  (** The buffer line of its saved cursor. *)
+  charsets : char array;  (** The designations of G0 to G3. *)
+  mutable restored : bool;  (** A restore changed matrix's designations. *)
 }
 
 let default_stops cols =
@@ -36,6 +40,8 @@ let terminal ~rows ~cols =
     region = (0, rows - 1);
     stops = default_stops cols;
     line = None;
+    charsets = Array.make 4 'B';
+    restored = false;
   }
 
 let vte t = t.vte
@@ -107,13 +113,21 @@ let erase_kept t ~row c final =
     Matrix_grid.blit_region ~src:t.kept ~dst:g ~src_x:0 ~src_y:0 ~width
       ~height:1 ~dst_x:x ~dst_y:row
 
+(* Give matrix xterm.js's designations again. *)
+let designate t =
+  let g = t.charsets in
+  Fmt.kstr (send t) "\027(%c\027)%c\027*%c\027+%c" g.(0) g.(1) g.(2) g.(3);
+  t.restored <- false
+
 let switches = List.exists (fun m -> m = 47 || m = 1047 || m = 1049)
 
 (* [quirk t c final] reads the control [c], whose last byte [final] feeds,
    as xterm.js does where it departs from xterm, and so from matrix. An
    erasure in the pending-wrap column starts beyond the last column and keeps
    the wrap pending; the cursor reports count that column and DECXCPR's has
-   no page; and CSI S keeps no scrollback. *)
+   no page; CSI S keeps no scrollback; a shift after a restore invokes a set
+   that the restore left designated; and ESC % G and ESC % @ invoke ASCII
+   into G0. *)
 let quirk t c final =
   let v = t.vte in
   let row, col = Vte.cursor_pos v and cols = Vte.cols v in
@@ -139,9 +153,21 @@ let quirk t c final =
   | DECSC when normal () ->
       final ();
       t.line <- Some (history t + row)
-  | DECRC when normal () ->
+  | DECRC ->
       final ();
-      restore_line t
+      t.restored <- true;
+      if normal () then restore_line t
+  | SCS (g, set) ->
+      final ();
+      t.charsets.(g) <- set
+  | LS _ when t.restored ->
+      designate t;
+      final ()
+  | Unknown ("ESC%G" | "ESC%@") ->
+      final ();
+      t.charsets.(0) <- 'B';
+      designate t;
+      send t "\015"
   | DECSET m when normal () && switches m ->
       if List.mem 1049 m then t.line <- Some (history t + row);
       final ();
@@ -152,10 +178,15 @@ let quirk t c final =
           let top, bottom = t.region in
           Fmt.kstr (send t) "\027[%d;%dr" (top + 1) (bottom + 1);
           set_stops t t.stops);
-      if List.mem 1049 m then restore_line t
+      if List.mem 1049 m then (
+        t.restored <- true;
+        restore_line t)
   | DECSTBM _ | DECALN | DECSTR | Reset ->
       final ();
-      if c = Reset || c = DECSTR then t.line <- None;
+      if c = Reset || c = DECSTR then (
+        t.line <- None;
+        Array.fill t.charsets 0 4 'B';
+        t.restored <- false);
       if normal () then t.region <- keeping t (fun () -> region t);
       if c = Reset then t.stops <- default_stops cols
   | HTS | TBC _ ->
@@ -168,8 +199,11 @@ let scan t = function
       (( ED _ | EL _
        | DSR 6
        | DECXCPR | SU _ | DECSC | DECRC | DECSET _ | DECRST _ | DECSTBM _
-       | DECALN | DECSTR | Reset | HTS | TBC _ ) as c) ->
+       | DECALN | DECSTR | Reset | HTS | TBC _ | SCS _ | LS _
+       | Unknown ("ESC%G" | "ESC%@") ) as c) ->
       t.hit <- Some c
+  | Text "\x0e" -> t.hit <- Some (LS 1)
+  | Text "\x0f" -> t.hit <- Some (LS 0)
   | _ -> ()
 
 let feed t s =
