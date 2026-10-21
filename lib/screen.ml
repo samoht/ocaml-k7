@@ -18,12 +18,6 @@ type terminal = {
   mutable line : int option;  (** The buffer line of its saved cursor. *)
 }
 
-(* matrix draws in a transparent colour, such as the default one, as an
-   overlay that erases nothing, so the default colours are opaque ones that no
-   theme uses. *)
-let default_fg = Ansi.Color.of_rgb 1 2 3
-let default_bg = Ansi.Color.of_rgb 4 5 6
-
 let default_stops cols =
   List.filter (fun c -> c < cols) (List.init (cols / 8) (fun i -> 8 * (i + 1)))
 
@@ -32,7 +26,8 @@ let default_stops cols =
 let terminal ~rows ~cols =
   {
     vte =
-      Vte.create ~scrollback:1000 ~width_method:`Wcwidth ~default_fg ~default_bg
+      Vte.create ~scrollback:1000 ~width_method:`Wcwidth
+        ~default_fg:Ansi.Color.default ~default_bg:Ansi.Color.default
         ~da2:"\027[>0;276;0c" ~rows ~cols ();
     scan = Ansi.Parser.create ();
     hit = None;
@@ -114,13 +109,6 @@ let erase_kept t ~row c final =
 
 let switches = List.exists (fun m -> m = 47 || m = 1047 || m = 1049)
 
-(* [cuts t ~row ~col n] is [true] iff deleting [n] cells from [col] cuts a
-   wide glyph, which matrix then deletes whole. *)
-let cuts t ~row ~col n =
-  let x = min col (Vte.cols t.vte - 1) + max n 1 and g = Vte.grid t.vte in
-  x < Vte.cols t.vte
-  && Matrix_grid.is_continuation g (Matrix_grid.idx g ~x ~y:row)
-
 (* [quirk t c final] reads the control [c], whose last byte [final] feeds,
    as xterm.js does where it departs from xterm, and so from matrix. An
    erasure in the pending-wrap column starts beyond the last column and keeps
@@ -148,9 +136,6 @@ let quirk t c final =
       Vte.set_cursor_pos v ~row:(fst t.region) ~col:0;
       send t "M";
       Vte.set_cursor_pos v ~row ~col
-  | DCH n when cuts t ~row ~col n ->
-      final ();
-      send t "\027[@"
   | DECSC when normal () ->
       final ();
       t.line <- Some (history t + row)
@@ -182,8 +167,8 @@ let scan t = function
   | Ansi.Parser.Control
       (( ED _ | EL _
        | DSR 6
-       | DECXCPR | SU _ | DCH _ | DECSC | DECRC | DECSET _ | DECRST _
-       | DECSTBM _ | DECALN | DECSTR | Reset | HTS | TBC _ ) as c) ->
+       | DECXCPR | SU _ | DECSC | DECRC | DECSET _ | DECRST _ | DECSTBM _
+       | DECALN | DECSTR | Reset | HTS | TBC _ ) as c) ->
       t.hit <- Some c
   | _ -> ()
 
@@ -233,8 +218,6 @@ let colour c =
   match Ansi.Color.intent c with
   | Default -> Default
   | Indexed i -> Indexed i
-  | Rgb when Ansi.Color.equal c default_fg || Ansi.Color.equal c default_bg ->
-      Default
   | Rgb ->
       let r, g, b = Ansi.Color.to_rgb c in
       Rgb ((r lsl 16) lor (g lsl 8) lor b)

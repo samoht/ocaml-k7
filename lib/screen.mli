@@ -22,8 +22,7 @@ val feed : terminal -> string -> unit
     scroll region and tab stops, and those of the alternate one are reset each
     time it shows; a restore returns the cursor to the line of the buffer that
     the save was on; after a character in the last column, an erasure keeps that
-    column and the wrap pending; CSI S keeps no scrollback; and deleting cells
-    up to the middle of a wide glyph blanks its other half. *)
+    column and the wrap pending; and CSI S keeps no scrollback. *)
 
 val take_replies : terminal -> string
 (** [take_replies t] is what [t] answers, as xterm.js does, to the queries it

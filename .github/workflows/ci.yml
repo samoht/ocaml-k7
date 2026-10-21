@@ -26,7 +26,7 @@ jobs:
 
       # The terminal fixes vhs needs are not on opam before matrix 0.2.0:
       # drop this pin once it is.
-      - run: opam pin add -n matrix.0.2.0 git+https://github.com/samoht/mosaic.git#7388bb131d2546cc9bc0ff1b94ad7fe95e8c40a4
+      - run: opam pin add -n matrix.0.2.0 git+https://github.com/samoht/mosaic.git#67464f3b08eaa42c774b438b8bf70efd0b6ca130
 
       # The native recorder's fish test needs fish, which the Ubuntu
       # runners lack.
@@ -49,7 +49,7 @@ jobs:
 
       # The terminal fixes vhs needs are not on opam before matrix 0.2.0:
       # drop this pin once it is.
-      - run: opam pin add -n matrix.0.2.0 git+https://github.com/samoht/mosaic.git#7388bb131d2546cc9bc0ff1b94ad7fe95e8c40a4
+      - run: opam pin add -n matrix.0.2.0 git+https://github.com/samoht/mosaic.git#67464f3b08eaa42c774b438b8bf70efd0b6ca130
 
       # Resolve every dependency to the oldest version its lower bound allows,
       # so a call that only compiles against a newer API fails here rather than
@@ -86,7 +86,7 @@ jobs:
       - run: opam repo add samoht https://tangled.org/gazagnaire.org/opam-overlay.git
       # The terminal fixes vhs needs are not on opam before matrix 0.2.0:
       # drop this pin once it is.
-      - run: opam pin add -n matrix.0.2.0 git+https://github.com/samoht/mosaic.git#7388bb131d2546cc9bc0ff1b94ad7fe95e8c40a4
+      - run: opam pin add -n matrix.0.2.0 git+https://github.com/samoht/mosaic.git#67464f3b08eaa42c774b438b8bf70efd0b6ca130
       - run: opam install . --deps-only --with-test
       - run: opam install merlint
       - run: opam exec -- merlint --build

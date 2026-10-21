@@ -180,15 +180,16 @@ let test_saved_charset () =
     [ ("restored line drawing", "\027(0\0277\027(B\0278q", [ "\xe2\x94\x80" ]) ]
 
 (* xterm.js reads the national character sets, designates G0 to G3 and
-   shifts to G2 and G3: the UK set maps [#] to [£], a designation that is
-   not DEC line drawing ends it, and the Dutch [\[] is the first letter of
-   its "ij". Real VHS writes this line. *)
+   shifts to G2 and G3: the UK set maps [#] to [£] and a designation that is
+   not DEC line drawing ends it. Real VHS writes this line, but for the Dutch
+   [\[], which is U+0133 in matrix, as in xterm, where xterm.js prints only
+   the first letter of its "ij". *)
 let test_charsets () =
   check_screens
     [
       ( "designations and shifts",
         "\027(A#\027(B#\027*0\027nq\015q\027(0q\027(Aq#\027(4[",
-        [ "\xc2\xa3#\xe2\x94\x80q\xe2\x94\x80q\xc2\xa3i" ] );
+        [ "\xc2\xa3#\xe2\x94\x80q\xe2\x94\x80q\xc2\xa3\xc4\xb3" ] );
       ("default", "\027(0\027%Gq", [ "q" ]);
     ]
 
