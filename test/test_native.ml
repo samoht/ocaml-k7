@@ -742,6 +742,11 @@ let test_alternate_cursor () =
     {|abc\033[?47hALT\033[?47lX\033[2;1Habc\033[?1047hALT\033[?1047lX|}
     [ "abc   X"; "abc   X" ]
 
+(* DECSCA marks cells as protected. DECSEL erases only unprotected cells,
+   as used by terminal forms and status displays. *)
+let test_selective_erase () =
+  check_terminal_payload {|\033[1"qabc\033[0"qdef\r\033[?2K|} [ "abc" ]
+
 (* The native terminal follows xterm, as matrix emulates it, where VHS's
    xterm.js departs from it. These are the differences that show in a
    recording, each with what VHS writes and what the native recorder does:
@@ -838,6 +843,7 @@ let suite =
          ("repeat combining cell", test_repeat_combining);
          ("C1 terminal controls", test_c1_controls);
          ("alternate-screen shared cursor", test_alternate_cursor);
+         ("selective erasure preserves protected text", test_selective_erase);
        ]
       @ known_differences
       @
