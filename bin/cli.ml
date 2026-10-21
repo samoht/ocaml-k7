@@ -17,7 +17,7 @@ let tape ~setup ~output ?wait_timeout ~name src =
       let timeout =
         match wait_timeout with
         | None -> []
-        | Some s -> [ Vhs.raw (Fmt.str "Set WaitTimeout %ds" s) ]
+        | Some s -> [ Fmt.kstr Vhs.raw "Set WaitTimeout %ds" s ]
       in
       Vhs.tape ~settings:[ Shell Bash ] ~outputs:[ output ]
         (timeout @ Cram.actions ~setup cram)
@@ -104,7 +104,7 @@ open Cmdliner
 let seconds s =
   match int_of_string_opt s with
   | Some n when n > 0 && n <= 9_223_372_036 -> Ok n
-  | _ -> Error (Fmt.str "%S is not a positive number of seconds" s)
+  | _ -> Fmt.error "%S is not a positive number of seconds" s
 
 let output =
   let doc =

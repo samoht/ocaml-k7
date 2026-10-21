@@ -412,6 +412,32 @@ let add_bar t b bar =
         circle ~cx:(centre ~gap ~r ~space i) ~cy:(cy r gap) ~r fill)
       [ {|fill="#ff4f4d"|}; {|fill="#febb00"|}; {|fill="#00cc1d"|} ]
 
+(* The text alternative: the text of the last screen, without its blank
+   last rows. *)
+let add_desc b screen =
+  let text = Screen.text screen in
+  let rec stop n = if n > 0 && text.[n - 1] = '\n' then stop (n - 1) else n in
+  Buffer.add_string b "<desc>";
+  String.sub text 0 (stop (String.length text))
+  |> String.split_on_char '\n'
+  |> List.iteri (fun i line ->
+      if i > 0 then Buffer.add_char b '\n';
+      add_escaped b line);
+  Buffer.add_string b "</desc>"
+
+let add_margin t b =
+  if t.margin > 0 then
+    match t.margin_fill with
+    | Colour c ->
+        Fmt.kstr (Buffer.add_string b)
+          "<rect width=\"%d\" height=\"%d\" fill=\"%s\"/>" t.width t.height
+          (hex c)
+    | Image uri ->
+        Fmt.kstr (Buffer.add_string b)
+          "<image width=\"%d\" height=\"%d\" preserveAspectRatio=\"none\" \
+           href=\"%s\"/>"
+          t.width t.height uri
+
 let image t ~duration frames =
   let b = Buffer.create 65536 in
   let d =
@@ -435,33 +461,11 @@ let image t ~duration frames =
     "\" font-size=\"%d\" xml:space=\"preserve\" role=\"img\"><title>Terminal \
      recording</title>"
     t.font_size;
-  (* The text alternative is the text of the last screen. *)
   (match List.rev frames with
-  | (_, screen) :: _ ->
-      let text = Screen.text screen in
-      let rec stop n =
-        if n > 0 && text.[n - 1] = '\n' then stop (n - 1) else n
-      in
-      Buffer.add_string b "<desc>";
-      String.sub text 0 (stop (String.length text))
-      |> String.split_on_char '\n'
-      |> List.iteri (fun i line ->
-          if i > 0 then Buffer.add_char b '\n';
-          add_escaped b line);
-      Buffer.add_string b "</desc>"
+  | (_, screen) :: _ -> add_desc b screen
   | [] -> ());
   add_style t b ~duration frames;
-  (if t.margin > 0 then
-     match t.margin_fill with
-     | Colour c ->
-         Fmt.kstr (Buffer.add_string b)
-           "<rect width=\"%d\" height=\"%d\" fill=\"%s\"/>" t.width t.height
-           (hex c)
-     | Image uri ->
-         Fmt.kstr (Buffer.add_string b)
-           "<image width=\"%d\" height=\"%d\" preserveAspectRatio=\"none\" \
-            href=\"%s\"/>"
-           t.width t.height uri);
+  add_margin t b;
   Fmt.kstr (Buffer.add_string b)
     "<rect x=\"%d\" y=\"%d\" width=\"%d\" height=\"%d\" rx=\"%d\" class=\"e\"/>"
     t.margin t.margin

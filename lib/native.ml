@@ -252,6 +252,18 @@ let bar c =
             size = c.bar_size;
           }
 
+let check_cells ~cols ~rows =
+  if cols > max_cells || rows > max_cells then
+    Fmt.kstr
+      (fun why -> stop (Unsupported why))
+      "a %d x %d terminal is beyond %d cells a side" cols rows max_cells
+
+let check_pixels ~width ~height =
+  if width > max_size || height > max_size then
+    Fmt.kstr
+      (fun why -> stop (Unsupported why))
+      "a %d x %d image is beyond %d pixels a side" width height max_size
+
 let style c =
   let fs = float c.font_size in
   let ascent = round (1.02 *. fs) and descent = round (0.3 *. fs) in
@@ -271,10 +283,7 @@ let style c =
     if c.rows > 0 then c.rows
     else max 1 ((c.height - frame - bar_height - 10) / cell_height)
   in
-  if cols > max_cells || rows > max_cells then
-    Fmt.kstr
-      (fun why -> stop (Unsupported why))
-      "a %d x %d terminal is beyond %d cells a side" cols rows max_cells;
+  check_cells ~cols ~rows;
   let width =
     if c.columns > 0 then even ((cols * cell_width) + 25 + frame) else c.width
   in
@@ -282,10 +291,7 @@ let style c =
     if c.rows > 0 then even ((rows * cell_height) + 10 + frame + bar_height)
     else c.height
   in
-  if width > max_size || height > max_size then
-    Fmt.kstr
-      (fun why -> stop (Unsupported why))
-      "a %d x %d image is beyond %d pixels a side" width height max_size;
+  check_pixels ~width ~height;
   Svg.
     {
       width;
