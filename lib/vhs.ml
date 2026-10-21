@@ -997,7 +997,18 @@ let record ~clock ~proc ~cwd t =
   let* () = iter_result (fun (path, s) -> save s path) stills in
   Ok svg
 
+let check_times output =
+  let rec go prev = function
+    | [] -> Ok ()
+    | (Ms ms, _) :: rest ->
+        let* () = check_ms "time " ms in
+        if ms < prev then Fmt.error "time %dms: before %dms" ms prev
+        else go ms rest
+  in
+  Result.map_error (fun msg -> Invalid msg) (go 0 output)
+
 let svg ?(settings = []) output =
+  let* () = check_times output in
   let b = Buffer.create 256 in
   List.iter (add_setting b) settings;
   let* tape = native (String.split_on_char '\n' (Buffer.contents b)) in
