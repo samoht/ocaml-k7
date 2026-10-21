@@ -39,20 +39,24 @@ itself.
 
 ## Usage
 
-A tape is a list of settings, the files to write, and a list of actions:
+A tape is a list of settings, the files to write, and a list of actions. The
+settings and the actions are constructors and values of `Vhs`, here opened
+locally with `Vhs.[ ... ]`:
 
 ```ocaml
 let tape =
   Vhs.tape
-    ~settings:[ Font_size 18; Width 1000; Height 560 ]
+    ~settings:Vhs.[ Font_size 18; Width 1000; Height 560 ]
     ~outputs:[ "demo.gif" ]
-    [ Vhs.type' "dune test\n"; Vhs.wait Prompt; Vhs.sleep (Ms 2000) ]
+    Vhs.[ type' "dune test\n"; wait Prompt; sleep (Ms 2000) ]
 ```
 
 `Vhs.type'` types text, a newline pressing Enter. `Vhs.wait Prompt` waits for
 the shell prompt to come back, so the recording shows the whole output of the
-command however long it takes; the final sleep keeps it on screen. `Vhs.pp`
-prints the tape in the format VHS reads:
+command. A prompt that takes more than 15 seconds fails the recording, and
+`Vhs.wait ~timeout` sets another limit. The final sleep keeps the output on
+screen. `Vhs.pp` prints
+the tape in the format VHS reads:
 
 ```ocaml
 # Fmt.pr "%a" Vhs.pp (Result.get_ok tape);;
@@ -84,7 +88,10 @@ something else, with a regular expression on the line under the cursor
 (`Vhs.Line`) or on the screen (`Vhs.Screen`).
 
 `Vhs.render` runs `vhs` on the tape in a given directory, and returns an error
-when `vhs` is not installed or fails:
+when `vhs` is not installed or fails. It runs processes with
+[Eio](https://github.com/ocaml-multicore/eio), so it takes the clock, the
+process manager and the directory from the environment `Eio_main.run` gives
+the program:
 
 ```ocaml
 let make_gif env tape =
@@ -92,6 +99,8 @@ let make_gif env tape =
   match Vhs.render ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd tape with
   | Ok () -> ()
   | Error e -> Fmt.epr "%a@." Vhs.pp_error e
+
+let main () = Eio_main.run @@ fun env -> make_gif env (Result.get_ok tape)
 ```
 
 ## Recording without VHS
@@ -99,8 +108,9 @@ let make_gif env tape =
 `Vhs.record` plays the tape in bash, zsh or fish on a pseudo-terminal, reads
 what the shell prints with a terminal emulator that follows xterm, and
 writes the screens to each `.svg` output of the tape as an
-animated SVG image, and its text to a `.txt`, `.ascii` or `.test` output as
-VHS writes it. The image holds text, no script and no external resource,
+animated SVG image, and its text to a `.txt`, `.ascii` or `.test` output in
+VHS's format. The text holds the screen VHS would read after each command,
+without the screens VHS also adds while it applies the settings. The image holds text, no script and no external resource,
 and animates with CSS alone, so it plays in an HTML `<img>` and in a README
 on GitHub. VHS cannot write `.svg`, so an `.svg` output is not in the tape
 that `vhs` reads:
@@ -127,6 +137,20 @@ lines of another tape. A few things need VHS, such as the other shells or
 a colour name in a JSON theme; `Vhs.record` names them in its error.
 `Vhs.svg` draws the image of output given with its times, without running
 anything.
+
+`Vhs.render` writes all the outputs of a tape but its `.svg` ones, and
+`Vhs.record` only those and its text output, so a tape with a `.gif` and a
+`.svg` output takes both calls, with `Vhs.record` second if they share a text
+output:
+
+```ocaml
+let make_both env tape =
+  let clock = Eio.Stdenv.mono_clock env and cwd = Eio.Stdenv.cwd env in
+  let proc = Eio.Stdenv.process_mgr env in
+  match Vhs.render ~clock ~proc ~cwd tape with
+  | Error e -> Error e
+  | Ok () -> Result.map ignore (Vhs.record ~clock ~proc ~cwd tape)
+```
 
 ## Recording a cram test
 
@@ -170,7 +194,8 @@ characters that spell a digest of the cram test, and waits for that mark:
 output that ends with `>`, or with a zero-width space, while its command still
 runs is not mistaken for the prompt. A command that leaves bash waiting for more input,
 such as an unterminated quote or here-document, makes that wait time out, and
-`vhs-cram` then names the command.
+`vhs-cram` then names the command. A wait times out after 15 seconds, or
+after the number of seconds `--wait-timeout` gives.
 
 ## Credits
 
