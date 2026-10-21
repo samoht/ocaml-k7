@@ -400,6 +400,37 @@ let test_keys () =
         (screen [ "> echo X abc"; "X abc"; ">" ])
         (last (frames s))
 
+(* Settings whose sizes or times leave the integer range are refused, or
+   reduced to the loop they offset, rather than wrapping around. *)
+let test_bounds () =
+  with_dir @@ fun env cwd ->
+  let play raws =
+    match
+      Vhs.tape ~outputs:[ "demo.svg" ]
+        (List.map Vhs.raw raws @ [ Vhs.type' "x" ])
+    with
+    | Ok t -> record env cwd t
+    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  in
+  List.iter
+    (fun raws ->
+      match play raws with
+      | Error (Unsupported _) -> ()
+      | Ok _ -> Alcotest.failf "%s played" (String.concat "; " raws)
+      | Error e -> Alcotest.failf "%a" Vhs.pp_error e)
+    [
+      [ "Set LetterSpacing 1000000000000000000"; "Set Columns 2000" ];
+      [ "Set LineHeight 1000000000000000000" ];
+      [ "Set Columns 2000"; "Set LetterSpacing 100" ];
+      [ "Set PlaybackSpeed 0.0000000001" ];
+    ];
+  (match play [ "Set LoopOffset 1" ^ String.make 300 '0' ] with
+  | Ok s ->
+      Alcotest.(check bool) "valid delay" false (contains ~sub:"delay:--" s)
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+  check_contains "late frame" ~sub:"99.9999%"
+    (svg [ (Ms 0, "a"); (Ms 9_000_000_000_000, "b") ])
+
 let test_unsupported () =
   with_dir @@ fun env cwd ->
   let t =
@@ -858,6 +889,7 @@ let suite =
          ("source", test_source);
          ("keys", test_keys);
          ("unsupported", test_unsupported);
+         ("bounds", test_bounds);
          ("terminal state recording", test_terminal_state);
          ("repeat combining cell", test_repeat_combining);
          ("C1 terminal controls", test_c1_controls);
