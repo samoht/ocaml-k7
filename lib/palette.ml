@@ -729,8 +729,25 @@ let themes =
   ]
 [@@ocamlformat "disable"]
 
-(* A theme of themes.json leaves [cursorAccent] to xterm.js, whose default
-   is black. *)
+(* WCAG's relative luminance of a colour, and the contrast ratio of two. *)
+let luminance c =
+  let channel shift =
+    let v = float ((c lsr shift) land 0xff) /. 255. in
+    if v <= 0.04045 then v /. 12.92 else Float.pow ((v +. 0.055) /. 1.055) 2.4
+  in
+  (0.2126 *. channel 16) +. (0.7152 *. channel 8) +. (0.0722 *. channel 0)
+
+let contrast a b =
+  let la = luminance a and lb = luminance b in
+  (Float.max la lb +. 0.05) /. (Float.min la lb +. 0.05)
+
+(* The text under the cursor of a theme without an accent: its background or
+   its foreground, whichever stands out more on the cursor. xterm.js draws
+   it black, which can vanish on a dark cursor. *)
+let accent ~background ~foreground ~cursor =
+  if contrast background cursor >= contrast foreground cursor then background
+  else foreground
+
 let of_hex s =
   match
     List.map (fun h -> int_of_string ("0x" ^ h)) (String.split_on_char ' ' s)
@@ -740,7 +757,7 @@ let of_hex s =
         background;
         foreground;
         cursor;
-        cursor_accent = 0;
+        cursor_accent = accent ~background ~foreground ~cursor;
         ansi = Array.of_list ansi;
       }
   | _ -> invalid_arg "Palette.of_hex"
@@ -1046,11 +1063,14 @@ let of_json s =
             | _, None -> default
           in
           match
+            let background = get 0 xterm.background
+            and foreground = get 1 xterm.foreground
+            and cursor = get 2 xterm.cursor in
             {
-              background = get 0 xterm.background;
-              foreground = get 1 xterm.foreground;
-              cursor = get 2 xterm.cursor;
-              cursor_accent = get 3 xterm.cursor_accent;
+              background;
+              foreground;
+              cursor;
+              cursor_accent = get 3 (accent ~background ~foreground ~cursor);
               ansi = Array.init 16 (fun i -> get (4 + i) xterm.ansi.(i));
             }
           with

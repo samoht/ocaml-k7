@@ -9,7 +9,10 @@ type t = {
   background : int;
   foreground : int;
   cursor : int;
-  cursor_accent : int;  (** The colour of the text under the cursor. *)
+  cursor_accent : int;
+      (** The colour of the text under the cursor: the theme's accent, or the
+          one of its background and foreground with the higher contrast on its
+          cursor. *)
   ansi : int array;  (** The sixteen ANSI colours, black first. *)
 }
 (** The type for themes. *)
