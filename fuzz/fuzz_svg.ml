@@ -245,10 +245,27 @@ let test_alternate_restore prefix_len alternate_len =
     (prefix ^ "\027[?1049h" ^ alternate ^ "\027[?1049lX")
     [ prefix ^ "X" ]
 
+(* Protected cells survive selective erasure; an ordinary erase still clears
+   them. Check matrix directly as well as the public SVG path. *)
+let test_selective_erase n selective =
+  let prefix = String.make (1 + (n mod 20)) 'a' in
+  let erase = if selective then "\027[?2K" else "\027[2K" in
+  let output = "\027[1\"q" ^ prefix ^ "\027[0\"qtail\r" ^ erase in
+  let lines = [ (if selective then prefix else "") ] in
+  let expected =
+    String.concat "\n" (lines @ List.init (rows - 1) (fun _ -> ""))
+  in
+  let term = Vte.create ~rows ~cols () in
+  Vte.feed_string term output;
+  check_eq ~pp:pp_string expected (Matrix_grid.to_text (Vte.grid term));
+  check_output_rows output lines
+
 let suite =
   ( "svg",
     [
       test_case "frames" [ list chunk ] test_frames;
+      test_case "selective erasure preserves protected cells" [ uint8; bool ]
+        test_selective_erase;
       test_case "1049 restores the main screen and cursor" [ uint8; uint8 ]
         test_alternate_restore;
       test_case "47 and 1047 share the alternate-screen cursor" [ uint8; bool ]
