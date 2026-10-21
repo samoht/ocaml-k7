@@ -529,9 +529,9 @@ let replay t output =
 
 (* Keys: the bytes xterm sends. *)
 
-let arrow vte c = if Vte.cursor_key_mode vte then "\027O" ^ c else "\027[" ^ c
+let arrow term c = if Screen.cursor_keys term then "\027O" ^ c else "\027[" ^ c
 
-let key_bytes vte = function
+let key_bytes term = function
   | "Enter" -> "\r"
   | "Tab" -> "\t"
   | "Space" -> " "
@@ -539,10 +539,10 @@ let key_bytes vte = function
   | "Delete" -> "\027[3~"
   | "Insert" -> "\027[2~"
   | "Escape" -> "\027"
-  | "Up" -> arrow vte "A"
-  | "Down" -> arrow vte "B"
-  | "Right" -> arrow vte "C"
-  | "Left" -> arrow vte "D"
+  | "Up" -> arrow term "A"
+  | "Down" -> arrow term "B"
+  | "Right" -> arrow term "C"
+  | "Left" -> arrow term "D"
   | "PageUp" -> "\027[5~"
   | "PageDown" -> "\027[6~"
   | _ -> ""
@@ -603,7 +603,6 @@ type state = {
 }
 
 let now st = Eio.Time.Mono.now st.clock
-let vte st = Screen.vte st.term
 
 let elapsed st =
   Int64.to_int
@@ -649,7 +648,7 @@ let send st s =
   in
   go 0
 
-(* The terminal answers the queries it reads, as xterm.js does. *)
+(* The terminal answers the queries it reads. *)
 let rec reader st buf =
   match Pty.read st.pty buf 0 (Bytes.length buf) with
   | 0 -> Eio.Fiber.await_cancel ()
@@ -717,11 +716,11 @@ let within st seconds f =
 let top st =
   Screen.buffer st.term st.live
   |> Array.to_list
-  |> List.take (Vte.rows (vte st))
+  |> List.take (Array.length (Screen.rows st.live))
 
 let wait_text st = function
   | Line ->
-      let row = fst (Vte.cursor_pos (vte st)) in
+      let row = Screen.cursor_row st.term in
       if st.offset = 0 then Screen.line st.live row
       else
         (* VHS reads the line of the cursor's row on the viewport, which a
@@ -768,7 +767,7 @@ let run_command st c = function
   | Key { speed; count; key = "ScrollDown" } -> scroll st ?speed ~count (-1)
   | Key { speed; count; key } ->
       for _ = 1 to count do
-        press st ?speed (key_bytes (vte st) key)
+        press st ?speed (key_bytes st.term key)
       done
   | Ctrl args -> press st (ctrl_bytes args)
   | Alt k -> press st ("\027" ^ modified ~shift:false k)
@@ -872,7 +871,10 @@ let spawn ~env ~cwd t s =
    does in VHS, which starts a browser in the meantime. *)
 let await_prompt st =
   let rec loop () =
-    if Screen.text st.live = String.make (Vte.rows (vte st) - 1) '\n' then (
+    if
+      Screen.text st.live
+      = String.make (Array.length (Screen.rows st.live) - 1) '\n'
+    then (
       Eio.Condition.await_no_mutex st.changed;
       loop ())
   in

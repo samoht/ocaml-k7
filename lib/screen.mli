@@ -8,35 +8,33 @@
     A snapshot holds the cells of each row of a {!Vte.t} and its cursor. *)
 
 type terminal
-(** The type for terminals: a {!Vte.t} and the state of the bytes it reads. *)
+(** The type for terminals: xterm's emulation, as {!Vte} gives it, with the
+    scrollback of VHS's xterm.js. *)
 
 val terminal : rows:int -> cols:int -> terminal
 (** [terminal ~rows ~cols] is a terminal that has read nothing. *)
 
-val vte : terminal -> Vte.t
-(** [vte t] is the emulator of [t], to query; {!feed} is how it reads. *)
-
 val feed : terminal -> string -> unit
-(** [feed t s] makes [t] read [s], the next bytes after those it read, as
-    xterm.js reads them where {!Vte.feed} does not: each screen has its own
-    scroll region and tab stops, and those of the alternate one are reset each
-    time it shows; a restore returns the cursor to the line of the buffer that
-    the save was on, and brings back the character set in use but not the
-    designations, which the next shift invokes; [ESC % G] and [ESC % @] select
-    ASCII; after a character in the last column, an erasure keeps that column
-    and the wrap pending; and CSI S keeps no scrollback. *)
+(** [feed term s] makes [term] read [s], the next bytes after those it read. *)
 
 val take_replies : terminal -> string
-(** [take_replies t] is what [t] answers, as xterm.js does, to the queries it
-    read since the last [take_replies]: of its primary and secondary device
-    attributes, its status and its cursor position. *)
+(** [take_replies term] is what [term] answers to the queries it read since the
+    last [take_replies], such as its device attributes, its status and its
+    cursor position. *)
+
+val cursor_keys : terminal -> bool
+(** [cursor_keys term] is [true] iff [term] is in application cursor-key mode,
+    in which the arrow keys send [ESC O] rather than [CSI]. *)
+
+val cursor_row : terminal -> int
+(** [cursor_row term] is the row of the cursor of [term], from [0]. *)
 
 val is_dirty : terminal -> bool
-(** [is_dirty t] is [true] iff the screen or the cursor of [t] changed since the
-    last {!clear_dirty}. *)
+(** [is_dirty term] is [true] iff the screen or the cursor of [term] changed
+    since the last {!clear_dirty}. *)
 
 val clear_dirty : terminal -> unit
-(** [clear_dirty t] marks [t] unchanged. *)
+(** [clear_dirty term] marks [term] unchanged. *)
 
 (** The type for colours. *)
 type colour =
@@ -73,15 +71,15 @@ type t
 (** The type for screens. *)
 
 val history : terminal -> int
-(** [history t] is the number of scrollback lines of [t] that xterm.js keeps:
-    those since the last [CSI 3 J], which erases them, at most a thousand, and
-    none on the alternate screen. *)
+(** [history term] is the number of scrollback lines of [term]: those that
+    scrolled off the top of its normal screen since the last [CSI 3 J], at most
+    a thousand, as in VHS's xterm.js. *)
 
 val of_terminal : ?previous:t -> ?offset:int -> terminal -> t
-(** [of_terminal ~previous ~offset t] is the screen of [t] scrolled [offset]
-    lines into its {!history} (defaults to [0]). Rows that have not changed
-    since the last {!clear_dirty} are those of [previous], if it has the same
-    size. *)
+(** [of_terminal ~previous ~offset term] is the screen of [term] scrolled
+    [offset] lines into its {!history} (defaults to [0]). Rows that have not
+    changed since the last {!clear_dirty} are those of [previous], if it has the
+    same size. *)
 
 val rows : t -> row array
 (** [rows t] are the rows of [t], top first. *)
@@ -93,12 +91,12 @@ val text : t -> string
 (** [text t] is the text of the rows of [t], joined by newlines. *)
 
 val buffer : terminal -> t -> string array
-(** [buffer term t] are the lines of the buffer of xterm.js, as VHS reads them:
-    the {!history} of [term], oldest first, then the {!text} of each row of [t],
-    the screen of [term]. *)
+(** [buffer term t] are the lines of the buffer of [term], as VHS reads those of
+    xterm.js: the {!history} of [term], oldest first, then the {!row_text} of
+    each row of [t], the screen of [term]. *)
 
 val line : t -> int -> string
-(** [line t r] is the text of row [r] of [t]. *)
+(** [line t r] is [row_text (rows t).(r)], or [""] if [t] has no row [r]. *)
 
 val equal : t -> t -> bool
 (** [equal t0 t1] is [true] iff [t0] and [t1] have equal rows and cursors. *)

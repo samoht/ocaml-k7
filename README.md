@@ -96,8 +96,8 @@ let make_gif env tape =
 ## Recording without VHS
 
 `Vhs.record` plays the tape in bash, zsh or fish on a pseudo-terminal, reads
-what the shell prints with a terminal emulator that behaves as VHS's
-xterm.js, and writes the screens to each `.svg` output of the tape as an
+what the shell prints with a terminal emulator that follows xterm, and
+writes the screens to each `.svg` output of the tape as an
 animated SVG image, and its text to a `.txt`, `.ascii` or `.test` output as
 VHS writes it. The image holds text, no script and no external resource,
 and animates with CSS alone, so it plays in an HTML `<img>` and in a README

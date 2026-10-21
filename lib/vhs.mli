@@ -272,10 +272,10 @@ val render :
     monospace font of the viewer's machine, in the colours of the [Theme]. The
     terminal keeps a colour as RGB, so a 256-colour or true colour equal to one
     of xterm's sixteen ANSI colours takes the theme's colour too. The terminal
-    reads what the shell prints as VHS's xterm.js does: a character of no width,
-    such as a combining mark or a zero-width joiner, joins the cell before it,
-    and the controls full-screen programs use, such as scroll regions, indexes
-    and DEC line drawing, act as they do there.
+    reads what the shell prints as xterm does, where VHS's xterm.js departs from
+    it in a few controls, such as an erasure in the last column or the row a
+    cursor restore returns to. As in xterm.js, a character of no width, such as
+    a combining mark or a zero-width joiner, joins the cell before it.
 
     Time is the tape's: a typed character, a key and a sleep last what the tape
     says, a wait lasts what the program makes it last, and output shows at the
