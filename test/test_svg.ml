@@ -41,6 +41,24 @@ let test_keyframes () =
     [ screen [ "a" ]; screen [ "ab" ]; screen [ "ab"; "c" ] ]
     (frames s)
 
+(* A reader who prefers reduced motion sees the last screen as a still
+   (WCAG 2.2.2), and the image names itself and holds that screen's text as
+   its text alternative. *)
+let test_accessible () =
+  let s = svg [ (Ms 0, "a"); (Ms 500, "\r\n<b>") ] in
+  check_contains "still"
+    ~sub:
+      "@media \
+       (prefers-reduced-motion:reduce){.s{animation:none;transform:translateX(-644px)}}"
+    s;
+  check_contains "role" ~sub:{|role="img"|} s;
+  check_contains "title" ~sub:"<title>Terminal recording</title>" s;
+  check_contains "description" ~sub:"<desc>a\n&lt;b&gt;</desc>" s;
+  Alcotest.(check (list string))
+    "frames"
+    [ screen [ "a" ]; screen [ "a"; "<b>" ] ]
+    (frames s)
+
 let test_one_frame () =
   let s = svg [ (Ms 0, "still") ] in
   Alcotest.(check bool)
@@ -113,6 +131,7 @@ let suite =
         ("hostile text", test_hostile);
         ("row dedup", test_dedup);
         ("keyframes", test_keyframes);
+        ("accessible", test_accessible);
         ("one frame", test_one_frame);
         ("settings", test_settings);
         ("huge sizes", test_huge);
