@@ -373,12 +373,21 @@ let test_replies () =
       ("\027[=c\027[?5n", "");
     ]
 
+(* U+06DD has the Unicode Prepend grapheme property. PTY reads can split
+   its UTF-8 bytes from the following character without changing the image. *)
+let test_prepend_chunk_boundaries () =
+  let whole = last (frames (svg [ (Ms 0, "\xdb\x9dq") ])) in
+  let split = last (frames (svg [ (Ms 0, "\xdb"); (Ms 20, "\x9dq") ])) in
+  Alcotest.(check string) "same terminal text across a UTF-8 split" whole split
+
 let suite =
   ( "screen",
     List.map
       (fun (name, fn) -> Alcotest.test_case name `Quick fn)
       [
         ("wide glyphs", test_wide);
+        ( "Arabic prepend survives a PTY read boundary",
+          test_prepend_chunk_boundaries );
         ("default foreground", test_default_fg);
         ("cursor", test_cursor);
         ("backspace", test_backspace);
