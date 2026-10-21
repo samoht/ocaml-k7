@@ -306,10 +306,34 @@ let test_prepend_boundaries n =
     (final
        (List.init (String.length output) (fun i -> String.make 1 output.[i])))
 
+(* Full-screen programs scroll their body while keeping a header and footer.
+   Neither boundary row may move, even if the whole body scrolls away. *)
+let test_scroll_region_boundaries n =
+  let count = 1 + (n mod (rows - 2)) in
+  let body = List.init (rows - 2) (fun i -> Fmt.str "row-%d" i) in
+  let initial = String.concat "\r\n" ([ "header" ] @ body @ [ "footer" ]) in
+  let output =
+    initial
+    ^ Fmt.str "\027[2;%dr\027[%d;1H" (rows - 1) (rows - 1)
+    ^ String.make count '\n'
+  in
+  let lines =
+    [ "header" ] @ List.drop count body
+    @ List.init count (fun _ -> "")
+    @ [ "footer" ]
+  in
+  let expected = String.concat "\n" lines in
+  let term = Vte.create ~rows ~cols () in
+  Vte.feed_string term output;
+  check_eq ~pp:pp_string expected (Matrix_grid.to_text (Vte.grid term));
+  check_output_rows output lines
+
 let suite =
   ( "svg",
     [
       test_case "frames" [ list chunk ] test_frames;
+      test_case "scroll regions preserve header and footer" [ uint8 ]
+        test_scroll_region_boundaries;
       test_case "Unicode Prepend survives delivery boundaries" [ uint8 ]
         test_prepend_boundaries;
       test_case "reverse wrap crosses automatic line breaks" [ uint8; bool ]
