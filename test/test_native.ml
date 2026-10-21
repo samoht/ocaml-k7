@@ -353,15 +353,18 @@ let test_fish () =
       Alcotest.(check bool) "no greeting" false (contains ~sub:"Welcome" text);
       check_contains "command" ~sub:"> echo fish-$status" text
 
-(* A program that asks the terminal for its attributes gets xterm.js's
-   answer. *)
+(* A program that asks the terminal for its attributes gets its
+   answer. The terminal answers as soon as it reads the query, so echo is
+   off before it, as a program sets it: the tty would otherwise echo a
+   reply that arrives before [read] turns echo off itself. *)
 let test_replies () =
   with_dir @@ fun env cwd ->
   let t =
     tape
       Vhs.
         [
-          type' {|printf '\033[c'; IFS= read -rsd c da; echo "da${da#*[}"|};
+          type'
+            {|stty -echo; printf '\033[c'; IFS= read -rd c da; stty echo; echo "da${da#*[}"|};
           key Enter;
           wait ~timeout:(Ms 5000) (Screen {|(?m)^da\?1;2$|});
         ]
