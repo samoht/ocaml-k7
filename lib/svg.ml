@@ -368,8 +368,13 @@ let add_style t b ~duration frames =
             (percent ~duration time)
             (-i * t.cols * t.cell_width))
         frames;
-      Fmt.kstr (Buffer.add_string b) "100%%{transform:translateX(%dpx)}}"
-        (-(List.length frames - 1) * t.cols * t.cell_width));
+      let last = -(List.length frames - 1) * t.cols * t.cell_width in
+      Fmt.kstr (Buffer.add_string b) "100%%{transform:translateX(%dpx)}}" last;
+      (* A reader who prefers reduced motion sees the last screen still. *)
+      Fmt.kstr (Buffer.add_string b)
+        "@media \
+         (prefers-reduced-motion:reduce){.s{animation:none;transform:translateX(%dpx)}}"
+        last);
   Buffer.add_string b "</style>"
 
 (* VHS's window bar, from its draw.go: three dots, or three rings, on the
@@ -426,8 +431,25 @@ let image t ~duration frames =
      viewBox=\"0 0 %d %d\" font-family=\""
     t.width t.height t.width t.height;
   add_escaped b t.font_family;
-  Fmt.kstr (Buffer.add_string b) "\" font-size=\"%d\" xml:space=\"preserve\">"
+  Fmt.kstr (Buffer.add_string b)
+    "\" font-size=\"%d\" xml:space=\"preserve\" role=\"img\"><title>Terminal \
+     recording</title>"
     t.font_size;
+  (* The text alternative is the text of the last screen. *)
+  (match List.rev frames with
+  | (_, screen) :: _ ->
+      let text = Screen.text screen in
+      let rec stop n =
+        if n > 0 && text.[n - 1] = '\n' then stop (n - 1) else n
+      in
+      Buffer.add_string b "<desc>";
+      String.sub text 0 (stop (String.length text))
+      |> String.split_on_char '\n'
+      |> List.iteri (fun i line ->
+          if i > 0 then Buffer.add_char b '\n';
+          add_escaped b line);
+      Buffer.add_string b "</desc>"
+  | [] -> ());
   add_style t b ~duration frames;
   (if t.margin > 0 then
      match t.margin_fill with
