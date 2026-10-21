@@ -577,10 +577,9 @@ let test_oracle () =
            (List.init 11 (fun i -> Int.to_string (i + 10)) @ [ ">" ]))
         (last frames)
 
-(* xterm's controls, which the native screen emulates where matrix 0.1.0
-   lacks them: raw line feeds and indexes, a reverse index, scroll regions,
-   line edits, character erases and repeats, no auto-wrap, origin mode, the
-   cursor in the last column and DEC line drawing. *)
+(* xterm's controls: raw line feeds and indexes, a reverse index, scroll
+   regions, line edits, character erases and repeats, no auto-wrap, origin
+   mode, the cursor in the last column and DEC line drawing. *)
 let test_oracle_controls () =
   with_dir @@ fun env cwd ->
   (* Each printf leaves the cursor at the start of the cleared last row,

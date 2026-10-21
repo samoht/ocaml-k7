@@ -124,10 +124,10 @@ let test_line_feeds () =
       ("scroll down", "a\r\nb\r\nc\027[T", [ ""; "a"; "b"; "c" ]);
     ]
 
-(* The controls of xterm that matrix 0.1.0 lacks or reads otherwise: the
-   relative and absolute moves, erasing and repeating characters, no
-   auto-wrap, origin mode, line edits in the scroll region and from its
-   first column, wrapping at the region's last row, and DEC line drawing. *)
+(* xterm's controls: the relative and absolute moves, erasing and repeating
+   characters, no auto-wrap, origin mode, line edits in the scroll region
+   and from its first column, wrapping at the region's last row, and DEC
+   line drawing. *)
 let test_controls () =
   let full = String.make 46 'a' in
   check_screens

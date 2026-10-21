@@ -11,14 +11,14 @@
   byte for byte as VHS writes them but for the screens VHS reads before it
   sizes the terminal. Its wait patterns match as Go's do, with Unicode case
   folding and ASCII word boundaries, and its waits read the lines VHS reads.
-- The native terminal behaves as VHS's xterm.js where matrix 0.1.0 does
-  not: zero-width characters join the cell before them, the cursor waits in
-  the last column, line feeds keep the column, and the scroll region,
-  indexes, line and character edits, `REP`, the modes of auto-wrap and
-  origin and DEC line drawing work.
+- The native terminal is matrix's emulator, read as VHS's xterm.js reads
+  bytes where it departs from xterm: each screen has its own scroll region
+  and tab stops, a restore returns to the line of the buffer, an erasure at
+  the right margin keeps the wrap pending, the cursor reports count the
+  column beyond the last, and `CSI S` keeps no scrollback.
 - `Vhs.tape` refuses a JSON theme that Go does not read, more rows or
   columns than VHS can measure, and a frame larger than the encoder of a
   GIF, MP4 or WebM output takes.
 - `vhs-cram` keeps typed non-ASCII text without a UTF-8 locale.
 - The library needs OCaml 5.4, for matrix's pseudo-terminals and terminal
-  emulator, and matrix 0.1.x.
+  emulator, and matrix 0.2.0.
