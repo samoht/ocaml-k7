@@ -771,7 +771,10 @@ let test_reverse_wrap () =
      each has its own in xterm.js;
    - the cursor position report after a character in the last column: xterm
      reports that column and xterm.js the one beyond, and xterm's DECXCPR
-     reply has the page, as the screen tests check. *)
+     reply has the page, as the screen tests check;
+   - a scroll of the alternate screen: VHS's text output reads xterm.js's
+     buffer lines by their absolute index rather than the viewport, so it is
+     a row off the screen its screenshots show, which the native one draws. *)
 let known_differences =
   let blank n = List.init n (fun _ -> "") in
   let margin = String.make 59 ' ' in
@@ -811,6 +814,11 @@ let known_differences =
       rows [ "a"; "b"; "c" ],
       rows [ "b"; "c" ],
       Some ("a" :: List.take 11 (rows [ "b"; "c" ])) );
+    ( "scrolled alternate screen",
+      {|\033[?1049h\033[12;1HA\r\nB|},
+      blank 10 @ [ ">"; "A" ],
+      blank 9 @ [ ">"; "A"; "B" ],
+      None );
     ( "shared tab stops",
       {|\033[?1049h\033[3g\033[?1049l\tX|},
       rows [ String.make 8 ' ' ^ "X" ],
