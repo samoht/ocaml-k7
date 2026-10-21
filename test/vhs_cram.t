@@ -68,7 +68,7 @@ A failing vhs is reported with what it printed.
   > EOF
   $ chmod +x fake-vhs
   $ vhs-cram --vhs ./fake-vhs --output demo.gif demo.t
-  vhs-cram: ./fake-vhs exited with code 1
+  vhs-cram: demo.t: ./fake-vhs exited with code 1
     Error: timeout waiting for "Line" to match >$
   [123]
 
