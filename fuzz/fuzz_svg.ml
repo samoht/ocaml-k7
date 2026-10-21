@@ -260,10 +260,31 @@ let test_selective_erase n selective =
   check_eq ~pp:pp_string expected (Matrix_grid.to_text (Vte.grid term));
   check_output_rows output lines
 
+(* With reverse wrap enabled, enough backspaces cross an automatic wrap.
+   Disabled, backspace stops in the first column of the current row. *)
+let test_reverse_wrap n enabled =
+  let count = 1 + (n mod 10) in
+  let mode = if enabled then "\027[?45h" else "\027[?45l" in
+  let first = String.make cols 'a' and second = String.make count 'z' in
+  let output = mode ^ first ^ second ^ String.make (count + 1) '\b' ^ "X" in
+  let lines =
+    if enabled then [ String.make (cols - 1) 'a' ^ "X"; second ]
+    else [ first; "X" ^ String.make (count - 1) 'z' ]
+  in
+  let expected =
+    String.concat "\n" (lines @ List.init (rows - 2) (fun _ -> ""))
+  in
+  let term = Vte.create ~rows ~cols () in
+  Vte.feed_string term output;
+  check_eq ~pp:pp_string expected (Matrix_grid.to_text (Vte.grid term));
+  check_output_rows output lines
+
 let suite =
   ( "svg",
     [
       test_case "frames" [ list chunk ] test_frames;
+      test_case "reverse wrap crosses automatic line breaks" [ uint8; bool ]
+        test_reverse_wrap;
       test_case "selective erasure preserves protected cells" [ uint8; bool ]
         test_selective_erase;
       test_case "1049 restores the main screen and cursor" [ uint8; uint8 ]
