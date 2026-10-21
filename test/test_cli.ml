@@ -137,6 +137,23 @@ let test_write_errors () =
     ( redirect Unix.stderr None @@ fun () ->
       run env ~print:true ~vhs:"vhs" (path "missing.t") )
 
+(* A failure that is not about a command names the cram test. *)
+let test_error_names_input () =
+  with_files [ ("demo.t", 0o644, "  $ echo hi\n"); ("err", 0o644, "") ]
+  @@ fun env path ->
+  let err = Unix.openfile (path "err") [ O_WRONLY; O_TRUNC ] 0 in
+  let code =
+    Fun.protect ~finally:(fun () -> Unix.close err) @@ fun () ->
+    redirect Unix.stderr (Some err) @@ fun () ->
+    run env ~vhs:"vhs-no-such-executable" (path "demo.t")
+  in
+  Alcotest.(check (pair int string))
+    "message"
+    ( 123,
+      Fmt.str "vhs-cram: %s: executable not found: vhs-no-such-executable\n"
+        (path "demo.t") )
+    (code, In_channel.with_open_bin (path "err") In_channel.input_all)
+
 let test_render () =
   with_files
     [
@@ -277,7 +294,7 @@ let test_command () =
   List.iter
     (fun s ->
       if not (contains ~sub:s man) then Alcotest.failf "manual lacks %S" s)
-    [ "--print"; "123"; "PS1"; "U+200B"; "cannot be written" ]
+    [ "--print"; "123"; "PS1"; "U+200B"; "cannot be written"; "--wait-timeout" ]
 
 (* The vhs executable of the tests that run it, from [VHS_ORACLE]: the
    oracle alias sets it, runtest does not. *)
@@ -497,6 +514,7 @@ let suite =
          ("tape", test_tape);
          ("run", test_run);
          ("write errors", test_write_errors);
+         ("errors name the input", test_error_names_input);
          ("render real processes", test_render);
          ("command line", test_command);
        ]
