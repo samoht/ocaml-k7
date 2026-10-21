@@ -85,15 +85,16 @@ let check_screens cases =
     cases
 
 (* After a character in the last column, the cursor waits there for the
-   next one to wrap it, as in xterm: a control moves it from the last
-   column, and a move beyond it stops there. *)
+   next one to wrap it, as in xterm.js: a control moves it from the last
+   column, a move beyond it stops there, and an erasure, which starts
+   beyond that column, keeps it waiting. Real VHS writes the erased line. *)
 let test_pending_wrap () =
   let full = String.make 46 'a' in
   check_screens
     [
       ("backspace", full ^ "\bX", [ String.make 44 'a' ^ "Xa" ]);
       ("cursor back", full ^ "\027[DX", [ String.make 44 'a' ^ "Xa" ]);
-      ("erase line", full ^ "\027[K", [ String.make 45 'a' ]);
+      ("erase line", full ^ "\027[KX", [ full; "X" ]);
       ("cursor position", "\027[1;99HX", [ String.make 45 ' ' ^ "X" ]);
       ("column", "\027[99GX", [ String.make 45 ' ' ^ "X" ]);
       ("cursor forward", "ab\027[99CX", [ "ab" ^ String.make 43 ' ' ^ "X" ]);
