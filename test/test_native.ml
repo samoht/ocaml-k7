@@ -459,6 +459,8 @@ let test_source () =
   file "nested.tape" "Source \"inc.tape\"\n";
   file "empty.tape" "";
   file "bad.tape" "Type\n";
+  (* The tape inline would be refused for its escape. *)
+  file "control.tape" "Type \"\027]8;;x\007click\"\n";
   let play name =
     record env cwd (tape Vhs.[ raw ("Source " ^ name); sleep (Ms 100) ])
   in
@@ -483,6 +485,7 @@ let test_source () =
       ({|"nested.tape"|}, "nested");
       ({|"empty.tape"|}, "empty");
       ({|"bad.tape"|}, "Type");
+      ({|"control.tape"|}, "control character");
       ({|"missing.tape"|}, "missing.tape");
     ]
 
