@@ -325,7 +325,10 @@ let add_frame t d b shown i screen =
 (* A percentage of [duration] with four decimals, in integers so that the
    output does not depend on float printing. *)
 let percent ~duration ms =
-  let v = ms * 1_000_000 / duration in
+  (* [ms * 1_000_000 / duration] in two steps, so that neither product
+     overflows for [ms <= duration]. *)
+  let q = ms * 1000 / duration and r = ms * 1000 mod duration in
+  let v = (q * 1000) + (r * 1000 / duration) in
   Fmt.str "%d.%04d%%" (v / 10_000) (v mod 10_000)
 
 let add_style t b ~duration frames =

@@ -150,10 +150,15 @@ let int_value line s =
   | Some _ -> unsupported line "%s is not between 0 and %d" s max_size
   | None -> unsupported line "%s is not an integer" s
 
-let float_value line s =
+let float_value line ?(min = -.float max_size) s =
   match float_of_string_opt s with
-  | Some f when Float.is_finite f -> f
-  | _ -> unsupported line "%s is not a number" s
+  | Some f when f >= min && f <= float max_size -> f
+  | Some _ -> unsupported line "%s is not between %g and %d" s min max_size
+  | None -> unsupported line "%s is not a number" s
+
+(* The slowest playback: the animation's times then stay within Go's
+   duration range. *)
+let min_speed = 0.001
 
 let is_hex_colour s =
   String.length s = 7
@@ -180,7 +185,8 @@ let set line c name args =
   | "BorderRadius", _ -> { c with border_radius = int_value line (value ()) }
   | "LetterSpacing", _ ->
       { c with letter_spacing = float_value line (value ()) }
-  | "LineHeight", _ -> { c with line_height = float_value line (value ()) }
+  | "LineHeight", _ ->
+      { c with line_height = float_value line ~min:0. (value ()) }
   | "Rows", _ -> { c with rows = int_value line (value ()) }
   | "Columns", _ -> { c with columns = int_value line (value ()) }
   | "Theme", _ -> (
@@ -203,9 +209,17 @@ let set line c name args =
       { c with typing_speed = ms line (n ^ u) }
   | "Framerate", _ -> { c with framerate = max 1 (int_value line (value ())) }
   | "PlaybackSpeed", _ ->
-      { c with playback_speed = float_value line (value ()) }
-  | "LoopOffset", _ ->
-      { c with loop_offset = float_value line (value ()) /. 100. }
+      let s = float_value line (value ()) in
+      if s > 0. && s < min_speed then
+        unsupported line "a speed below %g" min_speed
+      else { c with playback_speed = s }
+  | "LoopOffset", _ -> (
+      match float_of_string_opt (value ()) with
+      | Some f when Float.is_finite f ->
+          (* An offset of a whole loop is none. *)
+          let f = Float.rem (f /. 100.) 1. in
+          { c with loop_offset = (if f < 0. then f +. 1. else f) }
+      | _ -> unsupported line "%s is not a number" (value ()))
   | "WaitTimeout", _ -> { c with wait_timeout = ms line (fst (time line args)) }
   | "WaitPattern", _ ->
       { c with wait_pattern = Regexp_match.compile (value ()) }
@@ -268,6 +282,10 @@ let style c =
     if c.rows > 0 then even ((rows * cell_height) + 10 + frame + bar_height)
     else c.height
   in
+  if width > max_size || height > max_size then
+    Fmt.kstr
+      (fun why -> stop (Unsupported why))
+      "a %d x %d image is beyond %d pixels a side" width height max_size;
   Svg.
     {
       width;

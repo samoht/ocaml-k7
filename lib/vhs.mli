@@ -320,7 +320,9 @@ val render :
     bar. For a reader who prefers reduced motion, the cursor stops blinking and
     the frames play on. The image of a [Set MarginFill], read relative to [cwd],
     is embedded, stretched to the frame as ffmpeg stretches it. A size beyond
-    100000 pixels, or a terminal beyond 2000 cells a side, is {!Unsupported}. *)
+    100000 pixels, a terminal beyond 2000 cells a side, a [Set LetterSpacing] or
+    [Set LineHeight] beyond 100000 and a positive [Set PlaybackSpeed] below
+    0.001 are {!Unsupported}. *)
 
 val record :
   clock:_ Eio.Time.Mono.t ->
