@@ -85,16 +85,18 @@ let check_screens cases =
     cases
 
 (* After a character in the last column, the cursor waits there for the
-   next one to wrap it, as in xterm.js: a control moves it from the last
-   column, a move beyond it stops there, and an erasure, which starts
-   beyond that column, keeps it waiting. Real VHS writes the erased line. *)
+   next one to wrap it, as in xterm: a control moves it from the last
+   column, a move beyond it stops there, and an erasure clears that column
+   and ends the wait. *)
 let test_pending_wrap () =
   let full = String.make 46 'a' in
   check_screens
     [
       ("backspace", full ^ "\bX", [ String.make 44 'a' ^ "Xa" ]);
       ("cursor back", full ^ "\027[DX", [ String.make 44 'a' ^ "Xa" ]);
-      ("erase line", full ^ "\027[KX", [ full; "X" ]);
+      ("erase line", full ^ "\027[KX", [ String.make 45 'a' ^ "X" ]);
+      ("erase to the start", full ^ "\027[1KX", [ String.make 45 ' ' ^ "X" ]);
+      ("erase below", full ^ "\027[JX", [ String.make 45 'a' ^ "X" ]);
       ("cursor position", "\027[1;99HX", [ String.make 45 ' ' ^ "X" ]);
       ("column", "\027[99GX", [ String.make 45 ' ' ^ "X" ]);
       ("cursor forward", "ab\027[99CX", [ "ab" ^ String.make 43 ' ' ^ "X" ]);
@@ -157,9 +159,8 @@ let test_controls () =
       ("shift out", "\027)0\014q\015q", [ "\xe2\x94\x80q" ]);
     ]
 
-(* Only a line feed at the bottom of the screen keeps the line it scrolls
-   out in the scrollback, as in xterm.js: deleted lines and CSI S drop
-   theirs. *)
+(* A line feed at the bottom of the screen and CSI S keep the lines they
+   scroll out in the scrollback, as in xterm; deleted lines drop theirs. *)
 let test_history () =
   let history s =
     let t = Screen.terminal ~rows:2 ~cols:5 in
@@ -168,7 +169,7 @@ let test_history () =
   in
   Alcotest.(check int) "line feed" 1 (history "a\r\nb\r\nc");
   Alcotest.(check int) "delete line" 0 (history "a\r\nb\027[H\027[M");
-  Alcotest.(check int) "scroll up" 0 (history "a\r\nb\027[S");
+  Alcotest.(check int) "scroll up" 1 (history "a\r\nb\027[S");
   Alcotest.(check int)
     "after a clear, a wrap" 2
     (history "a\r\nb\r\nc\027[3J\r\n0123456789")
@@ -179,18 +180,17 @@ let test_saved_charset () =
   check_screens
     [ ("restored line drawing", "\027(0\0277\027(B\0278q", [ "\xe2\x94\x80" ]) ]
 
-(* xterm.js reads the national character sets, designates G0 to G3 and
+(* The terminal reads the national character sets, designates G0 to G3 and
    shifts to G2 and G3: the UK set maps [#] to [£] and a designation that is
-   not DEC line drawing ends it. Real VHS writes this line, but for the Dutch
-   [\[], which is U+0133 in matrix, as in xterm, where xterm.js prints only
-   the first letter of its "ij". *)
+   not DEC line drawing ends it, and the Dutch [\[] is U+0133, as in xterm.
+   ESC % G selects UTF-8 and leaves the designations alone. *)
 let test_charsets () =
   check_screens
     [
       ( "designations and shifts",
         "\027(A#\027(B#\027*0\027nq\015q\027(0q\027(Aq#\027(4[",
         [ "\xc2\xa3#\xe2\x94\x80q\xe2\x94\x80q\xc2\xa3\xc4\xb3" ] );
-      ("default", "\027(0\027%Gq", [ "q" ]);
+      ("UTF-8", "\027(0\027%Gq", [ "\xe2\x94\x80" ]);
     ]
 
 (* The colour of the first cell of the screen after [s]. *)
@@ -207,20 +207,21 @@ let colour =
       | Rgb c -> Fmt.pf ppf "#%06x" c)
     ( = )
 
-(* As in xterm.js, a restore brings back the colours and the active
-   character set the save saw, and the line the save was on, which lines
-   scrolled out since moved up; it leaves the cursor's visibility alone,
-   and without a save, it homes the cursor. SI after a restore selects G0
-   again, and leaving the alternate screen of mode 1049 restores the save
-   that entering it made. Real VHS writes these screens. *)
+(* As in xterm, a restore brings back the colours, the character set
+   designations and the shift the save saw, and the row the save was on;
+   it leaves the cursor's visibility alone, and without a save, it homes
+   the cursor. Leaving the alternate screen of mode 1049 restores the save
+   that entering it made. *)
 let test_restore () =
   check_screens
     [
       ("without a save", "\027[5;5Habc\0278X", [ "X"; ""; ""; ""; "    abc" ]);
       ( "after scrolling",
         "\027[9;3H\0277\r\n\r\nY\0278X",
-        [ ""; ""; ""; ""; ""; ""; "  X"; ""; "Y" ] );
-      ("shift in", "\027(0\0277\027(B\0278q\015q", [ "\xe2\x94\x80q" ]);
+        [ ""; ""; ""; ""; ""; ""; ""; ""; "Y X" ] );
+      ( "shift in",
+        "\027(0\0277\027(B\0278q\015q",
+        [ "\xe2\x94\x80\xe2\x94\x80" ] );
       ("ANSI restore", "\027(0\027[s\027(B\027[uq", [ "\xe2\x94\x80" ]);
       ( "alternate screen",
         "\027(0\027[?1049h\027(B\027[?1049lq",
@@ -234,7 +235,7 @@ let test_restore () =
     "hidden cursor" false
     (contains ~sub:{|href="#c"|} (svg [ (Ms 0, "\0277\027[?25l\0278") ]))
 
-(* Each screen of xterm.js has its own scroll region, and leaving the
+(* The two screens share the scroll region, as in xterm, and leaving the
    alternate one keeps the cursor's visibility. A CSI sequence with a
    private prefix, such as a query of the kitty keyboard, restores
    nothing. *)
@@ -243,7 +244,7 @@ let test_screens () =
     [
       ( "scroll regions",
         "\027[?1049h\027[1;2r\027[?1049la\r\nb\r\nc",
-        [ "a"; "b"; "c" ] );
+        [ "b"; "c" ] );
       ( "private prefix",
         "\0277\027[5;5Habc\027[?uX",
         [ ""; ""; ""; ""; "    abcX" ] );
@@ -265,8 +266,7 @@ let test_clear_tabs () =
 
 (* HTS sets a tab stop and TBC 0 clears one; CHT and CBT move over several
    stops; a tab after a character in the last column leaves the next one to
-   wrap; and each screen has its own stops, which leaving the alternate one
-   resets. Real VHS writes the first four screens. *)
+   wrap; and the two screens share the stops, as in xterm. *)
 let test_tab_stops () =
   let full = String.make 46 'a' in
   check_screens
@@ -280,7 +280,7 @@ let test_tab_stops () =
         [ String.make 45 ' ' ^ "X" ] );
       ( "alternate screen",
         "\027[?1049h\027[3g\027[?1049l\027[?1049h\tX",
-        [ String.make 8 ' ' ^ "X" ] );
+        [ String.make 45 ' ' ^ "X" ] );
     ]
 
 (* DCH deletes one cell, even when it cuts a wide glyph in half. The
@@ -345,10 +345,10 @@ let test_sequences () =
     "modifyOtherKeys" true
     (Ansi.Attr.is_empty (first_attrs "\027[>4;2mx"))
 
-(* The terminal answers the queries xterm.js answers, once each: the
-   primary and secondary device attributes, the status report and the
-   cursor position, which counts the column beyond the last after a
-   character there, as xterm.js does. *)
+(* The terminal answers the queries xterm answers, once each: the primary
+   and secondary device attributes, the status report and the cursor
+   position, which stays in the last column after a character there, and
+   whose DECXCPR form has the page. *)
 let test_replies () =
   let replies s =
     let t = Screen.terminal ~rows:9 ~cols:46 in
@@ -367,8 +367,8 @@ let test_replies () =
       ("\027[>c", "\027[>0;276;0c");
       ("\027[5n", "\027[0n");
       ("ab\r\nc\027[6n", "\027[2;2R");
-      ("ab\r\nc\027[?6n", "\027[?2;2R");
-      (String.make 46 'a' ^ "\027[6n", "\027[1;47R");
+      ("ab\r\nc\027[?6n", "\027[?2;2;1R");
+      (String.make 46 'a' ^ "\027[6n", "\027[1;46R");
       ("\027[c\027[5n", "\027[?1;2c\027[0n");
       ("\027[=c\027[?5n", "");
     ]

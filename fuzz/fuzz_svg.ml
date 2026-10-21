@@ -218,13 +218,14 @@ let test_c1_controls n osc =
   in
   check_output_rows ("a" ^ control ^ "b") [ expected ]
 
-(* The right-margin cursor is logically past the last cell until it wraps.
-   ED 0 keeps that cell, and neither ED 0 nor EL 1 cancels the pending wrap. *)
+(* After a character in the last column, the cursor waits there to wrap.
+   As in xterm, ED 0 and EL 1 erase that column and end the wait, so the
+   next character takes it. *)
 let test_margin_erasure n display =
   let c = Char.chr (Char.code 'a' + (n mod 26)) in
   let line = String.make cols c in
-  let erase, first = if display then ("\027[J", line) else ("\027[1K", "") in
-  check_output_rows (line ^ erase ^ "X") [ first; "X" ]
+  let erase, kept = if display then ("\027[J", c) else ("\027[1K", ' ') in
+  check_output_rows (line ^ erase ^ "X") [ String.make (cols - 1) kept ^ "X" ]
 
 (* Modes 47 and 1047 share the cursor; they do not restore a saved one. *)
 let test_alternate_cursor n mode =
@@ -252,7 +253,7 @@ let suite =
         test_alternate_restore;
       test_case "47 and 1047 share the alternate-screen cursor" [ uint8; bool ]
         test_alternate_cursor;
-      test_case "erasure preserves pending right-margin wrap" [ uint8; bool ]
+      test_case "erasure ends a pending right-margin wrap" [ uint8; bool ]
         test_margin_erasure;
       test_case "UTF-8 C1 controls act as terminal commands" [ uint8; bool ]
         test_c1_controls;

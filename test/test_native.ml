@@ -681,40 +681,50 @@ let test_terminal_state () =
             "native text and SVG" (expected, expected)
             (text (), last images))
 
-(* The expected screen is checked against real VHS when VHS_ORACLE is set.
-   Keep the prompt below the payload so shell echo cannot affect its cells. *)
-let check_terminal_payload payload lines =
+(* [rows lines] are the rows of a 60 x 12 screen that shows [lines], then
+   the prompt on its tenth row. *)
+let rows lines =
+  lines @ List.init (9 - List.length lines) (fun _ -> "") @ [ ">"; ""; "" ]
+
+(* [check_payload ?vhs ?text payload image] records a shell that clears the
+   screen and prints [payload], then puts the prompt on the tenth row, below
+   it, so shell echo cannot affect its cells. The native image shows [image],
+   the native text output [text] (defaults to [image]), and, when
+   VHS_ORACLE is set, VHS's text output [vhs] (defaults to [text]). *)
+let check_payload ?vhs ?text payload image =
+  let text = Option.value text ~default:image in
+  let vhs = Option.value vhs ~default:text in
+  let lines l = String.concat "\n" l in
   with_dir @@ fun env cwd ->
   let command = "printf '\\033[2J\\033[H" ^ payload ^ "\\033[10;1H'" in
   let t =
     oracle_tape ~settings:[ Typing_speed (Ms 1) ]
       Vhs.[ hidden [ type' command; key Enter; wait Prompt ]; sleep (Ms 200) ]
   in
-  let expected =
-    String.concat "\n"
-      (lines @ List.init (9 - List.length lines) (fun _ -> "") @ [ ">"; ""; "" ])
-  in
-  let text () = last_screen (Eio.Path.load Eio.Path.(cwd / "oracle.txt")) in
+  let output () = last_screen (Eio.Path.load Eio.Path.(cwd / "oracle.txt")) in
   (match oracle with
   | None -> ()
-  | Some vhs -> (
+  | Some exe -> (
       match
-        Vhs.render ~vhs
+        Vhs.render ~vhs:exe
           ~clock:(Eio.Stdenv.mono_clock env)
           ~proc:(Eio.Stdenv.process_mgr env)
           ~cwd t
       with
       | Error e -> Alcotest.failf "%a" Vhs.pp_error e
-      | Ok () -> Alcotest.(check string) "VHS oracle" expected (text ())));
+      | Ok () -> Alcotest.(check string) "VHS oracle" (lines vhs) (output ())));
   match record env cwd t with
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e
-  | Ok image -> (
-      match Svg_check.frames ~cell_width ~cell_height ~rows:12 image with
+  | Ok svg -> (
+      match Svg_check.frames ~cell_width ~cell_height ~rows:12 svg with
       | Error e -> Alcotest.fail e
       | Ok images ->
           Alcotest.(check (pair string string))
-            "native text and SVG" (expected, expected)
-            (text (), last images))
+            "native text and SVG"
+            (lines text, lines image)
+            (output (), last images))
+
+let check_terminal_payload payload lines = check_payload payload (rows lines)
 
 (* REP repeats the complete preceding cell, including its combining marks. *)
 let test_repeat_combining () =
@@ -726,17 +736,79 @@ let test_repeat_combining () =
 let test_c1_controls () =
   check_terminal_payload {|a\302\2332Cb\302\235title\302\234c|} [ "a  bc" ]
 
-(* Erasure does not consume a pending wrap. ED starts beyond the final cell;
-   EL 1 clears the row, but the following glyph still wraps to the next row. *)
-let test_margin_erasure () =
-  check_terminal_payload {|\033[60GX\033[JY\033[3;60HX\033[1KY|}
-    [ String.make 59 ' ' ^ "X"; "Y"; ""; "Y" ]
-
 (* Unlike 1049, modes 47 and 1047 share the cursor between buffers. *)
 let test_alternate_cursor () =
   check_terminal_payload
     {|abc\033[?47hALT\033[?47lX\033[2;1Habc\033[?1047hALT\033[?1047lX|}
     [ "abc   X"; "abc   X" ]
+
+(* The native terminal follows xterm, as matrix emulates it, where VHS's
+   xterm.js departs from it. These are the differences that show in a
+   recording, each with what VHS writes and what the native recorder does:
+   - an erasure in the last column after a character there: xterm erases
+     that column and ends the pending wrap, xterm.js starts beyond it and
+     keeps the wrap pending;
+   - CSI S: xterm keeps the lines it scrolls out in the scrollback, which the
+     text output reads, and xterm.js drops them;
+   - a restore after scrolling: xterm returns to the row the save was on,
+     xterm.js to the buffer line, which moved up;
+   - a restore brings back the character set designations in xterm; xterm.js
+     brings back only the set in use, and the next shift invokes the
+     designation made since;
+   - ESC % G: xterm selects UTF-8 and keeps the designations, xterm.js also
+     invokes ASCII into G0;
+   - the two screens share the scroll region and the tab stops in xterm, and
+     each has its own in xterm.js;
+   - the cursor position report after a character in the last column: xterm
+     reports that column and xterm.js the one beyond, and xterm's DECXCPR
+     reply has the page, as the screen tests check. *)
+let known_differences =
+  let blank n = List.init n (fun _ -> "") in
+  let margin = String.make 59 ' ' in
+  [
+    ( "erase below at the margin",
+      {|\033[60GX\033[JY|},
+      rows [ margin ^ "X"; "Y" ],
+      rows [ margin ^ "Y" ],
+      None );
+    ( "erase to the start at the margin",
+      {|\033[60GX\033[1KY|},
+      rows [ ""; "Y" ],
+      rows [ margin ^ "Y" ],
+      None );
+    ( "scroll up",
+      {|a\033[S|},
+      rows [],
+      rows [],
+      Some ("a" :: List.take 11 (rows [])) );
+    ( "restore after scrolling",
+      {|\033[8;3H\0337\033[12;1H\n\n\0338X|},
+      blank 2 @ List.take 10 (rows (blank 5 @ [ "  X" ])),
+      rows (blank 7 @ [ "  X" ]),
+      Some (blank 2 @ List.take 10 (rows (blank 7 @ [ "  X" ]))) );
+    ( "restored designations",
+      {|\033(0\0337\033(B\0338q\017q\033(B|},
+      rows [ "\xe2\x94\x80q" ],
+      rows [ "\xe2\x94\x80\xe2\x94\x80" ],
+      None );
+    ( "UTF-8",
+      {|\033(0\033%%Gq\033(B|},
+      rows [ "q" ],
+      rows [ "\xe2\x94\x80" ],
+      None );
+    ( "shared scroll region",
+      {|\033[?1049h\033[1;2r\033[?1049la\r\nb\r\nc\033[r|},
+      rows [ "a"; "b"; "c" ],
+      rows [ "b"; "c" ],
+      Some ("a" :: List.take 11 (rows [ "b"; "c" ])) );
+    ( "shared tab stops",
+      {|\033[?1049h\033[3g\033[?1049l\tX|},
+      rows [ String.make 8 ' ' ^ "X" ],
+      rows [ margin ^ "X" ],
+      None );
+  ]
+  |> List.map (fun (name, payload, vhs, image, text) ->
+      (name, fun () -> check_payload ~vhs ?text payload image))
 
 let suite =
   ( "native",
@@ -765,9 +837,9 @@ let suite =
          ("terminal state recording", test_terminal_state);
          ("repeat combining cell", test_repeat_combining);
          ("C1 terminal controls", test_c1_controls);
-         ("right-margin erasure", test_margin_erasure);
          ("alternate-screen shared cursor", test_alternate_cursor);
        ]
+      @ known_differences
       @
       if Option.is_some oracle then
         [
