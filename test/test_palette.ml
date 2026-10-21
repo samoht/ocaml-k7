@@ -42,6 +42,16 @@ let test_json_theme () =
   check_contains "foreground" ~sub:"text{fill:#ffffff}" s;
   check_contains "cursor" ~sub:".kc{fill:#ffffff}" s;
   check_contains "green" ~sub:".p2{fill:#4e9a06}" s;
+  (* The text under the cursor takes the theme's accent, or the one of its
+     background and foreground that stands out more on the cursor. *)
+  let accent theme = svg ~settings:[ Theme theme ] [ (Ms 0, "x") ] in
+  check_contains "named theme" ~sub:".ka{fill:#1e1f29}" (accent "Dracula");
+  check_contains "missing accent" ~sub:".ka{fill:#102030}" s;
+  check_contains "light cursor" ~sub:".ka{fill:#000000}"
+    (accent
+       {|{"background": "#ffffff", "foreground": "#000000", "cursor": "#eeeeee"}|});
+  check_contains "accent" ~sub:".ka{fill:#00ff00}"
+    (accent {|{"cursor": "#ff0000", "cursorAccent": "#00ff00"}|});
   (match Vhs.svg ~settings:[ Theme {|{"red": "tomato"}|} ] [] with
   | Error (Unsupported why) -> check_contains "names it" ~sub:"tomato" why
   | Ok _ -> Alcotest.fail "a colour name played"
@@ -116,7 +126,7 @@ let test_default () =
 let test_no_cursor () =
   let s = svg ~settings:(Vhs.Theme "TokyoNight" :: settings) [ (Ms 0, "x") ] in
   check_contains "cursor" ~sub:".kc{fill:#ffffff}" s;
-  check_contains "accent" ~sub:".ka{fill:#000000}" s
+  check_contains "accent" ~sub:".ka{fill:#16161e}" s
 
 let suite =
   ( "palette",
