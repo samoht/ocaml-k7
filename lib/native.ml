@@ -328,7 +328,8 @@ let wait_command line tokens =
 (* The settings, environment and requirements a line adds, or its action. *)
 (* The lines of the tape a [Source] line names, as VHS's parser reads it:
    not empty, without error and without a [Source] line; it drops their
-   [Output] lines. *)
+   [Output] lines. A line also holds no control character but white space,
+   as {!Vhs.tape} requires of a raw line. *)
 let sourced ~source line path =
   let invalid fmt =
     Fmt.kstr (fun why -> stop (Invalid (line ^ ": " ^ why))) fmt
@@ -341,12 +342,15 @@ let sourced ~source line path =
   in
   List.filter_map
     (fun l ->
-      match check l with
-      | Error e -> invalid "%s: %s" l e
-      | Ok (Output _) -> None
-      | Ok _ when List.mem (Keyword "Source") (tokens l) ->
-          invalid "VHS refuses a nested Source"
-      | Ok _ -> Some l)
+      if has_control ~except:"\t\r" l then
+        invalid "%S holds a control character" l
+      else
+        match check l with
+        | Error e -> invalid "%s: %s" l e
+        | Ok (Output _) -> None
+        | Ok _ when List.mem (Keyword "Source") (tokens l) ->
+            invalid "VHS refuses a nested Source"
+        | Ok _ -> Some l)
     (String.split_on_char '\n' src)
 
 let base64 s =

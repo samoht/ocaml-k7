@@ -35,7 +35,8 @@ val of_lines :
     in place of a [Source path] line, as VHS's parser inlines them; [source] is
     [Error msg] if it cannot read [path] (defaults to always [Error]). It is
     [Error (Unsupported _)] on a line this module cannot play, and
-    [Error (Invalid _)] on a [Source] VHS refuses. *)
+    [Error (Invalid _)] on a [Source] VHS refuses or whose tape holds a control
+    character other than a tab or a carriage return. *)
 
 val text_output : t -> string option
 (** [text_output t] is the path of the text output of [t], its [Output] line

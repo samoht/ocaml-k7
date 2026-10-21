@@ -302,9 +302,10 @@ val render :
     {!record} plays the actions of {!action}, the raw [Type], key, [Ctrl],
     [Alt], [Shift], [Sleep], [Wait], [Copy], [Paste] ([Paste] types the last
     [Copy]), [Screenshot] and [Output] lines, [Source] lines, whose tape it
-    reads relative to [cwd] and refuses, as {!Invalid}, where VHS does, [Env],
-    [Require], and every [Set] but those below. It does not play, and is
-    {!Unsupported} on:
+    reads relative to [cwd] and refuses, as {!Invalid}, where VHS does and on a
+    control character other than a tab or a carriage return, which {!val-tape}
+    refuses in a {!raw} line, [Env], [Require], and every [Set] but those below.
+    It does not play, and is {!Unsupported} on:
     - a {!shell} other than {!Bash}, {!Zsh} and {!Fish}, which start as in VHS;
     - a colour of a JSON [Theme] other than [#RGB], [#RGBA], [#RRGGBB],
       [#RRGGBBAA], [rgb()] or [rgba()], such as a colour name, which xterm.js
