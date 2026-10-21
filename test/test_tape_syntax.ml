@@ -9,6 +9,7 @@
 let tape actions =
   Vhs.tape ~outputs:[ "demo.gif" ] (actions @ [ Vhs.sleep (Ms 100) ])
   |> Result.map ignore
+  |> Result.map_error Native_test.invalid
 
 (* A raw line is one command VHS's parser reads without error, and that
    takes nothing from the line after it. *)

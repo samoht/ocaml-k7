@@ -7,10 +7,11 @@
    v0.12.1 (MIT, Charm). *)
 
 type error =
+  | Executable_not_found of string
+  | Io of string
   | Unsupported of string
   | Timeout of { wait : string; last : string }
-  | Not_found of string
-  | Io of string
+  | Invalid of string
 
 open Tape_syntax
 
@@ -295,7 +296,7 @@ let style c =
 
 type t = {
   config : config;
-  look : Svg.t;
+  look : Svg.look;
   actions : command list;
   env : (string * string) list;
   requires : string list;
@@ -329,19 +330,22 @@ let wait_command line tokens =
    not empty, without error and without a [Source] line; it drops their
    [Output] lines. *)
 let sourced ~source line path =
+  let invalid fmt =
+    Fmt.kstr (fun why -> stop (Invalid (line ^ ": " ^ why))) fmt
+  in
   let src =
     match source path with
-    | Ok "" -> unsupported line "VHS refuses an empty tape"
+    | Ok "" -> invalid "VHS refuses an empty tape"
     | Ok src -> src
     | Error msg -> stop (Io msg)
   in
   List.filter_map
     (fun l ->
       match check l with
-      | Error e -> unsupported line "%s: %s" l e
+      | Error e -> invalid "%s: %s" l e
       | Ok (Output _) -> None
       | Ok _ when List.mem (Keyword "Source") (tokens l) ->
-          unsupported line "VHS refuses a nested Source"
+          invalid "VHS refuses a nested Source"
       | Ok _ -> Some l)
     (String.split_on_char '\n' src)
 
@@ -495,7 +499,7 @@ let svg t tl ~end_ms =
   let duration = max (last + tl.quantum) end_ms in
   let duration = (duration + tl.quantum - 1) / tl.quantum * tl.quantum in
   let loop_offset = round (c.loop_offset *. float duration) mod duration in
-  Svg.to_string { s with loop_offset } ~duration frames
+  Svg.image { s with loop_offset } ~duration frames
 
 let timeline c = { quantum = max 1 (1000 / c.framerate); frames = [] }
 
@@ -856,7 +860,7 @@ let spawn ~env ~cwd t s =
       env
   in
   List.iter
-    (fun exe -> if not (on_path env exe) then stop (Not_found exe))
+    (fun exe -> if not (on_path env exe) then stop (Executable_not_found exe))
     (prog :: t.requires);
   match
     Pty.spawn ~env ~cwd
@@ -908,7 +912,7 @@ let state t ~clock pty =
 let recording t st =
   let still (path, screen) =
     ( path,
-      Svg.to_string
+      Svg.image
         { t.look with blink = false }
         ~duration:st.tl.quantum
         [ (0, screen) ] )

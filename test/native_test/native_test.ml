@@ -62,9 +62,13 @@ let tape actions =
       ~outputs:[ "demo.svg" ] actions
   with
   | Ok t -> t
-  | Error e -> Alcotest.fail e
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
 
 let last l = List.nth l (List.length l - 1)
+
+let invalid = function
+  | Vhs.Invalid msg -> msg
+  | e -> Alcotest.failf "not Invalid: %a" Vhs.pp_error e
 
 (* The vhs executable of the tests that run it, from [VHS_ORACLE]: the
    oracle alias sets it, runtest does not. *)

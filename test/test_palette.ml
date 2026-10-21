@@ -52,7 +52,8 @@ let test_json_theme () =
         Vhs.tape ~settings:[ Theme theme ] ~outputs:[ "a.gif" ]
           [ Vhs.type' "x" ]
       with
-      | Error e -> check_contains "refused" ~sub:"VHS cannot read it" e
+      | Error e ->
+          check_contains "refused" ~sub:"VHS cannot read it" (invalid e)
       | Ok _ -> Alcotest.failf "%s accepted" theme)
     [ {|{"background": 1}|}; {|{"background": "#000"} x|}; {|{"a": tru}|}; "{" ]
 

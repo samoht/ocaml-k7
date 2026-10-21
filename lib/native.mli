@@ -12,13 +12,16 @@
     wait. Output gets the time it arrives at within the action that runs,
     rounded down to a frame. *)
 
-(** The type for the reasons a tape does not play. *)
+(** The type for the reasons a tape does not play, as [Vhs.error] names them. *)
 type error =
+  | Executable_not_found of string  (** An executable is not on the [PATH]. *)
+  | Io of string  (** Any other I/O failure. *)
   | Unsupported of string  (** A line only VHS plays, and why. *)
   | Timeout of { wait : string; last : string }
       (** A wait line did not hold in time; [last] is what it last read. *)
-  | Not_found of string  (** An executable is not on the [PATH]. *)
-  | Io of string  (** Any other failure. *)
+  | Invalid of string
+      (** A line of the tape of a [Source] line that VHS rejects or that holds a
+          control character, and why. *)
 
 type t
 (** The type for tapes to play. *)
@@ -31,8 +34,8 @@ val of_lines :
     {!Tape_syntax.check} accepts, with the lines of the tape [source path] reads
     in place of a [Source path] line, as VHS's parser inlines them; [source] is
     [Error msg] if it cannot read [path] (defaults to always [Error]). It is
-    [Error (Unsupported _)] on a line this module cannot play, and on a [Source]
-    VHS refuses. *)
+    [Error (Unsupported _)] on a line this module cannot play, and
+    [Error (Invalid _)] on a [Source] VHS refuses. *)
 
 val text_output : t -> string option
 (** [text_output t] is the path of the text output of [t], its [Output] line

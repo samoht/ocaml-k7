@@ -18,9 +18,9 @@
     {[
     let demo =
       Vhs.tape
-        ~settings:[ Width 1000; Height 560 ]
+        ~settings:Vhs.[ Width 1000; Height 560 ]
         ~outputs:[ "demo.gif" ]
-        [ Vhs.type' "ls\n"; Vhs.wait Prompt ]
+        Vhs.[ type' "ls\n"; wait Prompt ]
     ]} *)
 
 (** {1:actions Actions} *)
@@ -150,18 +150,46 @@ type setting =
 type t
 (** The type for tapes VHS reads without error and without ignoring a line. *)
 
+(** The type for errors. *)
+type error =
+  | Executable_not_found of string  (** No such executable on the [PATH]. *)
+  | Failed of {
+      vhs : string;
+      status : [ `Exited of int | `Signaled of int ];
+      output : string;
+    }
+      (** The executable [vhs] ran and did not exit with [0]; [output] is the
+          end of what it printed, at most 64 KiB, such as the wait that timed
+          out. *)
+  | Io of string  (** Any other I/O failure. *)
+  | Unsupported of string
+      (** A setting or a command that {!record} cannot play, named, and why:
+          {!render} plays it. *)
+  | Timeout of { wait : string; last : string }
+      (** The wait line [wait] of {!record} did not hold in time; [last] is the
+          line or the screen it last read. *)
+  | Invalid of string
+      (** A tape VHS rejects, or one of whose lines it ignores, naming the first
+          offending item, and why. *)
+
+val pp_error : error Fmt.t
+(** [pp_error] formats an error for humans: one line, followed for {!Failed} by
+    the last ten lines [vhs] printed, indented. Escape sequences and control
+    characters are removed from every string it prints, and invalid UTF-8 is
+    replaced by U+FFFD. *)
+
 val tape :
   ?settings:setting list ->
   outputs:string list ->
   action list ->
-  (t, string) result
+  (t, error) result
 (** [tape ~settings ~outputs actions] is the tape that applies [settings]
     (defaults to [[]]), runs [actions] and writes the recording to each path of
     [outputs], in the format of its extension: [.gif], [.mp4], [.webm], [.txt],
     [.ascii] or [.test] for the screen as text, a directory of PNG frames for
     [.png] or a trailing slash, and [.svg] for the animated SVG image that
-    {!record} writes and VHS cannot. It is [Error msg], with [msg] naming the
-    first offending item, if:
+    {!record} writes and VHS cannot. It is [Error (Invalid msg)], with [msg]
+    naming the first offending item, if:
     - [outputs] is empty, or one has another extension, none and no trailing
       slash, or starts with [-], which ffmpeg reads as an option;
     - two outputs, {!raw} [Output] lines included, are of the same kind (GIF,
@@ -211,31 +239,6 @@ val pp : t Fmt.t
 
 (** {1:running Running vhs} *)
 
-(** The type for errors of {!render} and {!record}. *)
-type error =
-  | Executable_not_found of string  (** No such executable on the [PATH]. *)
-  | Failed of {
-      vhs : string;
-      status : [ `Exited of int | `Signaled of int ];
-      output : string;
-    }
-      (** The executable [vhs] ran and did not exit with [0]; [output] is the
-          end of what it printed, at most 64 KiB, such as the wait that timed
-          out. *)
-  | Io of string  (** Any other I/O failure. *)
-  | Unsupported of string
-      (** A setting or a command that {!record} cannot play, named, and why:
-          {!render} plays it. *)
-  | Timeout of { wait : string; last : string }
-      (** The wait line [wait] of {!record} did not hold in time; [last] is the
-          line or the screen it last read. *)
-
-val pp_error : error Fmt.t
-(** [pp_error] formats an error for humans: one line, followed for {!Failed} by
-    the last ten lines [vhs] printed, indented. Escape sequences and control
-    characters are removed from every string it prints, and invalid UTF-8 is
-    replaced by U+FFFD. *)
-
 val render :
   ?vhs:string ->
   clock:_ Eio.Time.Mono.t ->
@@ -258,11 +261,11 @@ val render :
 
 (** {1:native Recording natively}
 
-    {!record} plays a tape in bash or zsh on a pseudo-terminal, reads what the
-    shell prints with a terminal emulator and draws the screens it shows as an
-    animated SVG image. It needs no [vhs], browser or [ffmpeg]. The image holds
-    text, no script and no external resource, and animates with CSS only, so it
-    plays in an HTML [<img>].
+    {!record} plays a tape in bash, zsh or fish on a pseudo-terminal, reads what
+    the shell prints with a terminal emulator and draws the screens it shows as
+    an animated SVG image. It needs no [vhs], browser or [ffmpeg]. The image
+    holds text, no script and no external resource, and animates with CSS only,
+    so it plays in an HTML [<img>].
 
     The terminal has the size VHS gives it with JetBrains Mono, VHS's first
     font: [Width], [Height], [Font_size], [Padding] and the raw [Set Margin],
@@ -299,8 +302,9 @@ val render :
     {!record} plays the actions of {!action}, the raw [Type], key, [Ctrl],
     [Alt], [Shift], [Sleep], [Wait], [Copy], [Paste] ([Paste] types the last
     [Copy]), [Screenshot] and [Output] lines, [Source] lines, whose tape it
-    reads relative to [cwd] and refuses where VHS does, [Env], [Require], and
-    every [Set] but those below. It does not play, and is {!Unsupported} on:
+    reads relative to [cwd] and refuses, as {!Invalid}, where VHS does, [Env],
+    [Require], and every [Set] but those below. It does not play, and is
+    {!Unsupported} on:
     - a {!shell} other than {!Bash}, {!Zsh} and {!Fish}, which start as in VHS;
     - a colour of a JSON [Theme] other than [#RGB], [#RGBA], [#RRGGBB],
       [#RRGGBBAA], [rgb()] or [rgba()], such as a colour name, which xterm.js

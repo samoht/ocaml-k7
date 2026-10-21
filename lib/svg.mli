@@ -25,7 +25,7 @@ type fill =
   | Image of string
       (** An image, as a [data:] URI, stretched to the size of the image. *)
 
-type t = {
+type look = {
   width : int;  (** The width of the image, in pixels. *)
   height : int;  (** The height of the image, in pixels. *)
   x : int;  (** The left of the first column. *)
@@ -46,13 +46,10 @@ type t = {
   loop_offset : int;  (** The time the loop starts at, in milliseconds. *)
   speed : float;  (** The playback speed, [1.] for real time. *)
 }
-(** The type for the look of a recording. *)
+(** The type for the looks of a recording. *)
 
-val pp : t Fmt.t
-(** [pp] formats the geometry of a look for humans. *)
-
-val to_string : t -> duration:int -> (int * Screen.t) list -> string
-(** [to_string t ~duration frames] is the image that shows each screen of
-    [frames] from its time, in milliseconds, to the next one's, and the last one
-    until [duration]. The times are increasing, the first is [0] and all are
+val image : look -> duration:int -> (int * Screen.t) list -> string
+(** [image look ~duration frames] is the image in [look] that shows each screen
+    of [frames] from its time, in milliseconds, to the next one's, and the last
+    one until [duration]. The times are increasing, the first is [0] and all are
     below [duration]. *)

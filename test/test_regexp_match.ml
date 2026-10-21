@@ -144,7 +144,7 @@ let test_vhs_oracle () =
         (Vhs.type' ("printf '" ^ text ^ "\\n'\n") :: Vhs.wait Prompt :: waits)
     with
     | Ok t -> t
-    | Error e -> Alcotest.fail e
+    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
   in
   let both t =
     (Vhs.render ?vhs:oracle ~clock ~proc ~cwd t, Native_test.record env cwd t)

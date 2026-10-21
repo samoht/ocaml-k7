@@ -10,6 +10,7 @@ let expect = Alcotest.(check string)
 let tape settings =
   Vhs.tape ~settings ~outputs:[ "demo.gif" ] [ Vhs.sleep (Ms 100) ]
   |> Result.map Vhs.to_string
+  |> Result.map_error Native_test.invalid
 
 let body settings =
   match tape settings with

@@ -16,6 +16,7 @@ let tape ~setup ~output ~name src =
   | false, None ->
       Vhs.tape ~settings:[ Shell Bash ] ~outputs:[ output ]
         (Cram.actions ~setup cram)
+      |> Result.map_error (Fmt.str "%a" Vhs.pp_error)
 
 let load_error name = function
   | Eio.Fs.E (Not_found _) -> Fmt.str "%s: no such file" name

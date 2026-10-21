@@ -59,6 +59,10 @@ val tape : Vhs.action list -> Vhs.t
 val last : 'a list -> 'a
 (** [last l] is the last element of [l]. *)
 
+val invalid : Vhs.error -> string
+(** [invalid e] is the message of [Vhs.Invalid msg], the error of {!Vhs.tape};
+    it fails the test on any other error. *)
+
 val oracle : string option
 (** [oracle] is the [vhs] the oracle alias names in [VHS_ORACLE]. *)
 

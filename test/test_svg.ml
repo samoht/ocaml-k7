@@ -80,7 +80,7 @@ let test_deterministic () =
 (* An .svg output never reaches VHS. *)
 let test_svg_output () =
   match Vhs.tape ~outputs:[ "demo.svg"; "demo.gif" ] [ Vhs.type' "x" ] with
-  | Error e -> Alcotest.fail e
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
   | Ok t ->
       Alcotest.(check bool)
         "not printed" false

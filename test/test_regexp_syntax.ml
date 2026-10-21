@@ -7,7 +7,7 @@
 
 let line re =
   match Vhs.tape ~outputs:[ "x.gif" ] [ Vhs.wait (Screen re) ] with
-  | Error e -> Error e
+  | Error e -> Error (Native_test.invalid e)
   | Ok t -> (
       match String.split_on_char '\n' (Vhs.to_string t) with
       | [ _output; line; "" ] -> Ok line

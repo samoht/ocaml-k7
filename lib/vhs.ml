@@ -66,6 +66,18 @@ type setting =
   | Typing_speed of duration
   | Framerate of int
 
+type error =
+  | Executable_not_found of string
+  | Failed of {
+      vhs : string;
+      status : [ `Exited of int | `Signaled of int ];
+      output : string;
+    }
+  | Io of string
+  | Unsupported of string
+  | Timeout of { wait : string; last : string }
+  | Invalid of string
+
 type t = {
   outputs : string list;
   settings : setting list;
@@ -82,24 +94,7 @@ let rec iter_result f = function
       let* () = f x in
       iter_result f rest
 
-(* [has_control ~except s] is [true] iff [s] holds a C0 control other than
-   those of [except], DEL, or a C1 control encoded in UTF-8, which a terminal
-   runs as ESC sequences (U+009B is CSI). *)
-let has_control ?(except = "") s =
-  let n = String.length s in
-  let rec go i =
-    i < n
-    &&
-    match s.[i] with
-    | '\xc2' when i + 1 < n && Char.code s.[i + 1] land 0xe0 = 0x80 -> true
-    | c
-      when (Char.code c < 0x20 && not (String.contains except c)) || c = '\x7f'
-      ->
-        true
-    | _ -> go (i + 1)
-  in
-  go 0
-
+let has_control = Tape_syntax.has_control
 let quote_bit = function '"' -> 1 | '\'' -> 2 | '`' -> 4 | _ -> 0
 
 (* A VHS string ends at its quote, a newline or a NUL and has no escapes. *)
@@ -579,7 +574,7 @@ let check_paths settings paths =
   let* () = check_mp4 settings paths in
   check_encoders settings paths
 
-let tape ?(settings = []) ~outputs actions =
+let check_tape ~settings ~outputs actions =
   let* () = check_outputs outputs in
   let* () = iter_result check_setting settings in
   let* _started = check_actions ~started:false actions in
@@ -588,6 +583,11 @@ let tape ?(settings = []) ~outputs actions =
   let* () = check_size settings actions in
   let* () = check_paths settings (outputs @ raw_outputs actions) in
   Ok { outputs; settings; actions }
+
+let tape ?(settings = []) ~outputs actions =
+  Result.map_error
+    (fun msg -> Invalid msg)
+    (check_tape ~settings ~outputs actions)
 
 (* Printing *)
 
@@ -742,17 +742,6 @@ let pp ppf t = Fmt.string ppf (to_string t)
 
 (* Running *)
 
-type error =
-  | Executable_not_found of string
-  | Failed of {
-      vhs : string;
-      status : [ `Exited of int | `Signaled of int ];
-      output : string;
-    }
-  | Io of string
-  | Unsupported of string
-  | Timeout of { wait : string; last : string }
-
 (* [utf_8 s] is [s] with each invalid byte replaced by U+FFFD, and without
    C1 controls, which dropping a byte between a lead byte and a continuation
    byte can create. *)
@@ -848,6 +837,7 @@ let pp_error ppf = function
   | Timeout { wait; last } ->
       Fmt.pf ppf "%s timed out; last value was: %s" (one_line wait)
         (one_line last)
+  | Invalid msg -> Fmt.string ppf (one_line msg)
 
 let fs_message path = function
   | Eio.Fs.Not_found _ -> path ^ ": no such file or directory"
@@ -964,11 +954,12 @@ let render ?(vhs = "vhs") ~clock ~proc ~cwd t =
 
 (* Recording natively *)
 
-let native_error = function
-  | Native.Unsupported why -> Unsupported why
-  | Native.Timeout { wait; last } -> Timeout { wait; last }
-  | Native.Not_found exe -> Executable_not_found exe
-  | Native.Io msg -> Io msg
+let native_error : Native.error -> error = function
+  | Unsupported why -> Unsupported why
+  | Timeout { wait; last } -> Timeout { wait; last }
+  | Executable_not_found exe -> Executable_not_found exe
+  | Io msg -> Io msg
+  | Invalid msg -> Invalid msg
 
 let native ?source lines =
   Result.map_error native_error (Native.of_lines ?source lines)

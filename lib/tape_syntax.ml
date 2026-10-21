@@ -586,3 +586,18 @@ let tokens line =
       | Number -> Some (Num t.lit)
       | Punct c -> Some (Sym c)
       | Comment | Eof | Illegal -> None)
+
+let has_control ?(except = "") s =
+  let n = String.length s in
+  let rec go i =
+    i < n
+    &&
+    match s.[i] with
+    | '\xc2' when i + 1 < n && Char.code s.[i + 1] land 0xe0 = 0x80 -> true
+    | c
+      when (Char.code c < 0x20 && not (String.contains except c)) || c = '\x7f'
+      ->
+        true
+    | _ -> go (i + 1)
+  in
+  go 0

@@ -210,7 +210,7 @@ let test_text () =
       Vhs.tape ~settings:(Vhs.Typing_speed (Ms 5) :: settings) ~outputs actions
     with
     | Ok t -> t
-    | Error e -> Alcotest.fail e
+    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
   in
   let actions =
     Vhs.
@@ -307,7 +307,7 @@ let test_zsh () =
         Vhs.[ type' "echo $ZSH_NAME\n"; wait Prompt; sleep (Ms 100) ]
     with
     | Ok t -> t
-    | Error e -> Alcotest.fail e
+    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
   in
   match record env cwd t with
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e
@@ -344,7 +344,7 @@ let test_fish () =
           ]
     with
     | Ok t -> t
-    | Error e -> Alcotest.fail e
+    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
   in
   match record env cwd t with
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e
@@ -408,7 +408,7 @@ let test_unsupported () =
         [ Vhs.type' "x" ]
     with
     | Ok t -> t
-    | Error e -> Alcotest.fail e
+    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
   in
   match record env cwd t with
   | Error (Unsupported why) -> check_contains "names the line" ~sub:"Shell" why
@@ -476,7 +476,7 @@ let test_source () =
   List.iter
     (fun (name, sub) ->
       match play name with
-      | Error (Unsupported why | Io why) -> check_contains name ~sub why
+      | Error (Invalid why | Io why) -> check_contains name ~sub why
       | Ok _ -> Alcotest.failf "%s played" name
       | Error e -> Alcotest.failf "%a" Vhs.pp_error e)
     [
@@ -545,7 +545,7 @@ let oracle_tape ?(settings = []) actions =
       (Vhs.raw "Set Columns 60" :: Vhs.raw "Set Rows 12" :: actions)
   with
   | Ok t -> t
-  | Error e -> Alcotest.fail e
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
 
 (* For a 60 x 12 terminal, with colours, a wide character, a combining mark,
    a trailing no-break space and scrolling. *)

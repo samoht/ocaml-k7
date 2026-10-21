@@ -15,6 +15,7 @@ let tape ?settings ?(outputs = outputs) actions =
   |> Result.map (fun t ->
       let s = Vhs.to_string t in
       String.sub s 0 (String.length s - String.length last))
+  |> Result.map_error Native_test.invalid
 
 let str ?settings ?outputs actions =
   match tape ?settings ?outputs actions with
@@ -249,7 +250,8 @@ let test_frames () =
   let frames name expected actions =
     Alcotest.(check (result string string))
       name expected
-      (Vhs.tape ~outputs actions |> Result.map Vhs.to_string)
+      (Vhs.tape ~outputs actions |> Result.map Vhs.to_string
+      |> Result.map_error Native_test.invalid)
   in
   let none = Error "no action outside hidden, so VHS records no frame" in
   frames "no action" none [];
@@ -396,7 +398,7 @@ let test_encoders () =
   let accepts name ~outputs settings =
     match Vhs.tape ~settings ~outputs [ Vhs.sleep (Ms 100) ] with
     | Ok _ -> ()
-    | Error e -> Alcotest.failf "%s: %s" name e
+    | Error e -> Alcotest.failf "%s: %a" name Vhs.pp_error e
   and refuses name ~outputs settings =
     match Vhs.tape ~settings ~outputs [ Vhs.sleep (Ms 100) ] with
     | Ok _ -> Alcotest.failf "%s: accepted" name

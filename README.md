@@ -72,8 +72,9 @@ names the offending line:
 
 ```ocaml
 # Vhs.tape ~outputs:[ "demo" ] [ Vhs.sleep (Ms 100) ];;
-- : (Vhs.t, string) result =
-Error "Output \"demo\": neither an extension nor a trailing slash"
+- : (Vhs.t, Vhs.error) result =
+Error
+ (Vhs.Invalid "Output \"demo\": neither an extension nor a trailing slash")
 ```
 
 `Vhs.Prompt` relies on the prompt VHS gives each shell it starts, which ends
@@ -106,7 +107,7 @@ that `vhs` reads:
 
 ```ocaml
 # Vhs.tape ~outputs:[ "demo.svg" ] [ Vhs.type' "ls\n" ] |> Result.map Vhs.to_string;;
-- : (string, string) result = Ok "Type \"ls\"\nEnter\n"
+- : (string, Vhs.error) result = Ok "Type \"ls\"\nEnter\n"
 ```
 
 ```ocaml

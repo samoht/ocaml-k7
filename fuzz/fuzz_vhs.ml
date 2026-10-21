@@ -409,9 +409,10 @@ let test_error_item n =
   let check_error prefix result =
     match result with
     | Ok _ -> failf "accepted invalid item %S" bad
-    | Error message ->
+    | Error (Vhs.Invalid message) ->
         if not (String.starts_with ~prefix message) then
           failf "error does not identify %S: %s" bad message
+    | Error e -> failf "not Invalid: %a" Vhs.pp_error e
   in
   check_error
     (Fmt.str "Output %S:" (bad ^ ".gif"))

@@ -6,7 +6,7 @@
 type bar = { rings : bool; right : bool; size : int }
 type fill = Colour of int | Image of string
 
-type t = {
+type look = {
   width : int;
   height : int;
   x : int;
@@ -27,10 +27,6 @@ type t = {
   loop_offset : int;
   speed : float;
 }
-
-let pp ppf t =
-  Fmt.pf ppf "@[<h>%dx%d image, %dx%d cells of %dx%d at (%d, %d)@]" t.width
-    t.height t.cols t.rows t.cell_width t.cell_height t.x t.y
 
 type paint = Foreground | Background | Ansi of int | Rgb of int
 
@@ -408,7 +404,7 @@ let add_bar t b bar =
         circle ~cx:(centre ~gap ~r ~space i) ~cy:(cy r gap) ~r fill)
       [ {|fill="#ff4f4d"|}; {|fill="#febb00"|}; {|fill="#00cc1d"|} ]
 
-let to_string t ~duration frames =
+let image t ~duration frames =
   let b = Buffer.create 65536 in
   let d =
     {

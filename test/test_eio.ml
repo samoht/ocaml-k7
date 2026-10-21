@@ -8,7 +8,7 @@ let expect = Alcotest.(check string)
 let tape actions =
   match Vhs.tape ~outputs:[ "demo.gif" ] (actions @ [ Vhs.sleep (Ms 100) ]) with
   | Ok t -> t
-  | Error e -> Alcotest.fail e
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
 
 let str t = Fmt.str "%a" Vhs.pp t
 

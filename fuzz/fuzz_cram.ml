@@ -28,7 +28,7 @@ let printed ?(setup = []) cram =
       (Cram.actions ~setup cram @ [ Vhs.sleep (Ms 100) ])
   with
   | Ok t -> Fmt.str "%a" Vhs.pp t
-  | Error e -> failf "rejected actions: %s" e
+  | Error e -> failf "rejected actions: %a" Vhs.pp_error e
 
 (* The text the printed tape types, one string per [Enter]. *)
 let submitted tape =

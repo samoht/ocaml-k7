@@ -1,6 +1,19 @@
 (library
  (name vhs)
  (public_name vhs)
+ (private_modules
+  casefold
+  casefold_data
+  native
+  palette
+  regexp_match
+  regexp_syntax
+  screen
+  svg
+  tape_syntax
+  themes
+  unicode
+  unicode_data)
  (libraries
   cstruct
   eio

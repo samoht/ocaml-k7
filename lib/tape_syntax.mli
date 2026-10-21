@@ -30,6 +30,11 @@ val check : string -> (command, string) result
     rejects, and a [Rows] or [Columns] value that is not positive. [line] holds
     no newline. A [Source] line's tape is not read. *)
 
+val has_control : ?except:string -> string -> bool
+(** [has_control ~except s] is [true] iff [s] holds a C0 control other than
+    those of [except] (defaults to [""]), DEL, or a C1 control encoded in UTF-8,
+    which a terminal runs as an escape sequence: U+009B is CSI. *)
+
 val atoi : string -> int64 option
 (** [atoi s] is Go's [strconv.Atoi s] on 64 bits, or [None] if it fails. *)
 

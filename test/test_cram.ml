@@ -61,7 +61,7 @@ let printed ?(setup = []) src =
           let header = "Output \"x.gif\"\n" in
           String.sub s (String.length header)
             (String.length s - String.length header)
-      | Error msg -> Alcotest.fail msg)
+      | Error msg -> Alcotest.failf "%a" Vhs.pp_error msg)
 
 let cram ?setup src = unmarked (printed ?setup src)
 
