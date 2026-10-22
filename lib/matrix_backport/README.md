@@ -3,14 +3,15 @@
 A temporary verbatim copy of matrix's terminal core at
 [invariant-hq/mosaic](https://github.com/invariant-hq/mosaic)
 ([samoht/mosaic](https://github.com/samoht/mosaic)) commit
-`ea6eb4b665a14ac3431ad77f42293c586a28bf06` (branch `vte-wcwidth-cells`).
-That is `90a3f220997fc14819623a5cb98afca7a3d29bb6` with two fixes on top:
-3ccffa89 keeps a zero-width character at the wrap limit, and ea6eb4b6
-draws each wcwidth character in cells of its own.
+`7d90dc4e3825ac1c84b8afa7e4351ae82b4d0c35` (branch `vte-blank-default-fg`).
+That is `90a3f220997fc14819623a5cb98afca7a3d29bb6` with three fixes on
+top: 3ccffa89 keeps a zero-width character at the wrap limit, ea6eb4b6
+draws each wcwidth character in cells of its own, and 7d90dc4e keeps the
+default foreground of a blank cell.
 
 It exists because the released matrix 0.1.0 lacks the terminal fixes that
 vhs's emulator needs: those merged on invariant-hq/mosaic since 0.1.0, the
-PR stack #46-#65, #78-#89 and #94-#96 on top of them, and those two
+PR stack #46-#65, #78-#89 and #94-#96 on top of them, and those three
 commits, not yet proposed upstream. It is deleted when vhs moves to matrix
 0.2.0 (the `next` branch).
 
