@@ -1263,6 +1263,27 @@ let test_run_exec_error n =
   | Error e -> failf "%a" K7.pp_error e
   | Ok _ -> fail "exec failed but returned a recording and program status"
 
+let test_run_cli_status n signaled =
+  with_dir @@ fun env path ->
+  let output = path "exit.svg" in
+  let status = n land 255 in
+  let cli = Option.value ~default:"k7" (Sys.getenv_opt "K7_TEST_EXE") in
+  let sink = Eio.Flow.buffer_sink (Buffer.create 128) in
+  let command =
+    "printf EXIT_MARKER; "
+    ^ if signaled then "kill -TERM $$" else Fmt.str "exit %d" status
+  in
+  let got =
+    Eio.Switch.run @@ fun sw ->
+    Eio.Process.spawn ~sw ~stdout:sink ~stderr:sink
+      (Eio.Stdenv.process_mgr env)
+      [ cli; "run"; "-o"; output; "--"; "/bin/sh"; "-c"; command ]
+    |> Eio.Process.await
+  in
+  check (got = `Exited (if signaled then 143 else status));
+  let image = Eio.Path.load Eio.Path.(Eio.Stdenv.fs env / output) in
+  check (contains ~sub:"EXIT_MARKER" image)
+
 let test_run_inherited_fd n =
   with_dir @@ fun env path ->
   let token = Fmt.str "PRIVATE_%d" n in
@@ -1349,6 +1370,8 @@ let with_processes =
       test_run_signal_disposition;
     test_case "run reports exec errors instead of a program status" [ uint8 ]
       test_run_exec_error;
+    test_case "run CLI writes the image for every program exit status"
+      [ uint8; bool ] test_run_cli_status;
     test_case "run children cannot read the recorder's private descriptors"
       [ uint8 ] test_run_inherited_fd;
     test_case "completed or cancelled run leaves no resistant descendant"
