@@ -22,9 +22,9 @@
   designations of the character sets, `ESC % G` selects ASCII, an erasure at
   the right margin keeps the wrap pending, the cursor reports count the
   column beyond the last, and `CSI S` keeps no scrollback.
-- `Vhs.tape` refuses a JSON theme that Go does not read, more rows or
-  columns than VHS can measure, and a frame larger than the encoder of a
-  GIF, MP4 or WebM output takes.
+- `Vhs.tape` refuses a JSON theme that Go or jsont does not read, more
+  rows or columns than VHS can measure, and a frame larger than the
+  encoder of a GIF, MP4 or WebM output takes.
 - `vhs-cram` keeps typed non-ASCII text without a UTF-8 locale.
 - The library needs OCaml 5.4, for matrix's pseudo-terminals and terminal
   emulator, and matrix 0.1.0. The emulator is a private copy of matrix's
@@ -33,4 +33,6 @@
 - The README lists the known limitations of this release: the private copy
   of matrix's terminal core, the queries and cursor shapes the native
   terminal does not handle yet, a rare `setpgid` error from macOS's bash 3.2
-  under load, and the timed-out wait `Vhs.render` reports as `Failed`.
+  under load, the timed-out wait `Vhs.render` reports as `Failed`, and the
+  JSON themes with invalid UTF-8 or unpaired surrogates that jsont refuses
+  and Go reads.
