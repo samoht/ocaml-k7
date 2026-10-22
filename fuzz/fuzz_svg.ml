@@ -367,10 +367,40 @@ let test_concealed_description n =
   | Error e -> failf "%a" Vhs.pp_error e
   | Ok image -> check (contains ~sub:"<desc></desc>" image)
 
+(* The XML guarantee also holds when themes change the generated style. *)
+let test_theme_xml output theme =
+  let settings = Vhs.Theme theme :: settings in
+  match Vhs.tape ~settings ~outputs:[ "a.svg" ] [ Vhs.sleep (Ms 100) ] with
+  | Error _ -> ()
+  | Ok _ -> (
+      match Vhs.svg ~settings [ (Ms 0, output) ] with
+      | Error (Unsupported _) -> ()
+      | Error e -> failf "%a" Vhs.pp_error e
+      | Ok image -> (
+          match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows image with
+          | Ok _ -> ()
+          | Error e -> failf "not well-formed XML: %s" e))
+
 let suite =
   ( "svg",
     [
       test_case "frames" [ list chunk ] test_frames;
+      test_case "arbitrary output and themes produce XML"
+        [
+          bytes;
+          choose
+            [
+              bytes;
+              const "Dracula";
+              const "TokyoNight";
+              const "{}";
+              const
+                {|{"foreground":"#abcd","background":"#1230","cursor":"#ff000080"}|};
+              const {|{"red":"rgb(1,2,3)","cursorAccent":"rgba(0,0,0,0.5)"}|};
+              const {|{"name":"<>&\u0000","red":null,"extra":[1,{}]}|};
+            ];
+        ]
+        test_theme_xml;
       test_case "text alternatives respect SGR conceal" [ uint8 ]
         test_concealed_description;
       test_case "cursor respects SGR conceal" [ uint8 ] test_concealed_cursor;
