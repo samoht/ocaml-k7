@@ -987,6 +987,34 @@ let test_native_literal n =
   | Error e -> failf "%a" Vhs.pp_error e);
   check_eq ~pp:pp_string payload (Eio.Path.load Eio.Path.(cwd / "received"))
 
+(* Zero typing delay cannot make Wait match the prompt that preceded the
+   submitted command. A leading sleep ensures at least one real frame. *)
+let test_zero_speed_prompt n =
+  with_dir @@ fun env path ->
+  let marker = Fmt.str "READY_%d" n in
+  let settings =
+    Vhs.[ Width 400; Height 200; Font_size 10; Padding 10; Typing_speed (Ms 0) ]
+  in
+  let tape =
+    match
+      Vhs.tape ~settings ~outputs:[ path "out.txt" ]
+        Vhs.[ sleep (Ms 100); type' ("echo " ^ marker ^ "\n"); wait Prompt ]
+    with
+    | Ok t -> t
+    | Error e -> failf "%a" Vhs.pp_error e
+  in
+  let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "out.txt")) in
+  (match
+     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 10. (fun () ->
+         Vhs.record ~clock:(Eio.Stdenv.mono_clock env)
+           ~proc:(Eio.Stdenv.process_mgr env) ~cwd tape)
+   with
+  | Ok () -> ()
+  | Error e -> failf "%a" Vhs.pp_error e);
+  let output = Eio.Path.load Eio.Path.(cwd / "out.txt") in
+  if not (contains ~sub:("\n" ^ marker ^ "\n>") output) then
+    failf "prompt wait returned without the output of echo %s" marker
+
 (* Properties that run [vhs] itself, so need [oracle]. *)
 let with_vhs =
   [
@@ -1004,6 +1032,8 @@ let with_vhs =
 (* Properties that run stand-ins for vhs and vhs-cram. *)
 let with_processes =
   [
+    test_case "zero-delay typing waits for the submitted command" [ uint8 ]
+      test_zero_speed_prompt;
     test_case "native typing preserves mixed scripts and shell quotes" [ uint8 ]
       test_native_literal;
     test_case "CLI wait timeout bounds and diagnostics"
