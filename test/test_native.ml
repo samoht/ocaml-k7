@@ -57,6 +57,33 @@ let test_zero_speed_prompt () =
     ~sub:"\nREADY\n>"
     (last_screen (Eio.Path.load Eio.Path.(cwd / "demo.txt")))
 
+(* A screenshot of demo.png writes its still to demo.svg, the path of the
+   recording: record refuses the tape before it plays, rather than replace
+   the recording with the still. *)
+let test_screenshot_clash () =
+  with_dir @@ fun env cwd ->
+  let t =
+    tape
+      Vhs.
+        [
+          type' "echo hi\n";
+          wait Prompt;
+          raw "Screenshot \"demo.png\"";
+          type' "echo again\n";
+          wait Prompt;
+          sleep (Ms 100);
+        ]
+  in
+  match play env cwd t with
+  | Error (Unsupported _) ->
+      Alcotest.(check bool)
+        "nothing written" false
+        (Eio.Path.is_file Eio.Path.(cwd / "demo.svg"))
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Ok () ->
+      Alcotest.failf "Ok, and demo.svg is the still:\n%s"
+        (Eio.Path.load Eio.Path.(cwd / "demo.svg"))
+
 let test_timeout () =
   with_dir @@ fun env cwd ->
   let t =
@@ -1000,6 +1027,7 @@ let suite =
       ([
          ("record", test_record);
          ("zero-speed prompt wait", test_zero_speed_prompt);
+         ("screenshot over the recording", test_screenshot_clash);
          ("timeout", test_timeout);
          ("timeout precedence", test_timeout_precedence);
          ("hidden", test_hidden);
