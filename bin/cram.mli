@@ -13,11 +13,11 @@
 
 type t
 (** The type for cram tests: a sequence of commands, each a non-empty list of
-    lines without control characters. *)
+    lines without control characters but tabs. *)
 
 val parse : string -> (t, string) result
 (** [parse src] is the cram test of source [src], or [Error msg] if a command
-    line is not {!is_typeable}. Lines may end with ["\r\n"]. *)
+    line, its tabs aside, is not {!is_typeable}. Lines may end with ["\r\n"]. *)
 
 val is_typeable : string -> bool
 (** [is_typeable s] is [true] iff [s] is valid UTF-8 without a control
@@ -38,14 +38,15 @@ val actions :
     and without all three quote characters, sources the shell scripts [setup] in
     order, appends to bash's [PROMPT_COMMAND], after the hooks [setup] installs,
     a command that sets [PS1] to the VHS prompt followed by a mark, and clears
-    the screen, all {!K7.hidden}; then it types each command of [t], waits until
-    the line under the cursor ends with the mark, and pauses one second. The
-    mark is sixteen zero-width characters, U+200B and U+2060, spelling a digest
-    of [setup] and [t]. It does not show in a GIF or a video, so the recording
-    shows the VHS prompt, but it tells the prompt from a line the command
-    prints, even one that ends with [>] and a zero-width space or with the
-    prompt of another recording: each command's output is complete before the
-    next command is typed. A text output of VHS holds the mark after each
+    the screen, all {!K7.hidden}; then it types each command of [t], a tab after
+    readline's quoted-insert ([Ctrl+V]), so that it does not complete, waits
+    until the line under the cursor ends with the mark, and pauses one second.
+    The mark is sixteen zero-width characters, U+200B and U+2060, spelling a
+    digest of [setup] and [t]. It does not show in a GIF or a video, so the
+    recording shows the VHS prompt, but it tells the prompt from a line the
+    command prints, even one that ends with [>] and a zero-width space or with
+    the prompt of another recording: each command's output is complete before
+    the next command is typed. A text output of VHS holds the mark after each
     prompt. A hook that rewrites [PS1] runs before the appended command, so the
     prompt survives it; a command that replaces [PROMPT_COMMAND] makes the next
     wait time out. The appended command also sets [PS2] to bash's [> ] followed

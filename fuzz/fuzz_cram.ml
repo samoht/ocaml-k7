@@ -64,7 +64,8 @@ let test_parse src =
     |> List.filter (String.starts_with ~prefix:"  $ ")
     |> List.map (fun l -> String.sub l 4 (String.length l - 4))
   in
-  let bad l = (not (String.is_valid_utf_8 l)) || has_control l in
+  let untabbed l = String.map (fun c -> if c = '\t' then ' ' else c) l in
+  let bad l = (not (String.is_valid_utf_8 l)) || has_control (untabbed l) in
   match Cram.parse src with
   | Ok cram ->
       if List.exists bad command_lines then failf "accepted %S" src;

@@ -11,11 +11,13 @@ let is_typeable s =
   || (not (String.exists (fun c -> c = '\t' || c = '\n') s))
      && Result.is_ok (K7.tape ~outputs:[ "x.gif" ] [ K7.type' s ])
 
+(* A tab in a command is typed after readline's quoted-insert. *)
 let check_line n line =
   if not (String.is_valid_utf_8 line) then
     Fmt.error "line %d: %a is not valid UTF-8" n Quote.pp line
-  else if not (is_typeable line) then
-    Fmt.error "line %d: %a holds a control character" n Quote.pp line
+  else if
+    not (is_typeable (String.map (fun c -> if c = '\t' then ' ' else c) line))
+  then Fmt.error "line %d: %a holds a control character" n Quote.pp line
   else Ok line
 
 (* As in dune, [  > ] continues a command and a bare [  >] adds an empty
@@ -118,7 +120,14 @@ let prepare ~env mark setup =
       ])
 
 let typed mark lines =
-  [ K7.type' (String.concat "\n" lines ^ "\n"); ready mark; K7.sleep (Ms 1000) ]
+  let text = String.concat "\n" lines ^ "\n" in
+  List.concat
+    (List.mapi
+       (fun i part ->
+         (if i = 0 then [] else K7.[ key (Ctrl 'v'); key Tab ])
+         @ [ K7.type' part ])
+       (String.split_on_char '\t' text))
+  @ [ ready mark; K7.sleep (Ms 1000) ]
 
 let actions ?(env = []) ~setup t =
   let mark = mark ~setup t in
