@@ -946,21 +946,37 @@ let close_terminal (t : terminal) =
   Pty.close t.pty;
   Pty.close t.slave
 
-let stop_terminal clock (t : terminal) =
-  (try Unix.kill t.pid Sys.sigterm with Unix.Unix_error _ -> ());
-  close_terminal t;
-  let rec reap n =
-    match Unix.waitpid [ WNOHANG ] t.pid with
-    | 0, _ when n > 0 ->
-        Eio.Time.Mono.sleep clock 0.01;
-        reap (n - 1)
-    | 0, _ -> (
-        (try Unix.kill t.pid Sys.sigkill with Unix.Unix_error _ -> ());
-        try ignore (Unix.waitpid [] t.pid) with Unix.Unix_error _ -> ())
-    | _ -> ()
-    | exception Unix.Unix_error _ -> ()
+(* The program leads its own process group, so its descendants get the
+   signals too. Once the program is reaped its pid may be reused, but not
+   as the id of a group while the group has a member. *)
+let stop_terminal clock ~reaped (t : terminal) =
+  let reaped = ref reaped in
+  let reap flags =
+    if not !reaped then
+      match Unix.waitpid flags t.pid with
+      | 0, _ -> ()
+      | _ | (exception Unix.Unix_error _) -> reaped := true
   in
-  reap 100
+  let signal s =
+    match Unix.kill (-t.pid) s with
+    | () -> true
+    | exception Unix.Unix_error _ ->
+        (if not !reaped then
+           try Unix.kill t.pid s with Unix.Unix_error _ -> ());
+        false
+  in
+  let running = signal Sys.sigterm in
+  close_terminal t;
+  let rec wait n =
+    reap [ WNOHANG ];
+    if n > 0 && (signal 0 || not !reaped) then (
+      Eio.Time.Mono.sleep clock 0.01;
+      wait (n - 1))
+  in
+  if running || not !reaped then (
+    wait 100;
+    ignore (signal Sys.sigkill));
+  reap []
 
 (* Temporary, see [terminal]. *)
 external acquire_terminal : Unix.file_descr -> unit = "native_acquire_terminal"
@@ -1154,12 +1170,10 @@ let recording t st =
     stills = List.rev_map still st.stills;
   }
 
-(* A reaped program is not signalled: its pid may be reused. *)
 let with_terminal ~clock t (terminal : terminal) f =
   let st = state t ~clock terminal in
   let finally () =
-    if Option.is_some st.exited then close_terminal terminal
-    else stop_terminal clock terminal
+    stop_terminal clock ~reaped:(Option.is_some st.exited) terminal
   in
   Fun.protect ~finally:(fun () -> Eio.Cancel.protect finally) @@ fun () ->
   Pty.set_nonblock terminal.pty;

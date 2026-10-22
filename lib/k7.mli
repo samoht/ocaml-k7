@@ -343,9 +343,10 @@ val record :
     terminal showed, the [.txt], [.ascii] or [.test] output is the
     {{!native_details}text output}, and the {{!native_details}screenshots} are
     written too. The waits of [t] time out by [clock]. When the recording ends
-    or fails, or the calling fiber is cancelled, [record] sends the shell
-    [SIGTERM], hangs up its terminal, sends it [SIGKILL] if it still runs a
-    second later by [clock], and waits for it to exit. It is:
+    or fails, or the calling fiber is cancelled, [record] sends the shell and
+    its process group [SIGTERM], hangs up its terminal, sends them [SIGKILL] if
+    one still runs a second later by [clock], and waits for the shell to exit.
+    It is:
     - [Error (Unsupported _)] on a [.gif], [.mp4], [.webm] or PNG frames output,
       or a [Screenshot] of a [.png] image, which {!render} writes, and on what
       the {{!native_details}native recorder} does not play, before it plays
@@ -409,9 +410,11 @@ val run :
     A program that exits with another status than [0], or is killed, still gives
     its image: the status says how it exited. [run] returns once the program has
     exited and what it printed is read, so a program that waits for input waits
-    until the calling fiber is cancelled. If the calling fiber is cancelled,
-    [run] sends the program [SIGTERM], hangs up its terminal, sends it [SIGKILL]
-    if it still runs a second later by [clock], and waits for it to exit. It is:
+    until the calling fiber is cancelled. The program leads a process group.
+    When it exits, or if the calling fiber is cancelled, [run] sends the group
+    [SIGTERM], hangs up its terminal, sends the group [SIGKILL] if one of it
+    still runs a second later by [clock], and waits for the program to exit. It
+    is:
     - [Error (Invalid _)] if [argv] is empty, if a setting is one {!svg}
       refuses, if [show] holds a control character, or if a name of [env] is
       empty or holds [=], or a name or a value holds a NUL byte;
