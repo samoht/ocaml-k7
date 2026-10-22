@@ -223,6 +223,15 @@ let test_cursor_format () =
     "bidi override removed everywhere" false
     (contains ~sub:"\u{202E}" s)
 
+(* A cursor moved onto the second cell of a wide glyph covers the whole
+   glyph, as the cursor at its first cell does. *)
+let test_cursor_wide_right () =
+  let s = svg [ (Ms 0, "\u{4e2d}\027[D") ] in
+  check_contains "wide cursor on the glyph"
+    ~sub:{|<use href="#w" class="k" x="0" y="0"/>|} s;
+  check_contains "glyph under the cursor"
+    ~sub:"<text class=\"ka k\" x=\"0\" y=\"22\">\u{4e2d}</text>" s
+
 (* Reverse video paints a wide glyph's two cells with its foreground, as
    xterm.js does, not its right half with the default foreground. *)
 let test_inverse_wide () =
@@ -253,6 +262,7 @@ let suite =
         ("inverse wide glyph", test_inverse_wide);
         ("subdivision flag", test_tag_flag);
         ("cursor format characters", test_cursor_format);
+        ("cursor on a wide glyph's second cell", test_cursor_wide_right);
         ("positive frame rate above the pixel limit", test_framerate_limit);
         ("row dedup", test_dedup);
         ("keyframes", test_keyframes);
