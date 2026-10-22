@@ -1033,6 +1033,42 @@ let test_zero_speed_prompt n =
   if not (contains ~sub:("\n" ^ marker ^ "\n>") output) then
     failf "prompt wait returned without the output of echo %s" marker
 
+(* Mixed outputs must be refused before spawning either engine or opening
+   an earlier text output, including one whose parent directory is absent. *)
+let test_output_preflight n =
+  with_dir @@ fun env path ->
+  let text = if n mod 2 = 0 then path "keep.txt" else path "absent/keep.txt" in
+  let kinds = [| ".gif"; ".mp4"; ".webm"; ".png"; "/" |] in
+  let movie = path ("movie" ^ kinds.(n mod Array.length kinds)) in
+  let image = path "image.svg" in
+  if n mod 2 = 0 then save env text "keep these bytes";
+  let tape =
+    match
+      Vhs.tape ~outputs:[ text; movie; image ]
+        Vhs.[ type' "touch played\n"; wait Prompt; sleep (Ms 100) ]
+    with
+    | Ok t -> t
+    | Error e -> failf "%a" Vhs.pp_error e
+  in
+  let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname image) in
+  let clock = Eio.Stdenv.mono_clock env and proc = Eio.Stdenv.process_mgr env in
+  let refused name item = function
+    | Error (Vhs.Unsupported why) ->
+        check (contains ~sub:name why);
+        check (contains ~sub:item why)
+    | Error e -> failf "%a" Vhs.pp_error e
+    | Ok () -> fail "played incompatible outputs"
+  in
+  refused "Vhs.record" image
+    (Vhs.render ~vhs:(path "missing-vhs") ~clock ~proc ~cwd tape);
+  refused "Vhs.render" movie (Vhs.record ~clock ~proc ~cwd tape);
+  check (not (Sys.file_exists (path "played")));
+  check (not (Sys.file_exists image));
+  if n mod 2 = 0 then
+    check_eq ~pp:pp_string "keep these bytes"
+      (Eio.Path.load Eio.Path.(Eio.Stdenv.fs env / text))
+  else check (not (Sys.file_exists (path "absent")))
+
 (* Properties that run [vhs] itself, so need [oracle]. *)
 let with_vhs =
   [
@@ -1050,6 +1086,8 @@ let with_vhs =
 (* Properties that run stand-ins for vhs and vhs-cram. *)
 let with_processes =
   [
+    test_case "mixed outputs are refused before playing or writing" [ uint8 ]
+      test_output_preflight;
     test_case "zero-delay typing waits for the submitted command" [ uint8 ]
       test_zero_speed_prompt;
     test_case "native typing preserves mixed scripts and shell quotes" [ uint8 ]
