@@ -560,6 +560,13 @@ let test_tape_output_option () =
   in
   Alcotest.(check (pair int string)) "printed" (0, "") (code, error)
 
+(* A shell killed by a signal is named by the signal's system number. *)
+let test_signal_message () =
+  with_files [] @@ fun env path ->
+  let code, msg = run_err env path ~wait_timeout_s:30 "  $ kill -9 $$\n" in
+  Alcotest.(check int) "exit code" 123 code;
+  check_message msg ~has:[ "signal 9"; "command 1" ] ~lacks:[ "signal -" ]
+
 let suite =
   ( "cli",
     List.map
@@ -575,6 +582,7 @@ let suite =
          ("native text outputs", test_native_text);
          ("shell exit message", test_exit_message);
          ("tape -o without Output", test_tape_output_option);
+         ("killed shell message", test_signal_message);
          ("command line", test_command);
        ]
       @ readiness ~native:true
