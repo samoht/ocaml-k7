@@ -337,10 +337,34 @@ let test_setting_errors value =
       | Error e -> failf "%a" Vhs.pp_error e)
     Vhs.[ Font_family value; Theme value ]
 
+let contains ~sub s =
+  let rec go i =
+    i + String.length sub <= String.length s
+    && (String.sub s i (String.length sub) = sub || go (i + 1))
+  in
+  go 0
+
+(* SGR conceal is retained by matrix and respected by every SVG text path. *)
+let concealed n =
+  let secret = String.make (1 + (n mod 20)) 's' in
+  let output = "\027[8m" ^ secret ^ "\r" in
+  let term = Vte.create ~rows ~cols () in
+  Vte.feed_string term output;
+  check (Ansi.Attr.mem Hidden (Matrix_grid.get_style (Vte.grid term) 0).attrs);
+  check_eq ~pp:pp_string "s" (Matrix_grid.get_text (Vte.grid term) 0);
+  (secret, output)
+
+let test_concealed_cursor n =
+  let _, output = concealed n in
+  match Vhs.svg ~settings [ (Ms 0, output) ] with
+  | Error e -> failf "%a" Vhs.pp_error e
+  | Ok image -> check (not (contains ~sub:{|<text class="ka k"|} image))
+
 let suite =
   ( "svg",
     [
       test_case "frames" [ list chunk ] test_frames;
+      test_case "cursor respects SGR conceal" [ uint8 ] test_concealed_cursor;
       test_case "direct SVG settings return results"
         [ choose [ bytes; const "Mono\nSpace"; const "\"'`"; const "{\n}" ] ]
         test_setting_errors;
