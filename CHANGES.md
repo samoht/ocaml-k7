@@ -1,8 +1,10 @@
 ## 0.9.0
 
 - Initial version.
-- `K7.record` records a tape without VHS, as an animated SVG image drawn
-  with CSS only, with the contract of `K7.render`: each writes the outputs
+- `K7.record` records a tape with one of two engines: `Vhs` runs `vhs`,
+  and `Native` records without VHS, as an animated SVG image drawn with
+  CSS only. By default it picks the engine that writes the outputs of the
+  tape. Both engines have one contract: each writes the outputs
   and screenshots at the paths the tape names, relative to its directory,
   absolute and `..` paths included, creates their missing directories as
   VHS does, and refuses, before it plays anything, an output or a
@@ -17,9 +19,7 @@
   nothing typed, and returns the animated SVG image of its screens below
   its command line, timed as they arrived, with how the program exited.
   `?show` (`--show`) replaces the command line, or hides it.
-- `K7.play` plays a tape with `K7.record`, or with `K7.render` when an
-  output or a screenshot needs `vhs`, as `k7 cram` and `k7 tape` do.
-- `K7.run`, `K7.record`, `K7.render` and `K7.play` take `?stop`, which ends
+- `K7.run` and `K7.record` take `?stop`, which ends
   a recording and keeps what it recorded; `k7 cram`, `k7 run` and
   `k7 tape` resolve it on SIGINT or SIGTERM, then exit 130 or 143.
 - `k7 cram` runs the commands in a new empty temporary directory, as dune
@@ -63,7 +63,7 @@
 - The README lists the known limitations of this release: the private copy
   of matrix's terminal core, the queries and cursor shapes the native
   terminal does not handle yet, a rare `setpgid` error from macOS's bash 3.2
-  under load, the timed-out wait `K7.render` reports as `Vhs_failed`, and the
+  under load, the timed-out wait the `Vhs` engine reports as `Vhs_failed`, and the
   JSON themes with invalid UTF-8 or unpaired surrogates that jsont refuses
   and Go reads, and the input and background output `k7 run` does not
   record.

@@ -164,7 +164,7 @@ let run ?vhs ?(status = `Exited 3) writes t =
         in
         { run; on_signal = (fun _ -> Alcotest.fail "signalled") })
   in
-  K7.render ?vhs ~clock:(clock ()) ~proc ~cwd t
+  K7.record ~engine:Vhs ?vhs ~clock:(clock ()) ~proc ~cwd t
 
 let failed expected = function
   | Error (K7.Vhs_failed { output; status = `Exited 3; _ }) ->
@@ -299,7 +299,7 @@ let test_spawn_errors () =
   List.iter
     (fun (error, expected) ->
       let proc = manager ~sw (fun _ _ -> raise (Eio.Process.err error)) in
-      match K7.render ~clock:(clock ()) ~proc ~cwd (tape []) with
+      match K7.record ~engine:Vhs ~clock:(clock ()) ~proc ~cwd (tape []) with
       | Error e ->
           expect "mapped spawn error" expected (Fmt.str "%a" K7.pp_error e)
       | Ok () -> Alcotest.fail "lost spawn failure")
@@ -320,10 +320,10 @@ let test_svg_refused () =
         | Ok t -> t
         | Error e -> Alcotest.failf "%a" K7.pp_error e
       in
-      match K7.render ~clock:(clock ()) ~proc ~cwd t with
+      match K7.record ~engine:Vhs ~clock:(clock ()) ~proc ~cwd t with
       | Error (Unsupported _ as e) ->
           expect "names the output and record"
-            {|not recorded by vhs: Output "demo.svg": an SVG image, which K7.record records|}
+            {|not recorded by vhs: Output "demo.svg": an SVG image, which the Native engine records|}
             (Fmt.str "%a" K7.pp_error e)
       | Error e -> Alcotest.failf "%a" K7.pp_error e
       | Ok () -> Alcotest.fail "an SVG output rendered")
@@ -336,10 +336,10 @@ let test_svg_refused () =
     | Ok t -> t
     | Error e -> Alcotest.failf "%a" K7.pp_error e
   in
-  match K7.render ~clock:(clock ()) ~proc ~cwd t with
+  match K7.record ~engine:Vhs ~clock:(clock ()) ~proc ~cwd t with
   | Error (Unsupported _ as e) ->
       expect "names the screenshot and record"
-        {|not recorded by vhs: Screenshot "shot.svg": an SVG image, which K7.record takes|}
+        {|not recorded by vhs: Screenshot "shot.svg": an SVG image, which the Native engine takes|}
         (Fmt.str "%a" K7.pp_error e)
   | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok () -> Alcotest.fail "an SVG screenshot rendered"
@@ -365,7 +365,9 @@ let test_cancel () =
   in
   (match
      Eio.Fiber.first
-       (fun () -> `Rendered (K7.render ~clock:(clock ()) ~proc ~cwd (tape [])))
+       (fun () ->
+         `Rendered
+           (K7.record ~engine:Vhs ~clock:(clock ()) ~proc ~cwd (tape [])))
        (fun () -> `Cancelled)
    with
   | `Cancelled -> ()
@@ -392,7 +394,7 @@ let test_cancel_kill () =
   let clock = env#mono_clock in
   (match
      Eio.Fiber.first
-       (fun () -> `Rendered (K7.render ~clock ~proc ~cwd (tape [])))
+       (fun () -> `Rendered (K7.record ~engine:Vhs ~clock ~proc ~cwd (tape [])))
        (fun () -> `Cancelled)
    with
   | `Cancelled -> ()
@@ -440,7 +442,7 @@ let test_publish_environment () =
           on_signal = (fun _ -> ());
         })
   in
-  match K7.render ~clock:(clock ()) ~proc ~cwd (tape []) with
+  match K7.record ~engine:Vhs ~clock:(clock ()) ~proc ~cwd (tape []) with
   | Ok () -> ()
   | Error e -> Alcotest.failf "%a" K7.pp_error e
 

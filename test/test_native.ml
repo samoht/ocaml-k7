@@ -127,7 +127,9 @@ let test_timeout_precedence () =
   with_dir @@ fun env cwd ->
   let times_out ~within t =
     with_virtual_clock @@ fun clock ->
-    (match K7.record ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd t with
+    (match
+       K7.record ~engine:Native ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd t
+     with
     | Error (Timeout _) -> ()
     | Ok _ -> Alcotest.fail "no timeout"
     | Error e -> Alcotest.failf "%a" K7.pp_error e);
@@ -440,7 +442,7 @@ let test_output_dirs () =
   in
   let record = play env cwd in
   let render t =
-    K7.render ~vhs:fake
+    K7.record ~engine:Vhs ~vhs:fake
       ~clock:(Eio.Stdenv.mono_clock env)
       ~proc:(Eio.Stdenv.process_mgr env)
       ~cwd t
@@ -724,23 +726,23 @@ let test_render_outputs () =
     [
       ( [ "demo.svg"; "demo.gif" ],
         [],
-        {|not recorded natively: Output "demo.gif": a GIF, which K7.render records|}
+        {|not recorded natively: Output "demo.gif": a GIF, which the Vhs engine records|}
       );
       ( [ "demo.mp4" ],
         [],
-        {|not recorded natively: Output "demo.mp4": an MP4 video, which K7.render records|}
+        {|not recorded natively: Output "demo.mp4": an MP4 video, which the Vhs engine records|}
       );
       ( [ "frames/" ],
         [],
-        {|not recorded natively: Output "frames/": PNG frames, which K7.render records|}
+        {|not recorded natively: Output "frames/": PNG frames, which the Vhs engine records|}
       );
       ( [ "demo.svg" ],
         [ {|Output "demo.webm"|} ],
-        {|not recorded natively: Output "demo.webm": a WebM video, which K7.render records|}
+        {|not recorded natively: Output "demo.webm": a WebM video, which the Vhs engine records|}
       );
       ( [ "demo.svg" ],
         [ {|Screenshot "shot.png"|} ],
-        {|not recorded natively: Screenshot "shot.png": a PNG image, which K7.render takes|}
+        {|not recorded natively: Screenshot "shot.png": a PNG image, which the Vhs engine takes|}
       );
     ]
 
@@ -819,7 +821,7 @@ let after_settings tape txt =
 
 let same_text env cwd (vhs_tape, native_tape) =
   let clock = Eio.Stdenv.mono_clock env and proc = Eio.Stdenv.process_mgr env in
-  (match K7.render ?vhs:oracle ~clock ~proc ~cwd vhs_tape with
+  (match K7.record ~engine:Vhs ?vhs:oracle ~clock ~proc ~cwd vhs_tape with
   | Ok () -> ()
   | Error e -> Alcotest.failf "%a" K7.pp_error e);
   let vhs = Eio.Path.load Eio.Path.(cwd / "oracle.txt") in
@@ -949,7 +951,7 @@ let test_terminal_state () =
   | None -> ()
   | Some vhs -> (
       match
-        K7.render ~vhs
+        K7.record ~engine:Vhs ~vhs
           ~clock:(Eio.Stdenv.mono_clock env)
           ~proc:(Eio.Stdenv.process_mgr env)
           ~cwd (fst t)
@@ -984,7 +986,7 @@ let check_payload ?vhs ?text payload image =
   | None -> ()
   | Some exe -> (
       match
-        K7.render ~vhs:exe
+        K7.record ~engine:Vhs ~vhs:exe
           ~clock:(Eio.Stdenv.mono_clock env)
           ~proc:(Eio.Stdenv.process_mgr env)
           ~cwd (fst t)

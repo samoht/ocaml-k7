@@ -1183,7 +1183,8 @@ let refuse ~by ~other kinds t =
         | "WebM" -> "a WebM video"
         | k -> "a " ^ k
       in
-      err_unsupported "not recorded %s: Output %a: %s, which K7.%s records" by
+      err_unsupported
+        "not recorded %s: Output %a: %s, which the %s engine records" by
         Quote.pp p what other
 
 let in_dir dir path =
@@ -1242,9 +1243,9 @@ let check_has_output t =
     Error (Invalid "no output: the tape names no file to write")
   else Ok ()
 
-let render ?stop ?(vhs = "vhs") ~clock ~proc ~cwd t =
+let record_vhs ?stop ~vhs ~clock ~proc ~cwd t =
   let* () = check_has_output t in
-  let* () = refuse ~by:"by vhs" ~other:"record" [ "SVG" ] t in
+  let* () = refuse ~by:"by vhs" ~other:"Native" [ "SVG" ] t in
   let* () =
     match
       List.find_opt
@@ -1254,8 +1255,8 @@ let render ?stop ?(vhs = "vhs") ~clock ~proc ~cwd t =
     | None -> Ok ()
     | Some p ->
         err_unsupported
-          "not recorded by vhs: Screenshot %a: an SVG image, which K7.record \
-           takes"
+          "not recorded by vhs: Screenshot %a: an SVG image, which the Native \
+           engine takes"
           Quote.pp p
   in
   let* () =
@@ -1347,10 +1348,10 @@ let save dir path contents =
   in
   go 0
 
-let record ?stop ~clock ~proc ~cwd t =
+let record_native ?stop ~clock ~proc ~cwd t =
   let* () = check_has_output t in
   let* () =
-    refuse ~by:"natively" ~other:"render" [ "GIF"; "MP4"; "WebM"; "frames" ] t
+    refuse ~by:"natively" ~other:"Vhs" [ "GIF"; "MP4"; "WebM"; "frames" ] t
   in
   let* dir =
     Option.to_result ~none:(Io "the directory is not a native path")
@@ -1397,9 +1398,17 @@ let needs_vhs t =
        (fun p -> Tape_syntax.extension p <> ".svg")
        (raw_screenshots t.actions)
 
-let play ?stop ?vhs ~clock ~proc ~cwd t =
-  if needs_vhs t then render ?stop ?vhs ~clock ~proc ~cwd t
-  else record ?stop ~clock ~proc ~cwd t
+type engine = Native | Vhs
+
+let record ?engine ?(vhs = "vhs") ?stop ~clock ~proc ~cwd t =
+  let engine =
+    match engine with
+    | Some e -> e
+    | None -> if needs_vhs t then Vhs else Native
+  in
+  match engine with
+  | Vhs -> record_vhs ?stop ~vhs ~clock ~proc ~cwd t
+  | Native -> record_native ?stop ~clock ~proc ~cwd t
 
 let check_times output =
   let rec go prev = function

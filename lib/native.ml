@@ -467,7 +467,7 @@ let rec read ~source ~at line t =
         | [ Keyword "Paste" ] -> Paste
         | Keyword "Screenshot" :: p :: _ ->
             if extension (lit p) = ".svg" then Screenshot (lit p)
-            else unsupported line "a PNG image, which K7.render takes"
+            else unsupported line "a PNG image, which the Vhs engine takes"
         | _ -> unsupported line "not a command this module knows"
       in
       { t with actions = action :: t.actions }

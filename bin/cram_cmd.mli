@@ -37,7 +37,7 @@ val run :
   string ->
   int
 (** [run stdenv ~print ~vhs ~setup ~dir ~settings ~env ~wait_timeout_s ~output
-     input] records the cram test in the file [input] with {!K7.play}, which
+     input] records the cram test in the file [input] with {!K7.record}, which
     runs the executable [vhs] only for the outputs [vhs] writes, or prints its
     tape on standard output if [print] is [true], with the {!tape} of [setup],
     [settings], [env], [wait_timeout_s] and [output]. The commands run in [dir],

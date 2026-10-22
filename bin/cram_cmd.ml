@@ -157,7 +157,7 @@ let record ?stop env ~print ~vhs ~setup ?dir ?settings ?env:vars ?wait_timeout_s
       | e -> e
     in
     in_dir env dir @@ fun cwd ->
-    K7.play ?stop ~vhs:run_vhs
+    K7.record ?stop ~vhs:run_vhs
       ~clock:(Eio.Stdenv.mono_clock env)
       ~proc:(Eio.Stdenv.process_mgr env)
       ~cwd tape

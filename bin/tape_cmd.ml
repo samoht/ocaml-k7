@@ -35,7 +35,7 @@ let record ?stop stdenv ~print ~vhs ~settings ~env ~outputs input =
   if print then Flags.print_tape stdenv t
   else
     let* () = set_env env in
-    K7.play ?stop ~vhs
+    K7.record ?stop ~vhs
       ~clock:(Eio.Stdenv.mono_clock stdenv)
       ~proc:(Eio.Stdenv.process_mgr stdenv)
       ~cwd:(Eio.Stdenv.cwd stdenv) t

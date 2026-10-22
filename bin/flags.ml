@@ -172,31 +172,6 @@ let print_tape env t =
 
 let shown s = Fmt.str "%a" K7.pp_error (Io s)
 
-let replace ~sub ~by s =
-  let n = String.length sub in
-  let b = Buffer.create (String.length s) in
-  let rec go i =
-    if i > String.length s - n then
-      Buffer.add_substring b s i (String.length s - i)
-    else if String.sub s i n = sub then (
-      Buffer.add_string b by;
-      go (i + n))
-    else (
-      Buffer.add_char b s.[i];
-      go (i + 1))
-  in
-  go 0;
-  Buffer.contents b
-
-(* The library names its functions; the CLI names what runs. *)
-let library_names =
-  [
-    ("which K7.record records", "which k7 records without vhs");
-    ("which K7.record takes", "which k7 records without vhs");
-    ("which K7.render records", "which vhs records");
-    ("which K7.render takes", "which vhs records");
-  ]
-
 let pp_error ppf = function
   | K7.Timeout { wait; line; last } ->
       Fmt.pf ppf
@@ -205,12 +180,6 @@ let pp_error ppf = function
          --wait-timeout"
         line (shown wait)
         (if last = "" then "" else "; last value was: " ^ shown last)
-  | K7.Unsupported _ as e ->
-      Fmt.string ppf
-        (List.fold_left
-           (fun s (sub, by) -> replace ~sub ~by s)
-           (Fmt.str "%a" K7.pp_error e)
-           library_names)
   | e -> K7.pp_error ppf e
 
 let pp_play_error ~vhs ppf = function

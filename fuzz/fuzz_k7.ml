@@ -587,7 +587,7 @@ let test_no_publication term =
       (Inherited.{ base; inherited }, Eio.Process.Pi.mgr (module Inherited))
   in
   match
-    K7.render ~vhs:executable
+    K7.record ~engine:Vhs ~vhs:executable
       ~clock:(Eio.Stdenv.mono_clock env)
       ~proc ~cwd:(Eio.Stdenv.cwd env) (render_tape ())
   with
@@ -631,7 +631,7 @@ let test_environment_isolation n =
       (Inherited.{ base; inherited }, Eio.Process.Pi.mgr (module Inherited))
   in
   match
-    K7.render ~vhs:executable
+    K7.record ~engine:Vhs ~vhs:executable
       ~clock:(Eio.Stdenv.mono_clock env)
       ~proc ~cwd:(Eio.Stdenv.cwd env) (render_tape ())
   with
@@ -653,7 +653,7 @@ let test_cancel_reaps delay =
         Eio.Fiber.first
           (fun () ->
             `Rendered
-              (K7.render ~vhs:executable
+              (K7.record ~engine:Vhs ~vhs:executable
                  ~clock:(Eio.Stdenv.mono_clock env)
                  ~proc:(Eio.Stdenv.process_mgr env)
                  ~cwd:(Eio.Stdenv.cwd env) (render_tape ())))
@@ -734,7 +734,7 @@ let test_record_reaps delay callback_raises =
           Eio.Fiber.first
             (fun () ->
               `Recorded
-                (K7.record
+                (K7.record ~engine:Native
                    ~clock:(Eio.Stdenv.mono_clock env)
                    ~proc:(Eio.Stdenv.process_mgr env)
                    ~cwd tape))
@@ -890,7 +890,7 @@ let record_cram ?(setup = []) ?(settings = []) env path src =
   in
   let result =
     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 40. (fun () ->
-        K7.render ?vhs:oracle
+        K7.record ~engine:Vhs ?vhs:oracle
           ~clock:(Eio.Stdenv.mono_clock env)
           ~proc:(Eio.Stdenv.process_mgr env)
           ~cwd:(Eio.Stdenv.cwd env) t)
@@ -998,7 +998,7 @@ let test_native_literal n =
   let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "received")) in
   (match
      Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 60. (fun () ->
-         K7.record
+         K7.record ~engine:Native
            ~clock:(Eio.Stdenv.mono_clock env)
            ~proc:(Eio.Stdenv.process_mgr env)
            ~cwd tape)
@@ -1026,7 +1026,7 @@ let test_zero_speed_prompt n =
   let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "out.txt")) in
   (match
      Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 60. (fun () ->
-         K7.record
+         K7.record ~engine:Native
            ~clock:(Eio.Stdenv.mono_clock env)
            ~proc:(Eio.Stdenv.process_mgr env)
            ~cwd tape)
@@ -1061,9 +1061,10 @@ let test_output_preflight n =
     | Error e -> failf "%a" K7.pp_error e
     | Ok () -> fail "played incompatible outputs"
   in
-  refused "K7.record" image
-    (K7.render ~vhs:(path "missing-vhs") ~clock ~proc ~cwd tape);
-  refused "K7.render" movie (K7.record ~clock ~proc ~cwd tape);
+  refused "the Native engine" image
+    (K7.record ~engine:Vhs ~vhs:(path "missing-vhs") ~clock ~proc ~cwd tape);
+  refused "the Vhs engine" movie
+    (K7.record ~engine:Native ~clock ~proc ~cwd tape);
   check (not (Sys.file_exists (path "played")));
   check (not (Sys.file_exists image));
   if n mod 2 = 0 then
@@ -1098,7 +1099,7 @@ let check_native_path env cwd marker (output, actual, rate) =
     | Error e -> failf "%a" K7.pp_error e
   in
   (match
-     K7.record
+     K7.record ~engine:Native
        ~clock:(Eio.Stdenv.mono_clock env)
        ~proc:(Eio.Stdenv.process_mgr env)
        ~cwd:(cwd :> Eio.Fs.dir_ty Eio.Path.t)

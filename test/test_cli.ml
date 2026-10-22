@@ -187,7 +187,7 @@ let test_render () =
   let mono = Eio.Stdenv.mono_clock env in
   let cwd = Eio.Stdenv.cwd env in
   let t = Result.get_ok (K7.tape ~outputs:[ "x.gif" ] [ K7.sleep (Ms 100) ]) in
-  (match K7.render ~vhs:(path "ko") ~clock:mono ~proc ~cwd t with
+  (match K7.record ~engine:Vhs ~vhs:(path "ko") ~clock:mono ~proc ~cwd t with
   | Error (Vhs_failed { status = `Exited 3; _ } as e) ->
       expect "both streams"
         (path "ko" ^ " exited with code 3\n  from stdout\n  from stderr")
@@ -195,7 +195,7 @@ let test_render () =
   | _ -> Alcotest.fail "lost the failure");
   let dir = Filename.dirname (path "pwd") in
   (match
-     K7.render ~vhs:(path "pwd") ~clock:mono ~proc
+     K7.record ~engine:Vhs ~vhs:(path "pwd") ~clock:mono ~proc
        ~cwd:Eio.Path.(Eio.Stdenv.fs env / dir)
        t
    with
@@ -208,12 +208,14 @@ let test_render () =
       (K7.tape ~outputs:[ "x.gif" ]
          (List.init 20_000 (fun _ -> K7.type' "echo hello")))
   in
-  (match K7.render ~vhs:(path "early") ~clock:mono ~proc ~cwd big with
+  (match
+     K7.record ~engine:Vhs ~vhs:(path "early") ~clock:mono ~proc ~cwd big
+   with
   | Error (Vhs_failed { status = `Exited 2; _ }) -> ()
   | Error e -> Alcotest.failf "early exit: %a" K7.pp_error e
   | Ok () -> Alcotest.fail "early exit succeeded");
   (match
-     K7.render ~vhs:(path "ko") ~clock:mono ~proc
+     K7.record ~engine:Vhs ~vhs:(path "ko") ~clock:mono ~proc
        ~cwd:Eio.Path.(Eio.Stdenv.fs env / path "missing-dir")
        t
    with
@@ -227,7 +229,8 @@ let test_render () =
   (match
      Eio.Fiber.first
        (fun () ->
-         `Rendered (K7.render ~vhs:(path "slow") ~clock:mono ~proc ~cwd t))
+         `Rendered
+           (K7.record ~engine:Vhs ~vhs:(path "slow") ~clock:mono ~proc ~cwd t))
        (fun () ->
          Eio.Time.with_timeout_exn clock 60. (fun () ->
              while not (Sys.file_exists (path "slow.ready")) do
@@ -256,7 +259,8 @@ let test_render () =
          Eio.Fiber.first
            (fun () ->
              `Rendered
-               (K7.render ~vhs:(path "stubborn") ~clock:grace ~proc ~cwd t))
+               (K7.record ~engine:Vhs ~vhs:(path "stubborn") ~clock:grace ~proc
+                  ~cwd t))
            (fun () ->
              Eio.Time.with_timeout_exn clock 60. (fun () ->
                  while not (Sys.file_exists (path "stubborn.ready")) do
@@ -303,8 +307,8 @@ let oracle = Sys.getenv_opt "VHS_ORACLE"
 let play ~native env t =
   let clock = Eio.Stdenv.mono_clock env and proc = Eio.Stdenv.process_mgr env in
   let cwd = Eio.Stdenv.cwd env in
-  if native then K7.record ~clock ~proc ~cwd t
-  else K7.render ?vhs:oracle ~clock ~proc ~cwd t
+  if native then K7.record ~engine:Native ~clock ~proc ~cwd t
+  else K7.record ~engine:Vhs ?vhs:oracle ~clock ~proc ~cwd t
 
 let test_output_order ~native () =
   with_files [] @@ fun env path ->

@@ -81,7 +81,7 @@ let with_dir f =
 
 let play env cwd t =
   Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 60. @@ fun () ->
-  K7.record
+  K7.record ~engine:Native
     ~clock:(Eio.Stdenv.mono_clock env)
     ~proc:(Eio.Stdenv.process_mgr env)
     ~cwd t

@@ -51,14 +51,15 @@ $ k7 tape hello.tape
 Each subcommand takes `--cols`, `--rows`, `--font-size`, `--theme` and
 `--env VAR=VALUE`, and `k7 cram` and `k7 tape` take `--wait-timeout`. k7 writes `.svg` outputs and the text outputs (`.txt`,
 `.ascii` and `.test`) itself, and `k7 cram` and `k7 tape` run `vhs` for the
-others. `k7 cram` and `k7 tape` call `K7.play`, and `k7 run` calls `K7.run`.
+others. `k7 cram` and `k7 tape` call `K7.record`, and `k7 run` calls `K7.run`.
 `k7 COMMAND --help` gives the details.
 
 ## OCaml
 
-`K7.record` plays a tape in bash, zsh or fish and writes its SVG and text
-outputs. `K7.play` calls `K7.record`, or `K7.render` when an output needs
-`vhs`. `K7.svg` returns the image of output given with its times, such as
+`K7.record` writes the outputs of a tape. Its `Native` engine plays the
+tape in bash, zsh or fish and writes the SVG and text outputs, and its
+`Vhs` engine runs `vhs`; `K7.record` picks the one that writes the outputs
+of the tape, unless `~engine` names one. `K7.svg` returns the image of output given with its times, such as
 the bytes a test captured. `K7.run` records a program as `k7 run` does.
 
 ```ocaml
@@ -112,10 +113,11 @@ Error
 [lib/k7.mli](lib/k7.mli) lists the checks. A line that `K7` has no value
 for goes in with `K7.raw`, and `K7.tape` checks it too.
 
-`K7.render` runs `vhs` on a tape and writes its `.gif`, `.mp4` and `.webm`
-outputs; `vhs` needs `ttyd`, `ffmpeg` and a browser. `K7.record` writes the
-`.svg` outputs instead. Both write the text outputs, and each refuses,
-before it plays anything, an output that only the other writes.
+`K7.record ~engine:Vhs` runs `vhs` on a tape and writes its `.gif`,
+`.mp4` and `.webm` outputs; `vhs` needs `ttyd`, `ffmpeg` and a browser.
+`K7.record ~engine:Native` writes the `.svg` outputs instead. Both write
+the text outputs, and each refuses, before it plays anything, an output
+that only the other writes.
 
 ## Known limitations
 
@@ -130,8 +132,9 @@ k7 differs from VHS in these cases:
   so the queries fish 4 sends as it starts go unanswered. CI tests fish 3.7
   only.
 - A cursor shape set with DECSCUSR is drawn as a block.
-- `K7.render` reports a wait that times out as `K7.Vhs_failed`, with VHS's
-  message in its output, where `K7.record` returns `K7.Timeout`.
+- The `Vhs` engine reports a wait that times out as `K7.Vhs_failed`, with
+  VHS's message in its output, where the `Native` engine returns
+  `K7.Timeout`.
 - `K7.tape` refuses a JSON theme with invalid UTF-8 or an unpaired
   surrogate escape such as `"\ud800"`, which VHS reads as U+FFFD.
 

@@ -42,8 +42,7 @@ val shown : string -> string
 
 val pp_error : K7.error Fmt.t
 (** [pp_error] is {!K7.pp_error} with the words of the command line: a wait that
-    times out suggests [Wait@30s] or [Set WaitTimeout], and an output names the
-    command that writes it rather than the function. *)
+    times out suggests [Wait@30s], [Set WaitTimeout] or [--wait-timeout]. *)
 
 val pp_play_error : vhs:string -> K7.error Fmt.t
 (** [pp_play_error ~vhs] is {!pp_error}, and says where to get VHS when the
