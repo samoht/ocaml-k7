@@ -232,6 +232,14 @@ let test_cursor_wide_right () =
   check_contains "glyph under the cursor"
     ~sub:"<text class=\"ka k\" x=\"0\" y=\"22\">\u{4e2d}</text>" s
 
+(* SGR 21 draws a double underline, as xterm.js does, and SGR 4 a single
+   one. *)
+let test_double_underline () =
+  let s = svg [ (Ms 0, "\027[21md\027[0m \027[4ms\027[0m") ] in
+  check_contains "double" ~sub:{|<tspan x="0" class="xu u2">d</tspan>|} s;
+  check_contains "single" ~sub:{|<tspan x="28" class="xu">s</tspan>|} s;
+  check_contains "style" ~sub:".u2{text-decoration-style:double}" s
+
 (* Reverse video paints a wide glyph's two cells with its foreground, as
    xterm.js does, not its right half with the default foreground. *)
 let test_inverse_wide () =
@@ -262,6 +270,7 @@ let suite =
         ("inverse wide glyph", test_inverse_wide);
         ("subdivision flag", test_tag_flag);
         ("cursor format characters", test_cursor_format);
+        ("double underline", test_double_underline);
         ("cursor on a wide glyph's second cell", test_cursor_wide_right);
         ("positive frame rate above the pixel limit", test_framerate_limit);
         ("row dedup", test_dedup);
