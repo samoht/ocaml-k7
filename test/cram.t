@@ -24,7 +24,7 @@ An input is a file of at most 10 MiB, not a stream.
 
 Numbers are plain decimal digits, as the messages say.
 
-  $ k7 cram --print --cols 0x50 --output demo.gif demo.t 2> /dev/null
+  $ k7 cram --print --columns 0x50 --output demo.gif demo.t 2> /dev/null
   [124]
   $ k7 cram --print --wait-timeout 1_5 --output demo.gif demo.t 2> /dev/null
   [124]
@@ -157,7 +157,7 @@ A GIF needs vhs, and k7 says where to get it.
 The terminal's size, font and theme are settings of the tape. The --env
 variables are in the environment of the shell, not in the tape.
 
-  $ k7 cram --print --cols 100 --rows 20 --font-size 16 --theme Dracula --env 'GREETING=bonjour à tous' --output demo.gif demo.t | head -n 7
+  $ k7 cram --print --columns 100 --rows 20 --font-size 16 --theme Dracula --env 'GREETING=bonjour à tous' --output demo.gif demo.t | head -n 7
   Output "demo.gif"
   Set Shell "bash"
   Set Columns 100
@@ -172,7 +172,7 @@ A native recording has the columns asked for and the variables set,
 whatever quotes they hold.
 
   $ printf '  $ echo "$GREETING"; printf "%%099d|\\n" 0\n' > env.t
-  $ k7 cram --cols 100 --env GREETING='"bonjour'"'"'`' --output env.txt env.t
+  $ k7 cram --columns 100 --env GREETING='"bonjour'"'"'`' --output env.txt env.t
   $ grep -c '^"bonjour'"'"'`$' env.txt
   3
   $ grep -c '^0*|$' env.txt
@@ -181,7 +181,7 @@ whatever quotes they hold.
 k7 run records a program, with no shell and nothing typed, and exits
 with the program's exit code once the image is written.
 
-  $ k7 run -o run.svg --cols 20 --rows 3 -- sh -c 'printf "hello\n"; exit 3'
+  $ k7 run -o run.svg --columns 20 --rows 3 -- sh -c 'printf "hello\n"; exit 3'
   [3]
   $ grep -c '>hello<' run.svg
   1
@@ -202,15 +202,15 @@ with the program's exit code once the image is written.
 The image shows the command line first, shell-quoted where needed, then
 the program's output. --show replaces the line and --show "" hides it.
 
-  $ k7 run -o cmd.svg --cols 40 --rows 3 -- printf '%s\n' 'hello world'
+  $ k7 run -o cmd.svg --columns 40 --rows 3 -- printf '%s\n' 'hello world'
   $ grep -o '<desc id="k[0-9a-f]*d">.*' cmd.svg | sed 's/id="[^"]*"//'
   <desc >$ printf '%s\n' 'hello world'
   $ grep -o '^[^<]*</desc>' cmd.svg
   hello world</desc>
-  $ k7 run -o show.svg --cols 40 --rows 3 --show 'dune exec -- ./main.exe' -- printf 'hi\n'
+  $ k7 run -o show.svg --columns 40 --rows 3 --show 'dune exec -- ./main.exe' -- printf 'hi\n'
   $ grep -o '<desc id="k[0-9a-f]*d">.*' show.svg | sed 's/id="[^"]*"//'
   <desc >$ dune exec -- ./main.exe
-  $ k7 run -o hide.svg --cols 40 --rows 3 --show '' -- printf 'hi\n'
+  $ k7 run -o hide.svg --columns 40 --rows 3 --show '' -- printf 'hi\n'
   $ grep -o '<desc id="k[0-9a-f]*d">[^<]*</desc>' hide.svg | sed 's/id="[^"]*"//'
   <desc >hi</desc>
 
@@ -225,13 +225,13 @@ settings and outputs.
   > Enter
   > Sleep 500ms
   > EOF
-  $ k7 tape --print --cols 90 -o demo.svg demo.tape
+  $ k7 tape --print --columns 90 -o demo.svg demo.tape
   Set FontSize 18
   Set Columns 90
   Type "echo $GREETING"
   Enter
   Sleep 500ms
-  $ k7 tape --cols 40 --env GREETING=salut -o tape.txt demo.tape
+  $ k7 tape --columns 40 --env GREETING=salut -o tape.txt demo.tape
   $ grep -c '^salut$' tape.txt
   2
   $ printf 'Output a.gif\nType "x\n' > bad.tape

@@ -18,7 +18,7 @@ let count ~docv what =
   Arg.Conv.make ~docv ~parser:(positive what) ~pp:Fmt.int ()
 
 let settings =
-  let cols =
+  let columns =
     let doc =
       "Give the terminal $(docv) columns, and the image the width they need \
        (defaults to as many as a frame of 1200 pixels holds, as in VHS: 75 at \
@@ -27,7 +27,7 @@ let settings =
     Arg.(
       value
       & opt (some (count ~docv:"N" "number of columns")) None
-      & info [ "cols" ] ~docv:"N" ~doc)
+      & info [ "columns" ] ~docv:"N" ~doc)
   and rows =
     let doc =
       "Give the terminal $(docv) rows, and the image the height they need \
@@ -51,16 +51,16 @@ let settings =
     in
     Arg.(value & opt (some string) None & info [ "theme" ] ~docv:"NAME" ~doc)
   in
-  let make cols rows font_size theme =
+  let make columns rows font_size theme =
     List.filter_map Fun.id
       [
-        Option.map (fun n -> K7.Columns n) cols;
+        Option.map (fun n -> K7.Columns n) columns;
         Option.map (fun n -> K7.Rows n) rows;
         Option.map (fun n -> K7.Font_size n) font_size;
         Option.map (fun t -> K7.Theme t) theme;
       ]
   in
-  Term.(const make $ cols $ rows $ font_size $ theme)
+  Term.(const make $ columns $ rows $ font_size $ theme)
 
 let binding s =
   match String.index_opt s '=' with

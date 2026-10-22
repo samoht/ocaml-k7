@@ -68,7 +68,7 @@ let man =
        for a second after the program exits. The first line of the image shows \
        $(b,\\$) and $(i,COMMAND), each argument shell-quoted where needed, and \
        the program's output starts on the next line. The terminal has 16 rows \
-       and 75 columns unless $(b,--rows) and $(b,--cols) say otherwise, and \
+       and 75 columns unless $(b,--rows) and $(b,--columns) say otherwise, and \
        output beyond its last row scrolls its first rows away.";
     `P
       "The program is looked up in the $(b,PATH) it gets unless its name holds \
@@ -83,7 +83,7 @@ let man =
     `S Manpage.s_examples;
     `Pre
       "$(cmd) -o ls.svg -- ls -l --color=always\n\
-       $(cmd) -o columns.svg --cols 100 -- dune exec -- ./main.exe";
+       $(cmd) -o columns.svg --columns 100 -- dune exec -- ./main.exe";
   ]
 
 let exits =

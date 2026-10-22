@@ -222,7 +222,7 @@ let man =
     `S Manpage.s_examples;
     `Pre
       "$(cmd) --output demo.svg demo.t\n\
-       $(cmd) --cols 100 --output demo.svg demo.t\n\
+       $(cmd) --columns 100 --output demo.svg demo.t\n\
        $(cmd) --output demo.gif demo.t\n\
        $(cmd) --print --output demo.gif demo.t   # show the tape";
   ]

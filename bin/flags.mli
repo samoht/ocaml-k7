@@ -8,7 +8,7 @@
 (** {1:options Options} *)
 
 val settings : K7.setting list Cmdliner.Term.t
-(** [settings] are the terminal settings of [--cols], [--rows], [--font-size]
+(** [settings] are the terminal settings of [--columns], [--rows], [--font-size]
     and [--theme], in that order. *)
 
 val env : (string * string) list Cmdliner.Term.t

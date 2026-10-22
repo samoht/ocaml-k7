@@ -13,7 +13,7 @@ let man =
        browser. For a GIF or a video, $(b,k7 cram) and $(b,k7 tape) run \
        Charm's $(b,vhs).";
     `P
-      "Every subcommand takes $(b,--cols), $(b,--rows), $(b,--font-size), \
+      "Every subcommand takes $(b,--columns), $(b,--rows), $(b,--font-size), \
        $(b,--theme) and $(b,--env). Run $(b,k7) $(i,COMMAND) $(b,--help) for \
        the manual of a subcommand.";
     `S "TYPING A CRAM TEST";

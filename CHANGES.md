@@ -13,7 +13,7 @@
   checks.
 - The `k7` command records a cram test (`k7 cram`), any program
   (`k7 run`) or a tape (`k7 tape`) as an animated SVG image, and runs
-  `vhs` for the other outputs. `--cols`, `--rows`, `--font-size`,
+  `vhs` for the other outputs. `--columns`, `--rows`, `--font-size`,
   `--theme` and `--env` set the terminal of each.
 - `K7.run` records a program on a pseudo-terminal, with no shell and
   nothing typed, and returns the animated SVG image of its screens below

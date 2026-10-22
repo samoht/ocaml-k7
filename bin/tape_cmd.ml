@@ -52,7 +52,7 @@ let man =
     `S Manpage.s_description;
     `P
       "$(cmd) reads the tape $(i,TAPE) and records it. Its $(b,Set) lines \
-       before the first action are its settings, which $(b,--cols), \
+       before the first action are its settings, which $(b,--columns), \
        $(b,--rows), $(b,--font-size), $(b,--theme) and $(b,--wait-timeout) \
        replace.";
     `P
@@ -64,7 +64,7 @@ let man =
     `S Manpage.s_examples;
     `Pre
       "$(cmd) demo.tape\n\
-       $(cmd) --cols 100 -o demo.svg demo.tape\n\
+       $(cmd) --columns 100 -o demo.svg demo.tape\n\
        $(cmd) --print demo.tape";
   ]
 

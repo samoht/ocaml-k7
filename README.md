@@ -48,7 +48,7 @@ $ printf 'Output hello.svg\nType "echo hello"\nEnter\nSleep 1s\n' > hello.tape
 $ k7 tape hello.tape
 ```
 
-Each subcommand takes `--cols`, `--rows`, `--font-size`, `--theme` and
+Each subcommand takes `--columns`, `--rows`, `--font-size`, `--theme` and
 `--env VAR=VALUE`, and `k7 cram` and `k7 tape` take `--wait-timeout`. k7 writes `.svg` outputs and the text outputs (`.txt`,
 `.ascii` and `.test`) itself, and `k7 cram` and `k7 tape` run `vhs` for the
 others. `k7 cram` and `k7 tape` call `K7.record`, and `k7 run` calls `K7.run`.
