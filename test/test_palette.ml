@@ -139,6 +139,24 @@ let test_no_cursor () =
   check_contains "cursor" ~sub:".kc{fill:#ffffff}" s;
   check_contains "accent" ~sub:".ka{fill:#16161e}" s
 
+(* Go's encoding/json counts the root object in its 10,000-level limit,
+   including values of unknown fields. VHS uses json.Unmarshal for themes. *)
+let test_json_depth () =
+  let build arrays =
+    let theme =
+      "{\"extra\":" ^ String.make arrays '[' ^ "0" ^ String.make arrays ']' ^ "}"
+    in
+    Vhs.tape ~settings:[ Theme theme ] ~outputs:[ "demo.txt" ]
+      [ Vhs.sleep (Ms 100) ]
+  in
+  (match build 9_999 with
+  | Ok _ -> ()
+  | Error e -> Alcotest.failf "Go accepts this depth: %a" Vhs.pp_error e);
+  match build 10_000 with
+  | Error (Invalid _) -> ()
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Ok _ -> Alcotest.fail "accepted a theme Go refuses: exceeded max depth"
+
 let suite =
   ( "palette",
     List.map
@@ -148,5 +166,6 @@ let suite =
         ("default theme", test_default);
         ("no cursor colour", test_no_cursor);
         ("JSON theme", test_json_theme);
+        ("JSON nesting limit", test_json_depth);
         ("Go oracle", test_go_oracle);
       ] )
