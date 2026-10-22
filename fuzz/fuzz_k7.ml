@@ -1212,12 +1212,34 @@ let test_run_signal_disposition n =
   | Ok _ -> fail "the program inherited ignored SIGPIPE from the recorder"
   | Error e -> failf "%a" K7.pp_error e
 
+let test_run_exec_error n =
+  with_dir @@ fun env path ->
+  save env (path "not-executable") "#!/bin/sh\nexit 0\n";
+  let argv =
+    List.nth
+      [ [ "./not-executable" ]; [ "." ]; [ "/bin/echo"; "a\000b" ] ]
+      (n mod 3)
+  in
+  match
+    K7.run
+      ~clock:(Eio.Stdenv.mono_clock env)
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd:
+        Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "not-executable"))
+      argv
+  with
+  | Error (K7.Io _) -> ()
+  | Error e -> failf "%a" K7.pp_error e
+  | Ok _ -> fail "exec failed but returned a recording and program status"
+
 let with_processes =
   [
     test_case "run searches the overridden PATH" [ uint8 ]
       test_run_path_override;
     test_case "run children have normal signal dispositions" [ uint8 ]
       test_run_signal_disposition;
+    test_case "run reports exec errors instead of a program status" [ uint8 ]
+      test_run_exec_error;
     test_case "a program's screen is the image of its bytes" [ bytes ]
       test_run_screen;
     test_case "native output paths and positive frame-rate boundaries" [ uint8 ]
