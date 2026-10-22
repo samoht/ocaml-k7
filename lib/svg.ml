@@ -429,16 +429,20 @@ let shown_text row =
   String.sub s 0 (stop (String.length s))
 
 (* The text alternative: the text the last screen shows, without its blank
-   last rows. *)
+   last rows. A blank screen has none, and the title stands alone. *)
 let add_desc b screen =
   let lines = Array.to_list (Array.map shown_text (Screen.rows screen)) in
   let rec drop_blank = function "" :: rest -> drop_blank rest | l -> l in
-  Buffer.add_string b "<desc>";
-  List.rev (drop_blank (List.rev lines))
-  |> List.iteri (fun i line ->
-      if i > 0 then Buffer.add_char b '\n';
-      add_escaped b line);
-  Buffer.add_string b "</desc>"
+  match List.rev (drop_blank (List.rev lines)) with
+  | [] -> ()
+  | lines ->
+      Buffer.add_string b "<desc>";
+      List.iteri
+        (fun i line ->
+          if i > 0 then Buffer.add_char b '\n';
+          add_escaped b line)
+        lines;
+      Buffer.add_string b "</desc>"
 
 let add_margin t b =
   if t.margin > 0 then

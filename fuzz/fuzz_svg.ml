@@ -415,7 +415,7 @@ let test_concealed_description n =
   let _, output = concealed n in
   match Vhs.svg ~settings [ (Ms 0, output ^ "\027[?25l") ] with
   | Error e -> failf "%a" Vhs.pp_error e
-  | Ok image -> check (contains ~sub:"<desc></desc>" image)
+  | Ok image -> check (not (contains ~sub:"<desc" image))
 
 (* The XML guarantee also holds when themes change the generated style. *)
 let test_theme_xml output theme =

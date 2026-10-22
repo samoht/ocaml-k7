@@ -152,10 +152,15 @@ let test_setting_errors () =
   | Ok _ -> ()
   | Error e -> Alcotest.failf "Shell Cmd: %a" Vhs.pp_error e
 
-(* A screen reader must not receive text concealed on the last screen. *)
+(* A screen reader must not receive text concealed on the last screen, and
+   a blank last screen has no description, only the title. *)
 let test_concealed_description () =
   let s = svg [ (Ms 0, "\027[8msecret\027[?25l") ] in
-  check_contains "blank text alternative" ~sub:"<desc></desc>" s
+  Alcotest.(check bool) "no description" false (contains ~sub:"<desc" s);
+  Alcotest.(check bool) "no secret" false (contains ~sub:"secret" s);
+  check_contains "title" ~sub:"<title>Terminal recording</title>" s;
+  let s = svg [ (Ms 0, "hello"); (Ms 100, "\027[2J\027[H") ] in
+  Alcotest.(check bool) "cleared" false (contains ~sub:"<desc" s)
 
 (* The zero-width characters of vhs-cram's prompt mark do not reach the text
    alternative; a joiner and a combining mark, which shape what shows, do. *)
