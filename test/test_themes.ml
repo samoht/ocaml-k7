@@ -3,13 +3,13 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(* The theme list is internal: test it through [Vhs.Theme]. *)
+(* The theme list is internal: test it through [K7.Theme]. *)
 
 let expect = Alcotest.(check string)
 
 let tape settings =
-  Vhs.tape ~settings ~outputs:[ "demo.gif" ] [ Vhs.sleep (Ms 100) ]
-  |> Result.map Vhs.to_string
+  K7.tape ~settings ~outputs:[ "demo.gif" ] [ K7.sleep (Ms 100) ]
+  |> Result.map K7.to_string
   |> Result.map_error Native_test.invalid
 
 let body settings =
@@ -28,7 +28,7 @@ let rejects name settings =
 (* VHS finds a theme by its exact name, reads a value starting with [{] as
    JSON, which Go must read, and a blank one as its default theme. *)
 let test_names () =
-  let open Vhs in
+  let open K7 in
   expect "name" "Output \"demo.gif\"\nSet Theme \"Dracula\"\nSleep 100ms\n"
     (body [ Theme "Dracula" ]);
   expect "blank" "Output \"demo.gif\"\nSet Theme \" \xc2\xa0\"\nSleep 100ms\n"

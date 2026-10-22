@@ -5,12 +5,12 @@
 
 type t = string list list
 
-(* [Vhs.tape] decides what a terminal can type, given something to type; a
+(* [K7.tape] decides what a terminal can type, given something to type; a
    tab would reach bash's completion and a newline would end the line. *)
 let is_typeable s =
   s = ""
   || (not (String.exists (fun c -> c = '\t' || c = '\n') s))
-     && Result.is_ok (Vhs.tape ~outputs:[ "x.gif" ] [ Vhs.type' s ])
+     && Result.is_ok (K7.tape ~outputs:[ "x.gif" ] [ K7.type' s ])
 
 let check_line n line =
   if not (String.is_valid_utf_8 line) then
@@ -83,7 +83,7 @@ let regexp b = if b then {|\x{2060}|} else {|\x{200B}|}
 (* The character that counts the prompts after the mark in [PS2]: it is not
    the last of [mark], so that a [PS2] line never ends with [mark]. *)
 let tally mark = not (List.nth mark (List.length mark - 1))
-let ready mark = Vhs.wait (Line (concat_map regexp mark ^ "$"))
+let ready mark = K7.wait (Line (concat_map regexp mark ^ "$"))
 
 (* The variable that hands [init] to bash, through VHS's [Env], which sets it
    before the shell starts; [init] unsets it. *)
@@ -130,20 +130,18 @@ let prepare ~env mark setup =
       setup
     @ [ Fmt.str {|eval "$%s"|} var; "clear" ]
   in
-  Vhs.hidden
+  K7.hidden
     (List.map
-       (fun (k, v) -> Fmt.kstr Vhs.raw "Env %s %s" (string k) (string v))
+       (fun (k, v) -> Fmt.kstr K7.raw "Env %s %s" (string k) (string v))
        env
     @ [
-        Fmt.kstr Vhs.raw "Env %s `%s`" var (init mark);
-        Vhs.type' (String.concat "; " line ^ "\n");
+        Fmt.kstr K7.raw "Env %s `%s`" var (init mark);
+        K7.type' (String.concat "; " line ^ "\n");
         ready mark;
       ])
 
 let typed mark lines =
-  [
-    Vhs.type' (String.concat "\n" lines ^ "\n"); ready mark; Vhs.sleep (Ms 1000);
-  ]
+  [ K7.type' (String.concat "\n" lines ^ "\n"); ready mark; K7.sleep (Ms 1000) ]
 
 let actions ?(env = []) ~setup t =
   let mark = mark ~setup t in

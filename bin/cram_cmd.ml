@@ -36,15 +36,15 @@ let tape ~setup ?(settings = []) ?(env = []) ~output ?wait_timeout_s ~name src =
       let timeout =
         match wait_timeout_s with
         | None -> []
-        | Some s -> [ Fmt.kstr Vhs.raw "Set WaitTimeout %ds" s ]
+        | Some s -> [ Fmt.kstr K7.raw "Set WaitTimeout %ds" s ]
       in
-      Vhs.tape ~settings:(Shell Bash :: settings) ~outputs:[ output ]
+      K7.tape ~settings:(Shell Bash :: settings) ~outputs:[ output ]
         (timeout @ Cram.actions ~env ~setup cram)
-      |> Result.map_error (fun e -> Fmt.str "%a" Vhs.pp_error e)
+      |> Result.map_error (fun e -> Fmt.str "%a" K7.pp_error e)
 
-(* [shown s] is [s] as [Vhs.pp_error] prints it: without escape sequences,
+(* [shown s] is [s] as [K7.pp_error] prints it: without escape sequences,
    controls and the invisible characters of the prompt mark. *)
-let shown s = Fmt.str "%a" Vhs.pp_error (Io s)
+let shown s = Fmt.str "%a" K7.pp_error (Io s)
 let last_value = function "" -> "" | last -> "; last value was: " ^ shown last
 
 (* [after cram tape line] is the prompt that the wait on line [line] of
@@ -52,7 +52,7 @@ let last_value = function "" -> "" | last -> "; last value was: " ^ shown last
    then one after each command. *)
 let after cram tape line =
   let waits =
-    String.split_on_char '\n' (Vhs.to_string tape)
+    String.split_on_char '\n' (K7.to_string tape)
     |> List.filteri (fun i l -> i < line && String.starts_with ~prefix:"Wait" l)
     |> List.length
   in
@@ -99,7 +99,7 @@ let render_error ~setup ~wait ~name ~tape src e =
   let longer = "; --wait-timeout gives it longer" in
   let output =
     match e with
-    | Vhs.Failed { output; _ } -> Some output
+    | K7.Failed { output; _ } -> Some output
     | Timeout { last; _ } | Exited { last; _ } ->
         Some ("last value was: " ^ last)
     | _ -> None
@@ -127,7 +127,7 @@ let render_error ~setup ~wait ~name ~tape src e =
         name (seconds_of wait)
         (last_value (Option.get (vhs_timeout output)))
         longer
-  | None, _, _ -> Fmt.str "%s: %a" name Vhs.pp_error e
+  | None, _, _ -> Fmt.str "%s: %a" name K7.pp_error e
 
 let record env ~print ~vhs ~setup ?settings ?env:vars ?wait_timeout_s ~output
     input =
@@ -137,7 +137,7 @@ let record env ~print ~vhs ~setup ?settings ?env:vars ?wait_timeout_s ~output
   in
   if print then Flags.print_tape env tape
   else
-    Vhs.play ~vhs
+    K7.play ~vhs
       ~clock:(Eio.Stdenv.mono_clock env)
       ~proc:(Eio.Stdenv.process_mgr env)
       ~cwd:(Eio.Stdenv.cwd env) tape

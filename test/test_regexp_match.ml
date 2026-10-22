@@ -3,7 +3,7 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(* The matcher is internal: test it through the waits of [Vhs.record]. *)
+(* The matcher is internal: test it through the waits of [K7.record]. *)
 
 open Native_test
 
@@ -13,8 +13,7 @@ let format = {|hello W\303\266rld 42 x>y end\n|}
 let record_waits waits =
   with_dir @@ fun env cwd ->
   record env cwd
-    (tape
-       ([ Vhs.type' ("printf '" ^ format ^ "'\n"); Vhs.wait Prompt ] @ waits))
+    (tape ([ K7.type' ("printf '" ^ format ^ "'\n"); K7.wait Prompt ] @ waits))
 
 (* Each pattern holds on the screen, so no wait times out. *)
 let test_matching () =
@@ -40,10 +39,10 @@ let test_matching () =
   in
   match
     record_waits
-      (List.map (fun p -> Vhs.wait ~timeout:(Ms 3000) (Screen p)) patterns)
+      (List.map (fun p -> K7.wait ~timeout:(Ms 3000) (Screen p)) patterns)
   with
   | Ok _ -> ()
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
 
 (* A pattern that does not hold times out, even one that matches a prefix
    of the text, a byte of a multi-byte character or across lines without
@@ -51,10 +50,10 @@ let test_matching () =
 let test_not_matching () =
   List.iter
     (fun p ->
-      match record_waits [ Vhs.wait ~timeout:(Ms 200) (Screen p) ] with
+      match record_waits [ K7.wait ~timeout:(Ms 200) (Screen p) ] with
       | Error (Timeout _) -> ()
       | Ok _ -> Alcotest.failf "%S matched" p
-      | Error e -> Alcotest.failf "%S: %a" p Vhs.pp_error e)
+      | Error e -> Alcotest.failf "%S: %a" p K7.pp_error e)
     [ "helloo"; "^hello"; "W[^\\x{f6}]rld"; "end.>"; {|\bell|}; "x{3}" ]
 
 (* Unicode classes match as Go's tables say: a lower-case letter, a digit
@@ -62,14 +61,14 @@ let test_not_matching () =
 let test_unicode_class () =
   (match
      record_waits
-       [ Vhs.wait ~timeout:(Ms 3000) (Screen {|W\p{Ll}rld \pN+ \p{Latin}|}) ]
+       [ K7.wait ~timeout:(Ms 3000) (Screen {|W\p{Ll}rld \pN+ \p{Latin}|}) ]
    with
   | Ok _ -> ()
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
-  match record_waits [ Vhs.wait ~timeout:(Ms 200) (Screen {|\p{Greek}|}) ] with
+  | Error e -> Alcotest.failf "%a" K7.pp_error e);
+  match record_waits [ K7.wait ~timeout:(Ms 200) (Screen {|\p{Greek}|}) ] with
   | Error (Timeout _) -> ()
   | Ok _ -> Alcotest.fail "\\p{Greek} matched"
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
 
 (* Go folds case with Unicode's simple folding, counts ASCII word
    characters only at a word boundary, keeps a branch's flags in the branches
@@ -140,18 +139,18 @@ let test_vhs_oracle () =
   let text = {|\307\204 \305\277tra\303\237e K caf\303\251|} in
   let tape waits =
     match
-      Vhs.tape ~outputs:[ "out.txt" ]
-        (Vhs.type' ("printf '" ^ text ^ "\\n'\n") :: Vhs.wait Prompt :: waits)
+      K7.tape ~outputs:[ "out.txt" ]
+        (K7.type' ("printf '" ^ text ^ "\\n'\n") :: K7.wait Prompt :: waits)
     with
     | Ok t -> t
-    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+    | Error e -> Alcotest.failf "%a" K7.pp_error e
   in
   let both t =
-    (Vhs.render ?vhs:oracle ~clock ~proc ~cwd t, Native_test.play env cwd t)
+    (K7.render ?vhs:oracle ~clock ~proc ~cwd t, Native_test.play env cwd t)
   in
   let holds =
     List.map
-      (fun re -> Vhs.wait ~timeout:(Ms 2000) (Screen re))
+      (fun re -> K7.wait ~timeout:(Ms 2000) (Screen re))
       [
         "(?i)\xc7\x86 ";
         "(?i)STRA\xe1\xba\x9eE";
@@ -162,8 +161,8 @@ let test_vhs_oracle () =
   in
   (match both (tape holds) with
   | Ok (), Ok _ -> ()
-  | Error e, _ | _, Error e -> Alcotest.failf "%a" Vhs.pp_error e);
-  match both (tape [ Vhs.wait ~timeout:(Ms 1000) (Screen {|caf\B|}) ]) with
+  | Error e, _ | _, Error e -> Alcotest.failf "%a" K7.pp_error e);
+  match both (tape [ K7.wait ~timeout:(Ms 1000) (Screen {|caf\B|}) ]) with
   | Error (Failed _), Error (Timeout _) -> ()
   | _ -> Alcotest.fail "a wait that does not hold ended a recording"
 

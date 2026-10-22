@@ -70,7 +70,7 @@ let test_one_frame () =
 let test_settings () =
   let s =
     svg
-      ~settings:Vhs.[ Width 400; Height 200; Font_size 10; Padding 10 ]
+      ~settings:K7.[ Width 400; Height 200; Font_size 10; Padding 10 ]
       [ (Ms 0, "x") ]
   in
   check_contains "size" ~sub:{|width="400" height="200" viewBox="0 0 400 200"|}
@@ -83,7 +83,7 @@ let test_settings () =
 let test_cells () =
   let s =
     svg
-      ~settings:Vhs.[ Columns 100; Rows 5; Font_size 10; Padding 10 ]
+      ~settings:K7.[ Columns 100; Rows 5; Font_size 10; Padding 10 ]
       [ (Ms 0, String.make 100 'x') ]
   in
   check_contains "size" ~sub:{|width="746" height="96" viewBox="0 0 746 96"|} s;
@@ -91,45 +91,45 @@ let test_cells () =
 
 (* Sizes far beyond a screen are refused, not computed with overflow. *)
 let test_huge () =
-  (match Vhs.svg ~settings:[ Width 1_000_000 ] [] with
+  (match K7.svg ~settings:[ Width 1_000_000 ] [] with
   | Error (Unsupported why) ->
       check_contains "names the setting" ~sub:"Width" why
   | Ok _ -> Alcotest.fail "a huge width played"
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
-  match Vhs.svg ~settings:[ Width 100_000; Font_size 1 ] [] with
+  | Error e -> Alcotest.failf "%a" K7.pp_error e);
+  match K7.svg ~settings:[ Width 100_000; Font_size 1 ] [] with
   | Error (Unsupported _) -> ()
   | Ok _ -> Alcotest.fail "a huge terminal played"
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
 
 (* The same output gives the same image. *)
 let test_deterministic () =
   let output =
-    [ (Vhs.Ms 0, "a\027[31mb"); (Ms 33, "\r\nc"); (Ms 65, "\027[2J") ]
+    [ (K7.Ms 0, "a\027[31mb"); (Ms 33, "\r\nc"); (Ms 65, "\027[2J") ]
   in
   Alcotest.(check string) "same bytes" (svg output) (svg output)
 
 (* An .svg output never reaches VHS. *)
 let test_svg_output () =
-  match Vhs.tape ~outputs:[ "demo.svg"; "demo.gif" ] [ Vhs.type' "x" ] with
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  match K7.tape ~outputs:[ "demo.svg"; "demo.gif" ] [ K7.type' "x" ] with
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok t ->
       Alcotest.(check bool)
         "not printed" false
-        (contains ~sub:".svg" (Vhs.to_string t));
+        (contains ~sub:".svg" (K7.to_string t));
       Alcotest.(check bool)
         "raw Output refused" true
         (Result.is_error
-           (Vhs.tape ~outputs:[ "a.gif" ]
-              [ Vhs.raw "Output b.svg"; Vhs.type' "x" ]))
+           (K7.tape ~outputs:[ "a.gif" ]
+              [ K7.raw "Output b.svg"; K7.type' "x" ]))
 
 (* Times are a tape's durations, in increasing order. *)
 let test_times () =
   List.iter
     (fun output ->
-      match Vhs.svg output with
+      match K7.svg output with
       | Error (Invalid _) -> ()
       | Ok _ -> Alcotest.fail "drawn"
-      | Error e -> Alcotest.failf "%a" Vhs.pp_error e)
+      | Error e -> Alcotest.failf "%a" K7.pp_error e)
     [
       [ (Ms (-1), "a") ];
       [ (Ms 10, "a"); (Ms 5, "b") ];
@@ -140,11 +140,11 @@ let test_times () =
 let test_setting_errors () =
   List.iteri
     (fun i setting ->
-      match Vhs.svg ~settings:[ setting ] [ (Ms 0, "hello") ] with
+      match K7.svg ~settings:[ setting ] [ (Ms 0, "hello") ] with
       | Error (Invalid _) -> ()
-      | Error e -> Alcotest.failf "setting %d: %a" i Vhs.pp_error e
+      | Error e -> Alcotest.failf "setting %d: %a" i K7.pp_error e
       | Ok _ -> Alcotest.failf "setting %d: played" i)
-    Vhs.
+    K7.
       [
         Font_family "Mono\nSpace";
         Font_family "\"'`";
@@ -161,9 +161,9 @@ let test_setting_errors () =
         Typing_speed (Ms (-1));
         Width max_int;
       ];
-  match Vhs.svg ~settings:[ Shell Cmd ] [ (Ms 0, "hello") ] with
+  match K7.svg ~settings:[ Shell Cmd ] [ (Ms 0, "hello") ] with
   | Ok _ -> ()
-  | Error e -> Alcotest.failf "Shell Cmd: %a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "Shell Cmd: %a" K7.pp_error e
 
 (* A screen reader must not receive text concealed on the last screen, and
    a blank last screen has no description, only the title. *)
@@ -216,13 +216,13 @@ let test_spacing_mark () =
 (* Framerate is documented as positive; the native limits enumerate pixel
    sizes and terminal dimensions, without a frame-rate ceiling. *)
 let test_framerate_limit () =
-  let settings = Vhs.Framerate 100_001 :: settings in
-  (match Vhs.tape ~settings ~outputs:[ "x.svg" ] [ Vhs.sleep (Ms 100) ] with
+  let settings = K7.Framerate 100_001 :: settings in
+  (match K7.tape ~settings ~outputs:[ "x.svg" ] [ K7.sleep (Ms 100) ] with
   | Ok _ -> ()
-  | Error e -> Alcotest.failf "tape: %a" Vhs.pp_error e);
-  match Vhs.svg ~settings [ (Ms 0, "hello") ] with
+  | Error e -> Alcotest.failf "tape: %a" K7.pp_error e);
+  match K7.svg ~settings [ (Ms 0, "hello") ] with
   | Ok _ -> ()
-  | Error e -> Alcotest.failf "svg: %a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "svg: %a" K7.pp_error e
 
 (* Cursor redraws obey the same format-character policy as row text and
    the accessible description. *)

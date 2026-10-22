@@ -1,5 +1,5 @@
 (library
- (name vhs)
+ (name k7)
  (public_name k7)
  (private_modules
   casefold
@@ -60,8 +60,8 @@
 
 (mdx
  (package k7)
- (files vhs.mli)
- (libraries vhs))
+ (files k7.mli)
+ (libraries k7))
 
 ; matrix_backport is a verbatim copy of upstream code: dune builds it
 ; without warnings, and formatting and linting leave it alone.

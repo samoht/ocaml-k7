@@ -16,7 +16,7 @@ let contains ~sub s =
 
 let tape ?(setup = []) ?(output = "demo.gif") ?wait_timeout_s src =
   Cram_cmd.tape ~setup ~output ?wait_timeout_s ~name:"input.t" src
-  |> Result.map Vhs.to_string
+  |> Result.map K7.to_string
 
 let test_tape () =
   expect "tape"
@@ -196,38 +196,36 @@ let test_render () =
   let proc = Eio.Stdenv.process_mgr env in
   let mono = Eio.Stdenv.mono_clock env in
   let cwd = Eio.Stdenv.cwd env in
-  let t =
-    Result.get_ok (Vhs.tape ~outputs:[ "x.gif" ] [ Vhs.sleep (Ms 100) ])
-  in
-  (match Vhs.render ~vhs:(path "ko") ~clock:mono ~proc ~cwd t with
+  let t = Result.get_ok (K7.tape ~outputs:[ "x.gif" ] [ K7.sleep (Ms 100) ]) in
+  (match K7.render ~vhs:(path "ko") ~clock:mono ~proc ~cwd t with
   | Error (Failed { status = `Exited 3; _ } as e) ->
       expect "both streams"
         (path "ko" ^ " exited with code 3\n  from stdout\n  from stderr")
-        (Fmt.str "%a" Vhs.pp_error e)
+        (Fmt.str "%a" K7.pp_error e)
   | _ -> Alcotest.fail "lost the failure");
   (* A directory other than the test's, where the output can be written. *)
   let dir = Filename.dirname (path "pwd") in
   (match
-     Vhs.render ~vhs:(path "pwd") ~clock:mono ~proc
+     K7.render ~vhs:(path "pwd") ~clock:mono ~proc
        ~cwd:Eio.Path.(Eio.Stdenv.fs env / dir)
        t
    with
   | Error (Failed { output; _ }) when output = Unix.realpath dir ^ "\n" -> ()
-  | Error e -> Alcotest.failf "not run in %s: %a" dir Vhs.pp_error e
+  | Error e -> Alcotest.failf "not run in %s: %a" dir K7.pp_error e
   | Ok () -> Alcotest.fail "pwd succeeded");
   (* A vhs that exits without reading a tape larger than a pipe buffer is
      reported by its status, not by the broken pipe. *)
   let big =
     Result.get_ok
-      (Vhs.tape ~outputs:[ "x.gif" ]
-         (List.init 20_000 (fun _ -> Vhs.type' "echo hello")))
+      (K7.tape ~outputs:[ "x.gif" ]
+         (List.init 20_000 (fun _ -> K7.type' "echo hello")))
   in
-  (match Vhs.render ~vhs:(path "early") ~clock:mono ~proc ~cwd big with
+  (match K7.render ~vhs:(path "early") ~clock:mono ~proc ~cwd big with
   | Error (Failed { status = `Exited 2; _ }) -> ()
-  | Error e -> Alcotest.failf "early exit: %a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "early exit: %a" K7.pp_error e
   | Ok () -> Alcotest.fail "early exit succeeded");
   (match
-     Vhs.render ~vhs:(path "ko") ~clock:mono ~proc
+     K7.render ~vhs:(path "ko") ~clock:mono ~proc
        ~cwd:Eio.Path.(Eio.Stdenv.fs env / path "missing-dir")
        t
    with
@@ -235,14 +233,14 @@ let test_render () =
       expect "missing cwd"
         (path "missing-dir" ^ ": no such file or directory")
         msg
-  | Error e -> Alcotest.failf "unexpected %a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "unexpected %a" K7.pp_error e
   | Ok () -> Alcotest.fail "ran in a missing directory");
   (* Cancelling render stops vhs with SIGTERM and waits for it. *)
   let clock = Eio.Stdenv.clock env in
   (match
      Eio.Fiber.first
        (fun () ->
-         `Rendered (Vhs.render ~vhs:(path "slow") ~clock:mono ~proc ~cwd t))
+         `Rendered (K7.render ~vhs:(path "slow") ~clock:mono ~proc ~cwd t))
        (fun () ->
          Eio.Time.with_timeout_exn clock 10. (fun () ->
              while not (Sys.file_exists (path "slow.ready")) do
@@ -272,7 +270,7 @@ let test_render () =
          Eio.Fiber.first
            (fun () ->
              `Rendered
-               (Vhs.render ~vhs:(path "stubborn") ~clock:grace ~proc ~cwd t))
+               (K7.render ~vhs:(path "stubborn") ~clock:grace ~proc ~cwd t))
            (fun () ->
              Eio.Time.with_timeout_exn clock 10. (fun () ->
                  while not (Sys.file_exists (path "stubborn.ready")) do
@@ -322,8 +320,8 @@ let oracle = Sys.getenv_opt "VHS_ORACLE"
 let play ~native env t =
   let clock = Eio.Stdenv.mono_clock env and proc = Eio.Stdenv.process_mgr env in
   let cwd = Eio.Stdenv.cwd env in
-  if native then Vhs.record ~clock ~proc ~cwd t
-  else Vhs.render ?vhs:oracle ~clock ~proc ~cwd t
+  if native then K7.record ~clock ~proc ~cwd t
+  else K7.render ?vhs:oracle ~clock ~proc ~cwd t
 
 let test_output_order ~native () =
   with_files [] @@ fun env path ->
@@ -334,9 +332,9 @@ let test_output_order ~native () =
   let cram = Result.get_ok (Cram.parse src) in
   let t =
     Result.get_ok
-      (Vhs.tape
+      (K7.tape
          ~settings:
-           Vhs.
+           K7.
              [
                Shell Bash;
                Width 480;
@@ -347,7 +345,7 @@ let test_output_order ~native () =
                Typing_speed (Ms 5);
              ]
          ~outputs:[ output ]
-         (Cram.actions ~setup:[] cram @ [ Vhs.sleep (Ms 3500) ]))
+         (Cram.actions ~setup:[] cram @ [ K7.sleep (Ms 3500) ]))
   in
   let result =
     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 30. (fun () ->
@@ -355,7 +353,7 @@ let test_output_order ~native () =
   in
   (match result with
   | Ok () -> ()
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+  | Error e -> Alcotest.failf "%a" K7.pp_error e);
   let screen = Eio.Path.load Eio.Path.(Eio.Stdenv.fs env / output) in
   let position sub =
     let rec scan i =
@@ -388,7 +386,7 @@ let test_history ~native () =
   in
   (match result with
   | Ok () -> ()
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+  | Error e -> Alcotest.failf "%a" K7.pp_error e);
   let screen = Eio.Path.load Eio.Path.(Eio.Stdenv.fs env / output) in
   if not (contains ~sub:"\nx!!y" screen) then
     Alcotest.failf "history expanded: %s" screen
@@ -398,9 +396,9 @@ let record_cram ~native ?(setup = []) env path src =
   let cram = Result.get_ok (Cram.parse src) in
   let t =
     Result.get_ok
-      (Vhs.tape
+      (K7.tape
          ~settings:
-           Vhs.
+           K7.
              [
                Shell Bash;
                Width 800;
@@ -411,15 +409,15 @@ let record_cram ~native ?(setup = []) env path src =
                Typing_speed (Ms 5);
              ]
          ~outputs:[ output ]
-         ((Vhs.raw "Set WaitTimeout 3s" :: Cram.actions ~setup cram)
-         @ [ Vhs.sleep (Ms 2000) ]))
+         ((K7.raw "Set WaitTimeout 3s" :: Cram.actions ~setup cram)
+         @ [ K7.sleep (Ms 2000) ]))
   in
   (match
      Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 40. (fun () ->
          play ~native env t)
    with
   | Ok () -> ()
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+  | Error e -> Alcotest.failf "%a" K7.pp_error e);
   Eio.Path.load Eio.Path.(Eio.Stdenv.fs env / output)
 
 (* A setup may install bash's usual dynamic prompt hook. The recorder must

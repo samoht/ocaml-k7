@@ -7,7 +7,7 @@
 (library
  (name k7_cli)
  (modules cram flags cram_cmd run_cmd tape_cmd cli quote)
- (libraries vhs cmdliner eio eio.unix eio_main fmt unix))
+ (libraries k7 cmdliner eio eio.unix eio_main fmt unix))
 
 (executable
  (name main)

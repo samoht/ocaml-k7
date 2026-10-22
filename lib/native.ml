@@ -365,7 +365,7 @@ let wait_command ~at line tokens =
 (* The lines of the tape a [Source] line names, as VHS's parser reads it:
    not empty, without error and without a [Source] line; it drops their
    [Output] lines. A line also holds no control character but white space,
-   as {!Vhs.tape} requires of a raw line. *)
+   as {!K7.tape} requires of a raw line. *)
 let sourced ~source line path =
   let invalid fmt =
     Fmt.kstr (fun why -> stop (Invalid (line ^ ": " ^ why))) fmt
@@ -483,7 +483,7 @@ let rec read ~source ~at line t =
         | [ Keyword "Paste" ] -> Paste
         | Keyword "Screenshot" :: p :: _ ->
             if extension (lit p) = ".svg" then Screenshot (lit p)
-            else unsupported line "a PNG image, which Vhs.render takes"
+            else unsupported line "a PNG image, which K7.render takes"
         | _ -> unsupported line "not a command this module knows"
       in
       { t with actions = action :: t.actions }

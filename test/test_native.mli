@@ -3,7 +3,7 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(** Tests for native recording with {!Vhs.record} and {!Vhs.run}. *)
+(** Tests for native recording with {!K7.record} and {!K7.run}. *)
 
 val suite : string * unit Alcotest.test_case list
 (** [suite] is the test suite. *)

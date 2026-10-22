@@ -3,25 +3,27 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(** Terminal recordings with VHS.
+(** Terminal recordings as animated SVG images, and tapes for VHS.
 
-    {{:https://github.com/charmbracelet/vhs}VHS}, by
-    {{:https://charm.land/}Charm}, records a terminal session as a GIF or a
-    video from a tape: a script of settings, followed by actions such as typing
-    text, pressing keys and waiting for output.
+    [K7] draws a terminal session as an SVG image animated with CSS alone,
+    without a browser: a tape it plays in a shell on a pseudo-terminal
+    ({!record}), a program it runs there ({!run}), or output given with its
+    times ({!svg}).
 
-    [Vhs] builds the actions as values, {{!checks}checks} them once when
-    {!val-tape} assembles a tape, prints tapes in the [.tape] syntax and
-    {{!running}runs} them, with [vhs] or, for an animated SVG image, without it.
-    {!run} records a program as an animated SVG image without a tape. Only
-    {!render}, {!record} and {!run} perform I/O.
+    A tape is the script of {{:https://github.com/charmbracelet/vhs}VHS}, by
+    {{:https://charm.land/}Charm}, which records a terminal session as a GIF or
+    a video: settings, followed by actions such as typing text, pressing keys
+    and waiting for output. [K7] builds the actions as values, {{!checks}checks}
+    them once when {!val-tape} assembles a tape, reads and prints tapes in the
+    [.tape] syntax and {{!running}runs} them, with [vhs] for a GIF or a video.
+    Only {!render}, {!record}, {!play} and {!run} perform I/O.
 
     {[
     let demo =
-      Vhs.tape
-        ~settings:Vhs.[ Width 1000; Height 560 ]
+      K7.tape
+        ~settings:K7.[ Width 1000; Height 560 ]
         ~outputs:[ "demo.gif" ]
-        Vhs.[ type' "ls\n"; wait Prompt ]
+        K7.[ type' "ls\n"; wait Prompt ]
     ]} *)
 
 (** {1:actions Actions} *)
@@ -292,9 +294,9 @@ val pp : t Fmt.t
 
     {[
     let image =
-      Vhs.svg
-        ~settings:Vhs.[ Width 600; Height 200 ]
-        Vhs.[ (Ms 0, "$ ls\r\n"); (Ms 500, "a.txt  b.txt\r\n") ]
+      K7.svg
+        ~settings:K7.[ Width 600; Height 200 ]
+        K7.[ (Ms 0, "$ ls\r\n"); (Ms 500, "a.txt  b.txt\r\n") ]
     ]} *)
 
 val render :

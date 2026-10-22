@@ -1174,7 +1174,7 @@ let refuse ~by ~other kinds t =
         | "WebM" -> "a WebM video"
         | k -> "a " ^ k
       in
-      err_unsupported "not recorded %s: Output %a: %s, which Vhs.%s records" by
+      err_unsupported "not recorded %s: Output %a: %s, which K7.%s records" by
         Quote.pp p what other
 
 (* Directories *)
@@ -1252,7 +1252,7 @@ let render ?(vhs = "vhs") ~clock ~proc ~cwd t =
     | None -> Ok ()
     | Some p ->
         err_unsupported
-          "not recorded by vhs: Screenshot %a: an SVG image, which Vhs.record \
+          "not recorded by vhs: Screenshot %a: an SVG image, which K7.record \
            takes"
           Quote.pp p
   in

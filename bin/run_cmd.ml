@@ -22,11 +22,11 @@ let exit_code = function
 let record stdenv ~settings ~env ~output argv =
   let* () = check_output output in
   let* svg, status =
-    Vhs.run ~settings ~env
+    K7.run ~settings ~env
       ~clock:(Eio.Stdenv.mono_clock stdenv)
       ~proc:(Eio.Stdenv.process_mgr stdenv)
       ~cwd:(Eio.Stdenv.cwd stdenv) argv
-    |> Result.map_error (Fmt.to_to_string Vhs.pp_error)
+    |> Result.map_error (Fmt.to_to_string K7.pp_error)
   in
   match
     Eio.Path.(save ~create:(`Or_truncate 0o644) (Eio.Stdenv.fs stdenv / output))

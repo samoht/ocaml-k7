@@ -19,20 +19,20 @@ let set_env env =
 
 let record stdenv ~print ~vhs ~settings ~env ~outputs input =
   let* src = Flags.load stdenv input in
-  let error e = Fmt.str "%s: %a" input Vhs.pp_error e in
-  let* t = Result.map_error error (Vhs.of_string src) in
+  let error e = Fmt.str "%s: %a" input K7.pp_error e in
+  let* t = Result.map_error error (K7.of_string src) in
   let* t =
     if settings = [] then Ok t
-    else Result.map_error error (Vhs.with_settings settings t)
+    else Result.map_error error (K7.with_settings settings t)
   in
   let* t =
     if outputs = [] then Ok t
-    else Result.map_error error (Vhs.with_outputs outputs t)
+    else Result.map_error error (K7.with_outputs outputs t)
   in
   if print then Flags.print_tape stdenv t
   else
     let* () = set_env env in
-    Vhs.play ~vhs
+    K7.play ~vhs
       ~clock:(Eio.Stdenv.mono_clock stdenv)
       ~proc:(Eio.Stdenv.process_mgr stdenv)
       ~cwd:(Eio.Stdenv.cwd stdenv) t

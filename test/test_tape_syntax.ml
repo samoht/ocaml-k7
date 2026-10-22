@@ -3,11 +3,11 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(* The checker is internal: test it through [Vhs.raw]. *)
+(* The checker is internal: test it through [K7.raw]. *)
 
 (* VHS records no frame without a visible action. *)
 let tape actions =
-  Vhs.tape ~outputs:[ "demo.gif" ] (actions @ [ Vhs.sleep (Ms 100) ])
+  K7.tape ~outputs:[ "demo.gif" ] (actions @ [ K7.sleep (Ms 100) ])
   |> Result.map ignore
   |> Result.map_error Native_test.invalid
 
@@ -16,7 +16,7 @@ let tape actions =
 let test_accepted () =
   List.iter
     (fun line ->
-      match tape [ Vhs.raw line ] with
+      match tape [ K7.raw line ] with
       | Ok _ -> ()
       | Error e -> Alcotest.failf "rejected %S: %s" line e)
     [
@@ -47,7 +47,7 @@ let fails name line msg =
   Alcotest.(check (result unit string))
     name
     (Fmt.kstr Result.error "raw line %S: %s" line msg)
-    (tape [ Vhs.raw line ])
+    (tape [ K7.raw line ])
 
 let test_rejected () =
   fails "negative sleep" "Sleep -1ms" "Expected time after Sleep";
@@ -69,8 +69,8 @@ let test_rejected () =
     "Modifiers must come before other characters";
   fails "screenshot" "Screenshot a.gif" "Expected file with .png extension";
   (match
-     Vhs.tape ~outputs:[ "demo.svg" ]
-       [ Vhs.raw "Screenshot demo.svg"; Vhs.sleep (Ms 1) ]
+     K7.tape ~outputs:[ "demo.svg" ]
+       [ K7.raw "Screenshot demo.svg"; K7.sleep (Ms 1) ]
    with
   | Error e ->
       Alcotest.(check string)
@@ -80,11 +80,7 @@ let test_rejected () =
   | Ok _ -> Alcotest.fail "a screenshot over an output");
   (match
      tape
-       [
-         Vhs.raw "Screenshot a.png";
-         Vhs.sleep (Ms 1);
-         Vhs.raw "Screenshot a.png";
-       ]
+       [ K7.raw "Screenshot a.png"; K7.sleep (Ms 1); K7.raw "Screenshot a.png" ]
    with
   | Error e ->
       Alcotest.(check string)
@@ -113,7 +109,7 @@ let test_oracle () =
   |> List.iter (fun l ->
       if l <> "" then
         let line = String.sub l 2 (String.length l - 2) in
-        match tape [ Vhs.raw line ] with
+        match tape [ K7.raw line ] with
         | Ok () when l.[0] = '0' -> Alcotest.failf "accepted %S" line
         | _ -> ())
 
@@ -122,7 +118,7 @@ let test_oracle () =
 let test_durations () =
   List.iter
     (fun line ->
-      match tape [ Vhs.raw line ] with
+      match tape [ K7.raw line ] with
       | Ok () -> ()
       | Error e -> Alcotest.failf "rejected %S: %s" line e)
     [
@@ -147,7 +143,7 @@ let test_numbers () =
     In_channel.with_open_bin "number_cases.txt" In_channel.input_all
   in
   let accepts setting value =
-    Result.is_ok (tape [ Fmt.kstr Vhs.raw "Set %s \"%s\"" setting value ])
+    Result.is_ok (tape [ Fmt.kstr K7.raw "Set %s \"%s\"" setting value ])
   in
   String.split_on_char '\n' cases
   |> List.iter (fun l ->
@@ -170,7 +166,7 @@ let test_numbers () =
   fails "loop offset" "Set LoopOffset x%" "LoopOffset x%: not a Go float";
   List.iter
     (fun line ->
-      match tape [ Vhs.raw line ] with
+      match tape [ K7.raw line ] with
       | Ok () -> ()
       | Error e -> Alcotest.failf "rejected %S: %s" line e)
     [ "Set LoopOffset 20"; {|Set LoopOffset "1.5%%"|} ]

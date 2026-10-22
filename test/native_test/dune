@@ -2,4 +2,4 @@
 
 (library
  (name native_test)
- (libraries vhs svg_check alcotest eio eio.unix eio_main fmt))
+ (libraries k7 svg_check alcotest eio eio.unix eio_main fmt))

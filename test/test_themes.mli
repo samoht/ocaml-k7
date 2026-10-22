@@ -3,7 +3,7 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(** Tests for the themes of {!Vhs.Theme}. *)
+(** Tests for the themes of {!K7.Theme}. *)
 
 val suite : string * unit Alcotest.test_case list
 (** [suite] is the test suite. *)

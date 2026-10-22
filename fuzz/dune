@@ -9,7 +9,7 @@
  (flags
   (:standard -open Matrix_backport))
  (libraries
-  vhs
+  k7
   k7_cli
   svg_check
   matrix_backport

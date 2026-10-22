@@ -9,15 +9,15 @@ val run :
   Eio_unix.Stdenv.base ->
   print:bool ->
   vhs:string ->
-  settings:Vhs.setting list ->
+  settings:K7.setting list ->
   env:(string * string) list ->
   outputs:string list ->
   string ->
   int
 (** [run stdenv ~print ~vhs ~settings ~env ~outputs input] reads the tape in the
-    file [input] with {!Vhs.of_string}, with [settings] in place of its own and
+    file [input] with {!K7.of_string}, with [settings] in place of its own and
     [outputs], unless empty, in place of its outputs, and records it with
-    {!Vhs.play}, which runs the executable [vhs] only for the outputs [vhs]
+    {!K7.play}, which runs the executable [vhs] only for the outputs [vhs]
     writes, after setting the variables [env] in the environment of [k7], or
     prints it on standard output if [print] is [true]. It is the exit code as
     for {!Cram_cmd.run}. *)

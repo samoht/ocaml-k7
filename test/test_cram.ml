@@ -55,13 +55,13 @@ let printed ?(setup = []) src =
   match Cram.parse src with
   | Error msg -> Alcotest.fail msg
   | Ok t -> (
-      match Vhs.tape ~outputs:[ "x.gif" ] (Cram.actions ~setup t) with
+      match K7.tape ~outputs:[ "x.gif" ] (Cram.actions ~setup t) with
       | Ok tape ->
-          let s = Fmt.str "%a" Vhs.pp tape in
+          let s = Fmt.str "%a" K7.pp tape in
           let header = "Output \"x.gif\"\n" in
           String.sub s (String.length header)
             (String.length s - String.length header)
-      | Error msg -> Alcotest.failf "%a" Vhs.pp_error msg)
+      | Error msg -> Alcotest.failf "%a" K7.pp_error msg)
 
 let cram ?setup src = unmarked (printed ?setup src)
 

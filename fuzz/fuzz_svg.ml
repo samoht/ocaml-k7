@@ -6,7 +6,7 @@
 open Alcobar
 
 (* A 50 x 13 terminal of 7 x 13 pixel cells. *)
-let settings = Vhs.[ Width 400; Height 200; Font_size 10; Padding 10 ]
+let settings = K7.[ Width 400; Height 200; Font_size 10; Padding 10 ]
 let cols = 50
 let rows = 13
 
@@ -45,9 +45,9 @@ let rec collapse = function
 (* Whatever a program prints, the image is well-formed XML and each of its
    screens has the text the screen shows, in order. *)
 let test_frames chunks =
-  let output = List.mapi (fun i s -> (Vhs.Ms (i * 20), s)) chunks in
-  match Vhs.svg ~settings output with
-  | Error e -> failf "%a" Vhs.pp_error e
+  let output = List.mapi (fun i s -> (K7.Ms (i * 20), s)) chunks in
+  match K7.svg ~settings output with
+  | Error e -> failf "%a" K7.pp_error e
   | Ok svg -> (
       match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows svg with
       | Error e -> failf "not well-formed: %s" e
@@ -110,10 +110,10 @@ let test_zero_width items =
       items
   in
   let output =
-    List.mapi (fun i s -> (Vhs.Ms (i * 20), s)) (List.concat pieces)
+    List.mapi (fun i s -> (K7.Ms (i * 20), s)) (List.concat pieces)
   in
-  match Vhs.svg ~settings output with
-  | Error e -> failf "%a" Vhs.pp_error e
+  match K7.svg ~settings output with
+  | Error e -> failf "%a" K7.pp_error e
   | Ok svg -> (
       match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows svg with
       | Error e -> failf "not well-formed: %s" e
@@ -197,8 +197,8 @@ let check_output_rows output lines =
   let term = Screen.terminal ~rows ~cols in
   Screen.feed term output;
   check_eq ~pp:pp_string expected (Screen.text (Screen.of_terminal term));
-  match Vhs.svg ~settings [ (Ms 0, output) ] with
-  | Error e -> failf "%a" Vhs.pp_error e
+  match K7.svg ~settings [ (Ms 0, output) ] with
+  | Error e -> failf "%a" K7.pp_error e
   | Ok svg -> (
       match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows svg with
       | Error e -> failf "%s" e
@@ -301,9 +301,9 @@ let test_prepend_boundaries n =
     (Matrix_grid.to_text (Vte.grid whole))
     (Matrix_grid.to_text (Vte.grid split));
   let final chunks =
-    let output = List.mapi (fun i s -> (Vhs.Ms (i * 20), s)) chunks in
-    match Vhs.svg ~settings output with
-    | Error e -> failf "%a" Vhs.pp_error e
+    let output = List.mapi (fun i s -> (K7.Ms (i * 20), s)) chunks in
+    match K7.svg ~settings output with
+    | Error e -> failf "%a" K7.pp_error e
     | Ok image -> (
         match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows image with
         | Error e -> fail e
@@ -339,13 +339,13 @@ let test_scroll_region_boundaries n =
    those. *)
 let test_setting_errors setting =
   let tape =
-    Vhs.tape ~settings:[ setting ] ~outputs:[ "x.svg" ] [ Vhs.type' "hi" ]
+    K7.tape ~settings:[ setting ] ~outputs:[ "x.svg" ] [ K7.type' "hi" ]
   in
-  match (tape, Vhs.svg ~settings:[ setting ] [ (Ms 0, "hello") ]) with
+  match (tape, K7.svg ~settings:[ setting ] [ (Ms 0, "hello") ]) with
   | Error (Invalid _), Error (Invalid _) -> ()
   | Ok _, (Ok _ | Error (Unsupported _)) -> ()
-  | Error e, _ -> failf "tape: %a, but svg did not refuse it" Vhs.pp_error e
-  | Ok _, Error e -> failf "svg: %a" Vhs.pp_error e
+  | Error e, _ -> failf "tape: %a, but svg did not refuse it" K7.pp_error e
+  | Ok _, Error e -> failf "svg: %a" K7.pp_error e
 
 let setting =
   let text =
@@ -353,39 +353,39 @@ let setting =
   in
   choose
     [
-      map [ text ] (fun s -> Vhs.Font_family s);
-      map [ text ] (fun s -> Vhs.Theme s);
-      map [ int ] (fun n -> Vhs.Width n);
-      map [ int ] (fun n -> Vhs.Height n);
-      map [ int ] (fun n -> Vhs.Padding n);
-      map [ int ] (fun n -> Vhs.Font_size n);
-      map [ int ] (fun n -> Vhs.Framerate n);
-      map [ int ] (fun n -> Vhs.Typing_speed (Ms n));
-      const (Vhs.Shell Cmd);
+      map [ text ] (fun s -> K7.Font_family s);
+      map [ text ] (fun s -> K7.Theme s);
+      map [ int ] (fun n -> K7.Width n);
+      map [ int ] (fun n -> K7.Height n);
+      map [ int ] (fun n -> K7.Padding n);
+      map [ int ] (fun n -> K7.Font_size n);
+      map [ int ] (fun n -> K7.Framerate n);
+      map [ int ] (fun n -> K7.Typing_speed (Ms n));
+      const (K7.Shell Cmd);
     ]
 
 (* Several settings can interact, and repeated settings must be checked in
    the same order by both public entry points. Native size and colour limits
    are documented separately from tape validation. *)
 let test_setting_list_errors settings =
-  let tape = Vhs.tape ~settings ~outputs:[ "x.svg" ] [ Vhs.type' "hi" ] in
-  match (tape, Vhs.svg ~settings [ (Ms 0, "hello") ]) with
+  let tape = K7.tape ~settings ~outputs:[ "x.svg" ] [ K7.type' "hi" ] in
+  match (tape, K7.svg ~settings [ (Ms 0, "hello") ]) with
   | Error (Invalid expected), Error (Invalid actual) ->
       check_eq ~pp:pp_string expected actual
   | Ok _, (Ok _ | Error (Unsupported _)) -> ()
-  | Error e, _ -> failf "tape: %a, but svg did not agree" Vhs.pp_error e
-  | Ok _, Error e -> failf "svg: %a" Vhs.pp_error e
+  | Error e, _ -> failf "tape: %a, but svg did not agree" K7.pp_error e
+  | Ok _, Error e -> failf "svg: %a" K7.pp_error e
 
 (* A frame rate is not a pixel dimension and has no documented native
    upper bound. Keep ordinary rates and the size-check boundary in scope. *)
 let test_positive_framerate n =
-  let settings = Vhs.Framerate (max 1 n) :: settings in
-  (match Vhs.tape ~settings ~outputs:[ "x.svg" ] [ Vhs.sleep (Ms 100) ] with
+  let settings = K7.Framerate (max 1 n) :: settings in
+  (match K7.tape ~settings ~outputs:[ "x.svg" ] [ K7.sleep (Ms 100) ] with
   | Ok _ -> ()
-  | Error e -> failf "tape: %a" Vhs.pp_error e);
-  match Vhs.svg ~settings [ (Ms 0, "hello") ] with
+  | Error e -> failf "tape: %a" K7.pp_error e);
+  match K7.svg ~settings [ (Ms 0, "hello") ] with
   | Ok _ -> ()
-  | Error e -> failf "svg: %a" Vhs.pp_error e
+  | Error e -> failf "svg: %a" K7.pp_error e
 
 let contains ~sub s =
   let rec go i =
@@ -407,25 +407,25 @@ let concealed n =
 
 let test_concealed_cursor n =
   let _, output = concealed n in
-  match Vhs.svg ~settings [ (Ms 0, output) ] with
-  | Error e -> failf "%a" Vhs.pp_error e
+  match K7.svg ~settings [ (Ms 0, output) ] with
+  | Error e -> failf "%a" K7.pp_error e
   | Ok image -> check (not (contains ~sub:{|<text class="ka k"|} image))
 
 let test_concealed_description n =
   let _, output = concealed n in
-  match Vhs.svg ~settings [ (Ms 0, output ^ "\027[?25l") ] with
-  | Error e -> failf "%a" Vhs.pp_error e
+  match K7.svg ~settings [ (Ms 0, output ^ "\027[?25l") ] with
+  | Error e -> failf "%a" K7.pp_error e
   | Ok image -> check (not (contains ~sub:"<desc" image))
 
 (* The XML guarantee also holds when themes change the generated style. *)
 let test_theme_xml output theme =
-  let settings = Vhs.Theme theme :: settings in
-  match Vhs.tape ~settings ~outputs:[ "a.svg" ] [ Vhs.sleep (Ms 100) ] with
+  let settings = K7.Theme theme :: settings in
+  match K7.tape ~settings ~outputs:[ "a.svg" ] [ K7.sleep (Ms 100) ] with
   | Error _ -> ()
   | Ok _ -> (
-      match Vhs.svg ~settings [ (Ms 0, output) ] with
+      match K7.svg ~settings [ (Ms 0, output) ] with
       | Error (Unsupported _) -> ()
-      | Error e -> failf "%a" Vhs.pp_error e
+      | Error e -> failf "%a" K7.pp_error e
       | Ok image -> (
           match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows image with
           | Ok _ -> ()
@@ -435,10 +435,10 @@ let test_theme_xml output theme =
 let test_time_bounds first second =
   let max_ms = 9_223_372_036_854 in
   let valid = first >= 0 && first <= second && second <= max_ms in
-  match Vhs.svg ~settings [ (Ms first, "a"); (Ms second, "b") ] with
+  match K7.svg ~settings [ (Ms first, "a"); (Ms second, "b") ] with
   | Ok _ -> check valid
   | Error (Invalid _) -> check (not valid)
-  | Error e -> failf "%a" Vhs.pp_error e
+  | Error e -> failf "%a" K7.pp_error e
 
 let theme =
   choose
@@ -485,9 +485,9 @@ let test_narrow_symbols n selector split_at =
   List.iter (Vte.feed_string term) chunks;
   let image =
     match
-      Vhs.svg ~settings (List.mapi (fun i s -> (Vhs.Ms (20 * i), s)) chunks)
+      K7.svg ~settings (List.mapi (fun i s -> (K7.Ms (20 * i), s)) chunks)
     with
-    | Error e -> failf "%a" Vhs.pp_error e
+    | Error e -> failf "%a" K7.pp_error e
     | Ok svg -> (
         match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows svg with
         | Error e -> failf "%s" e
@@ -530,8 +530,8 @@ let test_cursor_format n =
   Vte.feed_string term output;
   check_eq ~pp:pp_string ("a" ^ mark) (Matrix_grid.get_text (Vte.grid term) 0);
   check_eq ~pp:Fmt.(Dump.pair int int) (0, 0) (Vte.cursor_pos term);
-  match Vhs.svg ~settings [ (Ms 0, output) ] with
-  | Error e -> failf "%a" Vhs.pp_error e
+  match K7.svg ~settings [ (Ms 0, output) ] with
+  | Error e -> failf "%a" K7.pp_error e
   | Ok image ->
       check (contains ~sub:"<desc id=\"d\">ab</desc>" image);
       check (not (contains ~sub:mark image))
@@ -563,9 +563,9 @@ let test_visible_format n =
   let mark = Buffer.contents b in
   check_eq ~pp:pp_string
     ("a" ^ mark ^ "b")
-    (Fmt.str "%a" Vhs.pp_error (Io ("a" ^ mark ^ "b")));
-  match Vhs.svg ~settings [ (Ms 0, "a" ^ mark ^ "b\r") ] with
-  | Error e -> failf "%a" Vhs.pp_error e
+    (Fmt.str "%a" K7.pp_error (Io ("a" ^ mark ^ "b")));
+  match K7.svg ~settings [ (Ms 0, "a" ^ mark ^ "b\r") ] with
+  | Error e -> failf "%a" K7.pp_error e
   | Ok image ->
       check (contains ~sub:("<desc id=\"d\">a" ^ mark ^ "b</desc>") image);
       check (contains ~sub:(">a" ^ mark ^ "</tspan>") image);
@@ -606,8 +606,8 @@ let test_regional_splits n =
     Vte.feed_string term a;
     Vte.feed_string term b;
     check_eq ~pp:pp_string expected (Matrix_grid.to_text (Vte.grid term));
-    match Vhs.svg ~settings [ (Ms 0, a); (Ms 20, b) ] with
-    | Error e -> failf "%a" Vhs.pp_error e
+    match K7.svg ~settings [ (Ms 0, a); (Ms 20, b) ] with
+    | Error e -> failf "%a" K7.pp_error e
     | Ok image -> (
         match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows image with
         | Error e -> failf "%s" e

@@ -534,7 +534,7 @@ let command p =
             fail "Expected file with .tape extension";
           Other
       | "Screenshot" -> (
-          (* VHS takes a PNG image; Vhs.record also takes an SVG one. *)
+          (* VHS takes a PNG image; K7.record also takes an SVG one. *)
           let shot = path p ~what:"Screenshot" in
           match extension shot with
           | ".png" | ".svg" -> Screenshot shot

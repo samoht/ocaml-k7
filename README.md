@@ -34,25 +34,25 @@ To make GIFs, you also need
 ## Usage
 
 A tape is a list of settings, the files to write, and a list of actions. The
-settings and the actions are constructors and values of `Vhs`, here opened
-locally with `Vhs.[ ... ]`:
+settings and the actions are constructors and values of `K7`, here opened
+locally with `K7.[ ... ]`:
 
 ```ocaml
 let tape =
-  Vhs.tape
-    ~settings:Vhs.[ Font_size 18; Width 1000; Height 560 ]
+  K7.tape
+    ~settings:K7.[ Font_size 18; Width 1000; Height 560 ]
     ~outputs:[ "demo.gif" ]
-    Vhs.[ type' "dune test\n"; wait Prompt; sleep (Ms 2000) ]
+    K7.[ type' "dune test\n"; wait Prompt; sleep (Ms 2000) ]
 ```
 
-`Vhs.type'` types text, a newline pressing Enter. `Vhs.wait Prompt` waits for
+`K7.type'` types text, a newline pressing Enter. `K7.wait Prompt` waits for
 the shell prompt to come back, so the recording shows the whole output of the
 command. A prompt that takes more than 15 seconds fails the recording, and
-`Vhs.wait ~timeout` sets another limit. The final sleep keeps the output on
-screen. `Vhs.pp` prints the tape in the format VHS reads:
+`K7.wait ~timeout` sets another limit. The final sleep keeps the output on
+screen. `K7.pp` prints the tape in the format VHS reads:
 
 ```ocaml
-# Fmt.pr "%a" Vhs.pp (Result.get_ok tape);;
+# Fmt.pr "%a" K7.pp (Result.get_ok tape);;
 Output "demo.gif"
 Set FontSize 18
 Set Width 1000
@@ -64,35 +64,35 @@ Sleep 2000ms
 - : unit = ()
 ```
 
-`Vhs.tape` returns an error for a tape VHS would reject or partly ignore, and
+`K7.tape` returns an error for a tape VHS would reject or partly ignore, and
 names the offending line:
 
 ```ocaml
-# Vhs.tape ~outputs:[ "demo" ] [ Vhs.sleep (Ms 100) ];;
-- : (Vhs.t, Vhs.error) result =
+# K7.tape ~outputs:[ "demo" ] [ K7.sleep (Ms 100) ];;
+- : (K7.t, K7.error) result =
 Error
- (Vhs.Invalid "Output \"demo\": neither an extension nor a trailing slash")
+ (K7.Invalid "Output \"demo\": neither an extension nor a trailing slash")
 ```
 
-A setting or a command that `Vhs` has no value for is a raw tape line,
-which `Vhs.tape` checks as VHS's parser reads it. `Set WaitTimeout`, before
+A setting or a command that `K7` has no value for is a raw tape line,
+which `K7.tape` checks as VHS's parser reads it. `Set WaitTimeout`, before
 the first action, gives every wait without its own timeout another limit:
 
 ```ocaml
-# Vhs.tape ~outputs:[ "demo.gif" ]
-    Vhs.[ raw "Set WaitTimeout 30s"; type' "make\n"; wait Prompt ]
-  |> Result.map Vhs.to_string;;
-- : (string, Vhs.error) result =
+# K7.tape ~outputs:[ "demo.gif" ]
+    K7.[ raw "Set WaitTimeout 30s"; type' "make\n"; wait Prompt ]
+  |> Result.map K7.to_string;;
+- : (string, K7.error) result =
 Ok "Output \"demo.gif\"\nSet WaitTimeout 30s\nType \"make\"\nEnter\nWait\n"
 ```
 
-`Vhs.Prompt` relies on the prompt VHS gives each shell it starts, which ends
+`K7.Prompt` relies on the prompt VHS gives each shell it starts, which ends
 with `>`, so it also holds while a command prints a line ending with `>`. A
 tape that changes the prompt, or runs such a command, should wait for
 something else, with a regular expression on the line under the cursor
-(`Vhs.Line`) or on the screen (`Vhs.Screen`).
+(`K7.Line`) or on the screen (`K7.Screen`).
 
-`Vhs.render` runs `vhs` on the tape in a given directory, which writes the
+`K7.render` runs `vhs` on the tape in a given directory, which writes the
 outputs of the tape there, and returns an error when `vhs` is not installed
 or fails. It runs processes with
 [Eio](https://github.com/ocaml-multicore/eio), so it takes the clock, the
@@ -102,17 +102,17 @@ the program:
 ```ocaml
 let make_gif env tape =
   let clock = Eio.Stdenv.mono_clock env and cwd = Eio.Stdenv.cwd env in
-  match Vhs.render ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd tape with
+  match K7.render ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd tape with
   | Ok () -> ()
-  | Error e -> Fmt.epr "%a@." Vhs.pp_error e
+  | Error e -> Fmt.epr "%a@." K7.pp_error e
 
 let main () = Eio_main.run @@ fun env -> make_gif env (Result.get_ok tape)
 ```
 
 ## Recording without VHS
 
-`Vhs.render` writes `.gif`, `.mp4` and `.webm` outputs and PNG frames, and
-`Vhs.record` writes `.svg` outputs; both write the text outputs, `.txt`,
+`K7.render` writes `.gif`, `.mp4` and `.webm` outputs and PNG frames, and
+`K7.record` writes `.svg` outputs; both write the text outputs, `.txt`,
 `.ascii` and `.test`. Each one refuses an output only the other writes,
 before it plays anything, and names the function that writes it, so a GIF
 and an SVG image of the same actions are two tapes:
@@ -122,17 +122,17 @@ let make_both env ~settings actions =
   let clock = Eio.Stdenv.mono_clock env and cwd = Eio.Stdenv.cwd env in
   let proc = Eio.Stdenv.process_mgr env in
   let ( let* ) = Result.bind in
-  let* gif = Vhs.tape ~settings ~outputs:[ "demo.gif" ] actions in
-  let* svg = Vhs.tape ~settings ~outputs:[ "demo.svg" ] actions in
-  let* () = Vhs.render ~clock ~proc ~cwd gif in
-  Vhs.record ~clock ~proc ~cwd svg
+  let* gif = K7.tape ~settings ~outputs:[ "demo.gif" ] actions in
+  let* svg = K7.tape ~settings ~outputs:[ "demo.svg" ] actions in
+  let* () = K7.render ~clock ~proc ~cwd gif in
+  K7.record ~clock ~proc ~cwd svg
 ```
 
-`Vhs.record` plays the tape in bash, zsh or fish on a pseudo-terminal, reads
+`K7.record` plays the tape in bash, zsh or fish on a pseudo-terminal, reads
 what the shell prints with a terminal emulator that follows xterm, and
 writes the screens to the `.svg` output of the tape as an animated SVG
 image, and its text to a `.txt`, `.ascii` or `.test` output in VHS's format.
-It takes the same arguments as `Vhs.render` but `~vhs`, and writes the
+It takes the same arguments as `K7.render` but `~vhs`, and writes the
 outputs to the same paths. The text holds what VHS reads after each
 command, without the extra screens VHS adds while it applies the settings.
 The image holds text, no script and no external resource, and animates with
@@ -142,9 +142,9 @@ reader who prefers reduced motion, it shows its last screen, still.
 ```ocaml
 let make_svg env tape =
   let clock = Eio.Stdenv.mono_clock env and cwd = Eio.Stdenv.cwd env in
-  match Vhs.record ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd tape with
+  match K7.record ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd tape with
   | Ok () -> ()
-  | Error e -> Fmt.epr "%a@." Vhs.pp_error e
+  | Error e -> Fmt.epr "%a@." K7.pp_error e
 ```
 
 The terminal has the size VHS gives it, and the image uses the colours of
@@ -155,18 +155,18 @@ output, in the same frames, gives the same image; how long a command takes
 to print can move its output to other frames. A `Screenshot` of an `.svg`
 path writes a still SVG image there, where VHS takes a `.png` path, and
 `Source` plays the lines of another tape. A few things need VHS, such as
-the other shells or a colour name in a JSON theme; `Vhs.record` names them
+the other shells or a colour name in a JSON theme; `K7.record` names them
 in its error.
 
-`Vhs.svg` draws the same image from output given with its times, such as
+`K7.svg` draws the same image from output given with its times, such as
 bytes a test captured, with no tape, no shell and no file written; it
 returns the image:
 
 ```ocaml
 let image =
-  Vhs.svg
-    ~settings:Vhs.[ Width 600; Height 200 ]
-    Vhs.[ (Ms 0, "$ ls\r\n"); (Ms 500, "a.txt  b.txt\r\n") ]
+  K7.svg
+    ~settings:K7.[ Width 600; Height 200 ]
+    K7.[ (Ms 0, "$ ls\r\n"); (Ms 500, "a.txt  b.txt\r\n") ]
 ```
 
 ## Recording a cram test
@@ -198,7 +198,7 @@ Sleep 1000ms
 ```
 
 An output ending in `.svg`, `.txt`, `.ascii` or `.test` is recorded by
-`k7 cram` itself, with `Vhs.record` and no browser, and the others by
+`k7 cram` itself, with `K7.record` and no browser, and the others by
 `vhs`. Extensions are lower case, as VHS reads them:
 
 ```
@@ -244,12 +244,12 @@ after `exit 3`, ends a native recording at once, with its status.
   indicator of a flag takes a cell, a family joined with U+200D shows as
   its separate emoji, and an emoji made wide by U+FE0F can overlap the cell
   after it.
-- `Vhs.render` reports a wait that times out as `Vhs.Failed`, with VHS's
-  message in its output, where `Vhs.record` returns `Vhs.Timeout`.
+- `K7.render` reports a wait that times out as `K7.Failed`, with VHS's
+  message in its output, where `K7.record` returns `K7.Timeout`.
 - A JSON theme is read with [jsont](https://erratique.ch/software/jsont),
   which refuses invalid UTF-8 and an unpaired surrogate escape, such as
   `"\ud800"`, in a string. VHS reads them with Go's `encoding/json`, which
-  replaces them with U+FFFD, so `Vhs.tape` refuses such a theme where VHS
+  replaces them with U+FFFD, so `K7.tape` refuses such a theme where VHS
   would not.
 
 ## Credits

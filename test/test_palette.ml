@@ -8,7 +8,7 @@ open Native_test
 let test_colours () =
   let s =
     svg
-      ~settings:(Vhs.Theme "Dracula" :: settings)
+      ~settings:(K7.Theme "Dracula" :: settings)
       [
         ( Ms 0,
           "\027[31mr\027[1;32mg\027[0;38;5;208mo\027[38;2;10;20;30mt\027[0;7mi\027[0;4mu"
@@ -52,18 +52,17 @@ let test_json_theme () =
        {|{"background": "#ffffff", "foreground": "#000000", "cursor": "#eeeeee"}|});
   check_contains "accent" ~sub:".ka{fill:#00ff00}"
     (accent {|{"cursor": "#ff0000", "cursorAccent": "#00ff00"}|});
-  (match Vhs.svg ~settings:[ Theme {|{"red": "tomato"}|} ] [] with
+  (match K7.svg ~settings:[ Theme {|{"red": "tomato"}|} ] [] with
   | Error (Unsupported why) ->
       check_contains "names it" ~sub:"tomato" why;
       (* svg records nothing: it draws. *)
       check_contains "drawn" ~sub:"not drawn natively: " why
   | Ok _ -> Alcotest.fail "a colour name played"
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+  | Error e -> Alcotest.failf "%a" K7.pp_error e);
   List.iter
     (fun theme ->
       match
-        Vhs.tape ~settings:[ Theme theme ] ~outputs:[ "a.gif" ]
-          [ Vhs.type' "x" ]
+        K7.tape ~settings:[ Theme theme ] ~outputs:[ "a.gif" ] [ K7.type' "x" ]
       with
       | Error e ->
           check_contains "refused" ~sub:"VHS cannot read it" (invalid e)
@@ -73,8 +72,7 @@ let test_json_theme () =
   List.iter
     (fun theme ->
       match
-        Vhs.tape ~settings:[ Theme theme ] ~outputs:[ "a.gif" ]
-          [ Vhs.type' "x" ]
+        K7.tape ~settings:[ Theme theme ] ~outputs:[ "a.gif" ] [ K7.type' "x" ]
       with
       | Error e ->
           check_contains "refused here" ~sub:"this library cannot read it"
@@ -104,8 +102,8 @@ let test_go_oracle () =
       match String.split_on_char '\t' line with
       | [ ok; bg; red; json ] -> (
           let result =
-            Vhs.tape ~settings:[ Theme json ] ~outputs:[ "a.gif" ]
-              [ Vhs.type' "x" ]
+            K7.tape ~settings:[ Theme json ] ~outputs:[ "a.gif" ]
+              [ K7.type' "x" ]
           in
           let accepted = Result.is_ok result in
           (* jsont refuses invalid UTF-8 and unpaired surrogate escapes in a
@@ -124,7 +122,7 @@ let test_go_oracle () =
             match
               ( colour "#000000" (unhex bg),
                 colour "#cc0000" (unhex red),
-                Vhs.svg ~settings:[ Theme json ] [] )
+                K7.svg ~settings:[ Theme json ] [] )
             with
             | Some bg, Some red, Ok s ->
                 check_contains json ~sub:(".e{fill:" ^ bg ^ "}") s;
@@ -132,7 +130,7 @@ let test_go_oracle () =
             | None, _, Error (Unsupported _) | _, None, Error (Unsupported _) ->
                 ()
             | _, _, Ok _ -> Alcotest.failf "%s: played" json
-            | _, _, Error e -> Alcotest.failf "%s: %a" json Vhs.pp_error e)
+            | _, _, Error e -> Alcotest.failf "%s: %a" json K7.pp_error e)
       | [ "" ] -> ()
       | _ -> Alcotest.failf "bad case %S" line)
 
@@ -145,12 +143,12 @@ let test_default () =
       check_contains "foreground" ~sub:"text{fill:#dddddd}" s;
       check_contains "red" ~sub:".p1{fill:#d74e6f}" s;
       check_contains "cursor accent" ~sub:".ka{fill:#171717}" s)
-    [ settings; Vhs.Theme "  " :: settings ]
+    [ settings; K7.Theme "  " :: settings ]
 
 (* A theme without a cursor colour gets xterm.js's white, and text under the
    cursor is black. *)
 let test_no_cursor () =
-  let s = svg ~settings:(Vhs.Theme "TokyoNight" :: settings) [ (Ms 0, "x") ] in
+  let s = svg ~settings:(K7.Theme "TokyoNight" :: settings) [ (Ms 0, "x") ] in
   check_contains "cursor" ~sub:".kc{fill:#ffffff}" s;
   check_contains "accent" ~sub:".ka{fill:#16161e}" s
 
@@ -162,15 +160,15 @@ let test_json_depth () =
       "{\"extra\":" ^ String.make arrays '[' ^ "0" ^ String.make arrays ']'
       ^ "}"
     in
-    Vhs.tape ~settings:[ Theme theme ] ~outputs:[ "demo.txt" ]
-      [ Vhs.sleep (Ms 100) ]
+    K7.tape ~settings:[ Theme theme ] ~outputs:[ "demo.txt" ]
+      [ K7.sleep (Ms 100) ]
   in
   (match build 9_999 with
   | Ok _ -> ()
-  | Error e -> Alcotest.failf "Go accepts this depth: %a" Vhs.pp_error e);
+  | Error e -> Alcotest.failf "Go accepts this depth: %a" K7.pp_error e);
   match build 10_000 with
   | Error (Invalid _) -> ()
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok _ -> Alcotest.fail "accepted a theme Go refuses: exceeded max depth"
 
 let suite =

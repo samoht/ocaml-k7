@@ -4,15 +4,15 @@
   ---------------------------------------------------------------------------*)
 
 (* A 46 x 9 terminal of 14 x 29 pixel cells. *)
-let settings = Vhs.[ Width 800; Height 400; Font_size 22 ]
+let settings = K7.[ Width 800; Height 400; Font_size 22 ]
 let cell_width = 14
 let cell_height = 29
 let rows = 9
 
 let svg ?(settings = settings) output =
-  match Vhs.svg ~settings output with
+  match K7.svg ~settings output with
   | Ok s -> s
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
 
 let frames svg =
   match Svg_check.frames ~cell_width ~cell_height ~rows svg with
@@ -50,7 +50,7 @@ let with_dir f =
 
 let play env cwd t =
   Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 60. @@ fun () ->
-  Vhs.record
+  K7.record
     ~clock:(Eio.Stdenv.mono_clock env)
     ~proc:(Eio.Stdenv.process_mgr env)
     ~cwd t
@@ -61,18 +61,18 @@ let record ?(image = "demo.svg") env cwd t =
 
 let tape actions =
   match
-    Vhs.tape
-      ~settings:(Vhs.Typing_speed (Ms 5) :: settings)
+    K7.tape
+      ~settings:(K7.Typing_speed (Ms 5) :: settings)
       ~outputs:[ "demo.svg" ] actions
   with
   | Ok t -> t
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
 
 let last l = List.nth l (List.length l - 1)
 
 let invalid = function
-  | Vhs.Invalid msg -> msg
-  | e -> Alcotest.failf "not Invalid: %a" Vhs.pp_error e
+  | K7.Invalid msg -> msg
+  | e -> Alcotest.failf "not Invalid: %a" K7.pp_error e
 
 (* The vhs executable of the tests that run it, from [VHS_ORACLE]: the
    oracle alias sets it, runtest does not. *)

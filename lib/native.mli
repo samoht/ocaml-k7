@@ -12,7 +12,7 @@
     it wait. Output gets the time it arrives at within the action that runs,
     rounded down to a frame. *)
 
-(** The type for the reasons a tape does not play, as [Vhs.error] names them. *)
+(** The type for the reasons a tape does not play, as [K7.error] names them. *)
 type error =
   | Executable_not_found of string  (** An executable is not on the [PATH]. *)
   | Io of string  (** Any other I/O failure. *)

@@ -3,7 +3,7 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(** Tests for the regular expressions of {!Vhs.constructor-Screen}. *)
+(** Tests for the regular expressions of {!K7.constructor-Screen}. *)
 
 val suite : string * unit Alcotest.test_case list
 (** [suite] is the test suite. *)

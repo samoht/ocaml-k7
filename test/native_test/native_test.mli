@@ -8,7 +8,7 @@
     The terminal of {!settings} has 9 rows and 46 columns of 14 x 29 pixel
     cells. *)
 
-val settings : Vhs.setting list
+val settings : K7.setting list
 (** [settings] are the settings of an 800 x 400 image in a 22 pixel font. *)
 
 val cell_width : int
@@ -20,8 +20,8 @@ val cell_height : int
 val rows : int
 (** [rows] is the number of rows of the terminal of {!settings}. *)
 
-val svg : ?settings:Vhs.setting list -> (Vhs.duration * string) list -> string
-(** [svg ~settings output] is [Vhs.svg ~settings output] (defaults to
+val svg : ?settings:K7.setting list -> (K7.duration * string) list -> string
+(** [svg ~settings output] is [K7.svg ~settings output] (defaults to
     {!settings}), and fails the test on an error. *)
 
 val frames : string -> string list
@@ -48,29 +48,29 @@ val with_dir : (Eio_unix.Stdenv.base -> Eio.Fs.dir_ty Eio.Path.t -> 'a) -> 'a
 val play :
   Eio_unix.Stdenv.base ->
   Eio.Fs.dir_ty Eio.Path.t ->
-  Vhs.t ->
-  (unit, Vhs.error) result
-(** [play env cwd t] is {!Vhs.record} of [t] in [cwd], within a minute. *)
+  K7.t ->
+  (unit, K7.error) result
+(** [play env cwd t] is {!K7.record} of [t] in [cwd], within a minute. *)
 
 val record :
   ?image:string ->
   Eio_unix.Stdenv.base ->
   Eio.Fs.dir_ty Eio.Path.t ->
-  Vhs.t ->
-  (string, Vhs.error) result
+  K7.t ->
+  (string, K7.error) result
 (** [record ~image env cwd t] is {!play} of [t], then the image it wrote to
     [image] (defaults to ["demo.svg"]), relative to [cwd]. *)
 
-val tape : Vhs.action list -> Vhs.t
+val tape : K7.action list -> K7.t
 (** [tape actions] is the tape of [actions] with {!settings}, typing every 5ms,
     to [demo.svg]. *)
 
 val last : 'a list -> 'a
 (** [last l] is the last element of [l]. *)
 
-val invalid : Vhs.error -> string
-(** [invalid e] is the message of [Vhs.Invalid msg], the error of {!Vhs.tape};
-    it fails the test on any other error. *)
+val invalid : K7.error -> string
+(** [invalid e] is the message of [K7.Invalid msg], the error of {!K7.tape}; it
+    fails the test on any other error. *)
 
 val oracle : string option
 (** [oracle] is the [vhs] the oracle alias names in [VHS_ORACLE]. *)

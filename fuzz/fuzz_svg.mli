@@ -3,7 +3,7 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(** Fuzz tests for the SVG recordings of {!Vhs.svg}. *)
+(** Fuzz tests for the SVG recordings of {!K7.svg}. *)
 
 val suite : string * Alcobar.test_case list
 (** Test suite. *)

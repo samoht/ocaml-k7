@@ -25,12 +25,12 @@ let measure name ~runs f =
 let actions n =
   List.init n (fun i ->
       match i mod 4 with
-      | 0 -> Fmt.kstr Vhs.type' "echo %d" i
-      | 1 -> Vhs.key Enter
-      | 2 -> Vhs.wait Prompt
-      | _ -> Vhs.sleep (Ms 100))
+      | 0 -> Fmt.kstr K7.type' "echo %d" i
+      | 1 -> K7.key Enter
+      | 2 -> K7.wait Prompt
+      | _ -> K7.sleep (Ms 100))
 
-let tape actions = Result.get_ok (Vhs.tape ~outputs:[ "demo.gif" ] actions)
+let tape actions = Result.get_ok (K7.tape ~outputs:[ "demo.gif" ] actions)
 
 let cram n =
   String.concat "" (List.init n (fun i -> Fmt.str "  $ echo %d\n  %d\n" i i))
@@ -40,10 +40,10 @@ let long_text =
 
 let () =
   let t = tape (actions 10_000) in
-  measure "print 10k-item tape" ~runs:50 (fun () -> Vhs.to_string t);
+  measure "print 10k-item tape" ~runs:50 (fun () -> K7.to_string t);
   let src = cram 10_000 in
   measure "parse 10k-command cram" ~runs:50 (fun () -> K7_cli.Cram.parse src);
-  let typed = [ Vhs.type' long_text ] in
+  let typed = [ K7.type' long_text ] in
   measure "check 3-quote text" ~runs:200 (fun () -> tape typed);
   let t = tape typed in
-  measure "print 3-quote text" ~runs:200 (fun () -> Vhs.to_string t)
+  measure "print 3-quote text" ~runs:200 (fun () -> K7.to_string t)

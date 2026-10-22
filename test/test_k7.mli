@@ -3,7 +3,7 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(** Fuzz tests for {!Vhs}. *)
+(** Tests for {!K7} tapes. *)
 
-val suite : string * Alcobar.test_case list
-(** Test suite. *)
+val suite : string * unit Alcotest.test_case list
+(** [suite] is the test suite. *)

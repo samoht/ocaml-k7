@@ -6,11 +6,11 @@
 let expect = Alcotest.(check string)
 
 let tape actions =
-  match Vhs.tape ~outputs:[ "demo.gif" ] (actions @ [ Vhs.sleep (Ms 100) ]) with
+  match K7.tape ~outputs:[ "demo.gif" ] (actions @ [ K7.sleep (Ms 100) ]) with
   | Ok t -> t
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
 
-let str t = Fmt.str "%a" Vhs.pp t
+let str t = Fmt.str "%a" K7.pp t
 
 (* An in-memory pipe: Eio_mock has none. The empty string marks the end. *)
 module Pipe = struct
@@ -170,12 +170,12 @@ let run ?vhs ?(status = `Exited 3) writes t =
         in
         { run; on_signal = (fun _ -> Alcotest.fail "signalled") })
   in
-  Vhs.render ?vhs ~clock:(clock ()) ~proc ~cwd t
+  K7.render ?vhs ~clock:(clock ()) ~proc ~cwd t
 
 let failed expected = function
-  | Error (Vhs.Failed { output; status = `Exited 3; _ }) ->
+  | Error (K7.Failed { output; status = `Exited 3; _ }) ->
       expect "output" expected output
-  | Error e -> Alcotest.failf "unexpected error: %a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "unexpected error: %a" K7.pp_error e
   | Ok () -> Alcotest.fail "expected child failure"
 
 let test_byte_writes () =
@@ -183,7 +183,7 @@ let test_byte_writes () =
   failed text
     (run
        (List.init (String.length text) (fun i -> String.make 1 text.[i]))
-       (tape [ Vhs.raw "# hello" ]))
+       (tape [ K7.raw "# hello" ]))
 
 let test_split_utf8 () =
   let euro = "\xe2\x82\xac" in
@@ -198,7 +198,7 @@ let test_long_output () =
   let line i = Fmt.str "line %07d\n" i in
   let writes = List.init 100_000 line in
   match run writes (tape []) with
-  | Error (Vhs.Failed { output; _ }) ->
+  | Error (K7.Failed { output; _ }) ->
       Alcotest.(check bool)
         "at most 64 KiB kept" true
         (String.length output <= 65536);
@@ -210,14 +210,14 @@ let test_long_output () =
 let test_success () =
   match
     run ~status:(`Exited 0) ~vhs:"custom-vhs" [ "progress" ]
-      (tape [ Vhs.type' "echo hello\n" ])
+      (tape [ K7.type' "echo hello\n" ])
   with
   | Ok () -> ()
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
 
 let test_signal () =
   match run ~status:(`Signaled 9) [ "killed" ] (tape []) with
-  | Error (Vhs.Failed { vhs = "vhs"; status = `Signaled 9; output = "killed" })
+  | Error (K7.Failed { vhs = "vhs"; status = `Signaled 9; output = "killed" })
     ->
       ()
   | _ -> Alcotest.fail "lost signal, executable, or output"
@@ -239,7 +239,7 @@ let test_pp_error () =
     \  line 9\n\
     \  line 10\n\
     \  line 11"
-    (Fmt.str "%a" Vhs.pp_error
+    (Fmt.str "%a" K7.pp_error
        (Failed { vhs = "vhs"; status = `Exited 1; output = output ^ "\n\n" }))
 
 (* No escape sequence or control character of what vhs prints reaches the
@@ -264,13 +264,13 @@ let test_pp_error_controls () =
     \  50%\n\
     \  done\n\
     \  \xef\xbf\xbd"
-    (Fmt.str "%a" Vhs.pp_error
+    (Fmt.str "%a" K7.pp_error
        (Failed { vhs = "vhs"; status = `Exited 1; output }))
 
 (* The executable and the message come from paths, which can hold
    anything. *)
 let test_pp_error_names () =
-  let pp e = Fmt.str "%a" Vhs.pp_error e in
+  let pp e = Fmt.str "%a" K7.pp_error e in
   expect "executable" "executable not found: ab"
     (pp (Executable_not_found "a\027]0;x\007b"));
   expect "failed" "ab exited with code 1"
@@ -302,9 +302,9 @@ let test_spawn_errors () =
   List.iter
     (fun (error, expected) ->
       let proc = manager ~sw (fun _ _ -> raise (Eio.Process.err error)) in
-      match Vhs.render ~clock:(clock ()) ~proc ~cwd (tape []) with
+      match K7.render ~clock:(clock ()) ~proc ~cwd (tape []) with
       | Error e ->
-          expect "mapped spawn error" expected (Fmt.str "%a" Vhs.pp_error e)
+          expect "mapped spawn error" expected (Fmt.str "%a" K7.pp_error e)
       | Ok () -> Alcotest.fail "lost spawn failure")
     [
       (Executable_not_found "vhs", "executable not found: vhs");
@@ -321,32 +321,32 @@ let test_svg_refused () =
   List.iter
     (fun outputs ->
       let t =
-        match Vhs.tape ~outputs [ Vhs.sleep (Ms 100) ] with
+        match K7.tape ~outputs [ K7.sleep (Ms 100) ] with
         | Ok t -> t
-        | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+        | Error e -> Alcotest.failf "%a" K7.pp_error e
       in
-      match Vhs.render ~clock:(clock ()) ~proc ~cwd t with
+      match K7.render ~clock:(clock ()) ~proc ~cwd t with
       | Error (Unsupported _ as e) ->
           expect "names the output and record"
-            {|not recorded by vhs: Output "demo.svg": an SVG image, which Vhs.record records|}
-            (Fmt.str "%a" Vhs.pp_error e)
-      | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+            {|not recorded by vhs: Output "demo.svg": an SVG image, which K7.record records|}
+            (Fmt.str "%a" K7.pp_error e)
+      | Error e -> Alcotest.failf "%a" K7.pp_error e
       | Ok () -> Alcotest.fail "an SVG output rendered")
     [ [ "demo.svg" ]; [ "demo.gif"; "demo.svg" ]; [ "demo.svg"; "demo.txt" ] ];
   let t =
     match
-      Vhs.tape ~outputs:[ "demo.gif" ]
-        [ Vhs.raw {|Screenshot "shot.svg"|}; Vhs.sleep (Ms 100) ]
+      K7.tape ~outputs:[ "demo.gif" ]
+        [ K7.raw {|Screenshot "shot.svg"|}; K7.sleep (Ms 100) ]
     with
     | Ok t -> t
-    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+    | Error e -> Alcotest.failf "%a" K7.pp_error e
   in
-  match Vhs.render ~clock:(clock ()) ~proc ~cwd t with
+  match K7.render ~clock:(clock ()) ~proc ~cwd t with
   | Error (Unsupported _ as e) ->
       expect "names the screenshot and record"
-        {|not recorded by vhs: Screenshot "shot.svg": an SVG image, which Vhs.record takes|}
-        (Fmt.str "%a" Vhs.pp_error e)
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+        {|not recorded by vhs: Screenshot "shot.svg": an SVG image, which K7.record takes|}
+        (Fmt.str "%a" K7.pp_error e)
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok () -> Alcotest.fail "an SVG screenshot rendered"
 
 (* Cancelling render sends vhs SIGTERM, which it cleans up after, and waits
@@ -372,7 +372,7 @@ let test_cancel () =
   in
   (match
      Eio.Fiber.first
-       (fun () -> `Rendered (Vhs.render ~clock:(clock ()) ~proc ~cwd (tape [])))
+       (fun () -> `Rendered (K7.render ~clock:(clock ()) ~proc ~cwd (tape [])))
        (fun () -> `Cancelled)
    with
   | `Cancelled -> ()
@@ -400,7 +400,7 @@ let test_cancel_kill () =
   let clock = env#mono_clock in
   (match
      Eio.Fiber.first
-       (fun () -> `Rendered (Vhs.render ~clock ~proc ~cwd (tape [])))
+       (fun () -> `Rendered (K7.render ~clock ~proc ~cwd (tape [])))
        (fun () -> `Cancelled)
    with
   | `Cancelled -> ()
@@ -448,9 +448,9 @@ let test_publish_environment () =
           on_signal = (fun _ -> ());
         })
   in
-  match Vhs.render ~clock:(clock ()) ~proc ~cwd (tape []) with
+  match K7.render ~clock:(clock ()) ~proc ~cwd (tape []) with
   | Ok () -> ()
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
 
 let suite =
   ( "eio",

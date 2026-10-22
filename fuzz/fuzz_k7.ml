@@ -10,13 +10,13 @@ let max_ms = 9_223_372_036_854
 
 (* VHS records no frame without a visible action, so each tape ends with
    [last], which [tape] does not print. *)
-let last = Vhs.sleep (Ms 100)
+let last = K7.sleep (Ms 100)
 let last_line = "Sleep 100ms\n"
 
 let tape ?settings ?(outputs = outputs) actions =
-  Vhs.tape ?settings ~outputs (actions @ [ last ])
+  K7.tape ?settings ~outputs (actions @ [ last ])
   |> Result.map (fun t ->
-      let s = Vhs.to_string t in
+      let s = K7.to_string t in
       String.sub s 0 (String.length s - String.length last_line))
 
 (* The printed lines of the actions, without the [Output] line. *)
@@ -129,7 +129,7 @@ let test_type s =
   let typeable =
     String.is_valid_utf_8 s && not (has_control ~except:"\t\n" s)
   in
-  match lines [ Vhs.type' s ] with
+  match lines [ K7.type' s ] with
   | None -> if typeable then failf "rejected typeable %S" s
   | Some lines ->
       if not typeable then failf "accepted %S" s;
@@ -141,7 +141,7 @@ let test_type s =
 let test_total s t n =
   let c = Char.chr (abs n mod 256) in
   let actions =
-    Vhs.
+    K7.
       [
         type' s;
         key (Ctrl c);
@@ -155,7 +155,7 @@ let test_total s t n =
       ]
   in
   let settings =
-    Vhs.
+    K7.
       [
         Font_size n;
         Font_family s;
@@ -178,24 +178,24 @@ let test_total s t n =
       ([], [ s ], actions);
       (settings, outputs, []);
       ([], outputs, actions);
-      ([], [ t ^ ".gif" ], List.map (fun a -> Vhs.hidden [ a ]) actions);
+      ([], [ t ^ ".gif" ], List.map (fun a -> K7.hidden [ a ]) actions);
     ]
 
 (* [of_string] reads back what [to_string] prints, and a tape it reads
    prints as a tape it reads the same. *)
 let check_reads t =
-  let printed = Vhs.to_string t in
-  match Vhs.of_string printed with
+  let printed = K7.to_string t in
+  match K7.of_string printed with
   | Ok t' ->
-      let printed' = Vhs.to_string t' in
+      let printed' = K7.to_string t' in
       if printed' <> printed then failf "%S read back as %S" printed printed'
-  | Error e -> failf "%S not read back: %a" printed Vhs.pp_error e
+  | Error e -> failf "%S not read back: %a" printed K7.pp_error e
 
 let test_of_string s t n =
-  (match Vhs.of_string s with Ok t -> check_reads t | Error _ -> ());
+  (match K7.of_string s with Ok t -> check_reads t | Error _ -> ());
   let c = Char.chr (abs n mod 256) in
   let actions =
-    Vhs.
+    K7.
       [
         raw t;
         type' s;
@@ -206,24 +206,24 @@ let test_of_string s t n =
       ]
   in
   let settings =
-    Vhs.[ Font_size n; Font_family s; Columns n; Theme t; Typing_speed (Ms n) ]
+    K7.[ Font_size n; Font_family s; Columns n; Theme t; Typing_speed (Ms n) ]
   in
   List.iter
     (fun (settings, actions) ->
-      match Vhs.tape ~settings ~outputs actions with
+      match K7.tape ~settings ~outputs actions with
       | Ok t -> check_reads t
       | Error _ -> ())
-    [ (settings, actions); ([], actions); (settings, [ Vhs.type' s ]) ]
+    [ (settings, actions); ([], actions); (settings, [ K7.type' s ]) ]
 
 (* A sleep accepts [0] to [max_ms], a wait timeout [1] to [max_ms], and both
    print the value. *)
 let test_durations n =
   let in_range lo = n >= lo && n <= max_ms in
-  (match lines [ Vhs.sleep (Ms n) ] with
+  (match lines [ K7.sleep (Ms n) ] with
   | Some [ l ] -> check (in_range 0 && l = Fmt.str "Sleep %dms" n)
   | Some _ -> fail "sleep printed several lines"
   | None -> check (not (in_range 0)));
-  match lines [ Vhs.wait ~timeout:(Ms n) Prompt ] with
+  match lines [ K7.wait ~timeout:(Ms n) Prompt ] with
   | Some [ l ] -> check (in_range 1 && l = Fmt.str "Wait@%dms" n)
   | Some _ -> fail "wait printed several lines"
   | None -> check (not (in_range 1))
@@ -232,7 +232,7 @@ let test_durations n =
    delimiters, no line break, no odd run of backslashes before the closing
    slash; and the token's own text is an accepted pattern. *)
 let test_screen re =
-  match lines [ Vhs.wait (Screen re) ] with
+  match lines [ K7.wait (Screen re) ] with
   | None -> ()
   | Some [ l ] ->
       let prefix = "Wait+Screen /" in
@@ -248,19 +248,19 @@ let test_screen re =
       in
       if trailing (String.length body) mod 2 = 1 then
         failf "odd backslashes end %S" l;
-      if not (accepted [ Vhs.wait (Screen body) ]) then
+      if not (accepted [ K7.wait (Screen body) ]) then
         failf "%S written as the invalid %S" re body
   | Some _ -> fail "wait printed several lines"
 
 (* A raw line is printed as is; a [Set] other than [TypingSpeed] or a
    [Require] is refused after the first other action. *)
 let test_raw line =
-  (match lines [ Vhs.raw line ] with
+  (match lines [ K7.raw line ] with
   | Some [ l ] -> check (l = line)
   | Some [] -> check (line = "")
   | Some _ -> fail "raw printed several lines"
   | None -> ());
-  (match lines [ Vhs.raw line ] with
+  (match lines [ K7.raw line ] with
   | Some _ when List.mem (String.trim line) [ "Hide"; "Show" ] ->
       failf "accepted %S" line
   | _ -> ());
@@ -273,14 +273,14 @@ let test_raw line =
     | ("Set" | "Require") :: _ -> true
     | _ -> false
   in
-  if late && accepted [ Vhs.key Enter; Vhs.raw line ] then
+  if late && accepted [ K7.key Enter; K7.raw line ] then
     failf "accepted %S after an action" line
 
 (* [hidden] prints one [Hide] ... [Show] pair around the actions it hides,
    however deep the nesting, and nothing for no action. *)
 let test_hidden texts depth =
-  let actions = List.map Vhs.type' texts in
-  let rec nest d a = if d <= 0 then a else nest (d - 1) [ Vhs.hidden a ] in
+  let actions = List.map K7.type' texts in
+  let rec nest d a = if d <= 0 then a else nest (d - 1) [ K7.hidden a ] in
   match (lines actions, lines (nest (1 + (abs depth mod 4)) actions)) with
   | Some plain, Some nested ->
       if plain = [] then check (nested = [])
@@ -302,7 +302,7 @@ let test_sizes w h p =
        < 0
   in
   let ok = p >= 0 && fits w && fits h && encodes in
-  let settings = Vhs.[ Padding p; Width w; Height h ] in
+  let settings = K7.[ Padding p; Width w; Height h ] in
   match lines ~settings [] with
   | Some l ->
       check ok;
@@ -340,14 +340,14 @@ let test_output path suffix =
    [Io] prints a printable message without its format characters, and [Failed] at most ten lines of
    output under one header line. *)
 let test_pp_error s n =
-  let pp e = Fmt.str "%a" Vhs.pp_error e in
+  let pp e = Fmt.str "%a" K7.pp_error e in
   List.iter
     (fun e ->
       let printed = pp e in
       if has_control printed then failf "control character in %S" printed)
-    [ Vhs.Io s; Executable_not_found s ];
+    [ K7.Io s; Executable_not_found s ];
   if String.is_valid_utf_8 s && not (has_control s) then
-    check (pp (Vhs.Io s) = Unicode.strip_format s);
+    check (pp (K7.Io s) = Unicode.strip_format s);
   List.iter
     (fun status ->
       let printed = pp (Failed { vhs = "vhs"; status; output = s }) in
@@ -361,10 +361,10 @@ let test_pp_error s n =
 let test_unified_errors message last =
   List.iter
     (fun error ->
-      let output = Fmt.str "%a" Vhs.pp_error error in
+      let output = Fmt.str "%a" K7.pp_error error in
       check (String.is_valid_utf_8 output);
       if has_control output then failf "non-printable error: %S" output)
-    Vhs.
+    K7.
       [
         Invalid message;
         Unsupported message;
@@ -378,9 +378,9 @@ let test_keys c =
   let letter = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') in
   let ctrl = letter || String.contains {|@[\]^-.|} c in
   let alt = (letter && c <> 'm' && c <> 's') || String.contains "[]." c in
-  check (accepted [ Vhs.key (Ctrl c) ] = ctrl);
-  check (accepted [ Vhs.key (Alt c) ] = alt);
-  match lines [ Vhs.key (Alt c) ] with
+  check (accepted [ K7.key (Ctrl c) ] = ctrl);
+  check (accepted [ K7.key (Alt c) ] = alt);
+  match lines [ K7.key (Alt c) ] with
   | Some [ l ] -> check (String.equal l ("Alt+" ^ String.make 1 c))
   | Some _ -> fail "Alt printed several lines"
   | None -> ()
@@ -405,14 +405,14 @@ let test_settings n font =
    prints the same text. *)
 let test_order path text =
   match
-    Vhs.tape ~settings:[ Width 1000 ]
+    K7.tape ~settings:[ Width 1000 ]
       ~outputs:[ path ^ ".gif"; "x.txt" ]
-      [ Vhs.type' text ]
+      [ K7.type' text ]
   with
   | Error _ -> ()
   | Ok t -> (
-      let s = Vhs.to_string t in
-      check (String.equal s (Fmt.str "%a" Vhs.pp t));
+      let s = K7.to_string t in
+      check (String.equal s (Fmt.str "%a" K7.pp t));
       match String.split_on_char '\n' s with
       | o1 :: o2 :: set :: _ ->
           check (String.starts_with ~prefix:"Output " o1);
@@ -430,7 +430,7 @@ let vhs_validates t =
     ~finally:(fun () -> Sys.remove path)
     (fun () ->
       Out_channel.with_open_bin path (fun oc ->
-          output_string oc (Vhs.to_string t));
+          output_string oc (K7.to_string t));
       Sys.command
         (Filename.quote_command (Option.get oracle) [ "validate"; path ]
            ~stdout:"/dev/null" ~stderr:"/dev/null")
@@ -438,7 +438,7 @@ let vhs_validates t =
 
 (* Check against the real parser, rather than a second tape lexer. *)
 let test_validates text n =
-  let open Vhs in
+  let open K7 in
   let candidates =
     [
       ([], [ type' text ]);
@@ -454,11 +454,11 @@ let test_validates text n =
   in
   List.iter
     (fun (settings, actions) ->
-      match Vhs.tape ~settings ~outputs:[ "demo.gif" ] (actions @ [ last ]) with
+      match K7.tape ~settings ~outputs:[ "demo.gif" ] (actions @ [ last ]) with
       | Error _ -> ()
       | Ok t ->
           if not (vhs_validates t) then
-            failf "accepted tape rejected by VHS: %s" (Vhs.to_string t))
+            failf "accepted tape rejected by VHS: %s" (K7.to_string t))
     candidates
 
 (* Raw lines from VHS's own vocabulary reach the parser far more often than
@@ -483,23 +483,23 @@ let test_raw_validates words =
       words
     |> String.concat ""
   in
-  match Vhs.tape ~outputs:[ "demo.gif" ] [ Vhs.raw line; last ] with
+  match K7.tape ~outputs:[ "demo.gif" ] [ K7.raw line; last ] with
   | Error _ -> ()
   | Ok t ->
       if not (vhs_validates t) then
         failf "accepted raw line rejected by VHS: %S" line
 
 let test_padding_bound padding =
-  let settings = Vhs.[ Padding padding; Width 1200; Height 600 ] in
+  let settings = K7.[ Padding padding; Width 1200; Height 600 ] in
   let expected = padding >= 0 && padding <= 300 in
-  check (Result.is_ok (Vhs.tape ~settings ~outputs [ last ]) = expected)
+  check (Result.is_ok (K7.tape ~settings ~outputs [ last ]) = expected)
 
 (* With the default frame and padding, a nonnegative margin fits iff it
    is at most 240; no multiplication of a generated margin is needed. *)
 let test_raw_margin_bound margin =
   let margin = margin land max_int in
   let line = Fmt.str "Set Margin %d" margin in
-  let result = Vhs.tape ~outputs [ Vhs.raw line; last ] in
+  let result = K7.tape ~outputs [ K7.raw line; last ] in
   if Result.is_ok result <> (margin <= 240) then
     failf "wrong frame bounds for %S" line
 
@@ -514,23 +514,23 @@ let test_error_item n =
   let check_error prefix result =
     match result with
     | Ok _ -> failf "accepted invalid item %S" bad
-    | Error (Vhs.Invalid message) ->
+    | Error (K7.Invalid message) ->
         if not (String.starts_with ~prefix message) then
           failf "error does not identify %S: %s" bad message
-    | Error e -> failf "not Invalid: %a" Vhs.pp_error e
+    | Error e -> failf "not Invalid: %a" K7.pp_error e
   in
   check_error
     (Fmt.str "Output %a:" Quote.pp (bad ^ ".gif"))
-    (Vhs.tape ~outputs:[ "good.gif"; bad ^ ".gif" ] []);
+    (K7.tape ~outputs:[ "good.gif"; bad ^ ".gif" ] []);
   check_error
     (Fmt.str "Type %a:" Quote.pp bad)
-    (Vhs.tape ~outputs [ Vhs.type' "good"; Vhs.hidden [ Vhs.type' bad ] ]);
+    (K7.tape ~outputs [ K7.type' "good"; K7.hidden [ K7.type' bad ] ]);
   check_error
     (Fmt.str "Set FontFamily %a:" Quote.pp bad)
-    (Vhs.tape ~settings:[ Vhs.Font_family bad ] ~outputs []);
+    (K7.tape ~settings:[ K7.Font_family bad ] ~outputs []);
   check_error
     (Fmt.str "Wait+Screen %a:" Quote.pp bad)
-    (Vhs.tape ~outputs [ Vhs.wait (Screen bad) ])
+    (K7.tape ~outputs [ K7.wait (Screen bad) ])
 
 let with_dir fn =
   Eio_main.run @@ fun env ->
@@ -548,7 +548,7 @@ let save env path contents =
     Eio.Path.(Eio.Stdenv.fs env / path)
     contents
 
-let render_tape () = Result.get_ok (Vhs.tape ~outputs:[ "demo.gif" ] [ last ])
+let render_tape () = Result.get_ok (K7.tape ~outputs:[ "demo.gif" ] [ last ])
 
 (* Supply a manager environment without mutating the test runner's process. *)
 module Inherited = struct
@@ -605,12 +605,12 @@ let test_no_publication term =
       (Inherited.{ base; inherited }, Eio.Process.Pi.mgr (module Inherited))
   in
   match
-    Vhs.render ~vhs:executable
+    K7.render ~vhs:executable
       ~clock:(Eio.Stdenv.mono_clock env)
       ~proc ~cwd:(Eio.Stdenv.cwd env) (render_tape ())
   with
   | Ok () -> ()
-  | Error e -> failf "ambient environment enables upload: %a" Vhs.pp_error e
+  | Error e -> failf "ambient environment enables upload: %a" K7.pp_error e
 
 (* All documented ambient overrides are removed, while an unrelated
    application variable survives byte for byte. The stand-in reads its
@@ -653,12 +653,12 @@ let test_environment_isolation n =
       (Inherited.{ base; inherited }, Eio.Process.Pi.mgr (module Inherited))
   in
   match
-    Vhs.render ~vhs:executable
+    K7.render ~vhs:executable
       ~clock:(Eio.Stdenv.mono_clock env)
       ~proc ~cwd:(Eio.Stdenv.cwd env) (render_tape ())
   with
   | Ok () -> ()
-  | Error e -> failf "environment contract: %a" Vhs.pp_error e
+  | Error e -> failf "environment contract: %a" K7.pp_error e
 
 let test_cancel_reaps delay =
   with_dir @@ fun env path ->
@@ -675,7 +675,7 @@ let test_cancel_reaps delay =
         Eio.Fiber.first
           (fun () ->
             `Rendered
-              (Vhs.render ~vhs:executable
+              (K7.render ~vhs:executable
                  ~clock:(Eio.Stdenv.mono_clock env)
                  ~proc:(Eio.Stdenv.process_mgr env)
                  ~cwd:(Eio.Stdenv.cwd env) (render_tape ())))
@@ -704,8 +704,8 @@ let test_cancel_reaps delay =
 let nested_shells =
   lazy
     (Result.get_ok
-       (Vhs.tape ~settings:[ Typing_speed (Ms 1) ] ~outputs:[ "image.svg" ]
-          Vhs.
+       (K7.tape ~settings:[ Typing_speed (Ms 1) ] ~outputs:[ "image.svg" ]
+          K7.
             [
               type'
                 "echo $$ > shell.pid; bash --norc --noprofile -c 'echo $$ > \
@@ -760,7 +760,7 @@ let test_record_reaps delay callback_raises =
           Eio.Fiber.first
             (fun () ->
               `Recorded
-                (Vhs.record
+                (K7.record
                    ~clock:(Eio.Stdenv.mono_clock env)
                    ~proc:(Eio.Stdenv.process_mgr env)
                    ~cwd tape))
@@ -770,7 +770,7 @@ let test_record_reaps delay callback_raises =
   (match result with
   | `Cancelled -> ()
   | `Recorded (Ok _) -> fail "recording ended before cancellation"
-  | `Recorded (Error e) -> failf "%a" Vhs.pp_error e);
+  | `Recorded (Error e) -> failf "%a" K7.pp_error e);
   check_reaped cwd
 
 let test_exit_codes n =
@@ -901,9 +901,9 @@ let record_cram ?(setup = []) ?(prefix = []) env path src =
   let cram = Result.get_ok (K7_cli.Cram.parse src) in
   let t =
     Result.get_ok
-      (Vhs.tape
+      (K7.tape
          ~settings:
-           Vhs.
+           K7.
              [
                Shell Bash;
                Width 480;
@@ -914,16 +914,16 @@ let record_cram ?(setup = []) ?(prefix = []) env path src =
                Typing_speed (Ms 5);
              ]
          ~outputs:[ output ]
-         (prefix @ K7_cli.Cram.actions ~setup cram @ [ Vhs.sleep (Ms 3500) ]))
+         (prefix @ K7_cli.Cram.actions ~setup cram @ [ K7.sleep (Ms 3500) ]))
   in
   let result =
     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 40. (fun () ->
-        Vhs.render ?vhs:oracle
+        K7.render ?vhs:oracle
           ~clock:(Eio.Stdenv.mono_clock env)
           ~proc:(Eio.Stdenv.process_mgr env)
           ~cwd:(Eio.Stdenv.cwd env) t)
   in
-  (match result with Ok () -> () | Error e -> failf "%a" Vhs.pp_error e);
+  (match result with Ok () -> () | Error e -> failf "%a" K7.pp_error e);
   Eio.Path.load Eio.Path.(Eio.Stdenv.fs env / output)
 
 let check_output_order decoy =
@@ -963,7 +963,7 @@ let test_setup_prompt_hook n =
   save env script (Fmt.str "PROMPT_COMMAND='PS1=custom-%d'\n" (n land 255));
   let screen =
     record_cram ~setup:[ script ]
-      ~prefix:[ Vhs.raw "Set WaitTimeout 3s" ]
+      ~prefix:[ K7.raw "Set WaitTimeout 3s" ]
       env path "  $ echo READY\n"
   in
   if not (String.split_on_char '\n' screen |> List.mem "READY") then
@@ -972,13 +972,13 @@ let test_setup_prompt_hook n =
 (* A JSON theme is accepted or refused, never an exception, and a tape that
    accepts it plays it or names why not. *)
 let test_json_theme s =
-  let theme = Vhs.Theme ("{" ^ s) in
-  match Vhs.tape ~settings:[ theme ] ~outputs:[ "a.gif" ] [ Vhs.type' "x" ] with
+  let theme = K7.Theme ("{" ^ s) in
+  match K7.tape ~settings:[ theme ] ~outputs:[ "a.gif" ] [ K7.type' "x" ] with
   | Error _ -> ()
   | Ok _ -> (
-      match Vhs.svg ~settings:[ theme ] [] with
+      match K7.svg ~settings:[ theme ] [] with
       | Ok _ | Error (Unsupported _) -> ()
-      | Error e -> failf "%a" Vhs.pp_error e)
+      | Error e -> failf "%a" K7.pp_error e)
 
 (* Unknown JSON values are skipped by Go, but still count towards the
    maximum nesting depth of 10,000, including the theme's root object. *)
@@ -989,10 +989,10 @@ let test_json_depth n =
   in
   let expected = depth < 10_000 in
   let accepted =
-    match Vhs.tape ~settings:[ Theme theme ] ~outputs:[ "a.txt" ] [ last ] with
+    match K7.tape ~settings:[ Theme theme ] ~outputs:[ "a.txt" ] [ last ] with
     | Ok _ -> true
     | Error (Invalid _) -> false
-    | Error e -> failf "%a" Vhs.pp_error e
+    | Error e -> failf "%a" K7.pp_error e
   in
   if expected <> accepted then
     failf "JSON array depth %d: Go accepts=%b, tape accepts=%b" depth expected
@@ -1024,24 +1024,24 @@ let test_native_literal n =
   let command = "printf '%s' " ^ Filename.quote payload ^ " > received\n" in
   let tape =
     match
-      Vhs.tape
-        ~settings:Vhs.[ Typing_speed (Ms 1) ]
+      K7.tape
+        ~settings:K7.[ Typing_speed (Ms 1) ]
         ~outputs:[ path "out.svg" ]
-        Vhs.[ hidden [ type' command; wait Prompt ]; sleep (Ms 100) ]
+        K7.[ hidden [ type' command; wait Prompt ]; sleep (Ms 100) ]
     with
     | Ok tape -> tape
-    | Error e -> failf "%a" Vhs.pp_error e
+    | Error e -> failf "%a" K7.pp_error e
   in
   let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "received")) in
   (match
      Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 10. (fun () ->
-         Vhs.record
+         K7.record
            ~clock:(Eio.Stdenv.mono_clock env)
            ~proc:(Eio.Stdenv.process_mgr env)
            ~cwd tape)
    with
   | Ok _ -> ()
-  | Error e -> failf "%a" Vhs.pp_error e);
+  | Error e -> failf "%a" K7.pp_error e);
   check_eq ~pp:pp_string payload (Eio.Path.load Eio.Path.(cwd / "received"))
 
 (* Zero typing delay cannot make Wait match the prompt that preceded the
@@ -1050,27 +1050,27 @@ let test_zero_speed_prompt n =
   with_dir @@ fun env path ->
   let marker = Fmt.str "READY_%d" n in
   let settings =
-    Vhs.[ Width 400; Height 200; Font_size 10; Padding 10; Typing_speed (Ms 0) ]
+    K7.[ Width 400; Height 200; Font_size 10; Padding 10; Typing_speed (Ms 0) ]
   in
   let tape =
     match
-      Vhs.tape ~settings
+      K7.tape ~settings
         ~outputs:[ path "out.txt" ]
-        Vhs.[ sleep (Ms 100); type' ("echo " ^ marker ^ "\n"); wait Prompt ]
+        K7.[ sleep (Ms 100); type' ("echo " ^ marker ^ "\n"); wait Prompt ]
     with
     | Ok t -> t
-    | Error e -> failf "%a" Vhs.pp_error e
+    | Error e -> failf "%a" K7.pp_error e
   in
   let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "out.txt")) in
   (match
      Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 10. (fun () ->
-         Vhs.record
+         K7.record
            ~clock:(Eio.Stdenv.mono_clock env)
            ~proc:(Eio.Stdenv.process_mgr env)
            ~cwd tape)
    with
   | Ok () -> ()
-  | Error e -> failf "%a" Vhs.pp_error e);
+  | Error e -> failf "%a" K7.pp_error e);
   let output = Eio.Path.load Eio.Path.(cwd / "out.txt") in
   if not (contains ~sub:("\n" ^ marker ^ "\n>") output) then
     failf "prompt wait returned without the output of echo %s" marker
@@ -1086,24 +1086,24 @@ let test_output_preflight n =
   if n mod 2 = 0 then save env text "keep these bytes";
   let tape =
     match
-      Vhs.tape ~outputs:[ text; movie; image ]
-        Vhs.[ type' "touch played\n"; wait Prompt; sleep (Ms 100) ]
+      K7.tape ~outputs:[ text; movie; image ]
+        K7.[ type' "touch played\n"; wait Prompt; sleep (Ms 100) ]
     with
     | Ok t -> t
-    | Error e -> failf "%a" Vhs.pp_error e
+    | Error e -> failf "%a" K7.pp_error e
   in
   let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname image) in
   let clock = Eio.Stdenv.mono_clock env and proc = Eio.Stdenv.process_mgr env in
   let refused name item = function
-    | Error (Vhs.Unsupported why) ->
+    | Error (K7.Unsupported why) ->
         check (contains ~sub:name why);
         check (contains ~sub:item why)
-    | Error e -> failf "%a" Vhs.pp_error e
+    | Error e -> failf "%a" K7.pp_error e
     | Ok () -> fail "played incompatible outputs"
   in
-  refused "Vhs.record" image
-    (Vhs.render ~vhs:(path "missing-vhs") ~clock ~proc ~cwd tape);
-  refused "Vhs.render" movie (Vhs.record ~clock ~proc ~cwd tape);
+  refused "K7.record" image
+    (K7.render ~vhs:(path "missing-vhs") ~clock ~proc ~cwd tape);
+  refused "K7.render" movie (K7.record ~clock ~proc ~cwd tape);
   check (not (Sys.file_exists (path "played")));
   check (not (Sys.file_exists image));
   if n mod 2 = 0 then
@@ -1114,7 +1114,7 @@ let test_output_preflight n =
 let check_native_path env cwd marker (output, actual, rate) =
   if Sys.file_exists actual then Sys.remove actual;
   let settings =
-    Vhs.
+    K7.
       [
         Width 400;
         Height 200;
@@ -1126,8 +1126,8 @@ let check_native_path env cwd marker (output, actual, rate) =
   in
   let tape =
     match
-      Vhs.tape ~settings ~outputs:[ output ]
-        Vhs.
+      K7.tape ~settings ~outputs:[ output ]
+        K7.
           [
             type' ("echo " ^ marker ^ "\n");
             wait ~timeout:(Ms 5000) (Screen ("(?m)^" ^ marker ^ "$"));
@@ -1135,17 +1135,17 @@ let check_native_path env cwd marker (output, actual, rate) =
           ]
     with
     | Ok t -> t
-    | Error e -> failf "%a" Vhs.pp_error e
+    | Error e -> failf "%a" K7.pp_error e
   in
   (match
-     Vhs.record
+     K7.record
        ~clock:(Eio.Stdenv.mono_clock env)
        ~proc:(Eio.Stdenv.process_mgr env)
        ~cwd:(cwd :> Eio.Fs.dir_ty Eio.Path.t)
        tape
    with
   | Ok () -> ()
-  | Error e -> failf "%a" Vhs.pp_error e);
+  | Error e -> failf "%a" K7.pp_error e);
   check (Sys.file_exists actual);
   check
     (contains
@@ -1212,7 +1212,7 @@ let test_run_screen bytes =
          (List.of_seq (String.to_seq bytes)))
   in
   save env (path "out") text;
-  let settings = Vhs.[ Columns 40; Rows 6; Font_size 10 ] in
+  let settings = K7.[ Columns 40; Rows 6; Font_size 10 ] in
   let last svg =
     match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows:6 svg with
     | Ok frames -> List.nth frames (List.length frames - 1)
@@ -1220,18 +1220,18 @@ let test_run_screen bytes =
   in
   let crlf = String.concat "\r\n" (String.split_on_char '\n' text) in
   match
-    ( Vhs.run ~settings
+    ( K7.run ~settings
         ~clock:(Eio.Stdenv.mono_clock env)
         ~proc:(Eio.Stdenv.process_mgr env)
         ~cwd:Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "out"))
         [ "cat"; "out" ],
-      Vhs.svg ~settings [ (Ms 0, crlf) ] )
+      K7.svg ~settings [ (Ms 0, crlf) ] )
   with
   | Ok (image, `Exited 0), Ok expected ->
       if last image <> last expected then
         failf "%S shows as\n%s\nnot\n%s" text (last image) (last expected)
   | Ok (_, _), Ok _ -> fail "cat did not exit with 0"
-  | Error e, _ | _, Error e -> failf "%a" Vhs.pp_error e
+  | Error e, _ | _, Error e -> failf "%a" K7.pp_error e
 
 let with_processes =
   [

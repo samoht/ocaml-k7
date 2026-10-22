@@ -24,11 +24,11 @@ let has_control s =
    its tape one VHS can record. *)
 let printed ?(setup = []) cram =
   match
-    Vhs.tape ~outputs:[ "x.gif" ]
-      (Cram.actions ~setup cram @ [ Vhs.sleep (Ms 100) ])
+    K7.tape ~outputs:[ "x.gif" ]
+      (Cram.actions ~setup cram @ [ K7.sleep (Ms 100) ])
   with
-  | Ok t -> Fmt.str "%a" Vhs.pp t
-  | Error e -> failf "rejected actions: %a" Vhs.pp_error e
+  | Ok t -> Fmt.str "%a" K7.pp t
+  | Error e -> failf "rejected actions: %a" K7.pp_error e
 
 (* The text the printed tape types, one string per [Enter]. *)
 let submitted tape =

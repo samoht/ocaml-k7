@@ -48,10 +48,10 @@ let settings =
   let make cols rows font_size theme =
     List.filter_map Fun.id
       [
-        Option.map (fun n -> Vhs.Columns n) cols;
-        Option.map (fun n -> Vhs.Rows n) rows;
-        Option.map (fun n -> Vhs.Font_size n) font_size;
-        Option.map (fun t -> Vhs.Theme t) theme;
+        Option.map (fun n -> K7.Columns n) cols;
+        Option.map (fun n -> K7.Rows n) rows;
+        Option.map (fun n -> K7.Font_size n) font_size;
+        Option.map (fun t -> K7.Theme t) theme;
       ]
   in
   Term.(const make $ cols $ rows $ font_size $ theme)
@@ -153,7 +153,7 @@ let write flow s =
 (* Like a process killed by SIGPIPE, which Eio ignores, [--print] stops
    quietly when the reader goes away, as in [k7 cram --print | head]. *)
 let print_tape env t =
-  match write (Eio.Stdenv.stdout env) (Vhs.to_string t) with
+  match write (Eio.Stdenv.stdout env) (K7.to_string t) with
   | Ok () | Error None -> Ok ()
   | Error (Some msg) -> Fmt.error "standard output: %s" msg
 

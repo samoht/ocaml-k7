@@ -9,7 +9,7 @@ let test_record () =
   with_dir @@ fun env cwd ->
   let t =
     tape
-      Vhs.
+      K7.
         [
           type' "echo hello\n";
           wait Prompt;
@@ -19,7 +19,7 @@ let test_record () =
         ]
   in
   match record env cwd t with
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok s ->
       let saved = Eio.Path.load Eio.Path.(cwd / "demo.svg") in
       Alcotest.(check string) "written to the output" s saved;
@@ -42,17 +42,17 @@ let test_zero_speed_prompt () =
   with_dir @@ fun env cwd ->
   let t =
     match
-      Vhs.tape
+      K7.tape
         ~settings:(Typing_speed (Ms 0) :: settings)
         ~outputs:[ "demo.txt" ]
-        Vhs.[ sleep (Ms 100); type' "echo READY\n"; wait Prompt ]
+        K7.[ sleep (Ms 100); type' "echo READY\n"; wait Prompt ]
     with
     | Ok t -> t
-    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+    | Error e -> Alcotest.failf "%a" K7.pp_error e
   in
   (match play env cwd t with
   | Ok () -> ()
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+  | Error e -> Alcotest.failf "%a" K7.pp_error e);
   check_contains "completed command before the prompt wait returns"
     ~sub:"\nREADY\n>"
     (last_screen (Eio.Path.load Eio.Path.(cwd / "demo.txt")))
@@ -64,7 +64,7 @@ let test_screenshot_clash () =
   with_dir @@ fun env cwd ->
   let t =
     tape
-      Vhs.
+      K7.
         [
           type' "echo hi\n";
           wait Prompt;
@@ -79,7 +79,7 @@ let test_screenshot_clash () =
       Alcotest.(check bool)
         "nothing written" false
         (Eio.Path.is_file Eio.Path.(cwd / "demo.svg"))
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok () ->
       Alcotest.failf "Ok, and demo.svg is the still:\n%s"
         (Eio.Path.load Eio.Path.(cwd / "demo.svg"))
@@ -87,36 +87,36 @@ let test_screenshot_clash () =
 let test_timeout () =
   with_dir @@ fun env cwd ->
   let t =
-    tape Vhs.[ type' "echo hi\n"; wait ~timeout:(Ms 300) (Screen "never") ]
+    tape K7.[ type' "echo hi\n"; wait ~timeout:(Ms 300) (Screen "never") ]
   in
   match record env cwd t with
   | Error (Timeout { wait; line; last } as e) ->
       Alcotest.(check string) "wait" "Wait+Screen@300ms /never/" wait;
-      (* The line of [Vhs.to_string t]: settings, then Type and Enter. *)
+      (* The line of [K7.to_string t]: settings, then Type and Enter. *)
       Alcotest.(check string)
         "line" "Wait+Screen@300ms /never/"
-        (List.nth (String.split_on_char '\n' (Vhs.to_string t)) (line - 1));
+        (List.nth (String.split_on_char '\n' (K7.to_string t)) (line - 1));
       check_contains "last screen" ~sub:"> echo hi\nhi" last;
       check_contains "names the line" ~sub:(Fmt.str "line %d," line)
-        (Fmt.str "%a" Vhs.pp_error e);
+        (Fmt.str "%a" K7.pp_error e);
       check_contains "how to wait longer"
         ~sub:"~timeout or the tape a Set WaitTimeout"
-        (Fmt.str "%a" Vhs.pp_error e)
+        (Fmt.str "%a" K7.pp_error e)
   | Ok _ -> Alcotest.fail "no timeout"
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
 
 (* A shell that exits while a wait waits for it fails the wait at once,
    with its status, not after the wait's timeout. *)
 let test_shell_exit () =
   with_dir @@ fun env cwd ->
-  let t = tape Vhs.[ type' "exit 3\n"; wait ~timeout:(Ms 20_000) Prompt ] in
+  let t = tape K7.[ type' "exit 3\n"; wait ~timeout:(Ms 20_000) Prompt ] in
   let start = Unix.gettimeofday () in
   (match record env cwd t with
   | Error (Exited { status = `Exited 3; wait = "Wait@20000ms"; _ } as e) ->
       check_contains "message" ~sub:"the shell exited (status 3) while waiting"
-        (Fmt.str "%a" Vhs.pp_error e)
+        (Fmt.str "%a" K7.pp_error e)
   | Ok _ -> Alcotest.fail "no error"
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+  | Error e -> Alcotest.failf "%a" K7.pp_error e);
   Alcotest.(check bool) "at once" true (Unix.gettimeofday () -. start < 10.)
 
 (* A wait's own timeout takes precedence over a raw [Set WaitTimeout], which
@@ -128,14 +128,14 @@ let test_timeout_precedence () =
     (match record env cwd t with
     | Error (Timeout _) -> ()
     | Ok _ -> Alcotest.fail "no timeout"
-    | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+    | Error e -> Alcotest.failf "%a" K7.pp_error e);
     Alcotest.(check bool)
       "timed out in time" true
       (Unix.gettimeofday () -. start < within)
   in
   times_out ~within:30.
     (tape
-       Vhs.
+       K7.
          [
            raw "Set WaitTimeout 60s";
            type' "echo hi\n";
@@ -143,7 +143,7 @@ let test_timeout_precedence () =
          ]);
   times_out ~within:30.
     (tape
-       Vhs.
+       K7.
          [
            raw "Set WaitTimeout 300ms"; type' "echo hi\n"; wait (Screen "never");
          ])
@@ -152,7 +152,7 @@ let test_hidden () =
   with_dir @@ fun env cwd ->
   let t =
     tape
-      Vhs.
+      K7.
         [
           hidden [ type' "secret=1; clear\n"; wait Prompt ];
           type' "echo shown\n";
@@ -161,7 +161,7 @@ let test_hidden () =
         ]
   in
   match record env cwd t with
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok s ->
       Alcotest.(check bool)
         "hidden typing not shown" false (contains ~sub:"secret" s);
@@ -175,7 +175,7 @@ let test_scroll () =
   with_dir @@ fun env cwd ->
   let t =
     tape
-      Vhs.
+      K7.
         [
           type' "seq 1 20\n";
           wait (Screen "20");
@@ -187,7 +187,7 @@ let test_scroll () =
         ]
   in
   match record env cwd t with
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok s ->
       Alcotest.(check string)
         "scrolled"
@@ -200,7 +200,7 @@ let test_scroll_far () =
   with_dir @@ fun env cwd ->
   let t =
     tape
-      Vhs.
+      K7.
         [
           type' "seq 1 30\n";
           wait (Line "^>$");
@@ -210,7 +210,7 @@ let test_scroll_far () =
         ]
   in
   match record env cwd t with
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok s ->
       Alcotest.(check string)
         "scrolled"
@@ -222,10 +222,10 @@ let test_scroll_far () =
    [clear] empties. *)
 let test_buffer () =
   with_dir @@ fun env cwd ->
-  let shows re = Vhs.wait ~timeout:(Ms 5000) (Screen re) in
+  let shows re = K7.wait ~timeout:(Ms 5000) (Screen re) in
   let t =
     tape
-      Vhs.
+      K7.
         [
           type' "seq 1 30\n";
           shows {|^> seq 1 30\n1\n2\n|};
@@ -240,7 +240,7 @@ let test_buffer () =
         ]
   in
   match record env cwd t with
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok s ->
       Alcotest.(check string)
         "no scrollback after clear"
@@ -250,10 +250,10 @@ let test_buffer () =
 (* The lines [clear] erases stay erased once the scrollback is full. *)
 let test_full_scrollback () =
   with_dir @@ fun env cwd ->
-  let shows re = Vhs.wait ~timeout:(Ms 10000) (Screen re) in
+  let shows re = K7.wait ~timeout:(Ms 10000) (Screen re) in
   let t =
     tape
-      Vhs.
+      K7.
         [
           type' "seq 1 9995; clear\n";
           shows {|^>\n\n|};
@@ -263,7 +263,7 @@ let test_full_scrollback () =
         ]
   in
   match record env cwd t with
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok _ -> ()
 
 (* After a scroll, a line wait reads the line as far above the cursor as
@@ -272,7 +272,7 @@ let test_scrolled_line () =
   with_dir @@ fun env cwd ->
   let t =
     tape
-      Vhs.
+      K7.
         [
           type' "seq 1 30\n";
           wait (Line "^>$");
@@ -281,7 +281,7 @@ let test_scrolled_line () =
         ]
   in
   match record env cwd t with
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok _ -> ()
 
 (* A line ends at its last character that JavaScript's [trimEnd] keeps,
@@ -290,14 +290,14 @@ let test_trim () =
   with_dir @@ fun env cwd ->
   let t =
     tape
-      Vhs.
+      K7.
         [
           type' "printf 'ab\\302\\240\\342\\200\\203'; sleep 3\n";
           wait ~timeout:(Ms 2000) (Line "^ab$");
         ]
   in
   match record env cwd t with
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok _ -> ()
 
 (* The text output holds the first lines of the buffer after each command
@@ -307,13 +307,13 @@ let test_text () =
   with_dir @@ fun env cwd ->
   let tape outputs actions =
     match
-      Vhs.tape ~settings:(Vhs.Typing_speed (Ms 5) :: settings) ~outputs actions
+      K7.tape ~settings:(K7.Typing_speed (Ms 5) :: settings) ~outputs actions
     with
     | Ok t -> t
-    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+    | Error e -> Alcotest.failf "%a" K7.pp_error e
   in
   let actions =
-    Vhs.
+    K7.
       [
         hidden [ type' "x=1\n"; wait Prompt ];
         type' "sleep 1; echo hi";
@@ -323,7 +323,7 @@ let test_text () =
   in
   let text path = screens (Eio.Path.load Eio.Path.(cwd / path)) in
   (match record env cwd (tape [ "demo.svg"; "demo.txt" ] actions) with
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok _ -> (
       (* The echo of the typing can lag behind it, so the screens after the
          typing and the key are left out. *)
@@ -338,9 +338,9 @@ let test_text () =
   match
     record env cwd
       (tape [ "demo.svg" ]
-         (Vhs.raw "Sleep 0" :: Vhs.raw "Output \"later.ascii\"" :: actions))
+         (K7.raw "Sleep 0" :: K7.raw "Output \"later.ascii\"" :: actions))
   with
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok _ ->
       Alcotest.(check int)
         "from the output" 5
@@ -350,9 +350,9 @@ let test_text () =
 let test_window_bar () =
   with_dir @@ fun env cwd ->
   let bar raws =
-    match record env cwd (tape (List.map Vhs.raw raws @ [ Vhs.type' "x" ])) with
+    match record env cwd (tape (List.map K7.raw raws @ [ K7.type' "x" ])) with
     | Ok s -> s
-    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+    | Error e -> Alcotest.failf "%a" K7.pp_error e
   in
   let s = bar [ "Set WindowBar Colorful" ] in
   List.iter
@@ -384,9 +384,9 @@ let test_margin_fill () =
     Eio.Path.(cwd / "m.png")
     "\x89PNG\r\n\x1a\nabcd";
   let play raws =
-    match record env cwd (tape (List.map Vhs.raw raws @ [ Vhs.type' "x" ])) with
+    match record env cwd (tape (List.map K7.raw raws @ [ K7.type' "x" ])) with
     | Ok s -> s
-    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+    | Error e -> Alcotest.failf "%a" K7.pp_error e
   in
   let s = play [ "Set Margin 20"; {|Set MarginFill "m.png"|} ] in
   check_contains "image"
@@ -418,15 +418,14 @@ let test_margin_fill_refused () =
   List.iter
     (fun (raw, sub) ->
       let t =
-        tape
-          [ Vhs.raw "Set Margin 20"; Vhs.raw raw; Vhs.type' "touch played\n" ]
+        tape [ K7.raw "Set Margin 20"; K7.raw raw; K7.type' "touch played\n" ]
       in
       match record env cwd t with
       | Error (Invalid msg) ->
           check_contains raw ~sub msg;
           Alcotest.(check bool) "not played" false (Eio.Path.is_file played)
       | Ok _ -> Alcotest.failf "%s played" raw
-      | Error e -> Alcotest.failf "%s: %a" raw Vhs.pp_error e)
+      | Error e -> Alcotest.failf "%s: %a" raw K7.pp_error e)
     [
       ({|Set MarginFill "text.png"|}, "not a PNG, JPEG, GIF, WebP or BMP image");
       ({|Set MarginFill "leak.png"|}, "not a PNG, JPEG, GIF, WebP or BMP image");
@@ -453,23 +452,23 @@ let test_output_dirs () =
   let refused name ~engine ~outputs ~raws sub =
     let t =
       match
-        Vhs.tape ~settings ~outputs
-          (List.map Vhs.raw raws @ Vhs.[ type' "touch played\n"; wait Prompt ])
+        K7.tape ~settings ~outputs
+          (List.map K7.raw raws @ K7.[ type' "touch played\n"; wait Prompt ])
       with
       | Ok t -> t
-      | Error e -> Alcotest.failf "%s: %a" name Vhs.pp_error e
+      | Error e -> Alcotest.failf "%s: %a" name K7.pp_error e
     in
     match engine t with
-    | Error (Vhs.Io msg) ->
+    | Error (K7.Io msg) ->
         check_contains name ~sub msg;
         Alcotest.(check bool)
           (name ^ ": not played") false (Eio.Path.is_file played)
     | Ok () -> Alcotest.failf "%s: Ok" name
-    | Error e -> Alcotest.failf "%s: %a" name Vhs.pp_error e
+    | Error e -> Alcotest.failf "%s: %a" name K7.pp_error e
   in
   let record = play env cwd in
   let render t =
-    Vhs.render ~vhs:fake
+    K7.render ~vhs:fake
       ~clock:(Eio.Stdenv.mono_clock env)
       ~proc:(Eio.Stdenv.process_mgr env)
       ~cwd t
@@ -491,16 +490,16 @@ let test_output_dirs () =
   (* VHS creates the directories of the other outputs, and so does record. *)
   let t =
     match
-      Vhs.tape ~settings
+      K7.tape ~settings
         ~outputs:[ "a/b/demo.svg"; "c/demo.txt" ]
-        Vhs.[ type' "true\n"; wait Prompt ]
+        K7.[ type' "true\n"; wait Prompt ]
     with
     | Ok t -> t
-    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+    | Error e -> Alcotest.failf "%a" K7.pp_error e
   in
   (match record t with
   | Ok () -> ()
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+  | Error e -> Alcotest.failf "%a" K7.pp_error e);
   Alcotest.(check bool)
     "created" true
     (Eio.Path.is_file Eio.Path.(cwd / "a" / "b" / "demo.svg")
@@ -519,16 +518,16 @@ let test_zsh () =
   with_dir @@ fun env cwd ->
   let t =
     match
-      Vhs.tape
+      K7.tape
         ~settings:(Shell Zsh :: Typing_speed (Ms 5) :: settings)
         ~outputs:[ "demo.svg" ]
-        Vhs.[ type' "echo $ZSH_NAME\n"; wait Prompt; sleep (Ms 100) ]
+        K7.[ type' "echo $ZSH_NAME\n"; wait Prompt; sleep (Ms 100) ]
     with
     | Ok t -> t
-    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+    | Error e -> Alcotest.failf "%a" K7.pp_error e
   in
   match record env cwd t with
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok s ->
       check_contains "prompt colour" ~sub:{|fill="#5b56e0">&gt;|} s;
       Alcotest.(check string)
@@ -544,10 +543,10 @@ let test_fish () =
   with_dir @@ fun env cwd ->
   let t =
     match
-      Vhs.tape
+      K7.tape
         ~settings:(Shell Fish :: Typing_speed (Ms 5) :: settings)
         ~outputs:[ "demo.svg" ]
-        Vhs.
+        K7.
           [
             type' "echo fish-$status\n";
             wait ~timeout:(Ms 10000) (Screen "(?m)^fish-0$");
@@ -556,10 +555,10 @@ let test_fish () =
           ]
     with
     | Ok t -> t
-    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+    | Error e -> Alcotest.failf "%a" K7.pp_error e
   in
   match record env cwd t with
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok s ->
       let text = last (frames s) in
       Alcotest.(check bool) "no greeting" false (contains ~sub:"Welcome" text);
@@ -573,7 +572,7 @@ let test_replies () =
   with_dir @@ fun env cwd ->
   let t =
     tape
-      Vhs.
+      K7.
         [
           type'
             {|stty -echo; printf '\033[c'; IFS= read -rd c da; stty echo; echo "da${da#*[}"|};
@@ -582,7 +581,7 @@ let test_replies () =
         ]
   in
   match record env cwd t with
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok _ -> ()
 
 (* Keys send what xterm sends: the line editor sees arrows, control and alt
@@ -591,7 +590,7 @@ let test_keys () =
   with_dir @@ fun env cwd ->
   let t =
     tape
-      Vhs.
+      K7.
         [
           type' "echo ac";
           key Left;
@@ -605,7 +604,7 @@ let test_keys () =
         ]
   in
   match record env cwd t with
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok s ->
       Alcotest.(check string)
         "edited"
@@ -618,7 +617,7 @@ let test_modified_arrows () =
   with_dir @@ fun env cwd ->
   let t =
     tape
-      Vhs.
+      K7.
         [
           type' "stty -echo; cat -v; stty echo\n";
           sleep (Ms 300);
@@ -633,7 +632,7 @@ let test_modified_arrows () =
         ]
   in
   match record env cwd t with
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok s ->
       check_contains "bytes" ~sub:"^[[1;5A^[[1;7A^[[1;6B^[[1;8D"
         (last (frames s))
@@ -644,28 +643,28 @@ let test_bounds () =
   with_dir @@ fun env cwd ->
   let play ?settings raws =
     match
-      Vhs.tape ?settings ~outputs:[ "demo.svg" ]
-        (List.map Vhs.raw raws @ [ Vhs.type' "x" ])
+      K7.tape ?settings ~outputs:[ "demo.svg" ]
+        (List.map K7.raw raws @ [ K7.type' "x" ])
     with
     | Ok t -> record env cwd t
-    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+    | Error e -> Alcotest.failf "%a" K7.pp_error e
   in
   List.iter
     (fun (settings, raws) ->
       match play ~settings raws with
       | Error (Unsupported _) -> ()
       | Ok _ -> Alcotest.failf "%s played" (String.concat "; " raws)
-      | Error e -> Alcotest.failf "%a" Vhs.pp_error e)
+      | Error e -> Alcotest.failf "%a" K7.pp_error e)
     [
-      ([ Vhs.Columns 2000 ], [ "Set LetterSpacing 1000000000000000000" ]);
+      ([ K7.Columns 2000 ], [ "Set LetterSpacing 1000000000000000000" ]);
       ([], [ "Set LineHeight 1000000000000000000" ]);
-      ([ Vhs.Columns 2000 ], [ "Set LetterSpacing 100" ]);
+      ([ K7.Columns 2000 ], [ "Set LetterSpacing 100" ]);
       ([], [ "Set PlaybackSpeed 0.0000000001" ]);
     ];
   (match play [ "Set LoopOffset 1" ^ String.make 300 '0' ] with
   | Ok s ->
       Alcotest.(check bool) "valid delay" false (contains ~sub:"delay:--" s)
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+  | Error e -> Alcotest.failf "%a" K7.pp_error e);
   check_contains "late frame" ~sub:"99.9999%"
     (svg [ (Ms 0, "a"); (Ms 9_000_000_000_000, "b") ])
 
@@ -673,16 +672,16 @@ let test_unsupported () =
   with_dir @@ fun env cwd ->
   let t =
     match
-      Vhs.tape ~settings:[ Shell Nushell ] ~outputs:[ "demo.svg" ]
-        [ Vhs.type' "x" ]
+      K7.tape ~settings:[ Shell Nushell ] ~outputs:[ "demo.svg" ]
+        [ K7.type' "x" ]
     with
     | Ok t -> t
-    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+    | Error e -> Alcotest.failf "%a" K7.pp_error e
   in
   match record env cwd t with
   | Error (Unsupported why) -> check_contains "names the line" ~sub:"Shell" why
   | Ok _ -> Alcotest.fail "played nushell"
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
 
 (* A screenshot of an [.svg] path is a still SVG image of the next frame at
    that path, also when it is taken while hidden. *)
@@ -690,7 +689,7 @@ let test_screenshot () =
   with_dir @@ fun env cwd ->
   let t =
     tape
-      Vhs.
+      K7.
         [
           hidden
             [ raw "Screenshot \"hidden.svg\""; type' "true\n"; wait Prompt ];
@@ -702,7 +701,7 @@ let test_screenshot () =
         ]
   in
   match record env cwd t with
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok _ ->
       let still name = Eio.Path.load Eio.Path.(cwd / name) in
       let s = still "shot.svg" in
@@ -730,17 +729,17 @@ let test_output_paths () =
   let cwd = Eio.Path.open_dir ~sw Eio.Path.(top / "sub") in
   let t =
     match
-      Vhs.tape
-        ~settings:(Vhs.Typing_speed (Ms 5) :: settings)
+      K7.tape
+        ~settings:(K7.Typing_speed (Ms 5) :: settings)
         ~outputs:[ "../up.svg"; Filename.concat top_dir "abs.txt" ]
-        Vhs.[ raw {|Source "../inc.tape"|}; sleep (Ms 100) ]
+        K7.[ raw {|Source "../inc.tape"|}; sleep (Ms 100) ]
     with
     | Ok t -> t
-    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+    | Error e -> Alcotest.failf "%a" K7.pp_error e
   in
   (match play env (cwd :> Eio.Fs.dir_ty Eio.Path.t) t with
   | Ok () -> ()
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+  | Error e -> Alcotest.failf "%a" K7.pp_error e);
   Alcotest.(check string)
     "image"
     (screen [ "> echo sourced"; "sourced"; ">" ])
@@ -757,40 +756,40 @@ let test_render_outputs () =
     (fun (outputs, raws, expected) ->
       let t =
         match
-          Vhs.tape ~settings ~outputs
-            (List.map Vhs.raw raws @ Vhs.[ type' "touch played\n"; wait Prompt ])
+          K7.tape ~settings ~outputs
+            (List.map K7.raw raws @ K7.[ type' "touch played\n"; wait Prompt ])
         with
         | Ok t -> t
-        | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+        | Error e -> Alcotest.failf "%a" K7.pp_error e
       in
       (match play env cwd t with
       | Error (Unsupported _ as e) ->
           Alcotest.(check string)
             "names the output and render" expected
-            (Fmt.str "%a" Vhs.pp_error e)
-      | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+            (Fmt.str "%a" K7.pp_error e)
+      | Error e -> Alcotest.failf "%a" K7.pp_error e
       | Ok () -> Alcotest.failf "%s recorded natively" (List.hd outputs));
       Alcotest.(check bool) "nothing played" false (Eio.Path.is_file played))
     [
       ( [ "demo.svg"; "demo.gif" ],
         [],
-        {|not recorded natively: Output "demo.gif": a GIF, which Vhs.render records|}
+        {|not recorded natively: Output "demo.gif": a GIF, which K7.render records|}
       );
       ( [ "demo.mp4" ],
         [],
-        {|not recorded natively: Output "demo.mp4": an MP4 video, which Vhs.render records|}
+        {|not recorded natively: Output "demo.mp4": an MP4 video, which K7.render records|}
       );
       ( [ "frames/" ],
         [],
-        {|not recorded natively: Output "frames/": PNG frames, which Vhs.render records|}
+        {|not recorded natively: Output "frames/": PNG frames, which K7.render records|}
       );
       ( [ "demo.svg" ],
         [ {|Output "demo.webm"|} ],
-        {|not recorded natively: Output "demo.webm": a WebM video, which Vhs.render records|}
+        {|not recorded natively: Output "demo.webm": a WebM video, which K7.render records|}
       );
       ( [ "demo.svg" ],
         [ {|Screenshot "shot.png"|} ],
-        {|not recorded natively: Screenshot "shot.png": a PNG image, which Vhs.render takes|}
+        {|not recorded natively: Screenshot "shot.png": a PNG image, which K7.render takes|}
       );
     ]
 
@@ -809,7 +808,7 @@ let test_source () =
   (* The tape inline would be refused for its escape. *)
   file "control.tape" "Type \"\027]8;;x\007click\"\n";
   let play name =
-    record env cwd (tape Vhs.[ raw ("Source " ^ name); sleep (Ms 100) ])
+    record env cwd (tape K7.[ raw ("Source " ^ name); sleep (Ms 100) ])
   in
   (match play {|"inc.tape"|} with
   | Ok s ->
@@ -821,13 +820,13 @@ let test_source () =
         "no output" false
         (Sys.file_exists
            (Option.get (Eio.Path.native Eio.Path.(cwd / "inc.txt"))))
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+  | Error e -> Alcotest.failf "%a" K7.pp_error e);
   List.iter
     (fun (name, sub) ->
       match play name with
       | Error (Invalid why | Io why) -> check_contains name ~sub why
       | Ok _ -> Alcotest.failf "%s played" name
-      | Error e -> Alcotest.failf "%a" Vhs.pp_error e)
+      | Error e -> Alcotest.failf "%a" K7.pp_error e)
     [
       ({|"nested.tape"|}, "nested");
       ({|"empty.tape"|}, "empty");
@@ -841,7 +840,7 @@ let test_source () =
    sizes the terminal: one per [Set], [Output] and [Require] line from the
    line of the text output, but [Set Shell]. *)
 let after_settings tape txt =
-  let lines = String.split_on_char '\n' (Vhs.to_string tape) in
+  let lines = String.split_on_char '\n' (K7.to_string tape) in
   let rec header = function
     | l :: rest when String.starts_with ~prefix:"Set Shell " l -> header rest
     | l :: rest
@@ -877,28 +876,26 @@ let after_settings tape txt =
    VHS reads before it sizes the terminal. It is the native image. *)
 let same_text env cwd (vhs_tape, native_tape) =
   let clock = Eio.Stdenv.mono_clock env and proc = Eio.Stdenv.process_mgr env in
-  (match Vhs.render ?vhs:oracle ~clock ~proc ~cwd vhs_tape with
+  (match K7.render ?vhs:oracle ~clock ~proc ~cwd vhs_tape with
   | Ok () -> ()
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+  | Error e -> Alcotest.failf "%a" K7.pp_error e);
   let vhs = Eio.Path.load Eio.Path.(cwd / "oracle.txt") in
   match record ~image:"oracle.svg" env cwd native_tape with
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok s ->
       let native = Eio.Path.load Eio.Path.(cwd / "oracle.txt") in
       Alcotest.(check string) "text output" (after_settings vhs_tape vhs) native;
       (native, s)
 
-(* [oracle_tape ~settings actions] are the tapes of [actions] for {!Vhs.render},
-   to [oracle.txt], and for {!Vhs.record}, also to [oracle.svg]. *)
+(* [oracle_tape ~settings actions] are the tapes of [actions] for {!K7.render},
+   to [oracle.txt], and for {!K7.record}, also to [oracle.svg]. *)
 let oracle_tape ?(settings = []) actions =
   let tape outputs =
     match
-      Vhs.tape
-        ~settings:(Vhs.[ Columns 60; Rows 12 ] @ settings)
-        ~outputs actions
+      K7.tape ~settings:(K7.[ Columns 60; Rows 12 ] @ settings) ~outputs actions
     with
     | Ok t -> t
-    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+    | Error e -> Alcotest.failf "%a" K7.pp_error e
   in
   (tape [ "oracle.txt" ], tape [ "oracle.txt"; "oracle.svg" ])
 
@@ -908,7 +905,7 @@ let test_oracle () =
   with_dir @@ fun env cwd ->
   let t =
     oracle_tape
-      Vhs.
+      K7.
         [
           type' "sleep 1; echo hello";
           key Enter;
@@ -943,12 +940,12 @@ let test_oracle_controls () =
   (* Each printf leaves the cursor at the start of the cleared last row,
      for the prompt. *)
   let printf s =
-    Vhs.type'
+    K7.type'
       ("sleep 1; stty -onlcr; printf '" ^ s ^ {|\033[12;1H\033[K'; stty onlcr|})
   in
   let t =
     oracle_tape
-      Vhs.
+      K7.
         [
           type' "sleep 1; clear";
           key Enter;
@@ -977,7 +974,7 @@ let test_oracle_zsh () =
   with_dir @@ fun env cwd ->
   let t =
     oracle_tape ~settings:[ Shell Zsh ]
-      Vhs.
+      K7.
         [
           type' "sleep 1; echo hello";
           key Enter;
@@ -1005,7 +1002,7 @@ let test_terminal_state () =
   in
   let t =
     oracle_tape ~settings:[ Typing_speed (Ms 1) ]
-      Vhs.[ hidden [ type' command; key Enter; wait Prompt ]; sleep (Ms 100) ]
+      K7.[ hidden [ type' command; key Enter; wait Prompt ]; sleep (Ms 100) ]
   in
   let expected =
     String.concat "\n"
@@ -1022,15 +1019,15 @@ let test_terminal_state () =
   | None -> ()
   | Some vhs -> (
       match
-        Vhs.render ~vhs
+        K7.render ~vhs
           ~clock:(Eio.Stdenv.mono_clock env)
           ~proc:(Eio.Stdenv.process_mgr env)
           ~cwd (fst t)
       with
-      | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+      | Error e -> Alcotest.failf "%a" K7.pp_error e
       | Ok () -> Alcotest.(check string) "VHS oracle" expected (text ())));
   match record ~image:"oracle.svg" env cwd (snd t) with
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok s -> (
       match Svg_check.frames ~cell_width ~cell_height ~rows:12 s with
       | Error e -> Alcotest.fail e
@@ -1057,22 +1054,22 @@ let check_payload ?vhs ?text payload image =
   let command = "printf '\\033[2J\\033[H" ^ payload ^ "\\033[10;1H'" in
   let t =
     oracle_tape ~settings:[ Typing_speed (Ms 1) ]
-      Vhs.[ hidden [ type' command; key Enter; wait Prompt ]; sleep (Ms 200) ]
+      K7.[ hidden [ type' command; key Enter; wait Prompt ]; sleep (Ms 200) ]
   in
   let output () = last_screen (Eio.Path.load Eio.Path.(cwd / "oracle.txt")) in
   (match oracle with
   | None -> ()
   | Some exe -> (
       match
-        Vhs.render ~vhs:exe
+        K7.render ~vhs:exe
           ~clock:(Eio.Stdenv.mono_clock env)
           ~proc:(Eio.Stdenv.process_mgr env)
           ~cwd (fst t)
       with
-      | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+      | Error e -> Alcotest.failf "%a" K7.pp_error e
       | Ok () -> Alcotest.(check string) "VHS oracle" (lines vhs) (output ())));
   match record ~image:"oracle.svg" env cwd (snd t) with
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok svg -> (
       match Svg_check.frames ~cell_width ~cell_height ~rows:12 svg with
       | Error e -> Alcotest.fail e
@@ -1186,11 +1183,11 @@ let known_differences =
   |> List.map (fun (name, payload, vhs, image, text) ->
       (name, fun () -> check_payload ~vhs ?text payload image))
 
-(* Recording a program with [Vhs.run]. *)
+(* Recording a program with [K7.run]. *)
 
 let run ?vars env cwd argv =
   Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 60. @@ fun () ->
-  Vhs.run ~settings ?env:vars
+  K7.run ~settings ?env:vars
     ~clock:(Eio.Stdenv.mono_clock env)
     ~proc:(Eio.Stdenv.process_mgr env)
     ~cwd argv
@@ -1246,7 +1243,7 @@ let test_run_program () =
      printf 'done\\n'\n\
      exit 3\n";
   match run env cwd [ "./demo.sh" ] with
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok (s, status) ->
       Alcotest.(check bool) "status" true (status = `Exited 3);
       check_contains "red" ~sub:{|class="p1">red|} s;
@@ -1274,7 +1271,7 @@ let test_run_fast () =
     Eio.Path.(cwd / "out")
     "one\ntwo\nthree\n";
   match run env cwd [ "cat"; "out" ] with
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok (s, status) ->
       Alcotest.(check bool) "status" true (status = `Exited 0);
       Alcotest.(check string)
@@ -1290,7 +1287,7 @@ let test_run_env () =
       env cwd
       [ "sh"; "-c"; {|printf '%s|%s' "$VHS_TEST" "$TERM"|} ]
   with
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok (s, status) ->
       Alcotest.(check bool) "status" true (status = `Exited 0);
       Alcotest.(check string)
@@ -1303,10 +1300,10 @@ let test_run_errors () =
   let error name ?vars argv check =
     match run ?vars env cwd argv with
     | Error e when check e -> ()
-    | Error e -> Alcotest.failf "%s: %a" name Vhs.pp_error e
+    | Error e -> Alcotest.failf "%s: %a" name K7.pp_error e
     | Ok _ -> Alcotest.failf "%s: ran" name
   in
-  let invalid = function Vhs.Invalid _ -> true | _ -> false in
+  let invalid = function K7.Invalid _ -> true | _ -> false in
   error "no command" [] invalid;
   error "not found" [ "vhs-no-such-program" ] (function
     | Executable_not_found "vhs-no-such-program" -> true
@@ -1318,20 +1315,20 @@ let test_run_errors () =
   error "name with =" ~vars:[ ("A=B", "x") ] [ "true" ] invalid;
   error "NUL" ~vars:[ ("A", "x\000y") ] [ "true" ] invalid;
   match
-    Vhs.run ~settings:[ Width 800; Columns 80 ]
+    K7.run ~settings:[ Width 800; Columns 80 ]
       ~clock:(Eio.Stdenv.mono_clock env)
       ~proc:(Eio.Stdenv.process_mgr env)
       ~cwd [ "true" ]
   with
   | Error (Invalid _) -> ()
-  | Error e -> Alcotest.failf "width and columns: %a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "width and columns: %a" K7.pp_error e
   | Ok _ -> Alcotest.fail "width and columns: ran"
 
 (* A killed program still gives its image. *)
 let test_run_signal () =
   with_dir @@ fun env cwd ->
   match run env cwd [ "sh"; "-c"; "echo bye; kill -TERM $$" ] with
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok (s, status) ->
       Alcotest.(check bool) "status" true (status = `Signaled Sys.sigterm);
       Alcotest.(check string) "image" (screen [ "bye" ]) (last (frames s))

@@ -4,9 +4,9 @@
   ---------------------------------------------------------------------------*)
 
 let () =
-  Alcotest.run "vhs"
+  Alcotest.run "k7"
     [
-      Test_vhs.suite;
+      Test_k7.suite;
       Test_regexp_syntax.suite;
       Test_tape_syntax.suite;
       Test_themes.suite;

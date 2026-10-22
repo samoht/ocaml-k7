@@ -7,7 +7,7 @@
 
 (** {1:options Options} *)
 
-val settings : Vhs.setting list Cmdliner.Term.t
+val settings : K7.setting list Cmdliner.Term.t
 (** [settings] are the terminal settings of [--cols], [--rows], [--font-size]
     and [--theme], in that order. *)
 
@@ -31,9 +31,9 @@ val exits : Cmdliner.Cmd.Exit.info list
 val load : Eio_unix.Stdenv.base -> string -> (string, string) result
 (** [load env path] is the contents of the file [path], or [Error msg]. *)
 
-val print_tape : Eio_unix.Stdenv.base -> Vhs.t -> (unit, string) result
-(** [print_tape env t] writes [Vhs.to_string t] on standard output. A reader
-    that closes the pipe early is not an error. *)
+val print_tape : Eio_unix.Stdenv.base -> K7.t -> (unit, string) result
+(** [print_tape env t] writes [K7.to_string t] on standard output. A reader that
+    closes the pipe early is not an error. *)
 
 val fail : Eio_unix.Stdenv.base -> string -> int
 (** [fail env msg] prints [k7: msg] on standard error, if it can be written, and

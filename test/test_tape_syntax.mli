@@ -3,7 +3,7 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(** Tests for the raw lines of {!Vhs.raw}. *)
+(** Tests for the raw lines of {!K7.raw}. *)
 
 val suite : string * unit Alcotest.test_case list
 (** [suite] is the test suite. *)

@@ -32,20 +32,20 @@ val command : t -> int -> string option
     there is one. *)
 
 val actions :
-  ?env:(string * string) list -> setup:string list -> t -> Vhs.action list
+  ?env:(string * string) list -> setup:string list -> t -> K7.action list
 (** [actions ~env ~setup t] sets each variable of [env] (defaults to [[]]) in
     the shell's environment with VHS's [Env], each name and value {!is_typeable}
     and without all three quote characters, sources the shell scripts [setup] in
     order, appends to bash's [PROMPT_COMMAND], after the hooks [setup] installs,
     a command that sets [PS1] to the VHS prompt followed by a mark, and clears
-    the screen, all {!Vhs.hidden}; then it types each command of [t], waits
-    until the line under the cursor ends with the mark, and pauses one second.
-    The mark is sixteen zero-width characters, U+200B and U+2060, spelling a
-    digest of [setup] and [t]. It does not show in a GIF or a video, so the
-    recording shows the VHS prompt, but it tells the prompt from a line the
-    command prints, even one that ends with [>] and a zero-width space or with
-    the prompt of another recording: each command's output is complete before
-    the next command is typed. A text output of VHS holds the mark after each
+    the screen, all {!K7.hidden}; then it types each command of [t], waits until
+    the line under the cursor ends with the mark, and pauses one second. The
+    mark is sixteen zero-width characters, U+200B and U+2060, spelling a digest
+    of [setup] and [t]. It does not show in a GIF or a video, so the recording
+    shows the VHS prompt, but it tells the prompt from a line the command
+    prints, even one that ends with [>] and a zero-width space or with the
+    prompt of another recording: each command's output is complete before the
+    next command is typed. A text output of VHS holds the mark after each
     prompt. A hook that rewrites [PS1] runs before the appended command, so the
     prompt survives it; a command that replaces [PROMPT_COMMAND] makes the next
     wait time out. The appended command also sets [PS2] to bash's [> ] followed
@@ -56,8 +56,8 @@ val actions :
 val unfinished : setup:string list -> t -> string -> (int * string) option
 (** [unfinished ~setup t output] is [Some (n, line)] if [output], what [vhs]
     printed, or ["last value was: "] followed by the [last] of a
-    {!Vhs.constructor-Timeout} or a {!Vhs.constructor-Exited}, when a recording
-    of [actions ~setup t] failed, shows bash waiting for more of command [n],
+    {!K7.constructor-Timeout} or a {!K7.constructor-Exited}, when a recording of
+    [actions ~setup t] failed, shows bash waiting for more of command [n],
     counted from [1], whose first line is [line]: an unterminated quote or
     here-document, or a line that ends with a backslash, leaves bash at its
     continuation prompt [PS2], where no wait can end. It is [None] otherwise. *)

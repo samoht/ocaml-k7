@@ -3,13 +3,13 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(* The checker and writer are internal: test them through [Vhs.wait]. *)
+(* The checker and writer are internal: test them through [K7.wait]. *)
 
 let line re =
-  match Vhs.tape ~outputs:[ "x.gif" ] [ Vhs.wait (Screen re) ] with
+  match K7.tape ~outputs:[ "x.gif" ] [ K7.wait (Screen re) ] with
   | Error e -> Error (Native_test.invalid e)
   | Ok t -> (
-      match String.split_on_char '\n' (Vhs.to_string t) with
+      match String.split_on_char '\n' (K7.to_string t) with
       | [ _output; line; "" ] -> Ok line
       | _ -> Alcotest.failf "%S: not one line" re)
 
