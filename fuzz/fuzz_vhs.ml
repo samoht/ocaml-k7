@@ -1015,7 +1015,8 @@ let test_zero_speed_prompt n =
   in
   let tape =
     match
-      Vhs.tape ~settings ~outputs:[ path "out.txt" ]
+      Vhs.tape ~settings
+        ~outputs:[ path "out.txt" ]
         Vhs.[ sleep (Ms 100); type' ("echo " ^ marker ^ "\n"); wait Prompt ]
     with
     | Ok t -> t
@@ -1024,8 +1025,10 @@ let test_zero_speed_prompt n =
   let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "out.txt")) in
   (match
      Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 10. (fun () ->
-         Vhs.record ~clock:(Eio.Stdenv.mono_clock env)
-           ~proc:(Eio.Stdenv.process_mgr env) ~cwd tape)
+         Vhs.record
+           ~clock:(Eio.Stdenv.mono_clock env)
+           ~proc:(Eio.Stdenv.process_mgr env)
+           ~cwd tape)
    with
   | Ok () -> ()
   | Error e -> failf "%a" Vhs.pp_error e);
@@ -1069,6 +1072,47 @@ let test_output_preflight n =
       (Eio.Path.load Eio.Path.(Eio.Stdenv.fs env / text))
   else check (not (Sys.file_exists (path "absent")))
 
+let check_native_path env cwd marker (output, actual, rate) =
+  if Sys.file_exists actual then Sys.remove actual;
+  let settings =
+    Vhs.
+      [
+        Width 400;
+        Height 200;
+        Font_size 10;
+        Padding 10;
+        Framerate rate;
+        Typing_speed (Ms 0);
+      ]
+  in
+  let tape =
+    match
+      Vhs.tape ~settings ~outputs:[ output ]
+        Vhs.
+          [
+            type' ("echo " ^ marker ^ "\n");
+            wait ~timeout:(Ms 5000) (Screen ("(?m)^" ^ marker ^ "$"));
+            wait Prompt;
+          ]
+    with
+    | Ok t -> t
+    | Error e -> failf "%a" Vhs.pp_error e
+  in
+  (match
+     Vhs.record
+       ~clock:(Eio.Stdenv.mono_clock env)
+       ~proc:(Eio.Stdenv.process_mgr env)
+       ~cwd:(cwd :> Eio.Fs.dir_ty Eio.Path.t)
+       tape
+   with
+  | Ok () -> ()
+  | Error e -> failf "%a" Vhs.pp_error e);
+  check (Sys.file_exists actual);
+  check
+    (contains
+       ~sub:("\n" ^ marker ^ "\n")
+       (Eio.Path.load Eio.Path.(Eio.Stdenv.fs env / actual)))
+
 (* A native recording writes the exact requested path even from a scoped
    cwd, with quoted Unicode names, at every positive frame-rate boundary. *)
 let test_native_paths n =
@@ -1081,9 +1125,9 @@ let test_native_paths n =
   let root_output = path name in
   let sub_output = Filename.concat sub name in
   let nested_output = Filename.concat nested name in
-  Fun.protect
-    ~finally:(fun () ->
-      List.iter (fun p -> if Sys.file_exists p then Sys.remove p)
+  Fun.protect ~finally:(fun () ->
+      List.iter
+        (fun p -> if Sys.file_exists p then Sys.remove p)
         [ sub_output; nested_output ];
       Unix.rmdir nested;
       Unix.rmdir sub)
@@ -1091,37 +1135,13 @@ let test_native_paths n =
   Eio.Switch.run @@ fun sw ->
   let cwd = Eio.Path.open_dir ~sw Eio.Path.(Eio.Stdenv.fs env / sub) in
   List.iter
-    (fun (output, actual, rate) ->
-      if Sys.file_exists actual then Sys.remove actual;
-      let marker = Fmt.str "DONE_%d" n in
-      let settings =
-        Vhs.[ Width 400; Height 200; Font_size 10; Padding 10;
-              Framerate rate; Typing_speed (Ms 0) ]
-      in
-      let tape =
-        match
-          Vhs.tape ~settings ~outputs:[ output ]
-            Vhs.[ type' ("echo " ^ marker ^ "\n");
-                  wait ~timeout:(Ms 5000) (Screen ("(?m)^" ^ marker ^ "$"));
-                  wait Prompt ]
-        with
-        | Ok t -> t
-        | Error e -> failf "%a" Vhs.pp_error e
-      in
-      (match
-         Vhs.record ~clock:(Eio.Stdenv.mono_clock env)
-           ~proc:(Eio.Stdenv.process_mgr env)
-           ~cwd:(cwd :> Eio.Fs.dir_ty Eio.Path.t) tape
-       with
-      | Ok () -> ()
-      | Error e -> failf "%a" Vhs.pp_error e);
-      check (Sys.file_exists actual);
-      check
-        (contains ~sub:("\n" ^ marker ^ "\n")
-           (Eio.Path.load Eio.Path.(Eio.Stdenv.fs env / actual))))
-    [ (name, sub_output, 1); ("../" ^ name, root_output, 100_001);
+    (check_native_path env cwd (Fmt.str "DONE_%d" n))
+    [
+      (name, sub_output, 1);
+      ("../" ^ name, root_output, 100_001);
       (root_output, root_output, max_int);
-      ("nested/" ^ name, nested_output, 50) ]
+      ("nested/" ^ name, nested_output, 50);
+    ]
 
 (* Properties that run [vhs] itself, so need [oracle]. *)
 let with_vhs =

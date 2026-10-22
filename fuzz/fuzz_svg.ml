@@ -504,11 +504,26 @@ let test_narrow_symbols n selector split_at =
    so a dropped terminal character cannot make the property vacuous. *)
 let test_cursor_format n =
   let forbidden =
-    [| 0x061c; 0x180e; 0x200b; 0x200e; 0x200f; 0x202a; 0x202e;
-       0x2060; 0x2066; 0xfeff; 0xfff9; 0x13430; 0x1bca0; 0xe0001 |]
+    [|
+      0x061c;
+      0x180e;
+      0x200b;
+      0x200e;
+      0x200f;
+      0x202a;
+      0x202e;
+      0x2060;
+      0x2066;
+      0xfeff;
+      0xfff9;
+      0x13430;
+      0x1bca0;
+      0xe0001;
+    |]
   in
   let b = Buffer.create 8 in
-  Buffer.add_utf_8_uchar b (Uchar.of_int forbidden.(n mod Array.length forbidden));
+  Buffer.add_utf_8_uchar b
+    (Uchar.of_int forbidden.(n mod Array.length forbidden));
   let mark = Buffer.contents b in
   let output = "a" ^ mark ^ "b\r" in
   let term = Vte.create ~width_method:`Wcwidth ~rows ~cols () in
@@ -525,13 +540,29 @@ let test_cursor_format n =
    path and every human-readable error must retain them. *)
 let test_visible_format n =
   let allowed =
-    [| 0x200c; 0x200d; 0x0600; 0x0601; 0x0602; 0x0603; 0x0604; 0x0605;
-       0x06dd; 0x070f; 0x0890; 0x0891; 0x08e2; 0x110bd; 0x110cd |]
+    [|
+      0x200c;
+      0x200d;
+      0x0600;
+      0x0601;
+      0x0602;
+      0x0603;
+      0x0604;
+      0x0605;
+      0x06dd;
+      0x070f;
+      0x0890;
+      0x0891;
+      0x08e2;
+      0x110bd;
+      0x110cd;
+    |]
   in
   let b = Buffer.create 8 in
   Buffer.add_utf_8_uchar b (Uchar.of_int allowed.(n mod Array.length allowed));
   let mark = Buffer.contents b in
-  check_eq ~pp:pp_string ("a" ^ mark ^ "b")
+  check_eq ~pp:pp_string
+    ("a" ^ mark ^ "b")
     (Fmt.str "%a" Vhs.pp_error (Io ("a" ^ mark ^ "b")));
   match Vhs.svg ~settings [ (Ms 0, "a" ^ mark ^ "b\r") ] with
   | Error e -> failf "%a" Vhs.pp_error e
@@ -553,16 +584,20 @@ let test_regional_splits n =
     Buffer.contents b
   in
   let prefix = List.init (cols - 1 - (n mod 3)) (fun _ -> "a") in
-  let flags = List.init (2 + (n mod 3)) (fun i -> glyph (0x1f1e6 + ((n + i) mod 26))) in
+  let flags =
+    List.init (2 + (n mod 3)) (fun i -> glyph (0x1f1e6 + ((n + i) mod 26)))
+  in
   let cells = prefix @ flags @ [ "X" ] in
   let output = String.concat "" cells in
   let rec lines = function
     | [] -> []
-    | cells -> String.concat "" (List.take cols cells) :: lines (List.drop cols cells)
+    | cells ->
+        String.concat "" (List.take cols cells) :: lines (List.drop cols cells)
   in
   let lines = lines cells in
   let expected =
-    String.concat "\n" (lines @ List.init (rows - List.length lines) (fun _ -> ""))
+    String.concat "\n"
+      (lines @ List.init (rows - List.length lines) (fun _ -> ""))
   in
   for cut = 0 to String.length output do
     let a = String.sub output 0 cut in
@@ -576,7 +611,8 @@ let test_regional_splits n =
     | Ok image -> (
         match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows image with
         | Error e -> failf "%s" e
-        | Ok frames -> check_eq ~pp:pp_string expected (List.hd (List.rev frames)))
+        | Ok frames ->
+            check_eq ~pp:pp_string expected (List.hd (List.rev frames)))
   done
 
 (* The emulator's terminal state across reads, through the SVG image. *)
@@ -617,12 +653,12 @@ let suite =
   ( "svg",
     [
       test_case "frames" [ list chunk ] test_frames;
-      test_case "regional indicators retain cells at every PTY split"
-        [ uint8 ] test_regional_splits;
+      test_case "regional indicators retain cells at every PTY split" [ uint8 ]
+        test_regional_splits;
       test_case "format exceptions survive errors and all SVG text paths"
         [ uint8 ] test_visible_format;
-      test_case "cursor redraw leaves invisible format characters out"
-        [ uint8 ] test_cursor_format;
+      test_case "cursor redraw leaves invisible format characters out" [ uint8 ]
+        test_cursor_format;
       test_case "text symbols keep xterm cell widths across PTY splits"
         [ uint8; uint8; uint8 ] test_narrow_symbols;
       test_case "positive SVG frame rates are not pixel sizes"

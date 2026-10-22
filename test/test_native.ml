@@ -42,7 +42,8 @@ let test_zero_speed_prompt () =
   with_dir @@ fun env cwd ->
   let t =
     match
-      Vhs.tape ~settings:(Typing_speed (Ms 0) :: settings)
+      Vhs.tape
+        ~settings:(Typing_speed (Ms 0) :: settings)
         ~outputs:[ "demo.txt" ]
         Vhs.[ sleep (Ms 100); type' "echo READY\n"; wait Prompt ]
     with
@@ -53,7 +54,8 @@ let test_zero_speed_prompt () =
   | Ok () -> ()
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
   check_contains "completed command before the prompt wait returns"
-    ~sub:"\nREADY\n>" (last_screen (Eio.Path.load Eio.Path.(cwd / "demo.txt")))
+    ~sub:"\nREADY\n>"
+    (last_screen (Eio.Path.load Eio.Path.(cwd / "demo.txt")))
 
 let test_timeout () =
   with_dir @@ fun env cwd ->

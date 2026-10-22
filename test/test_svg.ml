@@ -214,10 +214,13 @@ let test_cursor_format () =
   let s = svg [ (Ms 0, "a\u{200B}\u{202E}b\r") ] in
   check_contains "row text" ~sub:">ab</tspan>" s;
   check_contains "description" ~sub:"<desc>ab</desc>" s;
-  check_contains "cursor glyph" ~sub:{|<text class="ka k" x="0" y="22">a</text>|} s;
-  Alcotest.(check bool) "zero-width space removed everywhere" false
+  check_contains "cursor glyph"
+    ~sub:{|<text class="ka k" x="0" y="22">a</text>|} s;
+  Alcotest.(check bool)
+    "zero-width space removed everywhere" false
     (contains ~sub:"\u{200B}" s);
-  Alcotest.(check bool) "bidi override removed everywhere" false
+  Alcotest.(check bool)
+    "bidi override removed everywhere" false
     (contains ~sub:"\u{202E}" s)
 
 let suite =

@@ -144,7 +144,8 @@ let test_no_cursor () =
 let test_json_depth () =
   let build arrays =
     let theme =
-      "{\"extra\":" ^ String.make arrays '[' ^ "0" ^ String.make arrays ']' ^ "}"
+      "{\"extra\":" ^ String.make arrays '[' ^ "0" ^ String.make arrays ']'
+      ^ "}"
     in
     Vhs.tape ~settings:[ Theme theme ] ~outputs:[ "demo.txt" ]
       [ Vhs.sleep (Ms 100) ]
