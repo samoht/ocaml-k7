@@ -454,6 +454,30 @@ let test_publish_environment () =
   | Ok () -> Alcotest.fail "recorded"
   | Error e -> Alcotest.failf "%a" K7.pp_error e
 
+(* An inherited size would replace the terminal's, which --columns sets. *)
+let test_size_environment () =
+  Eio_mock.Backend.run @@ fun () ->
+  Eio.Switch.run @@ fun sw ->
+  let inherited = [| "COLUMNS=200"; "LINES=5"; "PATH=/bin" |] in
+  let inspect_env env =
+    Alcotest.(check (list string))
+      "COLUMNS and LINES are cleared" [ "PATH=/bin" ]
+      (Array.to_list (Option.value ~default:inherited env))
+  in
+  let proc =
+    manager ~sw ~inherited ~inspect_env (fun _ _ ->
+        {
+          run =
+            (fun ~stdin ~output:_ ->
+              ignore (read_all stdin);
+              `Exited 0);
+          on_signal = (fun _ -> ());
+        })
+  in
+  match K7.record ~engine:Vhs ~clock:(clock ()) ~proc ~cwd (tape []) with
+  | Ok () -> ()
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+
 let test_vhs_path_override () =
   Native_test.with_dir @@ fun env cwd ->
   let name = "k7-r14-path-vhs" in
@@ -495,5 +519,6 @@ let suite =
         ("cancel", test_cancel);
         ("cancel a vhs ignoring SIGTERM", test_cancel_kill);
         ("publish environment", test_publish_environment);
+        ("size environment", test_size_environment);
         ("vhs searches overridden PATH", test_vhs_path_override);
       ] )
