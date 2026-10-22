@@ -187,6 +187,36 @@ let test_playback_speed () =
   Alcotest.(check int) "clamped" ((real + 1) / 2) (loop "100000");
   Alcotest.(check int) "slower" (4 * real) (loop "0.25")
 
+(* A shell that shows no prompt fails the recording within the tape's wait
+   timeout, by the clock of record. *)
+let test_first_prompt () =
+  with_dir @@ fun env cwd ->
+  with_virtual_clock @@ fun clock ->
+  let t =
+    Result.get_ok
+      (K7.tape
+         ~settings:(K7.Wait_timeout (Ms 300) :: settings)
+         ~outputs:[ "demo.svg" ]
+         K7.[ raw {|Env PS1 ""|}; type' "touch played\n"; sleep (Ms 100) ])
+  in
+  (match
+     K7.record ~engine:Native ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd t
+   with
+  | Error (Timeout { line = 0; _ } as e) ->
+      Alcotest.(check string)
+        "message"
+        "timed out waiting for the shell's first prompt; give the tape a \
+         longer Wait_timeout"
+        (Fmt.str "%a" K7.pp_error e)
+  | Ok () -> Alcotest.fail "recorded without a prompt"
+  | Error e -> Alcotest.failf "%a" K7.pp_error e);
+  Alcotest.(check bool)
+    "nothing typed" false
+    (Eio.Path.is_file Eio.Path.(cwd / "played"));
+  Alcotest.(check bool)
+    "within the wait timeout" true
+    (Mtime.to_uint64_ns (Eio.Time.Mono.now clock) < 5_000_000_000L)
+
 let test_hidden () =
   with_dir @@ fun env cwd ->
   let t =
@@ -1690,6 +1720,7 @@ let suite =
          ("shell exit", test_shell_exit);
          ("timeout precedence", test_timeout_precedence);
          ("playback speed", test_playback_speed);
+         ("first prompt", test_first_prompt);
          ("hidden", test_hidden);
          ("scroll", test_scroll);
          ("scroll far", test_scroll_far);
