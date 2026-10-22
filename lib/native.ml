@@ -910,15 +910,26 @@ let run st c command =
   run_command st c command;
   dump st
 
-(* The child resolves a path with a slash relative to [cwd]. *)
-let on_path ~cwd env exe =
+let is_executable file =
+  match Unix.stat file with
+  | { st_kind = S_REG; _ } -> (
+      match Unix.access file [ X_OK ] with
+      | () -> true
+      | exception Unix.Unix_error _ -> false)
+  | _ -> false
+  | exception Unix.Unix_error _ -> false
+
+(* The child runs in [cwd], so a relative path stays relative. *)
+let resolve ~cwd env exe =
+  let in_cwd p = if Filename.is_relative p then Filename.concat cwd p else p in
   if String.contains exe '/' then
-    Sys.file_exists
-      (if Filename.is_relative exe then Filename.concat cwd exe else exe)
+    if Sys.file_exists (in_cwd exe) then Some exe else None
   else
     let path = Option.value (Eio.Process.Env.get_opt "PATH" env) ~default:"" in
-    List.exists
-      (fun dir -> dir <> "" && Sys.file_exists (Filename.concat dir exe))
+    List.find_map
+      (fun dir ->
+        let p = Filename.concat dir exe in
+        if dir <> "" && is_executable (in_cwd p) then Some p else None)
       (String.split_on_char ':' path)
 
 let close_terminal (t : terminal) =
@@ -944,9 +955,10 @@ let stop_terminal clock (t : terminal) =
 (* Temporary, see [terminal]. *)
 external acquire_terminal : Unix.file_descr -> unit = "native_acquire_terminal"
 
-let open_terminal ~env ~cwd ~winsize prog args =
+let open_terminal ~env ~cwd ~winsize ~path prog args =
   let pty, slave = Pty.open_pty ~winsize () in
   let argv = Array.of_list (prog :: args) in
+  let prog = path in
   match Unix.fork () with
   | 0 -> (
       try
@@ -957,7 +969,12 @@ let open_terminal ~env ~cwd ~winsize prog args =
         if not (List.mem fd [ Unix.stdin; Unix.stdout; Unix.stderr ]) then
           Unix.close fd;
         Unix.chdir cwd;
-        Unix.execvpe prog argv (Eio.Process.Env.to_array env)
+        let env = Eio.Process.Env.to_array env in
+        try Unix.execve prog argv env
+        with Unix.Unix_error (ENOEXEC, _, _) ->
+          (* As execvp, a file without a #! line is a shell script. *)
+          let args = Array.sub argv 1 (Array.length argv - 1) in
+          Unix.execve "/bin/sh" (Array.append [| "/bin/sh"; prog |] args) env
       with Unix.Unix_error _ -> Unix._exit 127)
   | pid -> { pty; slave; pid }
   | exception e ->
@@ -994,15 +1011,18 @@ let start ~env ~vars ~cwd t ~requires prog args =
   let env =
     Eio.Process.Env.override (List.map (fun (k, v) -> (k, Some v)) vars) env
   in
-  List.iter
-    (fun exe ->
-      if not (on_path ~cwd env exe) then stop (Executable_not_found exe))
-    (prog :: requires);
+  let find exe =
+    match resolve ~cwd env exe with
+    | Some path -> path
+    | None -> stop (Executable_not_found exe)
+  in
+  let path = find prog in
+  List.iter (fun exe -> ignore (find exe)) requires;
   let s = t.look in
   match
     open_terminal ~env ~cwd
       ~winsize:{ rows = s.Svg.rows; cols = s.cols; xpixel = 0; ypixel = 0 }
-      prog args
+      ~path prog args
   with
   | terminal -> terminal
   | exception Unix.Unix_error (e, f, _) ->

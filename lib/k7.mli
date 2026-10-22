@@ -398,10 +398,10 @@ val run :
     The image's first line is [$ ] in the colour of VHS's prompt, then [show]
     (defaults to [argv], each argument shell-quoted where needed), and the
     program's output starts on the next line; an empty [show] shows no line. The
-    first element of [argv] is the executable, looked up in the [PATH] unless it
-    holds a slash, and relative to [cwd] if it does. The program gets the
-    environment {!render} gives [vhs], with [TERM=xterm-256color], then the
-    variables of [env] (defaults to [[]]).
+    first element of [argv] is the executable, looked up in the [PATH] the
+    program gets unless it holds a slash, and relative to [cwd] if it does. The
+    program gets the environment {!render} gives [vhs], with
+    [TERM=xterm-256color], then the variables of [env] (defaults to [[]]).
 
     A program that exits with another status than [0], or is killed, still gives
     its image: the status says how it exited. [run] returns once the program has
