@@ -1196,10 +1196,28 @@ let test_run_path_override n =
   | Ok _ -> fail "the executable in the overridden PATH did not run"
   | Error e -> failf "%a" K7.pp_error e
 
+let test_run_signal_disposition n =
+  with_dir @@ fun env _ ->
+  let previous = Sys.signal Sys.sigpipe Sys.Signal_ignore in
+  Fun.protect ~finally:(fun () -> Sys.set_signal Sys.sigpipe previous)
+  @@ fun () ->
+  match
+    K7.run
+      ~clock:(Eio.Stdenv.mono_clock env)
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd:(Eio.Stdenv.cwd env)
+      [ "/bin/sh"; "-c"; Fmt.str "kill -PIPE $$; printf IGNORED_%d" n ]
+  with
+  | Ok (_, `Signaled got) when got = Sys.sigpipe -> ()
+  | Ok _ -> fail "the program inherited ignored SIGPIPE from the recorder"
+  | Error e -> failf "%a" K7.pp_error e
+
 let with_processes =
   [
     test_case "run searches the overridden PATH" [ uint8 ]
       test_run_path_override;
+    test_case "run children have normal signal dispositions" [ uint8 ]
+      test_run_signal_disposition;
     test_case "a program's screen is the image of its bytes" [ bytes ]
       test_run_screen;
     test_case "native output paths and positive frame-rate boundaries" [ uint8 ]
