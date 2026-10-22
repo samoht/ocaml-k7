@@ -243,8 +243,11 @@ val pp : t Fmt.t
     {!constructor-Unsupported} and before it plays anything, an output or a
     [Screenshot] that only the other one writes. Both write the text outputs,
     and the screenshots at their paths: {!render} of [.png] images, {!record} of
-    [.svg] images. {!svg} draws the image of output that is already there, with
-    no tape and no shell. *)
+    [.svg] images. Each one creates the missing directories of an output, as VHS
+    does, but not those of PNG frames or of a screenshot, and reports as
+    {!constructor-Io}, before it plays anything, an output whose directory it
+    cannot write in or create. {!svg} draws the image of output that is already
+    there, with no tape and no shell. *)
 
 val render :
   ?vhs:string ->

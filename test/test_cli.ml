@@ -198,13 +198,15 @@ let test_render () =
         (path "ko" ^ " exited with code 3\n  from stdout\n  from stderr")
         (Fmt.str "%a" Vhs.pp_error e)
   | _ -> Alcotest.fail "lost the failure");
+  (* A directory other than the test's, where the output can be written. *)
+  let dir = Filename.dirname (path "pwd") in
   (match
      Vhs.render ~vhs:(path "pwd") ~clock:mono ~proc
-       ~cwd:Eio.Path.(Eio.Stdenv.fs env / "/")
+       ~cwd:Eio.Path.(Eio.Stdenv.fs env / dir)
        t
    with
-  | Error (Failed { output = "/\n"; _ }) -> ()
-  | Error e -> Alcotest.failf "not run in /: %a" Vhs.pp_error e
+  | Error (Failed { output; _ }) when output = Unix.realpath dir ^ "\n" -> ()
+  | Error e -> Alcotest.failf "not run in %s: %a" dir Vhs.pp_error e
   | Ok () -> Alcotest.fail "pwd succeeded");
   (* A vhs that exits without reading a tape larger than a pipe buffer is
      reported by its status, not by the broken pipe. *)

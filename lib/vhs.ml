@@ -1017,6 +1017,69 @@ let refuse ~by ~other kinds t =
       err_unsupported "not recorded %s: Output %S: %s, which Vhs.%s records" by
         p what other
 
+(* Directories *)
+
+(* [dir_problem ~create dir path] is why [path], relative to the native
+   directory [dir], cannot be written, if it cannot: its directory is not a
+   directory the user can write in, or with [create], since VHS creates the
+   directories of its outputs, its nearest ancestor that exists is not. *)
+let dir_problem ~create dir path =
+  let file =
+    if Filename.is_relative path then Filename.concat dir path else path
+  in
+  let shown d =
+    (* The directory as the path names it. *)
+    let k = String.length file - String.length path in
+    if k >= 0 && k <= String.length d && String.length d > k then
+      String.sub d k (String.length d - k)
+    else d
+  in
+  let rec nearest d =
+    let up = Filename.dirname d in
+    if Sys.file_exists d || up = d then d else nearest up
+  in
+  let parent = Filename.dirname file in
+  let d = if create then nearest parent else parent in
+  match Unix.stat d with
+  | { st_kind = S_DIR; _ } -> (
+      match Unix.access d [ W_OK; X_OK ] with
+      | () -> None
+      | exception Unix.Unix_error _ ->
+          Some (Fmt.str "%s: cannot write in %s" path (shown d)))
+  | _ -> Some (Fmt.str "%s: %s is not a directory" path (shown d))
+  | exception Unix.Unix_error _ ->
+      Some (Fmt.str "%s: no directory %s" path (shown d))
+
+(* [check_dirs cwd paths] is [Error (Io _)] on the first of [paths], each
+   with whether its directories can be created, that cannot be written. *)
+let check_dirs cwd paths =
+  (* A directory with no native path, such as a mock's, is not checked. *)
+  match Eio.Path.native cwd with
+  | None | (exception Failure _) -> Ok ()
+  | Some dir -> (
+      match
+        List.find_map (fun (create, p) -> dir_problem ~create dir p) paths
+      with
+      | None -> Ok ()
+      | Some msg -> Error (Io msg))
+
+(* [mkdirs dir path] creates the missing directories of [path], relative to
+   [dir], as VHS does for its outputs. *)
+let mkdirs dir path =
+  let file =
+    if Filename.is_relative path then Filename.concat dir path else path
+  in
+  let rec go d =
+    if not (Sys.file_exists d || Filename.dirname d = d) then (
+      go (Filename.dirname d);
+      try Unix.mkdir d 0o755 with Unix.Unix_error (EEXIST, _, _) -> ())
+  in
+  go (Filename.dirname file)
+
+(* VHS creates the directories of its outputs, but those of PNG frames,
+   which it renames into place, and of screenshots, which ffmpeg writes. *)
+let creates path = kind path <> "frames"
+
 let render ?(vhs = "vhs") ~clock ~proc ~cwd t =
   let* () = refuse ~by:"by vhs" ~other:"record" [ "SVG" ] t in
   let* () =
@@ -1031,6 +1094,11 @@ let render ?(vhs = "vhs") ~clock ~proc ~cwd t =
           "not recorded by vhs: Screenshot %S: an SVG image, which Vhs.record \
            takes"
           p
+  in
+  let* () =
+    check_dirs cwd
+      (List.map (fun p -> (creates p, p)) (t.outputs @ raw_outputs t.actions)
+      @ List.map (fun p -> (false, p)) (raw_screenshots t.actions))
   in
   render_vhs ~vhs ~clock ~proc ~cwd t
 
@@ -1123,17 +1191,26 @@ let record ~clock ~proc ~cwd t =
          (t.outputs @ raw_outputs t.actions)
          (Native.stills tape))
   in
+  let svgs = List.filter is_svg t.outputs
+  and texts = Option.to_list (Native.text_output tape) in
+  let* () =
+    check_dirs cwd
+      (List.map (fun p -> (true, p)) (svgs @ texts)
+      @ List.map (fun p -> (false, p)) (Native.stills tape))
+  in
   let* { svg; text; stills } =
     Result.map_error native_error
       (Native.play ~clock ~env:(environment proc) ~cwd:dir tape)
   in
-  let save contents path =
-    Result.map_error (fun msg -> Io msg) (save dir path contents)
+  let save ?(create = false) contents path =
+    match if create then mkdirs dir path with
+    | () -> Result.map_error (fun msg -> Io msg) (save dir path contents)
+    | exception Unix.Unix_error (e, _, _) ->
+        Error
+          (Io (path ^ ": " ^ String.uncapitalize_ascii (Unix.error_message e)))
   in
-  let* () = iter_result (save svg) (List.filter is_svg t.outputs) in
-  let* () =
-    iter_result (save text) (Option.to_list (Native.text_output tape))
-  in
+  let* () = iter_result (save ~create:true svg) svgs in
+  let* () = iter_result (save ~create:true text) texts in
   iter_result (fun (path, s) -> save s path) stills
 
 let check_times output =
