@@ -6,7 +6,6 @@
 let ( let* ) = Result.bind
 let has_all_quotes s = List.for_all (String.contains s) [ '"'; '\''; '`' ]
 
-(* The tape's [Env] lines quote each name and value. *)
 let check_env (k, v) =
   let binding = k ^ "=" ^ v in
   if not (Cram.is_typeable k && Cram.is_typeable v) then
@@ -42,14 +41,10 @@ let tape ~setup ?(settings = []) ?(env = []) ~output ?wait_timeout_s ~name src =
         (timeout @ Cram.actions ~env ~setup cram)
       |> Result.map_error (fun e -> Fmt.str "%a" K7.pp_error e)
 
-(* [shown s] is [s] as [K7.pp_error] prints it: without escape sequences,
-   controls and the invisible characters of the prompt mark. *)
 let shown s = Fmt.str "%a" K7.pp_error (Io s)
 let last_value = function "" -> "" | last -> "; last value was: " ^ shown last
 
-(* [after cram tape line] is the prompt that the wait on line [line] of
-   [tape] waits for, in words. The waits of a cram tape are the setup's,
-   then one after each command. *)
+(* A cram tape waits after its setup, then after each command. *)
 let after cram tape line =
   let waits =
     String.split_on_char '\n' (K7.to_string tape)
@@ -61,7 +56,6 @@ let after cram tape line =
       Fmt.str "the prompt after command %d, %a" (waits - 1) Quote.pp first
   | None -> "the prompt after the setup scripts"
 
-(* [rest_after sub l] is what follows the first [sub] in [l], if any. *)
 let rest_after sub l =
   let n = String.length sub in
   let rec go i =
@@ -74,8 +68,6 @@ let rest_after sub l =
   in
   go 0
 
-(* What [vhs] last read in a wait that timed out, from the line of its
-   message, if a wait timed out. *)
 let vhs_timeout output =
   List.find_map
     (fun l ->
@@ -87,10 +79,7 @@ let vhs_timeout output =
 
 let seconds_of n = Fmt.str "%d second%s" n (if n = 1 then "" else "s")
 
-(* A command that leaves bash at its continuation prompt makes the next
-   wait time out; the error then names it. A timeout otherwise names the
-   prompt it waited for, in words, without the prompt mark of the tape's
-   pattern, and the option that waits longer. *)
+(* A command left at bash's continuation prompt times the next wait out. *)
 let render_error ~setup ~wait ~name ~tape src e =
   let cram = Result.to_option (Cram.parse src) in
   let unfinished output =

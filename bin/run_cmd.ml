@@ -5,7 +5,6 @@
 
 let ( let* ) = Result.bind
 
-(* The image's directory is checked before the program runs. *)
 let check_output output =
   let dir = Filename.dirname output in
   if Filename.extension output <> ".svg" then

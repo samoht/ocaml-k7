@@ -73,7 +73,7 @@ let env =
     & opt_all (Arg.Conv.make ~docv:"VAR=VALUE" ~parser:binding ~pp ()) []
     & info [ "env" ] ~docv:"VAR=VALUE" ~doc)
 
-(* The seconds of Go's longest duration. *)
+(* Go's longest duration, in seconds. *)
 let max_seconds = 9_223_372_036
 
 let seconds s =
@@ -84,7 +84,7 @@ let seconds s =
   match int_of_string_opt s with
   | Some n when n > 0 && n <= max_seconds -> Ok n
   | Some n when n > 0 -> too_large ()
-  (* A number of digits [int_of_string] cannot read is beyond [max_int]. *)
+  (* Digits [int_of_string] cannot read are beyond [max_int]. *)
   | None when s <> "" && String.for_all Char.Ascii.is_digit s -> too_large ()
   | _ -> Fmt.error "%a is not a positive number of seconds" Quote.pp s
 
@@ -136,8 +136,6 @@ let load env path =
       Fmt.error "%s: permission denied" path
   | exception Eio.Io (err, _) -> Fmt.error "%s: %a" path Eio.Exn.pp_err err
 
-(* [write flow s] writes [s] to [flow]. It is [Error None] if the reader
-   closed the pipe, and [Error (Some msg)] on another failure. *)
 let write flow s =
   match Eio.Flow.copy_string s flow with
   | () -> Ok ()
@@ -150,14 +148,13 @@ let write flow s =
   | exception Eio.Io (err, _) ->
       Error (Fmt.kstr Option.some "%a" Eio.Exn.pp_err err)
 
-(* Like a process killed by SIGPIPE, which Eio ignores, [--print] stops
-   quietly when the reader goes away, as in [k7 cram --print | head]. *)
+(* As under SIGPIPE, which Eio ignores: [k7 cram --print | head] is quiet. *)
 let print_tape env t =
   match write (Eio.Stdenv.stdout env) (K7.to_string t) with
   | Ok () | Error None -> Ok ()
   | Error (Some msg) -> Fmt.error "standard output: %s" msg
 
 let fail env msg =
-  (* A closed standard error leaves the exit code to report. *)
+  (* With standard error closed, the exit code still reports. *)
   ignore (write (Eio.Stdenv.stderr env) (Fmt.str "k7: %s\n" msg));
   Cmd.Exit.some_error

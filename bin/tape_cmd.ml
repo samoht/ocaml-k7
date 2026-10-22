@@ -5,8 +5,7 @@
 
 let ( let* ) = Result.bind
 
-(* As VHS's [Env] does, a variable is set in the recorder's own environment,
-   which the shell inherits. *)
+(* As VHS's [Env]: the shell inherits the recorder's environment. *)
 let set_env env =
   List.fold_left
     (fun acc (k, v) ->
