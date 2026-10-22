@@ -1,5 +1,3 @@
-; Reading the SVG images back, for the tests and the fuzz properties.
-
 (library
  (name svg_check)
  (flags

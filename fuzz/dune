@@ -1,6 +1,3 @@
-; The emulator, the tape lexer and the Unicode tables are private to the
-; library; their properties compile them in.
-
 (copy_files
  ../lib/{screen,tape_syntax,quote,regexp_syntax,unicode,unicode_data}.{ml,mli})
 
@@ -18,9 +15,6 @@
   eio
   eio_main
   unix))
-
-; The property run is a quick smoke. The oracle alias also runs the
-; properties that need the real vhs (VHS_ORACLE), for longer.
 
 (rule
  (alias runtest)

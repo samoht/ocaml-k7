@@ -15,11 +15,8 @@
   themes
   unicode
   unicode_data)
- ; The terminal core comes from matrix_backport until matrix 0.2.0.
  (flags
   (:standard -open Matrix_backport))
- ; Temporary, until matrix's Pty.spawn keeps the slave open: see
- ; terminal_stubs.c.
  (foreign_stubs
   (language c)
   (names terminal_stubs))
@@ -35,8 +32,6 @@
   mtime
   re
   unix))
-
-;; The case folding orbits and the Unicode tables of Go, as OCaml strings.
 
 (rule
  (targets casefold_data.ml)
@@ -64,8 +59,5 @@
  (package k7)
  (files k7.mli)
  (libraries k7))
-
-; matrix_backport is a verbatim copy of upstream code: dune builds it
-; without warnings, and formatting and linting leave it alone.
 
 (vendored_dirs matrix_backport)

@@ -1,6 +1,3 @@
-; The emulator and the pattern matcher are private to the library; their
-; tests compile them in.
-
 (copy_files
  ../lib/{screen,casefold,casefold_data,unicode,unicode_data,regexp_match}.{ml,mli})
 
@@ -30,8 +27,6 @@
   mtime
   cmdliner
   unix))
-
-; The oracle alias also runs the tests that record with the real vhs.
 
 (rule
  (alias oracle)

@@ -1,5 +1,3 @@
-; Shared by the tests of native recordings.
-
 (library
  (name native_test)
  (libraries k7 svg_check alcotest eio eio.unix eio_main fmt))

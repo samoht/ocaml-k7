@@ -1,7 +1,3 @@
-; The library is private: it keeps the cram translation and the command line
-; testable without making them part of the installed library. Its messages
-; quote strings as the library's do.
-
 (copy_files ../lib/quote.{ml,mli})
 
 (library
