@@ -5,7 +5,7 @@
 
 let ( let* ) = Result.bind
 
-let tape ~setup ~output ?wait_timeout ~name src =
+let tape ~setup ~output ?wait_timeout_s ~name src =
   let* cram = Cram.parse src |> Result.map_error (Fmt.str "%s: %s" name) in
   match
     (Cram.is_empty cram, List.find_opt (Fun.negate Cram.is_typeable) setup)
@@ -15,7 +15,7 @@ let tape ~setup ~output ?wait_timeout ~name src =
       Fmt.error "setup %S: holds invalid UTF-8 or a control character" path
   | false, None ->
       let timeout =
-        match wait_timeout with
+        match wait_timeout_s with
         | None -> []
         | Some s -> [ Fmt.kstr Vhs.raw "Set WaitTimeout %ds" s ]
       in
@@ -67,13 +67,13 @@ let render_error ~setup ~name src e =
       | None -> Fmt.str "%s: %a" name Vhs.pp_error e)
   | None -> Fmt.str "%s: %a" name Vhs.pp_error e
 
-let record env ~print ~vhs ~setup ?wait_timeout ~output input =
+let record env ~print ~vhs ~setup ?wait_timeout_s ~output input =
   let* src =
     match Eio.Path.(load (Eio.Stdenv.fs env / input)) with
     | src -> Ok src
     | exception Eio.Io (err, _) -> Error (load_error input err)
   in
-  let* tape = tape ~setup ~output ?wait_timeout ~name:input src in
+  let* tape = tape ~setup ~output ?wait_timeout_s ~name:input src in
   if print then
     (* Like a process killed by SIGPIPE, which Eio ignores, [--print] stops
        quietly when the reader goes away, as in [vhs-cram --print | head]. *)
@@ -91,8 +91,8 @@ let record env ~print ~vhs ~setup ?wait_timeout ~output input =
      else Vhs.render ~vhs ~clock ~proc ~cwd tape)
     |> Result.map_error (render_error ~setup ~name:input src)
 
-let run env ~print ~vhs ~setup ?wait_timeout ~output input =
-  match record env ~print ~vhs ~setup ?wait_timeout ~output input with
+let run env ~print ~vhs ~setup ?wait_timeout_s ~output input =
+  match record env ~print ~vhs ~setup ?wait_timeout_s ~output input with
   | Ok () -> 0
   | Error msg ->
       (* A closed standard error leaves the exit code to report. *)
@@ -134,7 +134,7 @@ let vhs =
   let doc = "The $(b,vhs) executable to run." in
   Arg.(value & opt string "vhs" & info [ "vhs" ] ~docv:"PATH" ~doc)
 
-let wait_timeout =
+let wait_timeout_s =
   let doc =
     "Fail the recording when a command has not given the prompt back after \
      $(docv) seconds (defaults to VHS's 15)."
@@ -205,10 +205,10 @@ let exits =
 
 let cmd =
   let doc = "record a cram test as a VHS terminal recording" in
-  let run print vhs setup wait_timeout output input =
+  let run print vhs setup wait_timeout_s output input =
     Eio_main.run @@ fun env ->
-    run env ~print ~vhs ~setup ?wait_timeout ~output input
+    run env ~print ~vhs ~setup ?wait_timeout_s ~output input
   in
   Cmd.make
     (Cmd.info "vhs-cram" ~doc ~man ~exits)
-    Term.(const run $ print $ vhs $ setup $ wait_timeout $ output $ input)
+    Term.(const run $ print $ vhs $ setup $ wait_timeout_s $ output $ input)

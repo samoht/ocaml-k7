@@ -14,8 +14,8 @@ let contains ~sub s =
   in
   at 0
 
-let tape ?(setup = []) ?(output = "demo.gif") ?wait_timeout src =
-  Cli.tape ~setup ~output ?wait_timeout ~name:"input.t" src
+let tape ?(setup = []) ?(output = "demo.gif") ?wait_timeout_s src =
+  Cli.tape ~setup ~output ?wait_timeout_s ~name:"input.t" src
   |> Result.map (Fmt.str "%a" Vhs.pp)
 
 let test_tape () =
@@ -38,7 +38,7 @@ Sleep 1000ms
   Alcotest.(check bool)
     "wait timeout" true
     (contains ~sub:"\nSet WaitTimeout 60s\n"
-       (Result.get_ok (tape ~wait_timeout:60 "  $ true\n")));
+       (Result.get_ok (tape ~wait_timeout_s:60 "  $ true\n")));
   let error name expected src ~setup ~output =
     Alcotest.(check (result string string))
       name (Error expected) (tape ~setup ~output src)
