@@ -3,11 +3,14 @@
 A temporary verbatim copy of matrix's terminal core at
 [invariant-hq/mosaic](https://github.com/invariant-hq/mosaic)
 ([samoht/mosaic](https://github.com/samoht/mosaic)) commit
+`3ccffa89b915646a7bebafa3a39edd0f62f659eb` (branch `vte-wrap-zero-width`),
+which keeps a zero-width character at the wrap limit on top of
 `90a3f220997fc14819623a5cb98afca7a3d29bb6`.
 
 It exists because the released matrix 0.1.0 lacks the terminal fixes that
-vhs's emulator needs: those merged on invariant-hq/mosaic since 0.1.0 and
-the PR stack #46-#65, #78-#89 and #94-#96 on top of them. It is deleted
+vhs's emulator needs: those merged on invariant-hq/mosaic since 0.1.0, the
+PR stack #46-#65, #78-#89 and #94-#96 on top of them, and that last commit,
+not yet proposed upstream. It is deleted
 when vhs moves to matrix 0.2.0 (the `next` branch).
 
 **Do not edit these files: fix upstream instead.** dune builds the
