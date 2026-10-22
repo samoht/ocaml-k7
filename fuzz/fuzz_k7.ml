@@ -1232,6 +1232,31 @@ let test_run_exec_error n =
   | Error e -> failf "%a" K7.pp_error e
   | Ok _ -> fail "exec failed but returned a recording and program status"
 
+let test_run_inherited_fd n =
+  with_dir @@ fun env path ->
+  let token = Fmt.str "PRIVATE_%d" n in
+  save env (path "private-data") (token ^ "\n");
+  let fd = Unix.openfile (path "private-data") [ O_RDONLY ] 0 in
+  Unix.clear_close_on_exec fd;
+  Fun.protect ~finally:(fun () -> Unix.close fd) @@ fun () ->
+  let command =
+    Fmt.str
+      "n=3; while [ \"$n\" -lt 64 ]; do value=; IFS= read -r -t 1 -u \"$n\" \
+       value 2>/dev/null; if [ \"$value\" = %s ]; then printf FD_LEAKED; fi; \
+       n=$((n+1)); done; printf DONE"
+      token
+  in
+  match
+    K7.run
+      ~clock:(Eio.Stdenv.mono_clock env)
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd:(Eio.Stdenv.cwd env)
+      [ "/bin/bash"; "-c"; command ]
+  with
+  | Error e -> failf "%a" K7.pp_error e
+  | Ok (image, `Exited 0) -> check (not (contains ~sub:"FD_LEAKED" image))
+  | Ok _ -> fail "descriptor probe did not exit successfully"
+
 let with_processes =
   [
     test_case "run searches the overridden PATH" [ uint8 ]
@@ -1240,6 +1265,8 @@ let with_processes =
       test_run_signal_disposition;
     test_case "run reports exec errors instead of a program status" [ uint8 ]
       test_run_exec_error;
+    test_case "run children cannot read the recorder's private descriptors"
+      [ uint8 ] test_run_inherited_fd;
     test_case "a program's screen is the image of its bytes" [ bytes ]
       test_run_screen;
     test_case "native output paths and positive frame-rate boundaries" [ uint8 ]
