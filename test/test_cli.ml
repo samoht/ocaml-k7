@@ -120,30 +120,38 @@ let redirect fd target fn =
       Unix.close saved)
     fn
 
+(* [captured path fn] is [fn ()] and what it wrote on standard error, which
+   goes to the file [path "err"]. *)
+let captured path fn =
+  let err = Unix.openfile (path "err") [ O_WRONLY; O_TRUNC; O_CREAT ] 0o644 in
+  let r =
+    Fun.protect ~finally:(fun () -> Unix.close err) @@ fun () ->
+    redirect Unix.stderr (Some err) fn
+  in
+  (r, In_channel.with_open_bin (path "err") In_channel.input_all)
+
 (* Where [run] writes cannot fail with an exception: a reader that stops
    reading the tape is not an error, and another write error is reported in
    one line. *)
 let test_write_errors () =
   with_files [ ("demo.t", 0o644, "  $ echo hi\n"); ("err", 0o644, "") ]
   @@ fun env path ->
-  let stderr () = In_channel.with_open_bin (path "err") In_channel.input_all in
   let cli ~stdout () =
-    let err = Unix.openfile (path "err") [ O_WRONLY; O_TRUNC ] 0 in
-    Fun.protect ~finally:(fun () -> Unix.close err) @@ fun () ->
-    redirect Unix.stderr (Some err) @@ fun () ->
+    captured path @@ fun () ->
     redirect Unix.stdout stdout @@ fun () ->
     run env ~print:true ~vhs:"vhs" (path "demo.t")
   in
   let r, w = Unix.pipe ~cloexec:true () in
   Unix.close r;
-  let code = cli ~stdout:(Some w) () in
+  let result = cli ~stdout:(Some w) () in
   Unix.close w;
-  Alcotest.(check (pair int string)) "closed pipe" (0, "") (code, stderr ());
-  let code = cli ~stdout:None () in
-  Alcotest.(check (pair int string))
-    "closed standard output"
-    (123, "vhs-cram: standard output: Bad file descriptor\n")
-    (code, stderr ());
+  Alcotest.(check (pair int string)) "closed pipe" (0, "") result;
+  (* The reason is the system's: "Bad file descriptor" on macOS, "Invalid
+     argument" on Linux. *)
+  let code, msg = cli ~stdout:None () in
+  Alcotest.(check int) "closed standard output" 123 code;
+  Native_test.check_contains "names standard output"
+    ~sub:"vhs-cram: standard output: " msg;
   Alcotest.(check int)
     "closed standard error" 123
     ( redirect Unix.stderr None @@ fun () ->
@@ -153,18 +161,13 @@ let test_write_errors () =
 let test_error_names_input () =
   with_files [ ("demo.t", 0o644, "  $ echo hi\n"); ("err", 0o644, "") ]
   @@ fun env path ->
-  let err = Unix.openfile (path "err") [ O_WRONLY; O_TRUNC ] 0 in
-  let code =
-    Fun.protect ~finally:(fun () -> Unix.close err) @@ fun () ->
-    redirect Unix.stderr (Some err) @@ fun () ->
-    run env ~vhs:"vhs-no-such-executable" (path "demo.t")
-  in
   Alcotest.(check (pair int string))
     "message"
     ( 123,
       Fmt.str "vhs-cram: %s: executable not found: vhs-no-such-executable\n"
         (path "demo.t") )
-    (code, In_channel.with_open_bin (path "err") In_channel.input_all)
+    ( captured path @@ fun () ->
+      run env ~vhs:"vhs-no-such-executable" (path "demo.t") )
 
 let test_render () =
   with_files
@@ -473,17 +476,14 @@ let test_unfinished ~native () =
       ("err", 0o644, "");
     ]
   @@ fun env path ->
-  let err = Unix.openfile (path "err") [ O_WRONLY; O_TRUNC ] 0 in
-  let code =
-    Fun.protect ~finally:(fun () -> Unix.close err) @@ fun () ->
-    redirect Unix.stderr (Some err) @@ fun () ->
+  let code, msg =
+    captured path @@ fun () ->
     Cli.run env ~print:false
       ~vhs:(Option.value oracle ~default:"vhs")
       ~setup:[]
       ~output:(path (if native then "out.svg" else "out.gif"))
       (path "demo.t")
   in
-  let msg = In_channel.with_open_bin (path "err") In_channel.input_all in
   Alcotest.(check int) "exit code" 123 code;
   List.iter
     (fun sub ->
@@ -497,17 +497,9 @@ let run_err env path ?wait_timeout_s src =
   Eio.Path.save ~create:(`Or_truncate 0o644)
     Eio.Path.(Eio.Stdenv.fs env / path "demo.t")
     src;
-  Eio.Path.save ~create:(`Or_truncate 0o644)
-    Eio.Path.(Eio.Stdenv.fs env / path "err")
-    "";
-  let err = Unix.openfile (path "err") [ O_WRONLY; O_TRUNC ] 0 in
-  let code =
-    Fun.protect ~finally:(fun () -> Unix.close err) @@ fun () ->
-    redirect Unix.stderr (Some err) @@ fun () ->
-    Cli.run env ~print:false ~vhs:"vhs" ~setup:[] ?wait_timeout_s
-      ~output:(path "out.svg") (path "demo.t")
-  in
-  (code, In_channel.with_open_bin (path "err") In_channel.input_all)
+  captured path @@ fun () ->
+  Cli.run env ~print:false ~vhs:"vhs" ~setup:[] ?wait_timeout_s
+    ~output:(path "out.svg") (path "demo.t")
 
 let check_message msg ~has ~lacks =
   List.iter
