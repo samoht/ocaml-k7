@@ -215,14 +215,6 @@ let man =
        element, or writes their text as VHS does. $(b,vhs) records the other \
        outputs, and needs $(b,ttyd), $(b,ffmpeg) and a browser.";
     `P
-      "Before the first command, and after the setup scripts, $(cmd) makes the \
-       last command of $(b,PROMPT_COMMAND) set $(b,PS1) to the VHS prompt \
-       followed by a mark. The mark is sixteen zero-width characters, U+200B \
-       and U+2060, that spell a digest of the setup scripts and the commands. \
-       It tells the prompt from output, even output that ends with $(b,>) or \
-       with a zero-width space, and does not show in a GIF or a video. The \
-       text outputs hold it after each prompt.";
-    `P
       "The prompt hooks of the setup scripts still run first, and a command \
        that replaces $(b,PROMPT_COMMAND) makes the next wait time out. So does \
        a command that leaves bash waiting for more input, such as an \
@@ -236,6 +228,15 @@ let man =
     `P
       "On SIGINT or SIGTERM, $(cmd) types no more commands, writes what it \
        recorded so far, and exits 130 or 143.";
+    `S "THE PROMPT MARK";
+    `P
+      "Before the first command, and after the setup scripts, $(cmd) makes the \
+       last command of $(b,PROMPT_COMMAND) set $(b,PS1) to the VHS prompt \
+       followed by a mark. The mark is sixteen zero-width characters, U+200B \
+       and U+2060, that spell a digest of the setup scripts and the commands. \
+       It tells the prompt from output, even output that ends with $(b,>) or \
+       with a zero-width space, and does not show in a GIF or a video. The \
+       text outputs hold it after each prompt.";
     `S Manpage.s_examples;
     `Pre
       "$(cmd) --output demo.svg demo.t\n\
@@ -245,7 +246,7 @@ let man =
   ]
 
 let cmd =
-  let doc = "record a cram test" in
+  let doc = "type a cram test into bash and record the session" in
   let run print vhs setup dir settings env wait_timeout_s output input =
     Eio_main.run @@ fun stdenv ->
     run stdenv ~print ~vhs ~setup ?dir ~settings ~env ?wait_timeout_s ~output

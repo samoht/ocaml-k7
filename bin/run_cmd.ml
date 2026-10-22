@@ -67,13 +67,15 @@ let man =
        the time it arrived since the program started, and the last one holds \
        for a second after the program exits. The first line of the image shows \
        $(b,\\$) and $(i,COMMAND), each argument shell-quoted where needed, and \
-       the program's output starts on the next line.";
+       the program's output starts on the next line. The terminal has 16 rows \
+       and 75 columns unless $(b,--rows) and $(b,--cols) say otherwise, and \
+       output beyond its last row scrolls its first rows away.";
     `P
-      "The program is looked up in $(b,PATH) unless its name holds a slash. It \
-       gets the environment of $(cmd), with $(b,TERM=xterm-256color), then the \
-       $(b,--env) variables. Its standard input is the terminal, where nothing \
-       is typed, so a program that waits for input waits until $(cmd) is \
-       interrupted.";
+      "The program is looked up in the $(b,PATH) it gets unless its name holds \
+       a slash. It gets the environment of $(cmd), with \
+       $(b,TERM=xterm-256color), then the $(b,--env) variables. Its standard \
+       input is the terminal, where nothing is typed, so a program that waits \
+       for input waits until $(cmd) is interrupted.";
     `P
       "On SIGINT or SIGTERM, $(cmd) sends the program and its descendants \
        SIGTERM, then SIGKILL a second later, writes the image of what the \
@@ -93,14 +95,18 @@ let exits =
            plus the number of the signal that killed it.";
       info some_error
         ~doc:
-          "also when the recording fails or the image cannot be written; the \
-           reason is on standard error.";
+          "also when k7 itself fails, such as when the program cannot start or \
+           the image cannot be written, after printing $(b,k7:) and the reason \
+           on standard error. A program can exit with 123 too; only k7's own \
+           errors print that line.";
+      info 130 ~doc:"also when $(cmd) is interrupted by SIGINT.";
+      info 143 ~doc:"also when $(cmd) is interrupted by SIGTERM.";
       info cli_error ~doc:"on command line parsing errors.";
       info internal_error ~doc:"on unexpected internal errors (bugs).";
     ]
 
 let cmd =
-  let doc = "record a program" in
+  let doc = "run a program on a pseudo-terminal and record its screens" in
   let run settings env show output argv =
     Eio_main.run @@ fun stdenv -> run ?show stdenv ~settings ~env ~output argv
   in

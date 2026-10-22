@@ -21,7 +21,8 @@ let settings =
   let cols =
     let doc =
       "Give the terminal $(docv) columns, and the image the width they need \
-       (defaults to as many as a frame of 1200 pixels holds, as in VHS)."
+       (defaults to as many as a frame of 1200 pixels holds, as in VHS: 75 at \
+       the default font size)."
     in
     Arg.(
       value
@@ -30,7 +31,8 @@ let settings =
   and rows =
     let doc =
       "Give the terminal $(docv) rows, and the image the height they need \
-       (defaults to as many as a frame of 600 pixels holds, as in VHS)."
+       (defaults to as many as a frame of 600 pixels holds, as in VHS: 16 at \
+       the default font size)."
     in
     Arg.(
       value
@@ -68,8 +70,8 @@ let binding s =
 
 let env =
   let doc =
-    "Set the variable $(i,VAR) to $(i,VALUE) in the environment of the \
-     recorded program. Repeatable."
+    "Set the variable $(i,VAR) to $(i,VALUE) for the recording. Repeatable. \
+     The description above says where."
   in
   let pp ppf (k, v) = Fmt.pf ppf "%s=%s" k v in
   Arg.(

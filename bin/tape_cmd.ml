@@ -84,7 +84,7 @@ let man =
   ]
 
 let cmd =
-  let doc = "record a VHS tape" in
+  let doc = "play a VHS tape, itself or with vhs" in
   let run print vhs settings env outputs input =
     Eio_main.run @@ fun stdenv ->
     run stdenv ~print ~vhs ~settings ~env ~outputs input
