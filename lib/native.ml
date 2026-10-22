@@ -976,7 +976,7 @@ let stop_terminal clock ~reaped (t : terminal) =
   in
   if running || not !reaped then (
     wait 100;
-    ignore (signal Sys.sigkill));
+    if signal Sys.sigkill then wait 100);
   reap []
 
 (* Temporary, see [terminal]. *)
