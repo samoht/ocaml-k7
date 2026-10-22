@@ -533,7 +533,7 @@ let test_cursor_format n =
   match Vhs.svg ~settings [ (Ms 0, output) ] with
   | Error e -> failf "%a" Vhs.pp_error e
   | Ok image ->
-      check (contains ~sub:"<desc>ab</desc>" image);
+      check (contains ~sub:"<desc id=\"d\">ab</desc>" image);
       check (not (contains ~sub:mark image))
 
 (* The documented Cf exceptions shape visible text, so every SVG text
@@ -567,7 +567,7 @@ let test_visible_format n =
   match Vhs.svg ~settings [ (Ms 0, "a" ^ mark ^ "b\r") ] with
   | Error e -> failf "%a" Vhs.pp_error e
   | Ok image ->
-      check (contains ~sub:("<desc>a" ^ mark ^ "b</desc>") image);
+      check (contains ~sub:("<desc id=\"d\">a" ^ mark ^ "b</desc>") image);
       check (contains ~sub:(">a" ^ mark ^ "</tspan>") image);
       check
         (contains

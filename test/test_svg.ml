@@ -52,8 +52,10 @@ let test_accessible () =
        (prefers-reduced-motion:reduce){.s{animation:none;transform:translateX(-644px)}}"
     s;
   check_contains "role" ~sub:{|role="img"|} s;
-  check_contains "title" ~sub:"<title>Terminal recording</title>" s;
-  check_contains "description" ~sub:"<desc>a\n&lt;b&gt;</desc>" s;
+  check_contains "named and described"
+    ~sub:{|aria-labelledby="t" aria-describedby="d">|} s;
+  check_contains "title" ~sub:"<title id=\"t\">Terminal recording</title>" s;
+  check_contains "description" ~sub:"<desc id=\"d\">a\n&lt;b&gt;</desc>" s;
   Alcotest.(check (list string))
     "frames"
     [ screen [ "a" ]; screen [ "a"; "<b>" ] ]
@@ -158,7 +160,10 @@ let test_concealed_description () =
   let s = svg [ (Ms 0, "\027[8msecret\027[?25l") ] in
   Alcotest.(check bool) "no description" false (contains ~sub:"<desc" s);
   Alcotest.(check bool) "no secret" false (contains ~sub:"secret" s);
-  check_contains "title" ~sub:"<title>Terminal recording</title>" s;
+  check_contains "title" ~sub:"<title id=\"t\">Terminal recording</title>" s;
+  Alcotest.(check bool)
+    "described by nothing" false
+    (contains ~sub:"aria-describedby" s);
   let s = svg [ (Ms 0, "hello"); (Ms 100, "\027[2J\027[H") ] in
   Alcotest.(check bool) "cleared" false (contains ~sub:"<desc" s)
 
@@ -176,7 +181,7 @@ let test_zero_width_description () =
   in
   check_contains "marks left out"
     ~sub:
-      "<desc>&gt;\n\
+      "<desc id=\"d\">&gt;\n\
        abc e\xcc\x81 \xf0\x9f\x91\xa9\xe2\x80\x8d\xf0\x9f\x92\xbb</desc>"
     s;
   Alcotest.(check (pair int int))
@@ -185,7 +190,7 @@ let test_zero_width_description () =
   (* A prepended concatenation mark, U+0605, shows over the digits; it
      joins the cell before it, as a zero-width character does. *)
   let s = svg [ (Ms 0, "a\xd8\x8512") ] in
-  check_contains "number mark" ~sub:"<desc>a\xd8\x8512</desc>" s;
+  check_contains "number mark" ~sub:"<desc id=\"d\">a\xd8\x8512</desc>" s;
   check_contains "number mark shown" ~sub:">a\xd8\x85</tspan>" s
 
 (* A spacing mark, such as the vowel sign after Devanagari KA, joins the
@@ -213,7 +218,7 @@ let test_framerate_limit () =
 let test_cursor_format () =
   let s = svg [ (Ms 0, "a\u{200B}\u{202E}b\r") ] in
   check_contains "row text" ~sub:">ab</tspan>" s;
-  check_contains "description" ~sub:"<desc>ab</desc>" s;
+  check_contains "description" ~sub:"<desc id=\"d\">ab</desc>" s;
   check_contains "cursor glyph"
     ~sub:{|<text class="ka k" x="0" y="22">a</text>|} s;
   Alcotest.(check bool)
@@ -258,7 +263,7 @@ let test_tag_flag () =
     "\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}"
   in
   let s = svg [ (Ms 0, flag) ] in
-  check_contains "description" ~sub:("<desc>" ^ flag ^ "</desc>") s;
+  check_contains "description" ~sub:("<desc id=\"d\">" ^ flag ^ "</desc>") s;
   check_contains "image text" ~sub:(">" ^ flag ^ "</tspan>") s
 
 let suite =

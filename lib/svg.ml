@@ -445,7 +445,7 @@ let add_desc b screen =
   match List.rev (drop_blank (List.rev lines)) with
   | [] -> ()
   | lines ->
-      Buffer.add_string b "<desc>";
+      Buffer.add_string b "<desc id=\"d\">";
       List.iteri
         (fun i line ->
           if i > 0 then Buffer.add_char b '\n';
@@ -485,13 +485,18 @@ let image t ~duration frames =
      viewBox=\"0 0 %d %d\" font-family=\""
     t.width t.height t.width t.height;
   add_escaped b t.font_family;
-  Fmt.kstr (Buffer.add_string b)
-    "\" font-size=\"%d\" xml:space=\"preserve\" role=\"img\"><title>Terminal \
-     recording</title>"
-    t.font_size;
+  (* An inlined image names itself by its title and describes itself by
+     its description, as an [img] element does by its [alt]. *)
+  let desc = Buffer.create 256 in
   (match List.rev frames with
-  | (_, screen) :: _ -> add_desc b screen
+  | (_, screen) :: _ -> add_desc desc screen
   | [] -> ());
+  Fmt.kstr (Buffer.add_string b)
+    "\" font-size=\"%d\" xml:space=\"preserve\" role=\"img\" \
+     aria-labelledby=\"t\"%s><title id=\"t\">Terminal recording</title>"
+    t.font_size
+    (if Buffer.length desc > 0 then " aria-describedby=\"d\"" else "");
+  Buffer.add_buffer b desc;
   add_style t b ~duration frames;
   add_margin t b;
   Fmt.kstr (Buffer.add_string b)
