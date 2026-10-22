@@ -369,6 +369,17 @@ let test_setting_list_errors settings =
   | Error e, _ -> failf "tape: %a, but svg did not agree" Vhs.pp_error e
   | Ok _, Error e -> failf "svg: %a" Vhs.pp_error e
 
+(* A frame rate is not a pixel dimension and has no documented native
+   upper bound. Keep ordinary rates and the size-check boundary in scope. *)
+let test_positive_framerate n =
+  let settings = Vhs.Framerate (max 1 n) :: settings in
+  (match Vhs.tape ~settings ~outputs:[ "x.svg" ] [ Vhs.sleep (Ms 100) ] with
+  | Ok _ -> ()
+  | Error e -> failf "tape: %a" Vhs.pp_error e);
+  match Vhs.svg ~settings [ (Ms 0, "hello") ] with
+  | Ok _ -> ()
+  | Error e -> failf "svg: %a" Vhs.pp_error e
+
 let contains ~sub s =
   let rec go i =
     i + String.length sub <= String.length s
@@ -438,6 +449,12 @@ let suite =
   ( "svg",
     [
       test_case "frames" [ list chunk ] test_frames;
+      test_case "positive SVG frame rates are not pixel sizes"
+        [
+          choose
+            [ uint16; map [ uint16 ] (fun n -> 100_001 + n); const max_int ];
+        ]
+        test_positive_framerate;
       test_case "SVG and tape return identical setting-list errors"
         [ list setting ]
         test_setting_list_errors;
