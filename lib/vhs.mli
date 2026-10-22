@@ -155,8 +155,9 @@ type setting =
   | Framerate of int  (** A positive frame rate (defaults to [50]). *)
 
 type t
-(** The type for tapes VHS reads without error and without ignoring a line. VHS
-    can still fail as it records, see {{!checks}checks}. *)
+(** The type for tapes VHS reads without error and without ignoring a line, but
+    for a {!raw} [Screenshot] of an [.svg] image, which only {!record} takes.
+    VHS can still fail as it records, see {{!checks}checks}. *)
 
 (** The type for errors. Constructors may be added, so a match on [error] ends
     with a case for the others. *)
@@ -227,10 +228,11 @@ val pp : t Fmt.t
     the screens it shows as an animated SVG image; it needs no [vhs], browser or
     [ffmpeg]. Each one writes the outputs of the tape, relative to its [cwd] and
     anywhere else an absolute or [..] path leads, and refuses, as
-    {!constructor-Unsupported} and before it plays anything, an output that only
-    the other one writes. Both write the text outputs and the screenshots.
-    {!svg} draws the image of output that is already there, with no tape and no
-    shell. *)
+    {!constructor-Unsupported} and before it plays anything, an output or a
+    [Screenshot] that only the other one writes. Both write the text outputs,
+    and the screenshots at their paths: {!render} of [.png] images, {!record} of
+    [.svg] images. {!svg} draws the image of output that is already there, with
+    no tape and no shell. *)
 
 val render :
   ?vhs:string ->
@@ -242,11 +244,12 @@ val render :
 (** [render ~vhs ~clock ~proc ~cwd t] runs the executable [vhs] (defaults to
     ["vhs"]) as [vhs -q] in the directory [cwd], with the tape [t] on its
     standard input, so that it writes the outputs of [t]. It is
-    [Error (Unsupported _)] if [t] has an [.svg] output, which {!record} writes.
-    [vhs] gets the environment of [proc] without five variables: [VHS_PUBLISH],
-    which would upload the recording; [rod], which configures the browser VHS
-    drives; and [PS1], [PROMPT] and [PROMPT_COMMAND], which would replace the
-    prompt {!constructor-Prompt} waits for. What [vhs] prints is kept for
+    [Error (Unsupported _)] if [t] has an [.svg] output or a {!raw} [Screenshot]
+    of an [.svg] image, which {!record} writes. [vhs] gets the environment of
+    [proc] without five variables: [VHS_PUBLISH], which would upload the
+    recording; [rod], which configures the browser VHS drives; and [PS1],
+    [PROMPT] and [PROMPT_COMMAND], which would replace the prompt
+    {!constructor-Prompt} waits for. What [vhs] prints is kept for
     {!constructor-Failed} and dropped on success. If the calling fiber is
     cancelled, [render] sends [vhs] [SIGTERM], which makes it stop the terminal
     and the browser it started, and waits for it to exit. If [vhs] still runs
@@ -269,9 +272,12 @@ val record :
     it [SIGKILL] if it still runs a second later by [clock], and waits for it to
     exit. It is:
     - [Error (Unsupported _)] on a [.gif], [.mp4], [.webm] or PNG frames output,
-      which {!render} writes, and on what the {{!native_details}native recorder}
-      does not play, before it plays anything;
-    - [Error (Invalid _)] on a [Source] line it refuses;
+      or a [Screenshot] of a [.png] image, which {!render} writes, and on what
+      the {{!native_details}native recorder} does not play, before it plays
+      anything;
+    - [Error (Invalid _)] on a [Source] line it refuses, and on a [Screenshot]
+      of a sourced tape that has the path of an output or of another
+      [Screenshot];
     - [Error (Timeout _)] if a wait does not hold in time;
     - [Error (Executable_not_found _)] if the shell or the executable of a
       [Require] line is not on the [PATH];
@@ -298,6 +304,8 @@ val svg :
     - two outputs, {!raw} [Output] lines included, are of the same kind (GIF,
       MP4, WebM, text, PNG frames or SVG): VHS writes only the last of each kind
       but SVG, which it never reads, and {!record} writes one SVG image;
+    - a {!raw} [Screenshot] has the path of an output or of another
+      [Screenshot];
     - a string holds a control character, C1 controls included (the tabs and
       newlines of {!type'} aside), or, in typed text, invalid UTF-8;
     - an output path or a {!constructor-Theme} holds all three quote characters
@@ -366,9 +374,9 @@ val svg :
     whose rows depend on its browser's window; the native output leaves them
     out.
 
-    A [Screenshot] of [shot.png], which VHS writes as a PNG image of the next
-    frame it records, writes a still SVG image of that frame to [shot.svg],
-    without the cursor blinking.
+    A [Screenshot] of [shot.svg] writes a still SVG image of the next frame it
+    records to [shot.svg], without the cursor blinking, where VHS writes a
+    [Screenshot] of [shot.png] as a PNG image.
 
     {!record} plays the actions of {!action}, the raw [Type], key, [Ctrl],
     [Alt], [Shift], [Sleep], [Wait], [Copy], [Paste] ([Paste] types the last

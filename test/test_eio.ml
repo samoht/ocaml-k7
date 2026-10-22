@@ -321,7 +321,22 @@ let test_svg_refused () =
             (Fmt.str "%a" Vhs.pp_error e)
       | Error e -> Alcotest.failf "%a" Vhs.pp_error e
       | Ok () -> Alcotest.fail "an SVG output rendered")
-    [ [ "demo.svg" ]; [ "demo.gif"; "demo.svg" ]; [ "demo.svg"; "demo.txt" ] ]
+    [ [ "demo.svg" ]; [ "demo.gif"; "demo.svg" ]; [ "demo.svg"; "demo.txt" ] ];
+  let t =
+    match
+      Vhs.tape ~outputs:[ "demo.gif" ]
+        [ Vhs.raw {|Screenshot "shot.svg"|}; Vhs.sleep (Ms 100) ]
+    with
+    | Ok t -> t
+    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  in
+  match Vhs.render ~clock:(clock ()) ~proc ~cwd t with
+  | Error (Unsupported _ as e) ->
+      expect "names the screenshot and record"
+        {|not recorded by vhs: Screenshot "shot.svg": an SVG image, which Vhs.record takes|}
+        (Fmt.str "%a" Vhs.pp_error e)
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Ok () -> Alcotest.fail "an SVG screenshot rendered"
 
 (* Cancelling render sends vhs SIGTERM, which it cleans up after, and waits
    for it to exit. *)

@@ -336,9 +336,6 @@ type t = {
   dumps : bool;  (** Whether the text output starts with the first action. *)
 }
 
-(* A screenshot is an SVG image: [shot.png] is [shot.svg]. *)
-let still_path p = Filename.remove_extension p ^ ".svg"
-
 let is_text path =
   match extension path with ".txt" | ".ascii" | ".test" -> true | _ -> false
 
@@ -470,7 +467,9 @@ let rec read ~source line t =
         | [ Keyword "Show" ] -> Show
         | Keyword "Copy" :: rest -> Copy (strings rest)
         | [ Keyword "Paste" ] -> Paste
-        | Keyword "Screenshot" :: p :: _ -> Screenshot (still_path (lit p))
+        | Keyword "Screenshot" :: p :: _ ->
+            if extension (lit p) = ".svg" then Screenshot (lit p)
+            else unsupported line "a PNG image, which Vhs.render takes"
         | _ -> unsupported line "not a command this module knows"
       in
       { t with actions = action :: t.actions }
@@ -546,6 +545,9 @@ type recording = {
 }
 
 let text_output (t : t) = t.text
+
+let stills t =
+  List.filter_map (function Screenshot p -> Some p | _ -> None) t.actions
 
 let replay t output =
   let s = t.look in

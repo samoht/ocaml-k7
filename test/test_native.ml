@@ -57,9 +57,9 @@ let test_zero_speed_prompt () =
     ~sub:"\nREADY\n>"
     (last_screen (Eio.Path.load Eio.Path.(cwd / "demo.txt")))
 
-(* A screenshot of demo.png writes its still to demo.svg, the path of the
-   recording: record refuses the tape before it plays, rather than replace
-   the recording with the still. *)
+(* A screenshot of demo.png is a PNG image, which only render writes:
+   record refuses the tape before it plays, rather than write a still to
+   demo.svg, the path of the recording. *)
 let test_screenshot_clash () =
   with_dir @@ fun env cwd ->
   let t =
@@ -523,8 +523,8 @@ let test_unsupported () =
   | Ok _ -> Alcotest.fail "played nushell"
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e
 
-(* A screenshot is a still SVG image of the next frame, also when it is
-   taken while hidden, for the path with [.svg] in place of [.png]. *)
+(* A screenshot of an [.svg] path is a still SVG image of the next frame at
+   that path, also when it is taken while hidden. *)
 let test_screenshot () =
   with_dir @@ fun env cwd ->
   let t =
@@ -532,10 +532,10 @@ let test_screenshot () =
       Vhs.
         [
           hidden
-            [ raw "Screenshot \"hidden.png\""; type' "true\n"; wait Prompt ];
+            [ raw "Screenshot \"hidden.svg\""; type' "true\n"; wait Prompt ];
           type' "echo one\n";
           wait Prompt;
-          raw "Screenshot \"shot.png\"";
+          raw "Screenshot \"shot.svg\"";
           type' "echo two\n";
           wait Prompt;
         ]
@@ -626,6 +626,10 @@ let test_render_outputs () =
       ( [ "demo.svg" ],
         [ {|Output "demo.webm"|} ],
         {|not recorded natively: Output "demo.webm": a WebM video, which Vhs.render records|}
+      );
+      ( [ "demo.svg" ],
+        [ {|Screenshot "shot.png"|} ],
+        {|not recorded natively: Screenshot "shot.png": a PNG image, which Vhs.render takes|}
       );
     ]
 

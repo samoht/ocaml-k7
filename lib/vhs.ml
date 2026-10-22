@@ -225,6 +225,26 @@ let raw_outputs actions =
     (function Tape_syntax.Output p -> Some p | _ -> None)
     (raw_commands actions)
 
+let raw_screenshots actions =
+  List.filter_map
+    (function Tape_syntax.Screenshot p -> Some p | _ -> None)
+    (raw_commands actions)
+
+(* [shared outputs shots] is a path of [shots] that is also another path of
+   [outputs] or [shots], if any. *)
+let shared outputs shots =
+  let rec go seen = function
+    | [] -> None
+    | p :: rest -> if List.mem p seen then Some p else go (p :: seen) rest
+  in
+  go outputs shots
+
+let check_screenshots outputs shots =
+  match shared outputs shots with
+  | None -> Ok ()
+  | Some p ->
+      Fmt.error "Screenshot %S: the path of an output or another screenshot" p
+
 (* VHS refuses a frame sized both by its pixels and by its cells in one
    direction. *)
 let check_cells settings actions =
@@ -277,7 +297,7 @@ let check_raw ~started line =
         Fmt.error "raw line %S: use the setting %s instead" line
           (List.assoc name constructors)
     | Ok (Set _ | Require) -> Ok false
-    | Ok Other -> Ok true
+    | Ok (Screenshot _ | Other) -> Ok true
 
 (* [is_empty a] is [true] iff [a] prints nothing. *)
 let rec is_empty = function
@@ -291,7 +311,9 @@ let records = function
   | Key _ | Sleep _ | Wait _ -> true
   | Hidden _ -> false
   | Raw line -> (
-      match Tape_syntax.check line with Ok Other -> true | _ -> false)
+      match Tape_syntax.check line with
+      | Ok (Screenshot _ | Other) -> true
+      | _ -> false)
 
 (* [check_actions ~started actions] is whether an action that ends the
    settings has run once [actions] have. *)
@@ -588,7 +610,9 @@ let check_tape ~settings ~outputs actions =
   let* () = check_records actions in
   let* () = check_cells settings actions in
   let* () = check_size settings actions in
-  let* () = check_paths settings (outputs @ raw_outputs actions) in
+  let outputs' = outputs @ raw_outputs actions in
+  let* () = check_paths settings outputs' in
+  let* () = check_screenshots outputs' (raw_screenshots actions) in
   Ok { outputs; settings; actions }
 
 let tape ?(settings = []) ~outputs actions =
@@ -981,6 +1005,19 @@ let refuse ~by ~other kinds t =
 
 let render ?(vhs = "vhs") ~clock ~proc ~cwd t =
   let* () = refuse ~by:"by vhs" ~other:"record" [ "SVG" ] t in
+  let* () =
+    match
+      List.find_opt
+        (fun p -> Tape_syntax.extension p = ".svg")
+        (raw_screenshots t.actions)
+    with
+    | None -> Ok ()
+    | Some p ->
+        err_unsupported
+          "not recorded by vhs: Screenshot %S: an SVG image, which Vhs.record \
+           takes"
+          p
+  in
   render_vhs ~vhs ~clock ~proc ~cwd t
 
 (* Recording natively *)
@@ -1044,6 +1081,14 @@ let record ~clock ~proc ~cwd t =
   in
   let* tape =
     native ~source:(load dir) (String.split_on_char '\n' (to_string t))
+  in
+  (* A sourced tape's screenshots, which [tape] does not see. *)
+  let* () =
+    Result.map_error
+      (fun msg -> Invalid msg)
+      (check_screenshots
+         (t.outputs @ raw_outputs t.actions)
+         (Native.stills tape))
   in
   let* { svg; text; stills } =
     Result.map_error native_error

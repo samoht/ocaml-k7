@@ -141,8 +141,9 @@ tape's theme, named or in JSON, and VHS's window bar and margin. Wait patterns
 match as Go's do. Time follows the tape: typing and sleeping take the time the
 tape says, whatever the machine does around them, so the same output, in the
 same frames, gives the same image; how long a command takes to print can move
-its output to other frames. A `Screenshot` writes a still SVG image, and `Source` plays the
-lines of another tape. A few things need VHS, such as the other shells or
+its output to other frames. A `Screenshot` of an `.svg` path writes a still
+SVG image there, where VHS takes a `.png` path, and `Source` plays the lines
+of another tape. A few things need VHS, such as the other shells or
 a colour name in a JSON theme; `Vhs.record` names them in its error.
 `Vhs.svg` draws the image of output given with its times, without running
 anything.

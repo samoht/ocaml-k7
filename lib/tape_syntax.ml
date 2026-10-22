@@ -13,6 +13,7 @@ type command =
   | Require
   | Output of string
   | Set of string * string
+  | Screenshot of string
   | Other
 
 (* Lexing *)
@@ -532,10 +533,12 @@ let command p =
           if extension (path p ~what:"Source") <> ".tape" then
             fail "Expected file with .tape extension";
           Other
-      | "Screenshot" ->
-          if extension (path p ~what:"Screenshot") <> ".png" then
-            fail "Expected file with .png extension";
-          Other
+      | "Screenshot" -> (
+          (* VHS takes a PNG image; Vhs.record also takes an SVG one. *)
+          let shot = path p ~what:"Screenshot" in
+          match extension shot with
+          | ".png" | ".svg" -> Screenshot shot
+          | _ -> fail "Expected file with .png extension")
       | "Paste" -> Other
       | "Env" ->
           ignore (take p);

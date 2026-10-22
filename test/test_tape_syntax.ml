@@ -28,6 +28,8 @@ let test_accepted () =
       {|Wait+Line /x\\/|};
       {|Wait+Screen@2s /a\/b/|};
       "Screenshot shot.png";
+      (* VHS refuses it; record writes it, and render refuses it. *)
+      "Screenshot shot.svg";
       {|Copy "a" 'b'|};
       "Paste";
       "Sleep .5";
@@ -66,6 +68,29 @@ let test_rejected () =
   fails "late modifier" "Ctrl+c+Alt"
     "Modifiers must come before other characters";
   fails "screenshot" "Screenshot a.gif" "Expected file with .png extension";
+  (match
+     Vhs.tape ~outputs:[ "demo.svg" ]
+       [ Vhs.raw "Screenshot demo.svg"; Vhs.sleep (Ms 1) ]
+   with
+  | Error e ->
+      Alcotest.(check string)
+        "screenshot over an output"
+        {|Screenshot "demo.svg": the path of an output or another screenshot|}
+        (Native_test.invalid e)
+  | Ok _ -> Alcotest.fail "a screenshot over an output");
+  (match
+     tape
+       [
+         Vhs.raw "Screenshot a.png";
+         Vhs.sleep (Ms 1);
+         Vhs.raw "Screenshot a.png";
+       ]
+   with
+  | Error e ->
+      Alcotest.(check string)
+        "two screenshots"
+        {|Screenshot "a.png": the path of an output or another screenshot|} e
+  | Ok () -> Alcotest.fail "two screenshots to one path");
   fails "source" "Source a.txt" "Expected file with .tape extension";
   fails "regex" "Wait /[/"
     "Invalid regular expression '[': missing closing ]: `[`";

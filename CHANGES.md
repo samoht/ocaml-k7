@@ -11,7 +11,7 @@
   with VHS.
 - The native recorder plays bash, zsh and fish as VHS starts them, VHS's
   window bar, named and JSON themes, margin colours and images, `Screenshot`
-  (a still SVG image), `Source` and the `.txt`, `.ascii` and `.test`
+  (a still SVG image at an `.svg` path), `Source` and the `.txt`, `.ascii` and `.test`
   outputs, byte for byte as VHS writes them but for the screens VHS reads
   before it sizes the terminal. Its wait patterns match as Go's do, with
   Unicode case folding and ASCII word boundaries, and its waits read the
