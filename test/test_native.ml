@@ -1239,6 +1239,35 @@ let test_run_exec_errors () =
   Alcotest.(check (list string))
     "exec and chdir failures are I/O errors" [ "Io"; "Io"; "Io"; "Io" ] outcomes
 
+let test_run_inherited_fd () =
+  with_dir @@ fun env cwd ->
+  Eio.Path.save ~create:(`Or_truncate 0o600)
+    Eio.Path.(cwd / "private-data")
+    "FD_SENTINEL\n";
+  let fd =
+    Unix.openfile
+      (Eio.Path.native_exn Eio.Path.(cwd / "private-data"))
+      [ O_RDONLY ] 0
+  in
+  Unix.clear_close_on_exec fd;
+  Fun.protect ~finally:(fun () -> Unix.close fd) @@ fun () ->
+  script cwd "inspect-fds.sh"
+    "#!/bin/bash\n\
+     n=3\n\
+     while [ \"$n\" -lt 64 ]; do\n\
+     value=\n\
+     IFS= read -r -t 1 -u \"$n\" value 2>/dev/null\n\
+     if [ \"$value\" = FD_SENTINEL ]; then printf FD_LEAKED; fi\n\
+     n=$((n+1))\n\
+     done\n\
+     printf DONE\n";
+  match run env cwd [ "./inspect-fds.sh" ] with
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+  | Ok (image, _) ->
+      Alcotest.(check string)
+        "only standard descriptors reach the program" (screen [ "DONE" ])
+        (last (frames image))
+
 let test_run_errors () =
   with_dir @@ fun env cwd ->
   let error name ?vars argv check =
@@ -1420,6 +1449,8 @@ let suite =
          ("run restores SIGPIPE", test_run_sigpipe);
          ("record restores SIGPIPE", test_record_sigpipe);
          ("run reports exec failures as I/O errors", test_run_exec_errors);
+         ( "run does not inherit recorder file descriptors",
+           test_run_inherited_fd );
          ("run errors", test_run_errors);
          ("run a killed program", test_run_signal);
          ("run shows the command line", test_run_command_line);
