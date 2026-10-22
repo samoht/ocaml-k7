@@ -128,8 +128,9 @@ type error =
           write, named, and why. *)
   | Timeout of { wait : string; line : int; last : string }
       (** A wait of {!record} did not hold in time. [line] is its line, counted
-          from 1, in the tape as {!to_string} prints it, and [wait] is that
-          line, such as [Wait+Line /re/] or [Wait@2000ms], or the line of a
+          from 1, in the source {!of_string} read the tape from, or in the tape
+          as {!to_string} prints it for a tape built otherwise, and [wait] is
+          that line, such as [Wait+Line /re/] or [Wait@2000ms], or the line of a
           sourced tape for a wait there. [last] is the line or the screen the
           wait last read. Only {!record} returns it, and {!render} reports a
           wait that times out as {!constructor-Failed}, with the message of

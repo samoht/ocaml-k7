@@ -501,6 +501,21 @@ let test_timeout_message () =
     ~has:[ "command 2"; "sleep 5"; "1 second"; "--wait-timeout" ]
     ~lacks:[ "x{200B}"; "x{2060}"; "Wait+Line"; "\u{200B}" ]
 
+let test_tape_timeout () =
+  with_files [] @@ fun env path ->
+  let tape = path "t.tape" in
+  Out_channel.with_open_bin tape (fun oc ->
+      Fmt.kstr
+        (Out_channel.output_string oc)
+        "Output %S\nType \"echo hi\"\nEnter\nWait@1s /never/\n" (path "t.svg"));
+  let code, msg =
+    captured path @@ fun () ->
+    Tape_cmd.run env ~print:false ~vhs:"vhs" ~settings:[] ~env:[] ~outputs:[]
+      tape
+  in
+  Alcotest.(check int) "exit code" 123 code;
+  check_message msg ~has:[ "line 4"; "Wait@1s /never/" ] ~lacks:[ "line 3" ]
+
 let test_exit_message () =
   with_files [] @@ fun env path ->
   let start = Unix.gettimeofday () in
@@ -642,6 +657,7 @@ let suite =
          ("errors name the input", test_error_names_input);
          ("render real processes", test_render);
          ("timeout message", test_timeout_message);
+         ("tape timeout names the file's line", test_tape_timeout);
          ("native text outputs", test_native_text);
          ("shell exit message", test_exit_message);
          ("tape -o without Output", test_tape_output_option);

@@ -89,6 +89,7 @@ type t = {
   outputs : string list;
   settings : setting list;
   actions : action list;
+  source : string list option;
 }
 
 let ( let* ) = Result.bind
@@ -626,7 +627,7 @@ let check_tape ~settings ~outputs actions =
   let outputs' = outputs @ raw_outputs actions in
   let* () = check_paths settings outputs' in
   let* () = check_screenshots outputs' (raw_screenshots actions) in
-  Ok { outputs; settings; actions }
+  Ok { outputs; settings; actions; source = None }
 
 let tape ?(settings = []) ~outputs actions =
   Result.map_error
@@ -887,6 +888,7 @@ let of_string src =
       in
       tape ~settings:(List.rev !settings) ~outputs:(List.rev !outputs)
         (List.rev actions)
+      |> Result.map (fun t -> { t with source = Some (lines src) })
 
 let replaces s s' =
   match (s, s') with
@@ -902,8 +904,11 @@ let with_settings settings t =
       t.settings
   in
   tape ~settings:(kept @ settings) ~outputs:t.outputs t.actions
+  |> Result.map (fun t' -> { t' with source = t.source })
 
-let with_outputs outputs t = tape ~settings:t.settings ~outputs t.actions
+let with_outputs outputs t =
+  tape ~settings:t.settings ~outputs t.actions
+  |> Result.map (fun t' -> { t' with source = t.source })
 
 let utf_8 s =
   let b = Buffer.create (String.length s) in
@@ -1218,10 +1223,31 @@ let render ?stop ?(vhs = "vhs") ~clock ~proc ~cwd t =
   in
   render_vhs ?stop ~vhs ~clock ~proc ~cwd t
 
-let native_error ?(verb = "recorded") : Native.error -> error = function
+(* The [n]th line of [to_string t] is the [k]th of its text there, and so
+   in the source of [of_string]: an action's lines keep their text and order. *)
+let source_line tape n =
+  match tape with
+  | Some ({ source = Some src; _ } as t) -> (
+      let printed = String.split_on_char '\n' (to_string t) in
+      match List.nth_opt printed (n - 1) with
+      | None -> n
+      | Some l ->
+          let rec find i k = function
+            | [] -> n
+            | l' :: rest when l' = l ->
+                if k = 1 then i else find (i + 1) (k - 1) rest
+            | _ :: rest -> find (i + 1) k rest
+          in
+          find 1 (List.length (List.filter (( = ) l) (List.take n printed))) src
+      )
+  | _ -> n
+
+let native_error ?(verb = "recorded") ?tape : Native.error -> error = function
   | Unsupported why -> Unsupported ("not " ^ verb ^ " natively: " ^ why)
-  | Timeout { wait; line; last } -> Timeout { wait; line; last }
-  | Exited { status; wait; line; last } -> Exited { status; wait; line; last }
+  | Timeout { wait; line; last } ->
+      Timeout { wait; line = source_line tape line; last }
+  | Exited { status; wait; line; last } ->
+      Exited { status; wait; line = source_line tape line; last }
   | Executable_not_found exe -> Executable_not_found exe
   | Io msg -> Io msg
   | Invalid msg -> Invalid msg
@@ -1307,7 +1333,7 @@ let record ?stop ~clock ~proc ~cwd t =
   in
   let* { svg; text; stills } =
     Result.map_error
-      (native_error ~verb:"recorded")
+      (native_error ~verb:"recorded" ~tape:t)
       (Native.play ?interrupt:stop ~clock ~env:(environment proc) ~cwd:dir tape)
   in
   let save ?(create = false) contents path =
