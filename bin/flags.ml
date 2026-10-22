@@ -17,6 +17,17 @@ let positive what s =
 let count ~docv what =
   Arg.Conv.make ~docv ~parser:(positive what) ~pp:Fmt.int ()
 
+let framerate =
+  let doc =
+    "Record at most $(docv) frames a second (defaults to 50, as in VHS). A \
+     lower rate makes a smaller image of a program that redraws often; 20 \
+     still moves smoothly."
+  in
+  Arg.(
+    value
+    & opt (some (count ~docv:"N" "frame rate")) None
+    & info [ "framerate" ] ~docv:"N" ~doc)
+
 let settings =
   let columns =
     let doc =
@@ -50,16 +61,6 @@ let settings =
        themes) lists them, or of a theme in JSON."
     in
     Arg.(value & opt (some string) None & info [ "theme" ] ~docv:"NAME" ~doc)
-  and framerate =
-    let doc =
-      "Record at most $(docv) frames a second (defaults to 50, as in VHS). A \
-       lower rate makes a smaller image of a program that redraws often; 20 \
-       still moves smoothly."
-    in
-    Arg.(
-      value
-      & opt (some (count ~docv:"N" "frame rate")) None
-      & info [ "framerate" ] ~docv:"N" ~doc)
   in
   let make columns rows font_size theme framerate =
     List.filter_map Fun.id

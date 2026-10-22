@@ -1372,29 +1372,28 @@ let test_run_cancel_descendant cancelled =
   | _ -> fail "run did not finish as expected");
   if alive then fail "run left its descendant alive"
 
+let payloads =
+  [
+    "";
+    "two words";
+    "it's";
+    "\"quoted\"";
+    "$HOME";
+    "a\nb";
+    "caf\xc3\xa9";
+    "世界";
+    "😀";
+    "`echo replaced`";
+    "a\tb";
+    "a\x9b[2Jb";
+    "\xc2\x9b";
+    "\xff\xfe";
+    "caf\xc3";
+  ]
+
 let test_command_line_roundtrip n =
   with_dir @@ fun env path ->
-  let payload =
-    List.nth
-      [
-        "";
-        "two words";
-        "it's";
-        "\"quoted\"";
-        "$HOME";
-        "a\nb";
-        "caf\xc3\xa9";
-        "世界";
-        "😀";
-        "`echo replaced`";
-        "a\tb";
-        "a\x9b[2Jb";
-        "\xc2\x9b";
-        "\xff\xfe";
-        "caf\xc3";
-      ]
-      (n mod 15)
-  in
+  let payload = List.nth payloads (n mod List.length payloads) in
   let settings = K7.[ Columns 200; Rows 6; Font_size 10; Padding 0 ] in
   let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "unused")) in
   let proc = Eio.Stdenv.process_mgr env in
@@ -1457,7 +1456,7 @@ let test_check_directory_destination n =
     | _ ->
         ( "occupied.svg",
           K7.Native,
-          [ K7.raw (Fmt.str "Screenshot %S" (path "occupied.svg")) ] )
+          [ Fmt.kstr K7.raw "Screenshot %S" (path "occupied.svg") ] )
   in
   Unix.mkdir (path name) 0o755;
   Fun.protect ~finally:(fun () -> Unix.rmdir (path name)) @@ fun () ->
@@ -1589,7 +1588,7 @@ let test_cli_dry_run_preflight n =
   check (recorded = checked);
   check (entries () = before)
 
-let test_cli_successful_dry_run_is_pure n =
+let test_cli_dry_run_pure n =
   with_dir @@ fun env path ->
   let command = "touch " ^ Filename.quote (path "played") in
   let name, src =
@@ -1630,7 +1629,7 @@ let with_processes =
     test_case "CLI dry-run and recording refuse the same preflight failures"
       [ uint8 ] test_cli_dry_run_preflight;
     test_case "successful CLI dry-run is silent and creates no output directory"
-      [ uint8 ] test_cli_successful_dry_run_is_pure;
+      [ uint8 ] test_cli_dry_run_pure;
     test_case "check rejects directory destinations for outputs and screenshots"
       [ uint8 ] test_check_directory_destination;
     test_case "record respects the explicit terminal environment" [ uint8 ]
@@ -1680,10 +1679,14 @@ let test_accessors_roundtrip n =
   let outputs = [ Fmt.str "out-%d.txt" n ] in
   let t = Result.get_ok (K7.tape ~settings ~outputs [ last ]) in
   let parsed = Result.get_ok (K7.of_string (K7.to_string t)) in
-  check (K7.settings t = settings);
-  check (K7.outputs t = outputs);
-  check (K7.settings parsed = settings);
-  check (K7.outputs parsed = outputs);
+  let printed settings =
+    K7.to_string (Result.get_ok (K7.tape ~settings ~outputs:[] [ last ]))
+  in
+  let same_outputs = List.equal String.equal outputs in
+  check_eq ~pp:pp_string (printed settings) (printed (K7.settings t));
+  check (same_outputs (K7.outputs t));
+  check_eq ~pp:pp_string (printed settings) (printed (K7.settings parsed));
+  check (same_outputs (K7.outputs parsed));
   check_eq ~pp:Fmt.Dump.string (K7.to_string t) (K7.to_string parsed)
 
 let test_replace_dimensions n =
@@ -1709,8 +1712,8 @@ let test_replace_outputs n =
   let get = function Ok t -> t | Error e -> failf "%a" K7.pp_error e in
   let original =
     get
-      (K7.of_string
-         (Fmt.str "Output old.gif\nSleep 100ms\nOutput late-%d.txt\n" n))
+      (Fmt.kstr K7.of_string "Output old.gif\nSleep 100ms\nOutput late-%d.txt\n"
+         n)
   in
   check_eq
     ~pp:Fmt.Dump.(list string)
@@ -1726,61 +1729,78 @@ let test_replace_outputs n =
    [closed] says: not ready, closed, or failed. The program runs while the
    reader asks whether it has exited, and the mock clock moves only when
    every fiber waits. *)
+type fake_pty = {
+  pending : Buffer.t;
+  capacity : int;
+  changed : Eio.Condition.t;
+  mutable exited : bool;
+}
+
+(* Once empty and the program gone, the terminal reads as [closed] says:
+   not ready, closed, or failed. *)
+let fake_read t closed buf off len =
+  if Buffer.length t.pending = 0 then
+    match closed mod 3 with
+    | 0 -> raise (Unix.Unix_error (EAGAIN, "read", ""))
+    | _ when not t.exited -> raise (Unix.Unix_error (EAGAIN, "read", ""))
+    | 1 -> 0
+    | _ -> raise (Unix.Unix_error (EIO, "read", ""))
+  else
+    let n = min len (Buffer.length t.pending) in
+    let rest = Buffer.sub t.pending n (Buffer.length t.pending - n) in
+    Buffer.blit t.pending 0 buf off n;
+    Buffer.clear t.pending;
+    Buffer.add_string t.pending rest;
+    Eio.Condition.broadcast t.changed;
+    n
+
+let rec fake_write t output i =
+  if i < String.length output then (
+    let n =
+      min (t.capacity - Buffer.length t.pending) (String.length output - i)
+    in
+    if n = 0 then Eio.Condition.await_no_mutex t.changed
+    else (
+      Buffer.add_substring t.pending output i n;
+      Eio.Condition.broadcast t.changed);
+    fake_write t output (i + n))
+  else (
+    t.exited <- true;
+    Eio.Condition.broadcast t.changed)
+
+(* The program writes [output] into a fake terminal of [capacity] bytes and
+   exits, and runs while the reader asks whether it has exited. The mock
+   clock moves only when every fiber waits. *)
 let test_reader output capacity closed size =
   Eio_mock.Backend.run_full @@ fun env ->
   let clock = Eio.Stdenv.mono_clock env in
-  let capacity = 1 + capacity and size = 1 + size in
-  let pending = Buffer.create capacity and fed = Buffer.create 256 in
-  let changed = Eio.Condition.create () and exited = ref false in
-  let empty () =
-    match closed mod 3 with
-    | 0 -> raise (Unix.Unix_error (EAGAIN, "read", ""))
-    | 1 -> 0
-    | _ -> raise (Unix.Unix_error (EIO, "read", ""))
+  let t =
+    {
+      pending = Buffer.create 256;
+      capacity = 1 + capacity;
+      changed = Eio.Condition.create ();
+      exited = false;
+    }
   in
-  let read buf off len =
-    if Buffer.length pending = 0 then
-      if !exited then empty () else raise (Unix.Unix_error (EAGAIN, "read", ""))
-    else
-      let n = min len (Buffer.length pending) in
-      let rest = Buffer.sub pending n (Buffer.length pending - n) in
-      Buffer.blit pending 0 buf off n;
-      Buffer.clear pending;
-      Buffer.add_string pending rest;
-      Eio.Condition.broadcast changed;
-      n
-  in
-  let rec write i =
-    if i < String.length output then (
-      let room = capacity - Buffer.length pending in
-      (if room = 0 then Eio.Condition.await_no_mutex changed
-       else
-         let n = min room (String.length output - i) in
-         Buffer.add_substring pending output i n;
-         Eio.Condition.broadcast changed);
-      write (i + min room (String.length output - i)))
-    else (
-      exited := true;
-      Eio.Condition.broadcast changed)
-  in
+  let fed = Buffer.create 256 in
   let pause () = Eio.Time.Mono.sleep clock 0.02 in
   let ready () =
     Eio.Fiber.first
       (fun () ->
-        while Buffer.length pending = 0 && not !exited do
-          Eio.Condition.await_no_mutex changed
+        while Buffer.length t.pending = 0 && not t.exited do
+          Eio.Condition.await_no_mutex t.changed
         done)
       pause
   in
   Eio.Fiber.both
-    (fun () -> write 0)
+    (fun () -> fake_write t output 0)
     (fun () ->
-      Pty_reader.run ~read ~ready ~pause
+      Pty_reader.run ~read:(fake_read t closed) ~ready ~pause
         ~exited:(fun () ->
           Eio.Fiber.yield ();
-          !exited)
+          t.exited)
         ~feed:(fun buf n -> Buffer.add_subbytes fed buf 0 n)
-        (Bytes.create size));
+        (Bytes.create (1 + size)));
   check_eq ~pp:pp_string output (Buffer.contents fed)
 
 let bounds =

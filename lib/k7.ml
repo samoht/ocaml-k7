@@ -1483,7 +1483,10 @@ let ansi_c_quote s =
   let b = Buffer.create (String.length s + 3) in
   let bytes i n =
     String.iter
-      (fun c -> Buffer.add_string b (Fmt.str "\\x%02X" (Char.code c)))
+      (fun c ->
+        Buffer.add_string b {|\x|};
+        Buffer.add_char b "0123456789ABCDEF".[Char.code c lsr 4];
+        Buffer.add_char b "0123456789ABCDEF".[Char.code c land 15])
       (String.sub s i n)
   in
   let rec go i =
