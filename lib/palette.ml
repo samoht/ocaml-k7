@@ -784,188 +784,7 @@ let pp ppf t =
 
 (* JSON themes *)
 
-exception Json of string
 exception Colour of string
-
-let fail_json fmt = Fmt.kstr (fun msg -> raise (Json msg)) fmt
-
-(* A JSON value as Go's [encoding/json] reads it: strictly, with invalid
-   UTF-8 in a string replaced by U+FFFD. Only strings are kept. *)
-type value = String of string | Other | Null
-type reader = { s : string; mutable pos : int }
-
-let peek r = if r.pos < String.length r.s then Some r.s.[r.pos] else None
-
-let rec blank r =
-  match peek r with
-  | Some (' ' | '\t' | '\n' | '\r') ->
-      r.pos <- r.pos + 1;
-      blank r
-  | _ -> ()
-
-let expect r c =
-  if peek r = Some c then r.pos <- r.pos + 1
-  else fail_json "expected %C at offset %d" c r.pos
-
-let literal r w v =
-  let l = String.length w in
-  if r.pos + l <= String.length r.s && String.sub r.s r.pos l = w then (
-    r.pos <- r.pos + l;
-    v)
-  else fail_json "invalid literal at offset %d" r.pos
-
-let hex4 r =
-  if r.pos + 4 > String.length r.s then fail_json "short \\u escape";
-  let h = String.sub r.s r.pos 4 in
-  if String.for_all Char.Ascii.is_hex_digit h then (
-    r.pos <- r.pos + 4;
-    int_of_string ("0x" ^ h))
-  else fail_json "invalid \\u escape at offset %d" r.pos
-
-(* A [\u] escape, with its low surrogate if it is a high one; an unpaired
-   surrogate is U+FFFD. *)
-let code_point r =
-  let u = hex4 r in
-  if
-    u >= 0xd800 && u < 0xdc00
-    && r.pos + 6 <= String.length r.s
-    && String.sub r.s r.pos 2 = "\\u"
-  then (
-    let save = r.pos in
-    r.pos <- r.pos + 2;
-    let l = hex4 r in
-    if l >= 0xdc00 && l < 0xe000 then
-      0x10000 + ((u - 0xd800) lsl 10) + (l - 0xdc00)
-    else (
-      r.pos <- save;
-      0xfffd))
-  else if u >= 0xd800 && u < 0xe000 then 0xfffd
-  else u
-
-let escape r b =
-  let c = peek r in
-  r.pos <- r.pos + 1;
-  match c with
-  | Some (('"' | '\\' | '/') as c) -> Buffer.add_char b c
-  | Some 'b' -> Buffer.add_char b '\b'
-  | Some 'f' -> Buffer.add_char b '\012'
-  | Some 'n' -> Buffer.add_char b '\n'
-  | Some 'r' -> Buffer.add_char b '\r'
-  | Some 't' -> Buffer.add_char b '\t'
-  | Some 'u' -> Buffer.add_utf_8_uchar b (Uchar.of_int (code_point r))
-  | _ -> fail_json "invalid escape at offset %d" (r.pos - 1)
-
-let string r =
-  expect r '"';
-  let b = Buffer.create 16 in
-  let rec go () =
-    match peek r with
-    | None -> fail_json "unterminated string"
-    | Some '"' -> r.pos <- r.pos + 1
-    | Some '\\' ->
-        r.pos <- r.pos + 1;
-        escape r b;
-        go ()
-    | Some c when Char.code c < 0x20 ->
-        fail_json "control character in string at offset %d" r.pos
-    | Some _ ->
-        let d = String.get_utf_8_uchar r.s r.pos in
-        Buffer.add_utf_8_uchar b (Uchar.utf_decode_uchar d);
-        r.pos <- r.pos + Uchar.utf_decode_length d;
-        go ()
-  in
-  go ();
-  Buffer.contents b
-
-let digits r start =
-  let d = r.pos in
-  while match peek r with Some c -> Char.Ascii.is_digit c | None -> false do
-    r.pos <- r.pos + 1
-  done;
-  if r.pos = d then fail_json "invalid number at offset %d" start
-
-let number r =
-  let start = r.pos in
-  if peek r = Some '-' then r.pos <- r.pos + 1;
-  (match peek r with Some '0' -> r.pos <- r.pos + 1 | _ -> digits r start);
-  if peek r = Some '.' then (
-    r.pos <- r.pos + 1;
-    digits r start);
-  match peek r with
-  | Some ('e' | 'E') ->
-      r.pos <- r.pos + 1;
-      (match peek r with Some ('+' | '-') -> r.pos <- r.pos + 1 | _ -> ());
-      digits r start
-  | _ -> ()
-
-let rec value r =
-  blank r;
-  let v =
-    match peek r with
-    | Some '"' -> String (string r)
-    | Some '{' ->
-        ignore (members r);
-        Other
-    | Some '[' ->
-        array r;
-        Other
-    | Some 't' -> literal r "true" Other
-    | Some 'f' -> literal r "false" Other
-    | Some 'n' -> literal r "null" Null
-    | Some ('-' | '0' .. '9') ->
-        number r;
-        Other
-    | _ -> fail_json "invalid character at offset %d" r.pos
-  in
-  blank r;
-  v
-
-and array r =
-  expect r '[';
-  blank r;
-  if peek r = Some ']' then r.pos <- r.pos + 1
-  else
-    let rec items () =
-      ignore (value r);
-      match peek r with
-      | Some ',' ->
-          r.pos <- r.pos + 1;
-          items ()
-      | _ -> expect r ']'
-    in
-    items ()
-
-and members r =
-  expect r '{';
-  blank r;
-  if peek r = Some '}' then (
-    r.pos <- r.pos + 1;
-    [])
-  else
-    let rec go acc =
-      blank r;
-      let k = string r in
-      blank r;
-      expect r ':';
-      let acc = (k, value r) :: acc in
-      match peek r with
-      | Some ',' ->
-          r.pos <- r.pos + 1;
-          go acc
-      | _ ->
-          expect r '}';
-          List.rev acc
-    in
-    go []
-
-let json s =
-  let r = { s; pos = 0 } in
-  blank r;
-  let fields = members r in
-  blank r;
-  if r.pos < String.length s then
-    fail_json "invalid character after the object at offset %d" r.pos;
-  fields
 
 (* Go matches a key to a field of VHS's [Theme] ignoring case, as
    [bytes.EqualFold] does, where U+017F folds to [s] and U+212A to [k]. *)
@@ -1032,20 +851,37 @@ let fields =
     "brightCyan"; "brightWhite"; "name"; "selection" ]
 [@@ocamlformat "disable"]
 
+(* [plain msg] is [msg] without the SGR sequences jsont styles it with. *)
+let plain msg =
+  let b = Buffer.create (String.length msg) in
+  let rec go i =
+    if i < String.length msg then
+      if msg.[i] = '\027' && i + 1 < String.length msg && msg.[i + 1] = '[' then
+        skip (i + 2)
+      else (
+        Buffer.add_char b msg.[i];
+        go (i + 1))
+  and skip i =
+    if i < String.length msg then
+      if msg.[i] = 'm' then go (i + 1) else skip (i + 1)
+  in
+  go 0;
+  Buffer.contents b
+
 (* The string of field [f] in [members], [""] if none: Go keeps the last
    string of a key that matches it, and fails on any other value but
    [null]. *)
 let field members f =
   List.fold_left
-    (fun acc (k, v) ->
-      match v with
+    (fun acc ((k, _), v) ->
+      match (v : Jsont.json) with
       | _ when not (equal_fold k f) -> acc
-      | String s -> Option.map (fun _ -> s) acc
-      | Null -> acc
-      | Other -> None)
+      | String (s, _) -> Option.map (fun _ -> s) acc
+      | Null _ -> acc
+      | _ -> None)
     (Some "") members
 
-let theme_of_members field members =
+let theme_of_members members =
   let values = List.map (fun f -> (f, field members f)) fields in
   match List.find_opt (fun (_, v) -> v = None) values with
   | Some (f, _) -> Error (`Json (Fmt.str "the %s of a theme is a string" f))
@@ -1074,44 +910,9 @@ let theme_of_members field members =
       | t -> Ok t
       | exception Colour c -> Error (`Colour c))
 
-let go_of_json s =
-  match json s with
-  | exception Json msg -> Error (`Json msg)
-  | members -> theme_of_members field members
-
-(* [plain msg] is [msg] without the SGR sequences jsont styles it with. *)
-let plain msg =
-  let b = Buffer.create (String.length msg) in
-  let rec go i =
-    if i < String.length msg then
-      if msg.[i] = '\027' && i + 1 < String.length msg && msg.[i + 1] = '[' then
-        skip (i + 2)
-      else (
-        Buffer.add_char b msg.[i];
-        go (i + 1))
-  and skip i =
-    if i < String.length msg then
-      if msg.[i] = 'm' then go (i + 1) else skip (i + 1)
-  in
-  go 0;
-  Buffer.contents b
-
-(* The string of field [f] in [members], [""] if none: Go keeps the last
-   string of a key that matches it, and fails on any other value but
-   [null]. *)
-let jsont_field members f =
-  List.fold_left
-    (fun acc ((k, _), v) ->
-      match (v : Jsont.json) with
-      | _ when not (equal_fold k f) -> acc
-      | String (s, _) -> Option.map (fun _ -> s) acc
-      | Null _ -> acc
-      | _ -> None)
-    (Some "") members
-
 let of_json s =
   match Jsont_bytesrw.decode_string' ~locs:true Jsont.json s with
-  | Ok (Object (members, _)) -> theme_of_members jsont_field members
+  | Ok (Object (members, _)) -> theme_of_members members
   | Ok _ -> Error (`Json "a theme is a JSON object")
   | Error (_, meta, kind) ->
       let at = Jsont.Textloc.first_byte (Jsont.Meta.textloc meta) in

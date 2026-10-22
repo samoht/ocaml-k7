@@ -25,17 +25,16 @@ val find : string -> t option
 (** [find name] is the theme VHS v0.12.1 names [name], if any. *)
 
 val of_json : string -> (t, [ `Json of string | `Colour of string ]) result
-(** [of_json s] is the theme of the JSON object [s], as VHS reads it with Go's
-    [encoding/json] and gives it to xterm.js: a field, matched to a key ignoring
-    case, is xterm.js's default colour if it is missing, [null] or empty. It is
-    [Error (`Json msg)] if Go does not read [s], such as invalid JSON or a field
-    that is not a string, and [Error (`Colour c)] if a colour [c] is not [#RGB],
-    [#RGBA], [#RRGGBB], [#RRGGBBAA], [rgb()] or [rgba()], the forms xterm.js
-    reads without a browser. *)
-
-val go_of_json : string -> (t, [ `Json of string | `Colour of string ]) result
-(** [go_of_json s] is like {!of_json} with the reader that imitates Go's
-    [encoding/json]. *)
+(** [of_json s] is the theme of the JSON object [s], read with jsont, with its
+    fields looked up as VHS does with Go's [encoding/json] and given to
+    xterm.js: a field matches a key ignoring case, takes the last string of the
+    keys that match it, and is xterm.js's default colour if it is missing,
+    [null] or empty. It is [Error (`Json msg)] if jsont does not read [s], which
+    includes invalid UTF-8 and unpaired surrogate escapes that Go reads as
+    U+FFFD, or if a field is neither a string nor [null], and
+    [Error (`Colour c)] if a colour [c] is not [#RGB], [#RGBA], [#RRGGBB],
+    [#RRGGBBAA], [rgb()] or [rgba()], the forms xterm.js reads without a
+    browser. *)
 
 val pp : t Fmt.t
 (** [pp] formats a theme's colours for humans. *)
