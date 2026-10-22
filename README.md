@@ -28,12 +28,6 @@ The recording above is [doc/demo.t](doc/demo.t), recorded natively with
 opam install vhs
 ```
 
-Until vhs is in the opam repository, install it from GitHub:
-
-```
-opam pin add https://github.com/samoht/ocaml-vhs.git
-```
-
 To make GIFs, you also need [VHS](https://github.com/charmbracelet/vhs#installation)
 itself.
 
@@ -55,8 +49,7 @@ let tape =
 the shell prompt to come back, so the recording shows the whole output of the
 command. A prompt that takes more than 15 seconds fails the recording, and
 `Vhs.wait ~timeout` sets another limit. The final sleep keeps the output on
-screen. `Vhs.pp` prints
-the tape in the format VHS reads:
+screen. `Vhs.pp` prints the tape in the format VHS reads:
 
 ```ocaml
 # Fmt.pr "%a" Vhs.pp (Result.get_ok tape);;
@@ -106,14 +99,14 @@ let main () = Eio_main.run @@ fun env -> make_gif env (Result.get_ok tape)
 ## Recording without VHS
 
 `Vhs.record` plays the tape in bash, zsh or fish on a pseudo-terminal, reads
-what the shell prints with a terminal emulator that follows xterm, and
-writes the screens to each `.svg` output of the tape as an
-animated SVG image, and its text to a `.txt`, `.ascii` or `.test` output in
-VHS's format. The text holds the screen VHS would read after each command,
-without the screens VHS also adds while it applies the settings. The image holds text, no script and no external resource,
-and animates with CSS alone, so it plays in an HTML `<img>` and in a README
-on GitHub. VHS cannot write `.svg`, so an `.svg` output is not in the tape
-that `vhs` reads:
+what the shell prints with a terminal emulator that follows xterm, and writes
+the screens to the `.svg` output of the tape as an animated SVG image, and its
+text to a `.txt`, `.ascii` or `.test` output in VHS's format. The text holds
+what VHS reads after each command, without the extra screens VHS adds while it
+applies the settings. The image holds text, no script and no external
+resource, and animates with CSS alone, so it plays in an HTML `<img>` and in a
+README on GitHub. VHS cannot write `.svg`, so an `.svg` output is not in the
+tape that `vhs` reads:
 
 ```ocaml
 # Vhs.tape ~outputs:[ "demo.svg" ] [ Vhs.type' "ls\n" ] |> Result.map Vhs.to_string;;
@@ -192,10 +185,34 @@ being recorded. `vhs-cram` then makes the last command of bash's
 the one VHS gives bash followed by an invisible mark, sixteen zero-width
 characters that spell a digest of the cram test, and waits for that mark:
 output that ends with `>`, or with a zero-width space, while its command still
-runs is not mistaken for the prompt. A command that leaves bash waiting for more input,
-such as an unterminated quote or here-document, makes that wait time out, and
-`vhs-cram` then names the command. A wait times out after 15 seconds, or
-after the number of seconds `--wait-timeout` gives.
+runs is not mistaken for the prompt. A command that leaves bash waiting for
+more input, such as an unterminated quote or here-document, makes that wait
+time out, and `vhs-cram` then names the command. A wait times out after 15
+seconds, or after the number of seconds `--wait-timeout` gives.
+
+## Known limitations
+
+- vhs 0.9.0 depends on the released matrix 0.1.0 for its pseudo-terminals,
+  and carries a temporary private copy of matrix's terminal core, from
+  mosaic commit 90a3f220, in
+  [lib/matrix_backport](lib/matrix_backport/README.md).
+  matrix 0.1.0 lacks emulator fixes the native recorder needs, such as
+  keeping zero-width characters, moving within scroll regions, setting tab
+  stops and replying to device queries. The copy goes away once matrix 0.2.0
+  is released. No test is skipped or narrowed for matrix 0.1.0, since the
+  tests run against the copy.
+- The native terminal answers the device attribute, status and cursor
+  position queries, but not DECRQM or the OSC 11 background colour query,
+  so the queries fish 4 sends as it starts go unanswered. CI tests fish 3.7
+  only.
+- A program that sets the cursor's shape with DECSCUSR still gets a block
+  cursor in the SVG image, as the terminal does not keep the shape.
+- Under heavy load on macOS, `/bin/bash` 3.2 can print `bash: child setpgid
+  (N to N): Operation not permitted` as it starts a command. The command
+  still runs, but the line shows on the screen and can make a wait on the
+  screen fail. It is rare, and its cause is not known yet.
+- `Vhs.render` reports a wait that times out as `Vhs.Failed`, with VHS's
+  message in its output, where `Vhs.record` returns `Vhs.Timeout`.
 
 ## Credits
 

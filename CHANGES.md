@@ -1,16 +1,18 @@
-## 1.0.0
+## 0.9.0
 
 - Initial version.
 - `Vhs.record` records a tape without VHS, as an animated SVG image drawn
-  with CSS only, and writes it to the tape's `.svg` outputs; `Vhs.svg` draws
-  the image of timed output. `vhs-cram` records an `.svg` output this way,
-  waiting for the same prompt mark as with VHS.
-- The native recorder plays bash and zsh as VHS starts them, VHS's window
-  bar, named and JSON themes, margin colours and images, `Screenshot` (a
-  still SVG image), `Source` and the `.txt`, `.ascii` and `.test` outputs,
-  byte for byte as VHS writes them but for the screens VHS reads before it
-  sizes the terminal. Its wait patterns match as Go's do, with Unicode case
-  folding and ASCII word boundaries, and its waits read the lines VHS reads.
+  with CSS only, and writes it to the tape's `.svg` output; `Vhs.svg` draws
+  the image of timed output, with the settings `Vhs.tape` checks. `vhs-cram`
+  records an `.svg` output this way, waiting for the same prompt mark as
+  with VHS.
+- The native recorder plays bash, zsh and fish as VHS starts them, VHS's
+  window bar, named and JSON themes, margin colours and images, `Screenshot`
+  (a still SVG image), `Source` and the `.txt`, `.ascii` and `.test`
+  outputs, byte for byte as VHS writes them but for the screens VHS reads
+  before it sizes the terminal. Its wait patterns match as Go's do, with
+  Unicode case folding and ASCII word boundaries, and its waits read the
+  lines VHS reads.
 - The native terminal is matrix's emulator, read as VHS's xterm.js reads
   bytes where it departs from xterm: each screen has its own scroll region
   and tab stops, a restore returns to the line of the buffer and leaves the
@@ -24,3 +26,7 @@
 - The library needs OCaml 5.4, for matrix's pseudo-terminals and terminal
   emulator, and matrix 0.1.0. The emulator is a private copy of matrix's
   terminal core at mosaic 90a3f220, whose fixes are not released yet.
+- The README lists the known limitations of this release: the private copy
+  of matrix's terminal core, the queries and cursor shapes the native
+  terminal does not handle yet, a rare `setpgid` error from macOS's bash 3.2
+  under load, and the timed-out wait `Vhs.render` reports as `Failed`.
