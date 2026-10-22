@@ -28,8 +28,7 @@ jobs:
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
-      # The native recorder's zsh and fish tests need zsh and fish, which the
-      # Ubuntu runners lack; the tests skip where they are missing.
+      # The zsh and fish tests skip without them.
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y zsh fish
 
@@ -48,15 +47,11 @@ jobs:
         with:
           ocaml-compiler: '5.4'
 
-      # Resolve every dependency to the oldest version its lower bound allows,
-      # so a call that only compiles against a newer API fails here rather than
-      # in a downstream opam build.
+      # The oldest version each lower bound allows.
       - run: opam install . --deps-only --with-test --criteria="+count[version-lag,solution]"
       - run: opam exec -- dune build
       - run: opam exec -- dune test
 
-  # odoc's warnings come from the private copy of matrix's terminal core,
-  # whose documentation is upstream's.
   doc:
     name: Documentation
     timeout-minutes: 30
@@ -84,8 +79,21 @@ jobs:
 
       - uses: ocaml/setup-ocaml/lint-fmt@v3
 
-  # merlint is not on opam yet and comes from a private overlay, so this job
-  # reports without blocking until merlint is released.
+  opam-build:
+    name: Build as opam-repository does
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: '5.4'
+
+      - run: opam install . --deps-only
+      - run: opam exec -- dune build -p k7 @install
+
+  # merlint is not on opam-repository yet, only on an overlay.
   merlint:
     name: Lint (merlint)
     timeout-minutes: 30
