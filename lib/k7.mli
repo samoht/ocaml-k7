@@ -154,12 +154,12 @@ type error =
 val pp_error : error Fmt.t
 (** [pp_error] formats an error for humans: one line, followed for
     {!constructor-Failed} by the last ten lines [vhs] printed that are not
-    blank, trimmed and indented. Escape sequences and control characters are
-    removed from every string it prints, and so are the format characters
-    (Unicode category [Cf]) other than the joiners U+200C and U+200D, the
-    prepended concatenation marks, such as U+0605, and the tag characters of a
-    subdivision flag, such as Scotland's, which show; invalid UTF-8 is replaced
-    by U+FFFD. *)
+    blank, trimmed and indented. It removes escape sequences and control
+    characters from every string it prints. It also removes the format
+    characters (Unicode category [Cf]), but for the joiners U+200C and U+200D,
+    the prepended concatenation marks such as U+0605, and the tag characters of
+    a subdivision flag such as Scotland's. A variation selector stays after a
+    character that shows and goes elsewhere. Invalid UTF-8 becomes U+FFFD. *)
 
 (** {1:tapes Tapes} *)
 

@@ -282,6 +282,16 @@ let test_tag_flag () =
   check_contains "description" ~sub:("<desc id=\"d\">" ^ flag ^ "</desc>") s;
   check_contains "image text" ~sub:(">" ^ flag ^ "</tspan>") s
 
+(* A variation selector shows only after a base: the image text and its
+   description keep the one after the heart and drop the stray ones. *)
+let test_stray_selector () =
+  let s = svg [ (Ms 0, "\u{2764}\u{FE0F}\u{FE0F}a \u{FE0F}b") ] in
+  check_contains "description" ~sub:"<desc id=\"d\">\u{2764}\u{FE0F}a b</desc>"
+    s;
+  Alcotest.(check int)
+    "one selector in the row text and one in the description" 2
+    (count ~sub:"\u{FE0F}" s)
+
 let suite =
   ( "svg",
     List.map
@@ -290,6 +300,7 @@ let suite =
         ("hostile text", test_hostile);
         ("inverse wide glyph", test_inverse_wide);
         ("subdivision flag", test_tag_flag);
+        ("stray variation selector", test_stray_selector);
         ("cursor format characters", test_cursor_format);
         ("double underline", test_double_underline);
         ("cursor on a wide glyph's second cell", test_cursor_wide_right);

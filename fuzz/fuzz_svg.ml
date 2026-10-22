@@ -98,7 +98,8 @@ let marks =
 
 (* Each character followed by a zero-width one shows both, whether they
    arrive together or apart: the first row holds them all, in order, but the
-   format characters U+200B and U+2060, which the image leaves out. *)
+   format characters U+200B and U+2060 and a variation selector after a
+   space, which the image leaves out. *)
 let test_zero_width items =
   let items = List.take 20 items in
   let pieces =
@@ -120,12 +121,16 @@ let test_zero_width items =
       | Ok frames ->
           let last = List.nth frames (List.length frames - 1) in
           let first = List.hd (String.split_on_char '\n' last) in
-          let shown m = m <> "\xe2\x80\x8b" && m <> "\xe2\x81\xa0" in
+          let shown b m =
+            m <> "\xe2\x80\x8b" && m <> "\xe2\x81\xa0"
+            && not (b = " " && m = "\xef\xb8\x8f")
+          in
           let expected =
             List.map
               (fun (b, m, _) ->
-                let m = marks.(m mod Array.length marks) in
-                bases.(b mod Array.length bases) ^ if shown m then m else "")
+                let b = bases.(b mod Array.length bases)
+                and m = marks.(m mod Array.length marks) in
+                b ^ if shown b m then m else "")
               (List.take 20 items)
             |> String.concat "" |> Svg_check.trim_rows
           in

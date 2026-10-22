@@ -19,8 +19,15 @@ val is_format : int -> bool
     concatenation marks, such as U+0605, which show over the digits after them.
 *)
 
+val is_selector : int -> bool
+(** [is_selector u] is [true] iff the code point [u] is a variation selector,
+    U+FE00 to U+FE0F or U+E0100 to U+E01EF. *)
+
 val strip_format : string -> string
 (** [strip_format s] is [s] without the characters {!is_format} holds of, but
     for the tag characters of an emoji tag sequence, U+1F3F4 followed by tag
     characters and U+E007F, which picks a subdivision flag such as Scotland's.
-    The other bytes of [s], invalid UTF-8 included, are kept. *)
+    It also drops a variation selector ({!is_selector}) that does not follow a
+    character that shows: at the start of [s], or after a space, a control, a
+    joiner or another selector. The other bytes of [s], invalid UTF-8 included,
+    are kept. *)

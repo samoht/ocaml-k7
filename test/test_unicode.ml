@@ -62,8 +62,46 @@ let test_names () =
       Alcotest.(check bool) (n ^ " unknown") true (Unicode.find n = None))
     [ ""; "Klingon"; "Lx"; "^L"; "Ll\xc3\xa9" ]
 
+(* [strip_format] follows console's rule: it keeps an emoji tag sequence and
+   a variation selector after a base, and removes stray tags, stray
+   selectors and the invisible characters U+200B, U+2060 to U+2064 and
+   U+FEFF. *)
+let test_strip_format () =
+  let check name ~expected s =
+    Alcotest.(check string) name expected (Unicode.strip_format s)
+  in
+  let flag =
+    "\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}"
+  in
+  check "tag sequence" ~expected:("a" ^ flag ^ "b") ("a" ^ flag ^ "b");
+  check "stray tags" ~expected:"a\u{1F3F4}b"
+    "a\u{E0067}\u{1F3F4}\u{E0067}\u{E0062}b\u{E007F}";
+  check "unfinished tag sequence" ~expected:"\u{1F3F4}" "\u{1F3F4}\u{E0067}";
+  check "selector after a base" ~expected:"\u{2764}\u{FE0F}a\u{E0100}"
+    "\u{2764}\u{FE0F}a\u{E0100}";
+  check "selector after a tag sequence" ~expected:(flag ^ "\u{FE0F}")
+    (flag ^ "\u{FE0F}");
+  check "run of selectors" ~expected:"a\u{FE0E}b\u{E0100}"
+    "a\u{FE0E}\u{FE0F}b\u{E0100}\u{E0101}\u{E01EF}";
+  check "selector at the start" ~expected:"a" "\u{FE0F}a";
+  check "selector after a space" ~expected:"a b" "a \u{FE0F}b";
+  check "selector after a line end" ~expected:"a\nb" "a\n\u{FE00}b";
+  check "selector after a joiner" ~expected:"a\u{200D}\u{200C}b"
+    "a\u{200D}\u{FE0F}\u{200C}\u{FE0F}b";
+  check "selector after a removed character" ~expected:"a\u{FE0F}"
+    "a\u{200B}\u{FE0F}";
+  check "selector after invalid UTF-8" ~expected:"\xff\u{FE0F}" "\xff\u{FE0F}";
+  check "invisible characters" ~expected:"ab"
+    "a\u{200B}\u{2060}\u{2061}\u{2062}\u{2063}\u{2064}\u{FEFF}b";
+  check "joiners and concatenation marks"
+    ~expected:"a\u{200C}b\u{200D}c\u{0605}1" "a\u{200C}b\u{200D}c\u{0605}1"
+
 let suite =
   ( "unicode",
     List.map
       (fun (name, fn) -> Alcotest.test_case name `Quick fn)
-      [ ("tables", test_tables); ("names", test_names) ] )
+      [
+        ("tables", test_tables);
+        ("names", test_names);
+        ("strip_format", test_strip_format);
+      ] )

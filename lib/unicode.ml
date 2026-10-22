@@ -71,38 +71,50 @@ let is_format u =
   && (not (is_concatenation_mark u))
   && List.exists (fun (lo, hi) -> lo <= u && u <= hi) (Lazy.force format)
 
-(* The length of the emoji tag sequence at [i] of [s], which picks a
-   subdivision flag: U+1F3F4, then tag characters, then U+E007F CANCEL TAG;
-   [0] if there is none. *)
-let tag_sequence s i =
-  let decode j =
+let is_selector u =
+  (u >= 0xfe00 && u <= 0xfe0f) || (u >= 0xe0100 && u <= 0xe01ef)
+
+(* A character a variation selector may follow: one that shows, other than
+   a selector or a joiner. *)
+let is_base u =
+  u > 0x20
+  && (not (u >= 0x7f && u <= 0x9f))
+  && (not (is_selector u))
+  && u <> 0x200c && u <> 0x200d
+
+(* UTS #51 ED-14a: an emoji tag sequence is a base, tag characters U+E0020
+   to U+E007E, then U+E007F CANCEL TAG. Its only base in
+   emoji-sequences.txt is U+1F3F4, which picks a subdivision flag.
+   [tags s j n] is where the sequence whose [n] tags so far end at [j]
+   ends, if it does. *)
+let rec tags s j n =
+  if j >= String.length s then None
+  else
     let d = String.get_utf_8_uchar s j in
-    (Uchar.to_int (Uchar.utf_decode_uchar d), Uchar.utf_decode_length d)
-  in
-  let rec tags j n =
-    if j >= String.length s then 0
-    else
-      match decode j with
-      | 0xe007f, l when n > 0 -> j + l - i
-      | u, l when u >= 0xe0020 && u <= 0xe007e -> tags (j + l) (n + 1)
-      | _ -> 0
-  in
-  match decode i with 0x1f3f4, l -> tags (i + l) 0 | _ -> 0
+    let next = j + Uchar.utf_decode_length d in
+    match Uchar.to_int (Uchar.utf_decode_uchar d) with
+    | _ when not (Uchar.utf_decode_is_valid d) -> None
+    | u when u >= 0xe0020 && u <= 0xe007e -> tags s next (n + 1)
+    | 0xe007f when n > 0 -> Some next
+    | _ -> None
 
 let strip_format s =
   let b = Buffer.create (String.length s) in
-  let rec go i =
+  let rec go i ~base =
     if i < String.length s then
-      match tag_sequence s i with
-      | 0 ->
-          let d = String.get_utf_8_uchar s i in
-          let n = Uchar.utf_decode_length d in
-          if not (is_format (Uchar.to_int (Uchar.utf_decode_uchar d))) then
-            Buffer.add_substring b s i n;
-          go (i + n)
-      | n ->
-          Buffer.add_substring b s i n;
-          go (i + n)
+      let d = String.get_utf_8_uchar s i in
+      let next = i + Uchar.utf_decode_length d in
+      let u = Uchar.to_int (Uchar.utf_decode_uchar d) in
+      let keep stop ~base =
+        Buffer.add_substring b s i (stop - i);
+        go stop ~base
+      in
+      if not (Uchar.utf_decode_is_valid d) then keep next ~base:true
+      else
+        match if u = 0x1f3f4 then tags s next 0 else None with
+        | Some stop -> keep stop ~base:true
+        | None when is_format u || (is_selector u && not base) -> go next ~base
+        | None -> keep next ~base:(is_base u)
   in
-  go 0;
+  go 0 ~base:false;
   Buffer.contents b

@@ -171,8 +171,8 @@ let add_texts t b ~from cells =
     if x >= n then Option.iter (fun f -> flush f xs text) first
     else
       let (c : Screen.cell) = cells.(x) in
-      (* A format character does not show, and a cell of only such
-         characters is blank. *)
+      (* Format characters and stray variation selectors do not show, and
+         a cell of only such characters is blank. *)
       let shown = match Unicode.strip_format c.text with "" -> " " | s -> s in
       if c.width = 0 then go (x + 1) first xs
       else if not (shows c) then (

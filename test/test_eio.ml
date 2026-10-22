@@ -287,6 +287,8 @@ let test_pp_error_names () =
             line = 3;
             last = "> a\u{200B}\u{2060}b\u{FEFF}\u{200B}";
           }));
+  expect "variation selectors" "dir \u{2764}\u{FE0F} x"
+    (pp (Io "\u{FE0F}dir\n\u{FE0F}\u{2764}\u{FE0F}\u{FE0F} \u{E0100}x"));
   expect "shell exit"
     "the shell exited (status 3) while waiting for line 3, Wait; last value \
      was: >"

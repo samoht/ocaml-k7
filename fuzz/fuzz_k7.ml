@@ -103,6 +103,33 @@ let test_trim_end_decoding s =
   in
   check_eq ~pp:Fmt.Dump.string expected (Screen.trim_end s)
 
+(* [strip_format] removes the invisible characters and every variation
+   selector that follows no character that shows, and keeps what it
+   returns. *)
+let test_strip_format s =
+  if String.is_valid_utf_8 s then (
+    let t = Unicode.strip_format s in
+    check_eq ~pp:Fmt.Dump.string t (Unicode.strip_format t);
+    let selector = Unicode.is_selector in
+    let rec scan i prev =
+      if i < String.length t then (
+        let d = String.get_utf_8_uchar t i in
+        let u = Uchar.to_int (Uchar.utf_decode_uchar d) in
+        if u = 0x200b || (u >= 0x2060 && u <= 0x2064) || u = 0xfeff then
+          failf "invisible U+%04X in %S" u t;
+        (if selector u then
+           match prev with
+           | Some p
+             when p > 0x20
+                  && (not (p >= 0x7f && p <= 0x9f))
+                  && (not (selector p))
+                  && p <> 0x200c && p <> 0x200d ->
+               ()
+           | _ -> failf "stray selector U+%04X in %S" u t);
+        scan (i + Uchar.utf_decode_length d) (Some u))
+    in
+    scan 0 None)
+
 (* An independent reader for the [Type] subset of VHS: no escapes, the
    matching quote ends the string. *)
 let decode_type line =
@@ -1304,6 +1331,17 @@ let decoding =
           ];
       ]
       test_trim_end_decoding;
+    test_case "format characters and stray selectors are removed"
+      [
+        choose
+          [
+            bytes;
+            map [ bytes; bytes ] (fun a b ->
+                a ^ " \u{FE0F}\u{2764}\u{FE0F}\u{E0100}\u{200B}" ^ b
+                ^ "\u{200D}\u{FE0E}");
+          ];
+      ]
+      test_strip_format;
   ]
 
 let tapes =
