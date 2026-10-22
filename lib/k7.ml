@@ -231,11 +231,6 @@ let rec raw_commands actions =
       | Type _ | Key _ | Sleep _ | Wait _ -> [])
     actions
 
-let raw_outputs actions =
-  List.filter_map
-    (function Tape_syntax.Output p -> Some p | _ -> None)
-    (raw_commands actions)
-
 let raw_screenshots actions =
   List.filter_map
     (function Tape_syntax.Screenshot p -> Some p | _ -> None)
@@ -296,13 +291,8 @@ let check_raw ~started line =
     | Ok (Hide | Show) ->
         Fmt.error "raw line %a: use hidden instead" Quote.pp line
     | Ok (Blank | Set ("TypingSpeed", _)) -> Ok started
-    | Ok (Output path) when is_svg path ->
-        Fmt.error "raw line %a: VHS cannot write .svg, give it in outputs"
-          Quote.pp line
-    | Ok (Output path) -> (
-        match output_problem path with
-        | None -> Ok started
-        | Some why -> Fmt.error "raw line %a: %s" Quote.pp line why)
+    | Ok (Output _) ->
+        Fmt.error "raw line %a: an output, which goes in outputs" Quote.pp line
     | Ok (Set ("Shell", _)) ->
         Fmt.error "raw line %a: use the setting Shell instead" Quote.pp line
     | Ok (Set _ | Require) when started ->
@@ -627,9 +617,8 @@ let check_tape ~settings ~outputs actions =
   let* () = check_records actions in
   let* () = check_cells settings in
   let* () = check_size settings actions in
-  let outputs' = outputs @ raw_outputs actions in
-  let* () = check_paths settings outputs' in
-  let* () = check_screenshots outputs' (raw_screenshots actions) in
+  let* () = check_paths settings outputs in
+  let* () = check_screenshots outputs (raw_screenshots actions) in
   Ok { outputs; settings; actions; source = None }
 
 let tape ?(settings = []) ~outputs actions =
@@ -847,7 +836,6 @@ type reading = {
   mutable read_actions : action list;
   mutable hidden : action list option;
   mutable started : bool;
-  mutable printed : bool;
 }
 
 let add r a =
@@ -861,20 +849,16 @@ let show r =
     r.hidden;
   r.hidden <- None
 
-let is_env line =
-  match Tape_syntax.tokens line with Keyword "Env" :: _ -> true | _ -> false
-
-(* [started] ends the settings, as in VHS; [printed], the outputs. *)
+(* [started] ends the settings, as in VHS. *)
 let read_line r n line =
-  let raw ~started ~printed =
+  let raw ~started =
     add r (Raw line);
     r.started <- r.started || started;
-    r.printed <- r.printed || printed;
     Ok ()
   in
   match Tape_syntax.check line with
   | Error e -> Fmt.error "line %d: %a: %s" n Quote.pp line e
-  | Ok (Output p) when not r.printed ->
+  | Ok (Output p) ->
       r.read_outputs <- p :: r.read_outputs;
       Ok ()
   | Ok (Set (name, arg)) when not r.started -> (
@@ -883,18 +867,16 @@ let read_line r n line =
       | Ok (Some s) ->
           r.read_settings <- s :: r.read_settings;
           Ok ()
-      | Ok None -> raw ~started:false ~printed:false)
+      | Ok None -> raw ~started:false)
   | Ok Hide ->
       if r.hidden = None then r.hidden <- Some [];
       r.started <- true;
-      r.printed <- true;
       Ok ()
   | Ok Show ->
       show r;
       Ok ()
-  | Ok (Blank | Set _ | Require | Output _) -> raw ~started:false ~printed:false
-  | Ok Other when is_env line -> raw ~started:true ~printed:false
-  | Ok (Screenshot _ | Other) -> raw ~started:true ~printed:true
+  | Ok (Blank | Set _ | Require) -> raw ~started:false
+  | Ok (Screenshot _ | Other) -> raw ~started:true
 
 let of_string src =
   let r =
@@ -904,7 +886,6 @@ let of_string src =
       read_actions = [];
       hidden = None;
       started = false;
-      printed = false;
     }
   in
   let rec go n = function
@@ -1197,11 +1178,7 @@ let render_vhs ?stop ~vhs ~vars ~clock ~proc ~cwd t =
   | Error e -> raise e
 
 let refuse ~by ~other kinds t =
-  match
-    List.find_opt
-      (fun p -> List.mem (kind p) kinds)
-      (t.outputs @ raw_outputs t.actions)
-  with
+  match List.find_opt (fun p -> List.mem (kind p) kinds) t.outputs with
   | None -> Ok ()
   | Some p ->
       let what =
@@ -1268,10 +1245,8 @@ let mkdirs dir path =
   in
   go (Filename.dirname file)
 
-let all_outputs t = t.outputs @ raw_outputs t.actions
-
 let check_has_output t =
-  if all_outputs t = [] then
+  if t.outputs = [] then
     Error (Invalid "no output: the tape names no file to write")
   else Ok ()
 
@@ -1293,7 +1268,7 @@ let prepare_vhs ~cwd t =
   in
   let* () =
     check_dirs cwd
-      (List.map (fun p -> (`Output, p)) (t.outputs @ raw_outputs t.actions)
+      (List.map (fun p -> (`Output, p)) t.outputs
       @ List.map (fun p -> (`Screenshot, p)) (raw_screenshots t.actions))
   in
   Ok ()
@@ -1395,9 +1370,7 @@ let prepare_native ~cwd t =
   let* () =
     Result.map_error
       (fun msg -> Invalid msg)
-      (check_screenshots
-         (t.outputs @ raw_outputs t.actions)
-         (Native.stills tape))
+      (check_screenshots t.outputs (Native.stills tape))
   in
   let svgs = List.filter is_svg t.outputs
   and texts = Option.to_list (Native.text_output tape) in
@@ -1430,7 +1403,7 @@ let record_native ?stop ~vars ~clock ~proc ~cwd t =
 let needs_vhs t =
   List.exists
     (fun p -> List.mem (kind p) [ "GIF"; "MP4"; "WebM"; "frames" ])
-    (t.outputs @ raw_outputs t.actions)
+    t.outputs
   || List.exists
        (fun p -> Tape_syntax.extension p <> ".svg")
        (raw_screenshots t.actions)

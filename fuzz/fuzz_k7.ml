@@ -1739,12 +1739,19 @@ let test_replace_dimensions n =
 
 let test_replace_outputs n =
   let get = function Ok t -> t | Error e -> failf "%a" K7.pp_error e in
-  let raw = Fmt.str "Output raw-%d.txt" n in
-  let original = get (K7.tape ~outputs:[ "old.gif" ] [ K7.raw raw; last ]) in
+  let original =
+    get
+      (K7.of_string
+         (Fmt.str "Output old.gif\nSleep 100ms\nOutput late-%d.txt\n" n))
+  in
+  check_eq
+    ~pp:Fmt.Dump.(list string)
+    [ "old.gif"; Fmt.str "late-%d.txt" n ]
+    (K7.outputs original);
   let replaced = get (K7.with_outputs [ "new.svg" ] original) in
-  check_eq ~pp:pp_string (raw ^ "\nSleep 100ms\n") (K7.to_string replaced);
+  check_eq ~pp:pp_string "Sleep 100ms\n" (K7.to_string replaced);
   let none = get (K7.with_outputs [] original) in
-  check_eq ~pp:pp_string (raw ^ "\nSleep 100ms\n") (K7.to_string none)
+  check_eq ~pp:pp_string "Sleep 100ms\n" (K7.to_string none)
 
 let bounds =
   [
@@ -1752,7 +1759,7 @@ let bounds =
       [ uint8 ] test_accessors_roundtrip;
     test_case "cell and pixel dimensions replace each other" [ uint8 ]
       test_replace_dimensions;
-    test_case "replacing outputs retains raw Output lines" [ uint8 ]
+    test_case "replacing outputs replaces every Output line" [ uint8 ]
       test_replace_outputs;
     test_case "raw margin fits the frame"
       [ choose [ int; const max_int; const (max_int - 59); const 240 ] ]

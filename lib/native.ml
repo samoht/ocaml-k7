@@ -48,7 +48,6 @@ type command =
   | Set_typing_speed of int
   | Copy of string
   | Paste
-  | Output of string
   | Env
   | Screenshot of string
 
@@ -329,7 +328,6 @@ type t = {
   env : (string * string) list;
   requires : string list;
   text : string option;
-  dumps : bool;
 }
 
 let is_text path =
@@ -423,10 +421,8 @@ let rec read ~source ~at line t =
         (fun t l -> read ~source ~at l t)
         t
         (sourced ~source line (lit p))
-  | Keyword "Output" :: p :: _ when t.actions = [] ->
-      if is_text (lit p) then { t with text = Some (lit p) } else t
   | Keyword "Output" :: p :: _ ->
-      { t with actions = Output (lit p) :: t.actions }
+      if is_text (lit p) then { t with text = Some (lit p) } else t
   | Keyword "Set" :: Keyword "TypingSpeed" :: args when t.actions <> [] ->
       let c = set line t.config "TypingSpeed" args in
       { t with actions = Set_typing_speed c.typing_speed :: t.actions }
@@ -483,7 +479,6 @@ let of_lines ?(source = fun path -> Error (Io (path ^ ": no file to read")))
       env = [];
       requires = [];
       text = None;
-      dumps = false;
     }
   in
   match
@@ -494,21 +489,7 @@ let of_lines ?(source = fun path -> Error (Io (path ^ ": no file to read")))
     in
     { t with look = style t.config }
   with
-  | t ->
-      let actions = List.rev t.actions in
-      let later =
-        List.find_map
-          (function Output p when is_text p -> Some p | _ -> None)
-          actions
-      in
-      Ok
-        {
-          t with
-          actions;
-          env = List.rev t.env;
-          text = (match t.text with Some _ -> t.text | None -> later);
-          dumps = Option.is_some t.text;
-        }
+  | t -> Ok { t with actions = List.rev t.actions; env = List.rev t.env }
   | exception Stop e -> Error e
 
 type timeline = {
@@ -653,7 +634,7 @@ type state = {
   mutable typing_speed : int;
   mutable clipboard : string;
   text : Buffer.t;
-  mutable dumps : bool;
+  dumps : bool;
   mutable still : string option;
   mutable stills : (string * Screen.t) list;
   mutable submitted : int option;
@@ -904,7 +885,6 @@ let run_command st c = function
   | Set_typing_speed ms -> st.typing_speed <- ms
   | Copy s -> st.clipboard <- s
   | Paste -> write st st.clipboard
-  | Output path -> if is_text path then st.dumps <- true
   | Screenshot path ->
       st.still <- Some path;
       record st
@@ -1158,7 +1138,7 @@ let state t ~clock ({ pty; pid; _ } : terminal) =
     typing_speed = t.config.typing_speed;
     clipboard = "";
     text = Buffer.create 4096;
-    dumps = t.dumps;
+    dumps = Option.is_some t.text;
     still = None;
     stills = [];
     submitted = None;

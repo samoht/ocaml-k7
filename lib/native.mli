@@ -75,12 +75,11 @@ val play :
     directory [cwd] and is what it recorded, until the last action or until
     [interrupt] resolves. The text of {!text_output} is in VHS's format: the
     first lines of the buffer, as many as the screen has rows, after each
-    command that runs while recording, from the first action or from the
-    [Output] line that names it, each screen followed by a line of 80 U+2500
-    characters. A [Screenshot] of [shot.svg] is a still SVG image of the next
-    frame it records, without the cursor blinking. The shell gets [env] with
-    [TERM=xterm-256color], then [vars], the prompt VHS gives it and the [Env]
-    lines of [t]. *)
+    command that runs while recording, from the first action, each screen
+    followed by a line of 80 U+2500 characters. A [Screenshot] of [shot.svg] is
+    a still SVG image of the next frame it records, without the cursor blinking.
+    The shell gets [env] with [TERM=xterm-256color], then [vars], the prompt VHS
+    gives it and the [Env] lines of [t]. *)
 
 val resolve : cwd:string -> Eio.Process.Env.t -> string -> string option
 (** [resolve ~cwd env exe] is the file [exe] names, as [execvp] finds it: [exe]

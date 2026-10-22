@@ -250,7 +250,7 @@ val settings : t -> setting list
 
 val outputs : t -> string list
 (** [outputs t] are the outputs of [t], as {!val-tape}, {!of_string} or
-    {!with_outputs} gave them, without its {!raw} [Output] lines. *)
+    {!with_outputs} gave them. *)
 
 val with_settings : setting list -> t -> (t, error) result
 (** [with_settings settings t] is [t] with [settings] after its own settings, in
@@ -260,23 +260,25 @@ val with_settings : setting list -> t -> (t, error) result
     [Error (Invalid _)] as {!val-tape} is. *)
 
 val with_outputs : string list -> t -> (t, error) result
-(** [with_outputs outputs t] is [t] that writes to [outputs] in place of the
-    [outputs] {!val-tape} gave it; its {!raw} [Output] lines stay. It is
-    [Error (Invalid _)] as {!val-tape} is. *)
+(** [with_outputs outputs t] is [t] that writes to [outputs] in place of its own
+    outputs. It is [Error (Invalid _)] as {!val-tape} is. *)
 
 val of_string : string -> (t, error) result
 (** [of_string s] is the tape of the [.tape] source [s], one command per line,
-    each line ending with ["\n"] or ["\r\n"]. The [Output] lines before the
-    first action other than [Env], [Set] and [Require] are its outputs, and the
-    [Set] lines before the first action that a {!setting} writes are its
-    settings; a tape may have no output, which {!with_outputs} gives it. The
-    lines between [Hide] and the next [Show], or the end, are a {!hidden}
-    action, and a [Show] outside them is dropped. Every other line is a {!raw}
-    action. It is [Error (Invalid msg)] if a line is not one VHS's parser
-    accepts, or is a [Set WaitTimeout] that is not a whole number of
-    milliseconds, with [msg] naming the line by its number from [1], or if
-    {!val-tape} refuses the tape. If a tape [x] has no {!raw} [Output] line,
-    [Result.map to_string (of_string (to_string x))] is [Ok (to_string x)]. *)
+    each line ending with ["\n"] or ["\r\n"]. Its [Output] lines, wherever they
+    are, are its outputs, and the [Set] lines before the first action that a
+    {!setting} writes are its settings; a tape may have no output, which
+    {!with_outputs} gives it. The lines between [Hide] and the next [Show], or
+    the end, are a {!hidden} action, and a [Show] outside them is dropped. Every
+    other line is a {!raw} action. It is [Error (Invalid msg)] if a line is not
+    one VHS's parser accepts, or is a [Set WaitTimeout] that is not a whole
+    number of milliseconds, with [msg] naming the line by its number from [1],
+    or if {!val-tape} refuses the tape. For a tape [x],
+    [Result.map to_string (of_string (to_string x))] is [Ok (to_string x)].
+
+    {b Note.} {!to_string} prints the outputs first, so a text output that an
+    [Output] line after the first action names holds the screens from the first
+    action on, where VHS starts at that line. *)
 
 val to_string : t -> string
 (** [to_string t] is [t] in the [.tape] syntax. The [Output] lines come first,
@@ -486,9 +488,9 @@ val run :
     naming the first offending item, if:
     - an output has another extension, none and no trailing slash, or starts
       with [-], which ffmpeg reads as an option;
-    - two outputs, {!raw} [Output] lines included, are of the same kind (GIF,
-      MP4, WebM, text, PNG frames or SVG). VHS writes only the last of each kind
-      but SVG, which it never reads, and {!record} writes one SVG image;
+    - two outputs are of the same kind (GIF, MP4, WebM, text, PNG frames or
+      SVG). VHS writes only the last of each kind but SVG, which it never reads,
+      and {!record} writes one SVG image;
     - a {!raw} [Screenshot] has the path of an output or of another
       [Screenshot];
     - a string holds a control character, C1 controls included (the tabs and
@@ -520,14 +522,14 @@ val run :
       takes, about 268 million, where (8 width + 1024) (height + 128) must be
       below 2{^ 31};
     - a {!raw} line is [Hide] or [Show] (use {!hidden}), [Set] for a setting of
-      {!setting} other than [TypingSpeed] (use the setting), or an [Output] that
-      breaks the rules of [outputs] or ends with [.svg];
+      {!setting} other than [TypingSpeed] (use the setting), or [Output] (use
+      [outputs]);
     - a {!raw} [Require] or [Set], other than [Set TypingSpeed], comes after an
       action that prints a line, where VHS ignores it;
-    - every action outside {!hidden} is a [type' ""] or a {!raw} [Output],
-      [Set], [Require], empty or comment line, which VHS does not record, so it
-      records no frame and fails. VHS also fails if the actions it records all
-      end within one frame, such as a lone [sleep (Ms 0)], which [tape] does not
+    - every action outside {!hidden} is a [type' ""] or a {!raw} [Set],
+      [Require], empty or comment line, which VHS does not record, so it records
+      no frame and fails. VHS also fails if the actions it records all end
+      within one frame, such as a lone [sleep (Ms 0)], which [tape] does not
       check. *)
 
 (** {1:native_details Native recordings}
@@ -566,11 +568,11 @@ val run :
 
     The {!constructor-Native} engine plays the actions of {!action} and the raw
     lines [Type], key, [Ctrl], [Alt], [Shift], [Sleep], [Wait], [Copy], [Paste],
-    [Screenshot], [Output], [Source], [Env], [Require] and every [Set] but those
-    below. [Paste] types the last [Copy]. The tape of a [Source] line is read
-    relative to the [cwd] of {!record}, and is {!constructor-Invalid} where VHS
-    refuses it and on a control character other than a tab or a carriage return,
-    which {!val-tape} refuses in a {!raw} line. It does not play, and is
+    [Screenshot], [Source], [Env], [Require] and every [Set] but those below.
+    [Paste] types the last [Copy]. The tape of a [Source] line is read relative
+    to the [cwd] of {!record}, and is {!constructor-Invalid} where VHS refuses
+    it and on a control character other than a tab or a carriage return, which
+    {!val-tape} refuses in a {!raw} line. It does not play, and is
     {!constructor-Unsupported} on:
     - a {!shell} other than {!constructor-Bash}, {!constructor-Zsh} and
       {!constructor-Fish}, which start as in VHS;

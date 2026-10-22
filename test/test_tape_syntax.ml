@@ -30,7 +30,6 @@ let test_accepted () =
       "Paste";
       "Sleep .5";
       "Sleep 1.5m";
-      "Output frames/";
       "Set WindowBar Colorful";
       {|Set MarginFill "#ff00ff"|};
       "Set CursorBlink false";
@@ -89,12 +88,7 @@ let test_rejected () =
   fails "font family" {|Set FontFamily "x'"|}
     "use the setting Font_family instead";
   fails "padding" "Set Padding 400" "use the setting Padding instead";
-  fails "output" "Output x.foo"
-    "not .gif, .mp4, .webm, .txt, .ascii, .test, .png or .svg";
-  fails "output without extension" "Output demo"
-    "neither an extension nor a trailing slash";
-  fails "output dash" {|Output "-y.gif"|}
-    "starts with -, which ffmpeg reads as an option"
+  fails "output" "Output x.gif" "an output, which goes in outputs"
 
 (* Written by tape_oracle.go from [vhs validate]. *)
 let test_oracle () =

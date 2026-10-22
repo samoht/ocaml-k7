@@ -307,7 +307,7 @@ let test_text () =
       ]
   in
   let text path = screens (Eio.Path.load Eio.Path.(cwd / path)) in
-  (match record env cwd (tape [ "demo.svg"; "demo.txt" ] actions) with
+  match record env cwd (tape [ "demo.svg"; "demo.txt" ] actions) with
   | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok _ -> (
       (* The echo can lag behind the typing. *)
@@ -318,17 +318,7 @@ let test_text () =
             "prompt"
             (screen [ "> x=1"; "> sleep 1; echo hi"; "hi"; ">" ])
             prompt
-      | l -> Alcotest.failf "%d screens" (List.length l)));
-  match
-    record env cwd
-      (tape [ "demo.svg" ]
-         (K7.raw "Sleep 0" :: K7.raw "Output \"later.ascii\"" :: actions))
-  with
-  | Error e -> Alcotest.failf "%a" K7.pp_error e
-  | Ok _ ->
-      Alcotest.(check int)
-        "from the output" 5
-        (List.length (text "later.ascii"))
+      | l -> Alcotest.failf "%d screens" (List.length l))
 
 let test_window_bar () =
   with_dir @@ fun env cwd ->
@@ -736,8 +726,8 @@ let test_render_outputs () =
         [],
         {|not recorded natively: Output "frames/": PNG frames, which the Vhs engine records|}
       );
-      ( [ "demo.svg" ],
-        [ {|Output "demo.webm"|} ],
+      ( [ "demo.svg"; "demo.webm" ],
+        [],
         {|not recorded natively: Output "demo.webm": a WebM video, which the Vhs engine records|}
       );
       ( [ "demo.svg" ],

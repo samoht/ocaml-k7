@@ -227,8 +227,7 @@ let test_settings () =
   error "odd MP4 width" "Set Width 601: odd, which an MP4 output cannot have"
     ~outputs:[ "a.mp4" ] ~settings:[ Width 601 ] [];
   error "odd MP4 height" "Set Height 301: odd, which an MP4 output cannot have"
-    ~settings:[ Height 301 ]
-    [ raw "Output a.mp4" ];
+    ~outputs:[ "a.mp4" ] ~settings:[ Height 301 ] [];
   expect "odd GIF and WebM"
     "Output \"a.gif\"\nOutput \"a.webm\"\nSet Width 601\n"
     (str ~outputs:[ "a.gif"; "a.webm" ] ~settings:[ Width 601 ] []);
@@ -296,7 +295,9 @@ let test_outputs () =
   error "two SVGs"
     {|Output "a.svg": a tape has one SVG output, not also "b.svg"|}
     ~outputs:[ "a.svg"; "b.svg" ] [];
-  rejects "raw output" [ K7.raw "Output b.mp4" ] ~outputs:[ "a.mp4" ];
+  error "raw output"
+    {|raw line "Output b.mp4": an output, which goes in outputs|}
+    [ K7.raw "Output b.mp4" ];
   (* VHS hands other extensions to ffmpeg, which picks the format. *)
   error "unknown extension"
     {|Output "demo.gfi": not .gif, .mp4, .webm, .txt, .ascii, .test, .png or .svg|}
@@ -518,11 +519,26 @@ let test_of_string_outputs () =
       match read ~outputs:[ "a.svg" ] (K7.to_string t) with
       | Ok _ -> ()
       | Error e -> Alcotest.failf "printed SVG tape: %s" e));
-  match
-    K7.of_string "Env FOO \"bar\"\nOutput a.txt\nType \"hi\"\nSleep 1s\n"
-  with
+  (match
+     K7.of_string "Env FOO \"bar\"\nOutput a.txt\nType \"hi\"\nSleep 1s\n"
+   with
   | Ok _ -> ()
-  | Error e -> Alcotest.failf "Output after Env: %a" K7.pp_error e
+  | Error e -> Alcotest.failf "Output after Env: %a" K7.pp_error e);
+  (* Every Output line is an output, which with_outputs replaces. *)
+  let late =
+    "Type \"hi\"\nEnter\nOutput late.txt\nHide\nOutput b.gif\nShow\n"
+  in
+  (match K7.of_string late with
+  | Ok t ->
+      Alcotest.(check (list string))
+        "late outputs" [ "late.txt"; "b.gif" ] (K7.outputs t);
+      expect "printed first"
+        "Output \"late.txt\"\nOutput \"b.gif\"\nType \"hi\"\nEnter\n"
+        (K7.to_string t)
+  | Error e -> Alcotest.failf "late Output: %a" K7.pp_error e);
+  Alcotest.(check (result string string))
+    "late outputs replaced" (Ok "Output \"a.txt\"\nType \"hi\"\nEnter\n")
+    (read late)
 
 let suite =
   ( "k7",
