@@ -32,6 +32,9 @@ an output.
   [123]
   $ cp demo.t upper.T
   $ k7 play --dry-run -o upper.svg upper.T
+  $ k7 play --dry-run --print -o upper.svg upper.T
+  k7: --dry-run checks a file and --print prints its tape; give one
+  [123]
   $ k7 play demo.t
   k7: demo.t: no output; give it -o FILE
   [123]

@@ -25,6 +25,9 @@ let run stdenv ?engine ~dry_run ~print ~vhs ~settings ~env ~outputs ~setup ~dir
     ~wait_timeout input =
   match kind input with
   | Error msg -> Flags.fail stdenv msg
+  | Ok _ when dry_run && print ->
+      Flags.fail stdenv
+        "--dry-run checks a file and --print prints its tape; give one"
   | Ok Cram ->
       Play_cram.run stdenv ?engine ~dry_run ~print ~vhs ~setup ?dir ~settings
         ~env ?wait_timeout_s:wait_timeout ~outputs input
@@ -63,8 +66,8 @@ let engine =
 let dry_run =
   let doc =
     "Check $(i,FILE), the options and the outputs as a recording would, \
-     without recording or printing anything, and without starting a shell or \
-     $(b,vhs)."
+     without recording anything, and without starting a shell or $(b,vhs). It \
+     does not go with $(b,--print)."
   in
   Arg.(value & flag & info [ "dry-run" ] ~doc)
 
