@@ -1,19 +1,19 @@
 Usage errors are reported by the command line parser, whose wording
 varies across cmdliner versions.
 
-  $ vhs-cram demo.t 2> /dev/null
+  $ k7 cram demo.t 2> /dev/null
   [124]
 
-  $ vhs-cram --output demo.gif missing.t 2> /dev/null
+  $ k7 cram --output demo.gif missing.t 2> /dev/null
   [124]
 
   $ printf '  $ echo hi\n  hi\n' > demo.t
-  $ vhs-cram --setup missing.sh --output demo.gif demo.t 2> /dev/null
+  $ k7 cram --setup missing.sh --output demo.gif demo.t 2> /dev/null
   [124]
 
 --print shows the tape instead of running vhs.
 
-  $ vhs-cram --print --output demo.gif demo.t
+  $ k7 cram --print --output demo.gif demo.t
   Output "demo.gif"
   Set Shell "bash"
   Hide
@@ -32,35 +32,35 @@ ends --print quietly, as SIGPIPE would; a standard output that cannot be
 written is an error.
 
   $ i=0; while [ $i -lt 4000 ]; do echo "  \$ echo line $i"; i=$((i + 1)); done > big.t
-  $ { vhs-cram --print --output demo.gif big.t; echo $? > status; } | head -n 1
+  $ { k7 cram --print --output demo.gif big.t; echo $? > status; } | head -n 1
   Output "demo.gif"
   $ cat status
   0
-  $ vhs-cram --print --output demo.gif big.t >&- 2> err
+  $ k7 cram --print --output demo.gif big.t >&- 2> err
   [123]
 
 The reason is the system's, such as "Bad file descriptor" on macOS and
 "Invalid argument" on Linux.
 
   $ cut -d: -f1,2 err
-  vhs-cram: standard output
+  k7: standard output
 
 A command the tape cannot type is an error, not an exception.
 
   $ printf '  $ echo \001\n' > bad.t
-  $ vhs-cram --output demo.gif bad.t
-  vhs-cram: bad.t: line 1: "echo \x01" holds a control character
+  $ k7 cram --output demo.gif bad.t
+  k7: bad.t: line 1: "echo \x01" holds a control character
   [123]
 
 So is a test without commands, and an output path VHS cannot read.
 
   $ printf 'Only prose.\n' > empty.t
-  $ vhs-cram --output demo.gif empty.t
-  vhs-cram: empty.t: no command: no line starts with "  $ "
+  $ k7 cram --output demo.gif empty.t
+  k7: empty.t: no command: no line starts with "  $ "
   [123]
 
-  $ vhs-cram --output demo demo.t
-  vhs-cram: Output "demo": neither an extension nor a trailing slash
+  $ k7 cram --output demo demo.t
+  k7: Output "demo": neither an extension nor a trailing slash
   [123]
 
 A failing vhs is reported with what it printed.
@@ -72,8 +72,8 @@ A failing vhs is reported with what it printed.
   > exit 1
   > EOF
   $ chmod +x fake-vhs
-  $ vhs-cram --vhs ./fake-vhs --output demo.gif demo.t
-  vhs-cram: demo.t: ./fake-vhs exited with code 1
+  $ k7 cram --vhs ./fake-vhs --output demo.gif demo.t
+  k7: demo.t: ./fake-vhs exited with code 1
     Error: no browser
   [123]
 
@@ -87,15 +87,15 @@ expression of the prompt mark, with the option that waits longer.
   > exit 1
   > EOF
   $ chmod +x slow-vhs
-  $ vhs-cram --vhs ./slow-vhs --wait-timeout 2 --output demo.gif demo.t
-  vhs-cram: demo.t: vhs timed out after 2 seconds waiting for the prompt after a command; last value was: > sleep 99; --wait-timeout gives it longer
+  $ k7 cram --vhs ./slow-vhs --wait-timeout 2 --output demo.gif demo.t
+  k7: demo.t: vhs timed out after 2 seconds waiting for the prompt after a command; last value was: > sleep 99; --wait-timeout gives it longer
   [123]
 
 Setup and clear finish while the recording is still hidden, after
 resetting the prompt that the waits rely on.
 
   $ printf 'PS1=x\n' > setup.sh
-  $ vhs-cram --print --setup setup.sh --output demo.gif demo.t
+  $ k7 cram --print --setup setup.sh --output demo.gif demo.t
   Output "demo.gif"
   Set Shell "bash"
   Hide
@@ -111,7 +111,7 @@ resetting the prompt that the waits rely on.
 
 An .svg output is recorded without vhs, with the same prompt and mark.
 
-  $ vhs-cram --print --output demo.svg demo.t | grep -v '^Env'
+  $ k7 cram --print --output demo.svg demo.t | grep -v '^Env'
   Set Shell "bash"
   Hide
   Type 'eval "$VHS_CRAM_PROMPT"; clear'
@@ -122,6 +122,79 @@ An .svg output is recorded without vhs, with the same prompt and mark.
   Enter
   Wait+Line /\x{2060}\x{2060}\x{200B}\x{2060}\x{200B}\x{200B}\x{200B}\x{2060}\x{200B}\x{2060}\x{200B}\x{200B}\x{2060}\x{200B}\x{2060}\x{2060}$/
   Sleep 1000ms
-  $ vhs-cram --vhs ./missing-vhs --output demo.svg demo.t
+  $ k7 cram --vhs ./missing-vhs --output demo.svg demo.t
   $ grep -c '<svg xmlns' demo.svg
   1
+
+The terminal's size, font and theme are settings of the tape, and each
+--env variable an Env line of its hidden setup.
+
+  $ k7 cram --print --cols 100 --rows 20 --font-size 16 --theme Dracula --env 'GREETING=bonjour à tous' --output demo.gif demo.t | head -n 8
+  Output "demo.gif"
+  Set Shell "bash"
+  Set Columns 100
+  Set Rows 20
+  Set FontSize 16
+  Set Theme "Dracula"
+  Hide
+  Env "GREETING" "bonjour à tous"
+  $ k7 cram --print --env 'A=B"C'"'"'D`' --output demo.gif demo.t
+  k7: --env "A=B\"C'D`": holds all three quote characters
+  [123]
+  $ k7 cram --print --env NOVALUE --output demo.gif demo.t 2> /dev/null
+  [124]
+
+A native recording has the columns asked for and the variables set.
+
+  $ printf '  $ echo "$GREETING"; printf "%%099d|\\n" 0\n' > env.t
+  $ k7 cram --cols 100 --env GREETING=bonjour --output env.txt env.t
+  $ grep -c '^bonjour$' env.txt
+  3
+  $ grep -c '^0*|$' env.txt
+  3
+
+k7 run records a program, with no shell and nothing typed, and exits
+with the program's exit code once the image is written.
+
+  $ k7 run -o run.svg --cols 20 --rows 3 -- sh -c 'printf "hello\n"; exit 3'
+  [3]
+  $ grep -c '>hello<' run.svg
+  1
+  $ grep -q '&gt; ' run.svg || echo no prompt
+  no prompt
+  $ k7 run -o run.gif -- true
+  k7: "run.gif": not .svg, the animated SVG image k7 run writes
+  [123]
+  $ k7 run -o run.svg -- k7-no-such-program
+  k7: executable not found: k7-no-such-program
+  [123]
+  $ k7 run -o missing/run.svg -- true
+  k7: "missing/run.svg": no directory "missing"
+  [123]
+  $ k7 run -o run.svg 2> /dev/null
+  [124]
+
+k7 tape reads a tape in VHS's syntax; the command line replaces its
+settings and outputs.
+
+  $ cat > demo.tape <<'EOF'
+  > Output demo.gif
+  > Set FontSize 18
+  > Set Width 900
+  > Type "echo $GREETING"
+  > Enter
+  > Sleep 500ms
+  > EOF
+  $ k7 tape --print --cols 90 -o demo.svg demo.tape
+  Set FontSize 18
+  Set Columns 90
+  Type "echo $GREETING"
+  Enter
+  Sleep 500ms
+  $ k7 tape --cols 40 --env GREETING=salut -o tape.txt demo.tape
+  $ grep -c '^salut$' tape.txt
+  2
+  $ printf 'Output a.gif\nType "x\n' > bad.tape
+  $ k7 tape bad.tape
+  k7: bad.tape: line 2: "Type \"x": unterminated string
+  [123]

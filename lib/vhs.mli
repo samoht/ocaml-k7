@@ -253,9 +253,9 @@ val of_string : string -> (t, error) result
     are a {!hidden} action, a [Show] outside them is dropped, and every other
     line is a {!raw} action. It is [Error (Invalid msg)] if a line is not one
     VHS's parser accepts, with [msg] naming the line by its number from [1], or
-    if {!val-tape} refuses the tape. If [t] has no [.svg] output and no {!raw}
-    [Output] line, [Result.map to_string (of_string (to_string t))] is
-    [Ok (to_string t)]. *)
+    if {!val-tape} refuses the tape. If a tape [x] has no [.svg] output and no
+    {!raw} [Output] line, [Result.map to_string (of_string (to_string x))] is
+    [Ok (to_string x)]. *)
 
 val to_string : t -> string
 (** [to_string t] is [t] in the [.tape] syntax: the [Output] lines, but those of
@@ -354,6 +354,17 @@ val record :
     - [Error (Io _)] if [cwd] is not a directory of the native file system, or
       if the directory of an output cannot be written, before it plays anything,
       and on any other I/O failure. *)
+
+val play :
+  ?vhs:string ->
+  clock:_ Eio.Time.Mono.t ->
+  proc:_ Eio.Process.mgr ->
+  cwd:_ Eio.Path.t ->
+  t ->
+  (unit, error) result
+(** [play ~vhs ~clock ~proc ~cwd t] is [render ~vhs ~clock ~proc ~cwd t] if [t]
+    has an output or a [Screenshot] that only {!render} writes, and
+    [record ~clock ~proc ~cwd t] otherwise, which needs no [vhs]. *)
 
 val svg :
   ?settings:setting list -> (duration * string) list -> (string, error) result

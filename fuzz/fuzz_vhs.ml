@@ -784,9 +784,7 @@ let test_exit_codes n =
   save env (path "input.t") "  $ echo hello\n";
   save env (path "empty.t") "prose only\n";
   save env (path "bad.t") "  $ echo \001\n";
-  let cli =
-    Option.value ~default:"vhs-cram" (Sys.getenv_opt "VHS_CRAM_TEST_EXE")
-  in
+  let cli = Option.value ~default:"k7" (Sys.getenv_opt "K7_TEST_EXE") in
   let eval expected args =
     let buffer = Buffer.create 256 in
     let sink = Eio.Flow.buffer_sink buffer in
@@ -795,7 +793,7 @@ let test_exit_codes n =
       let child =
         Eio.Process.spawn ~sw ~stdout:sink ~stderr:sink
           (Eio.Stdenv.process_mgr env)
-          (cli :: args)
+          (cli :: "cram" :: args)
       in
       Eio.Process.await child
     in
@@ -830,12 +828,10 @@ let contains ~sub s =
   in
   go 0
 
-(* The exit status of vhs-cram on [args] and what it printed. cmdliner
+(* The exit status of k7 cram on [args] and what it printed. cmdliner
    styles its messages unless [TERM] is [dumb]. *)
 let run_cli env args =
-  let cli =
-    Option.value ~default:"vhs-cram" (Sys.getenv_opt "VHS_CRAM_TEST_EXE")
-  in
+  let cli = Option.value ~default:"k7" (Sys.getenv_opt "K7_TEST_EXE") in
   let output = Buffer.create 256 in
   let sink = Eio.Flow.buffer_sink output in
   let proc = Eio.Stdenv.process_mgr env in
@@ -845,12 +841,13 @@ let run_cli env args =
   in
   let status =
     Eio.Switch.run @@ fun sw ->
-    Eio.Process.spawn ~sw ~env ~stdout:sink ~stderr:sink proc (cli :: args)
+    Eio.Process.spawn ~sw ~env ~stdout:sink ~stderr:sink proc
+      (cli :: "cram" :: args)
     |> Eio.Process.await
   in
   (status, Buffer.contents output)
 
-(* [output] says why vhs-cram refused [--wait-timeout=seconds]. *)
+(* [output] says why k7 cram refused [--wait-timeout=seconds]. *)
 let check_refused seconds output =
   check (List.mem (string_of_int seconds) (String.split_on_char '"' output));
   (* cmdliner wraps the message. *)
@@ -869,7 +866,7 @@ let check_refused seconds output =
        words);
   check
     (List.exists
-       (String.starts_with ~prefix:"vhs-cram: option '--wait-timeout':")
+       (String.starts_with ~prefix:"k7: option '--wait-timeout':")
        (String.split_on_char '\n' output))
 
 (* Command-line seconds must fit Go's duration and be strictly positive. *)
@@ -901,7 +898,7 @@ let test_cli_wait_timeout seconds =
 
 let record_cram ?(setup = []) ?(prefix = []) env path src =
   let output = path "order.txt" in
-  let cram = Result.get_ok (Vhs_cram.Cram.parse src) in
+  let cram = Result.get_ok (K7_cli.Cram.parse src) in
   let t =
     Result.get_ok
       (Vhs.tape
@@ -917,7 +914,7 @@ let record_cram ?(setup = []) ?(prefix = []) env path src =
                Typing_speed (Ms 5);
              ]
          ~outputs:[ output ]
-         (prefix @ Vhs_cram.Cram.actions ~setup cram @ [ Vhs.sleep (Ms 3500) ]))
+         (prefix @ K7_cli.Cram.actions ~setup cram @ [ Vhs.sleep (Ms 3500) ]))
   in
   let result =
     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 40. (fun () ->
@@ -1199,7 +1196,7 @@ let with_vhs =
       test_raw_validates;
   ]
 
-(* Properties that run stand-ins for vhs and vhs-cram. *)
+(* Properties that run stand-ins for vhs and k7. *)
 (* What a program prints shows as [svg] draws the same bytes, which the
    terminal's line discipline gives a carriage return before each newline. *)
 let test_run_screen bytes =

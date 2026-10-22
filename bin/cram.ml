@@ -111,7 +111,15 @@ let init mark =
       var;
     ]
 
-let prepare mark setup =
+(* [string s] is [s] as a tape string, between a quote it does not hold. *)
+let string s =
+  let q =
+    Option.value ~default:'"'
+      (List.find_opt (fun q -> not (String.contains s q)) [ '"'; '\''; '`' ])
+  in
+  Fmt.str "%c%s%c" q s q
+
+let prepare ~env mark setup =
   let line =
     List.map
       (fun s ->
@@ -123,20 +131,23 @@ let prepare mark setup =
     @ [ Fmt.str {|eval "$%s"|} var; "clear" ]
   in
   Vhs.hidden
-    [
-      Fmt.kstr Vhs.raw "Env %s `%s`" var (init mark);
-      Vhs.type' (String.concat "; " line ^ "\n");
-      ready mark;
-    ]
+    (List.map
+       (fun (k, v) -> Fmt.kstr Vhs.raw "Env %s %s" (string k) (string v))
+       env
+    @ [
+        Fmt.kstr Vhs.raw "Env %s `%s`" var (init mark);
+        Vhs.type' (String.concat "; " line ^ "\n");
+        ready mark;
+      ])
 
 let typed mark lines =
   [
     Vhs.type' (String.concat "\n" lines ^ "\n"); ready mark; Vhs.sleep (Ms 1000);
   ]
 
-let actions ~setup t =
+let actions ?(env = []) ~setup t =
   let mark = mark ~setup t in
-  prepare mark setup :: List.concat_map (typed mark) t
+  prepare ~env mark setup :: List.concat_map (typed mark) t
 
 (* [find sub s ~from] is the index of the first [sub] in [s] from [from]. *)
 let find sub s ~from =

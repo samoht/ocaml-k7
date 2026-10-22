@@ -20,8 +20,8 @@
    own parser rules before VHS runs, print them as .tape files and run vhs \
    on them to record a GIF or a video. A native recorder plays a tape in \
    bash, zsh or fish on a pseudo-terminal and draws an SVG image animated \
-   with CSS alone, with no vhs, browser or ffmpeg. The vhs-cram command \
-   records a cram test either way.")
+   with CSS alone, with no vhs, browser or ffmpeg. The k7 command \
+   records a cram test, a program or a tape.")
  (depends
   (ocaml (>= 5.4))
   (eio (>= 1.6))

@@ -1,17 +1,17 @@
 ; The library is private: it keeps the cram translation and the command line
-; testable without making them part of the installed vhs library. Its
-; messages quote strings as the library's do.
+; testable without making them part of the installed library. Its messages
+; quote strings as the library's do.
 
 (copy_files ../lib/quote.{ml,mli})
 
 (library
- (name vhs_cram)
- (modules cram cli quote)
+ (name k7_cli)
+ (modules cram flags cram_cmd run_cmd tape_cmd cli quote)
  (libraries vhs cmdliner eio eio.unix eio_main fmt unix))
 
 (executable
  (name main)
- (public_name vhs-cram)
+ (public_name k7)
  (package vhs)
  (modules main)
- (libraries vhs_cram cmdliner))
+ (libraries k7_cli cmdliner))

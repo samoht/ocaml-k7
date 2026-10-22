@@ -3,7 +3,7 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-open Vhs_cram
+open K7_cli
 
 let expect = Alcotest.(check string)
 

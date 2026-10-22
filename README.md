@@ -20,7 +20,7 @@ image, which needs no other program; a GIF or a video still needs `vhs`.
 ![A terminal where four commands run: echo prints "Recorded without a browser"; printf prints "bold green" in bold green, "blue" in blue and "inverse" in reverse video; printf prints wide Chinese characters, an e with a combining accent and a thumbs-up emoji; and echo $((6 * 7)) prints 42](doc/demo.svg)
 
 The recording above is [doc/demo.t](doc/demo.t), recorded natively with
-`dune exec -- vhs-cram --output doc/demo.svg doc/demo.t`.
+`dune exec -- k7 cram --output doc/demo.svg doc/demo.t`.
 
 ## Installation
 
@@ -174,7 +174,7 @@ let image =
 A cram test is a `.t` file, in the format of Mercurial's test runner that
 Brodie Rao's [cram](https://bitheap.org/cram/) popularised and dune runs: each
 line starting with `  $ ` is a shell command, and the lines below it are the
-output it must print. The `vhs-cram` command types each command into a bash
+output it must print. The `k7 cram` command types each command into a bash
 terminal and waits for the prompt to come back before the next one, so the
 recording shows each command with its output. `--print` shows the tape
 instead of running `vhs`; an `.svg` output, which VHS cannot write, has no
@@ -182,7 +182,7 @@ instead of running `vhs`; an `.svg` output, which VHS cannot write, has no
 
 ```sh
 $ printf '  $ echo hello\n  hello\n' > hello.t
-$ vhs-cram --print --output hello.gif hello.t
+$ k7 cram --print --output hello.gif hello.t
 Output "hello.gif"
 Set Shell "bash"
 Hide
@@ -198,22 +198,22 @@ Sleep 1000ms
 ```
 
 An output ending in `.svg`, `.txt`, `.ascii` or `.test` is recorded by
-`vhs-cram` itself, with `Vhs.record` and no browser, and the others by
+`k7 cram` itself, with `Vhs.record` and no browser, and the others by
 `vhs`. Extensions are lower case, as VHS reads them:
 
 ```
-$ vhs-cram --output hello.svg hello.t
+$ k7 cram --output hello.svg hello.t
 ```
 
 A setup script, given with `--setup`, runs before the first command without
-being recorded. `vhs-cram` then makes the last command of bash's
+being recorded. `k7 cram` then makes the last command of bash's
 `PROMPT_COMMAND`, after any prompt hook the setup installs, set the prompt to
 the one VHS gives bash followed by an invisible mark, sixteen zero-width
 characters that spell a digest of the cram test, and waits for that mark:
 output that ends with `>`, or with a zero-width space, while its command still
 runs is not mistaken for the prompt. A command that leaves bash waiting for
 more input, such as an unterminated quote or here-document, makes that wait
-time out, and `vhs-cram` then names the command. A wait times out after 15
+time out, and `k7 cram` then names the command. A wait times out after 15
 seconds, or after the number of seconds `--wait-timeout` gives; the error
 names the command whose prompt did not come back, when the recording is
 native, and says that `--wait-timeout` waits longer. A shell that exits, as

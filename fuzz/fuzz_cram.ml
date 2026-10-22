@@ -4,7 +4,7 @@
   ---------------------------------------------------------------------------*)
 
 open Alcobar
-open Vhs_cram
+open K7_cli
 
 (* C0, DEL and C1. *)
 let is_control u =

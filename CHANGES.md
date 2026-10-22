@@ -8,8 +8,11 @@
   VHS does, and refuses, before it plays anything, an output or a
   screenshot only the other writes, or one whose directory it cannot write.
   `Vhs.svg` draws the image of timed output, with the settings `Vhs.tape`
-  checks. `vhs-cram` records an `.svg` output and the text outputs this
-  way, waiting for the same prompt mark as with VHS.
+  checks.
+- The `k7` command records a cram test (`k7 cram`), any program
+  (`k7 run`) or a tape (`k7 tape`) as an animated SVG image, and runs
+  `vhs` for the other outputs. `--cols`, `--rows`, `--font-size`,
+  `--theme` and `--env` set the terminal of each.
 - `Vhs.run` records a program on a pseudo-terminal, with no shell and
   nothing typed, and returns the animated SVG image of its own screens,
   timed as they arrived, with how the program exited.
@@ -39,7 +42,8 @@
   rows or columns than VHS can measure, a frame larger than the encoder of
   a GIF, MP4 or WebM output takes, and a screenshot with the path of an
   output or of another screenshot.
-- `vhs-cram` keeps typed non-ASCII text without a UTF-8 locale.
+- `k7 cram` keeps typed non-ASCII text without a UTF-8 locale, and waits
+  for the same prompt mark natively as with VHS.
 - The library needs OCaml 5.4, for matrix's pseudo-terminals and terminal
   emulator, and matrix 0.1.0. The emulator is a private copy of matrix's
   terminal core at mosaic 858724d6 (90a3f220 and the fixes of PRs

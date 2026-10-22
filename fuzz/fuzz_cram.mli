@@ -3,7 +3,7 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(** Fuzz tests for the [Cram] module of [vhs-cram]. *)
+(** Fuzz tests for the [Cram] module of [k7 cram]. *)
 
 val suite : string * Alcobar.test_case list
 (** Test suite. *)

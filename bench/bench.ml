@@ -42,7 +42,7 @@ let () =
   let t = tape (actions 10_000) in
   measure "print 10k-item tape" ~runs:50 (fun () -> Vhs.to_string t);
   let src = cram 10_000 in
-  measure "parse 10k-command cram" ~runs:50 (fun () -> Vhs_cram.Cram.parse src);
+  measure "parse 10k-command cram" ~runs:50 (fun () -> K7_cli.Cram.parse src);
   let typed = [ Vhs.type' long_text ] in
   measure "check 3-quote text" ~runs:200 (fun () -> tape typed);
   let t = tape typed in

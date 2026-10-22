@@ -3,4 +3,4 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-let () = exit (Cmdliner.Cmd.eval' Vhs_cram.Cli.cmd)
+let () = exit (Cmdliner.Cmd.eval' K7_cli.Cli.cmd)

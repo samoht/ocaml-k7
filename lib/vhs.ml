@@ -96,6 +96,7 @@ type t = {
 
 let ( let* ) = Result.bind
 let err_unsupported fmt = Fmt.kstr (fun s -> Error (Unsupported s)) fmt
+let err_invalid fmt = Fmt.kstr (fun s -> Error (Invalid s)) fmt
 
 let rec iter_result f = function
   | [] -> Ok ()
@@ -849,15 +850,16 @@ let setting_of_line line name arg =
 (* [of_string] reads the settings, while no action has started, with their
    constructors, the [Output] lines before them as outputs, [Hide] and
    [Show] as {!hidden}, and every other line as a raw line. *)
+(* The lines of [src], which end with a newline or a CRLF. *)
+let lines src =
+  List.map
+    (fun l ->
+      if String.ends_with ~suffix:"\r" l then
+        String.sub l 0 (String.length l - 1)
+      else l)
+    (String.split_on_char '\n' src)
+
 let of_string src =
-  let lines =
-    List.map
-      (fun l ->
-        if String.ends_with ~suffix:"\r" l then
-          String.sub l 0 (String.length l - 1)
-        else l)
-      (String.split_on_char '\n' src)
-  in
   let settings = ref [] and outputs = ref [] and actions = ref [] in
   let hidden = ref None in
   let add a =
@@ -900,7 +902,7 @@ let of_string src =
             add (Raw line);
             next ~started:true)
   in
-  match go 1 ~started:false lines with
+  match go 1 ~started:false (lines src) with
   | Error msg -> Error (Invalid msg)
   | Ok () ->
       show ();
@@ -1373,6 +1375,19 @@ let record ~clock ~proc ~cwd t =
   let* () = iter_result (save ~create:true text) texts in
   iter_result (fun (path, s) -> save s path) stills
 
+(* The outputs and screenshots only [render] writes. *)
+let needs_vhs t =
+  List.exists
+    (fun p -> List.mem (kind p) [ "GIF"; "MP4"; "WebM"; "frames" ])
+    (t.outputs @ raw_outputs t.actions)
+  || List.exists
+       (fun p -> Tape_syntax.extension p <> ".svg")
+       (raw_screenshots t.actions)
+
+let play ?vhs ~clock ~proc ~cwd t =
+  if needs_vhs t then render ?vhs ~clock ~proc ~cwd t
+  else record ~clock ~proc ~cwd t
+
 let check_times output =
   let rec go prev = function
     | [] -> Ok ()
@@ -1416,8 +1431,7 @@ let check_env env =
     List.find_map (fun kv -> Option.map (fun why -> (kv, why)) (bad kv)) env
   with
   | None -> Ok ()
-  | Some ((k, v), why) ->
-      Error (Invalid (Fmt.str "env %a: %s" Quote.pp (k ^ "=" ^ v) why))
+  | Some ((k, v), why) -> err_invalid "env %a: %s" Quote.pp (k ^ "=" ^ v) why
 
 let run ?(settings = []) ?(env = []) ~clock ~proc ~cwd argv =
   let* () = if argv = [] then Error (Invalid "no command to run") else Ok () in

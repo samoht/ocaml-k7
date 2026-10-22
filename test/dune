@@ -16,7 +16,7 @@
   (:standard -open Matrix_backport))
  (libraries
   vhs
-  vhs_cram
+  k7_cli
   svg_check
   matrix_backport
   native_test
@@ -48,4 +48,4 @@
    (run %{exe:test.exe}))))
 
 (cram
- (deps %{bin:vhs-cram}))
+ (deps %{bin:k7}))

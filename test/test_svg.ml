@@ -178,7 +178,7 @@ let test_concealed_description () =
   let s = svg [ (Ms 0, "hello"); (Ms 100, "\027[2J\027[H") ] in
   Alcotest.(check bool) "cleared" false (contains ~sub:"<desc" s)
 
-(* The zero-width characters of vhs-cram's prompt mark do not reach the text
+(* The zero-width characters of k7 cram's prompt mark do not reach the text
    alternative; a joiner and a combining mark, which shape what shows, do. *)
 let test_zero_width_description () =
   let s =

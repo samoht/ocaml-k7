@@ -3,4 +3,4 @@
 
 (executable
  (name bench)
- (libraries vhs vhs_cram fmt unix))
+ (libraries vhs k7_cli fmt unix))

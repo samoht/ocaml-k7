@@ -3,7 +3,7 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-open Vhs_cram
+open K7_cli
 
 let expect = Alcotest.(check string)
 
@@ -15,7 +15,7 @@ let contains ~sub s =
   at 0
 
 let tape ?(setup = []) ?(output = "demo.gif") ?wait_timeout_s src =
-  Cli.tape ~setup ~output ?wait_timeout_s ~name:"input.t" src
+  Cram_cmd.tape ~setup ~output ?wait_timeout_s ~name:"input.t" src
   |> Result.map Vhs.to_string
 
 let test_tape () =
@@ -69,7 +69,7 @@ Sleep 1000ms
    stands in for vhs. *)
 let with_files files fn =
   Eio_main.run @@ fun env ->
-  let dir = Filename.temp_dir "vhs-cram" "" in
+  let dir = Filename.temp_dir "k7-cli" "" in
   let path name = Filename.concat dir name in
   List.iter
     (fun (name, perm, contents) ->
@@ -90,7 +90,7 @@ let fake_vhs status =
     status
 
 let run env ?(print = false) ~vhs input =
-  Cli.run env ~print ~vhs ~setup:[] ~output:"demo.gif" input
+  Cram_cmd.run env ~print ~vhs ~setup:[] ~output:"demo.gif" input
 
 let test_run () =
   with_files
@@ -151,7 +151,7 @@ let test_write_errors () =
   let code, msg = cli ~stdout:None () in
   Alcotest.(check int) "closed standard output" 123 code;
   Native_test.check_contains "names standard output"
-    ~sub:"vhs-cram: standard output: " msg;
+    ~sub:"k7: standard output: " msg;
   Alcotest.(check int)
     "closed standard error" 123
     ( redirect Unix.stderr None @@ fun () ->
@@ -164,7 +164,7 @@ let test_error_names_input () =
   Alcotest.(check (pair int string))
     "message"
     ( 123,
-      Fmt.str "vhs-cram: %s: executable not found: vhs-no-such-executable\n"
+      Fmt.str "k7: %s: executable not found: vhs-no-such-executable\n"
         (path "demo.t") )
     ( captured path @@ fun () ->
       run env ~vhs:"vhs-no-such-executable" (path "demo.t") )
@@ -294,7 +294,7 @@ let test_command () =
   let err = Format.formatter_of_buffer (Buffer.create 256) in
   let eval args =
     Cmdliner.Cmd.eval_value ~err ~help
-      ~argv:(Array.of_list ("vhs-cram" :: args))
+      ~argv:(Array.of_list ("k7" :: "cram" :: args))
       Cli.cmd
   in
   (match eval [] with
@@ -380,7 +380,7 @@ let test_history ~native () =
   let src = "  $ echo one\n  $ echo \"x!!y\"\n" in
   let t =
     Result.get_ok
-      (Cli.tape ~setup:[ path "history.sh" ] ~output ~name:"history.t" src)
+      (Cram_cmd.tape ~setup:[ path "history.sh" ] ~output ~name:"history.t" src)
   in
   let result =
     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 60. (fun () ->
@@ -478,7 +478,7 @@ let test_unfinished ~native () =
   @@ fun env path ->
   let code, msg =
     captured path @@ fun () ->
-    Cli.run env ~print:false
+    Cram_cmd.run env ~print:false
       ~vhs:(Option.value oracle ~default:"vhs")
       ~setup:[]
       ~output:(path (if native then "out.svg" else "out.gif"))
@@ -491,14 +491,14 @@ let test_unfinished ~native () =
         Alcotest.failf "error lacks %S: %s" sub msg)
     [ "command 1"; "cat <<EOF"; "waiting for more input" ]
 
-(* [run_err env path ~wait_timeout_s src] runs vhs-cram natively on [src]
+(* [run_err env path ~wait_timeout_s src] runs k7 cram natively on [src]
    and is its exit code and what it printed on standard error. *)
 let run_err env path ?wait_timeout_s src =
   Eio.Path.save ~create:(`Or_truncate 0o644)
     Eio.Path.(Eio.Stdenv.fs env / path "demo.t")
     src;
   captured path @@ fun () ->
-  Cli.run env ~print:false ~vhs:"vhs" ~setup:[] ?wait_timeout_s
+  Cram_cmd.run env ~print:false ~vhs:"vhs" ~setup:[] ?wait_timeout_s
     ~output:(path "out.svg") (path "demo.t")
 
 let check_message msg ~has ~lacks =
@@ -512,13 +512,13 @@ let check_message msg ~has ~lacks =
       if contains ~sub msg then Alcotest.failf "error has %S: %s" sub msg)
     lacks
 
-(* vhs-cram records the text outputs natively too, without vhs. *)
+(* k7 cram records the text outputs natively too, without vhs. *)
 let test_native_text () =
   with_files [ ("demo.t", 0o644, "  $ echo native-text\n") ] @@ fun env path ->
   List.iter
     (fun output ->
       let code =
-        Cli.run env ~print:false ~vhs:"vhs-no-such-executable" ~setup:[]
+        Cram_cmd.run env ~print:false ~vhs:"vhs-no-such-executable" ~setup:[]
           ~output:(path output) (path "demo.t")
       in
       Alcotest.(check int) output 0 code;

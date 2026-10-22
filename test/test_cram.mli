@@ -3,7 +3,7 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(** Tests for the [Cram] module of [vhs-cram]. *)
+(** Tests for the [Cram] module of [k7 cram]. *)
 
 val suite : string * unit Alcotest.test_case list
 (** [suite] is the test suite. *)

@@ -10,7 +10,7 @@
   (:standard -open Matrix_backport))
  (libraries
   vhs
-  vhs_cram
+  k7_cli
   svg_check
   matrix_backport
   fmt
@@ -28,8 +28,8 @@
   (<> %{profile} afl))
  (action
   (setenv
-   VHS_CRAM_TEST_EXE
-   %{bin:vhs-cram}
+   K7_TEST_EXE
+   %{bin:k7}
    (run %{exe:fuzz.exe} --budget 0.2 --timeout 60 --seed 42))))
 
 (rule
@@ -38,8 +38,8 @@
   (<> %{profile} afl))
  (action
   (setenv
-   VHS_CRAM_TEST_EXE
-   %{bin:vhs-cram}
+   K7_TEST_EXE
+   %{bin:k7}
    (setenv
     VHS_ORACLE
     vhs
