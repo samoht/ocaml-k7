@@ -26,7 +26,7 @@
     ]}
 
     {!record} writes [demo.svg] without [vhs]: it picks the {!engine} that
-    writes the outputs of a tape, as [k7 cram] and [k7 tape] do. *)
+    writes the outputs of a tape, as [k7 play] does. *)
 
 (** {1:actions Actions} *)
 

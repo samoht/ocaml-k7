@@ -3,7 +3,7 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(** The [k7 tape] subcommand. *)
+(** [k7 play] on a tape. *)
 
 val run :
   Eio_unix.Stdenv.base ->
@@ -19,7 +19,4 @@ val run :
     [outputs], unless empty, in place of its outputs, and records it with
     {!K7.record}, which runs the executable [vhs] only for the outputs [vhs]
     writes, with the variables [env], or prints it on standard output if [print]
-    is [true]. It is the exit code as for {!Cram_cmd.run}. *)
-
-val cmd : int Cmdliner.Cmd.t
-(** [cmd] is the [tape] subcommand. *)
+    is [true]. It is the exit code as for {!Play_cram.run}. *)

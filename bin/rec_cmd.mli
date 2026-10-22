@@ -3,7 +3,7 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(** The [k7 run] subcommand. *)
+(** The [k7 rec] subcommand. *)
 
 val run :
   ?show:string ->
@@ -23,4 +23,4 @@ val run :
     {!K7.run} fails, or if the image cannot be written. *)
 
 val cmd : int Cmdliner.Cmd.t
-(** [cmd] is the [k7 run] subcommand. *)
+(** [cmd] is the [k7 rec] subcommand. *)

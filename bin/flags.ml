@@ -96,9 +96,8 @@ let seconds s =
 
 let wait_timeout =
   let doc =
-    "Fail the recording when a wait without a timeout of its own has not held \
-     after $(docv) seconds (defaults to VHS's 15). $(b,k7 cram) waits for the \
-     prompt after each command."
+    "Give each command of a cram test $(docv) seconds to give the prompt back \
+     before the recording fails (defaults to VHS's 15)."
   in
   Arg.(
     value
@@ -164,7 +163,7 @@ let write flow s =
   | exception Eio.Io (err, _) ->
       Error (Fmt.kstr Option.some "%a" Eio.Exn.pp_err err)
 
-(* As under SIGPIPE, which Eio ignores: [k7 cram --print | head] is quiet. *)
+(* As under SIGPIPE, which Eio ignores: [k7 play --print | head] is quiet. *)
 let print_tape env t =
   match write (Eio.Stdenv.stdout env) (K7.to_string t) with
   | Ok () | Error None -> Ok ()
@@ -176,8 +175,7 @@ let pp_error ppf = function
   | K7.Timeout { wait; line; last } ->
       Fmt.pf ppf
         "timed out waiting for line %d, %s%s; give the wait a longer timeout, \
-         as in Wait@30s, or the tape a longer Set WaitTimeout or \
-         --wait-timeout"
+         as in Wait@30s, or the tape a longer Set WaitTimeout"
         line (shown wait)
         (if last = "" then "" else "; last value was: " ^ shown last)
   | e -> K7.pp_error ppf e

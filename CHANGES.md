@@ -11,10 +11,10 @@
   screenshot only the other writes, or one whose directory it cannot write.
   `K7.svg` draws the image of timed output, with the settings `K7.tape`
   checks.
-- The `k7` command records a cram test (`k7 cram`), any program
-  (`k7 run`) or a tape (`k7 tape`) as an animated SVG image, and runs
-  `vhs` for the other outputs. `--columns`, `--rows`, `--font-size`,
-  `--theme` and `--env` set the terminal of each.
+- The `k7` command plays a tape or a cram test (`k7 play`), or records
+  any program (`k7 rec`), as an animated SVG image, and runs `vhs` for
+  the other outputs of a tape or a cram test. `--columns`, `--rows`,
+  `--font-size`, `--theme` and `--env` set the terminal of each.
 - `K7.run` records a program on a pseudo-terminal, with no shell and
   nothing typed, and returns the animated SVG image of its screens below
   its command line, timed as they arrived, with how the program exited.
@@ -24,16 +24,16 @@
   without starting a shell or `vhs`.
 - `K7.run` and `K7.record` take `?env`, variables for the environment of
   the program or the shell, which `--env` sets for each subcommand.
-- `K7.run` and `K7.record` take `?stop`, which ends
-  a recording and keeps what it recorded; `k7 cram`, `k7 run` and
-  `k7 tape` resolve it on SIGINT or SIGTERM, then exit 130 or 143.
-- `k7 cram` runs the commands in a new empty temporary directory, as dune
-  does, or in the directory of `--dir`.
+- `K7.run` and `K7.record` take `?stop`, which ends a recording and keeps
+  what it recorded; `k7 play` and `k7 rec` resolve it on SIGINT or
+  SIGTERM, then exit 130 or 143.
+- `k7 play` runs the commands of a cram test in a new empty temporary
+  directory, as dune does, or in the directory of `--dir`.
 - `K7.of_string` reads a tape in the `.tape` syntax, its settings as
   `K7.setting` values and `Hide`/`Show` as `K7.hidden`, and
   `K7.with_settings` and `K7.with_outputs` replace a tape's settings and
   outputs, which `K7.settings` and `K7.outputs` return. A tape may have no output until it plays, so a tape without an
-  `Output` line reads, and `k7 tape -o` gives it one.
+  `Output` line reads, and `k7 play -o` gives it one.
 - The native recorder plays bash, zsh and fish as VHS starts them, VHS's
   window bar, named and JSON themes, margin colours and images, `Screenshot`
   of an `.svg` path (a still SVG image), `Source` and the `.txt`, `.ascii`
@@ -54,13 +54,13 @@
   `K7.Height`.
 - `K7.Wait_timeout` sets how long a wait without a timeout of its own
   waits, as VHS's `Set WaitTimeout` does; `--wait-timeout` sets it for
-  `k7 cram` and `k7 tape`.
+  a cram test.
 - `K7.tape` refuses a JSON theme that Go or jsont does not read, more
   rows or columns than VHS can measure, a frame larger than the encoder of
   a GIF, MP4 or WebM output takes, and a screenshot with the path of an
   output or of another screenshot.
-- `k7 cram` keeps typed non-ASCII text without a UTF-8 locale, and waits
-  for the same prompt mark natively as with VHS.
+- `k7 play` keeps the typed non-ASCII text of a cram test without a
+  UTF-8 locale, and waits for the same prompt mark natively as with VHS.
 - The library needs OCaml 5.4, for matrix's pseudo-terminals and terminal
   emulator, and matrix 0.1.0. The emulator is a private copy of matrix's
   terminal core at mosaic 858724d6 (90a3f220 and the fixes of PRs
@@ -68,7 +68,7 @@
 - The README lists the known limitations of this release: the private copy
   of matrix's terminal core, the queries and cursor shapes the native
   terminal does not handle yet, a rare `setpgid` error from macOS's bash 3.2
-  under load, the timed-out wait the `Vhs` engine reports as `Vhs_failed`, and the
-  JSON themes with invalid UTF-8 or unpaired surrogates that jsont refuses
-  and Go reads, and the input and background output `k7 run` does not
-  record.
+  under load, the timed-out wait the `Vhs` engine reports as
+  `Vhs_failed`, and the JSON themes with invalid UTF-8 or unpaired
+  surrogates that jsont refuses and Go reads, and the input and background
+  output `k7 rec` does not record.

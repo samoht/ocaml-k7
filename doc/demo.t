@@ -1,5 +1,5 @@
 The demo of the README, which k7 records natively with
-dune exec -- k7 cram --output doc/demo.svg doc/demo.t; dune runs it as a
+dune exec -- k7 play --output doc/demo.svg doc/demo.t; dune runs it as a
 cram test too.
 
   $ echo "Recorded without a browser"

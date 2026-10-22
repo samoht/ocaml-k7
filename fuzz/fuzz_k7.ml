@@ -767,7 +767,7 @@ let test_exit_codes n =
       let child =
         Eio.Process.spawn ~sw ~stdout:sink ~stderr:sink
           (Eio.Stdenv.process_mgr env)
-          (cli :: "cram" :: args)
+          (cli :: "play" :: args)
       in
       Eio.Process.await child
     in
@@ -815,7 +815,7 @@ let run_cli env args =
   let status =
     Eio.Switch.run @@ fun sw ->
     Eio.Process.spawn ~sw ~env ~stdout:sink ~stderr:sink proc
-      (cli :: "cram" :: args)
+      (cli :: "play" :: args)
     |> Eio.Process.await
   in
   (status, Buffer.contents output)
@@ -1289,7 +1289,7 @@ let test_run_cli_status n signaled =
     Eio.Switch.run @@ fun sw ->
     Eio.Process.spawn ~sw ~stdout:sink ~stderr:sink
       (Eio.Stdenv.process_mgr env)
-      [ cli; "run"; "--show"; ""; "-o"; output; "--"; "/bin/sh"; "-c"; command ]
+      [ cli; "rec"; "--show"; ""; "-o"; output; "--"; "/bin/sh"; "-c"; command ]
     |> Eio.Process.await
   in
   check (got = `Exited (if signaled then 143 else status));

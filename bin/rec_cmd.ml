@@ -8,7 +8,7 @@ let ( let* ) = Result.bind
 let check_output output =
   let dir = Filename.dirname output in
   if Filename.extension output <> ".svg" then
-    Fmt.error "%a: not .svg, the animated SVG image k7 run writes" Quote.pp
+    Fmt.error "%a: not .svg, the animated SVG image k7 rec writes" Quote.pp
       output
   else if not (Sys.file_exists dir && Sys.is_directory dir) then
     Fmt.error "%a: no directory %a" Quote.pp output Quote.pp dir
@@ -119,6 +119,6 @@ let cmd =
     run ?show ~delay:(Ms delay) stdenv ~settings ~env ~output argv
   in
   Cmd.make
-    (Cmd.info "run" ~doc ~man ~exits)
+    (Cmd.info "rec" ~doc ~man ~exits)
     Term.(
       const run $ Flags.settings $ Flags.env $ show $ delay $ output $ command)

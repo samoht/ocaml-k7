@@ -5,7 +5,7 @@
 
 let ( let* ) = Result.bind
 
-let tape ~setup ?(settings = []) ~output ?wait_timeout_s ~name src =
+let tape ~setup ?(settings = []) ~outputs ?wait_timeout_s ~name src =
   let* cram =
     Cram.parse src |> Result.map_error (fun e -> Fmt.str "%s: %s" name e)
   in
@@ -13,6 +13,8 @@ let tape ~setup ?(settings = []) ~output ?wait_timeout_s ~name src =
     (Cram.is_empty cram, List.find_opt (Fun.negate Cram.is_typeable) setup)
   with
   | true, _ -> Fmt.error "%s: no command: no line starts with \"  $ \"" name
+  | false, _ when outputs = [] ->
+      Fmt.error "%s: no output; give it -o FILE" name
   | false, Some path ->
       Fmt.error "setup path %a: holds invalid UTF-8 or a control character"
         Quote.pp path
@@ -22,7 +24,7 @@ let tape ~setup ?(settings = []) ~output ?wait_timeout_s ~name src =
       in
       K7.tape
         ~settings:((K7.Shell Bash :: settings) @ Option.to_list timeout)
-        ~outputs:[ output ] (Cram.actions ~setup cram)
+        ~outputs (Cram.actions ~setup cram)
       |> Result.map_error (fun e -> Fmt.str "%a" Flags.pp_error e)
 
 let shown = Flags.shown
@@ -122,16 +124,16 @@ let in_dir env dir f =
             (fun () -> f dir))
 
 let record ?stop env ~print ~vhs ~setup ?dir ?settings ?env:vars ?wait_timeout_s
-    ~output input =
+    ~outputs input =
   let* src = Flags.load env input in
-  let tape ~setup ~output =
-    tape ~setup ?settings ~output ?wait_timeout_s ~name:input src
+  let tape ~setup ~outputs =
+    tape ~setup ?settings ~outputs ?wait_timeout_s ~name:input src
   in
-  let* given = tape ~setup ~output in
+  let* given = tape ~setup ~outputs in
   if print then Flags.print_tape env given
   else
     let* tape =
-      tape ~setup:(List.map absolute setup) ~output:(absolute output)
+      tape ~setup:(List.map absolute setup) ~outputs:(List.map absolute outputs)
     in
     let run_vhs = if String.contains vhs '/' then absolute vhs else vhs in
     let named = function
@@ -150,92 +152,9 @@ let record ?stop env ~print ~vhs ~setup ?dir ?settings ?env:vars ?wait_timeout_s
           ~wait:(Option.value wait_timeout_s ~default:15)
           ~name:input ~tape:given src (named e))
 
-let run env ~print ~vhs ~setup ?dir ?settings ?env:vars ?wait_timeout_s ~output
+let run env ~print ~vhs ~setup ?dir ?settings ?env:vars ?wait_timeout_s ~outputs
     input =
   Flags.interruptible (fun stop ->
       record ~stop env ~print ~vhs ~setup ?dir ?settings ?env:vars
-        ?wait_timeout_s ~output input)
+        ?wait_timeout_s ~outputs input)
   |> Flags.exit env ~ok:(fun () -> 0)
-
-open Cmdliner
-
-let output =
-  let doc =
-    "Write the recording to $(docv), in the format of its extension, in lower \
-     case. $(cmd) itself records an $(b,.svg) image and the text outputs \
-     $(b,.txt), $(b,.ascii) and $(b,.test), and $(b,vhs) records the others."
-  in
-  Arg.(
-    required & opt (some string) None & info [ "o"; "output" ] ~docv:"FILE" ~doc)
-
-let setup =
-  let doc =
-    "Source $(docv) before the first command, without recording it. Repeatable."
-  in
-  Arg.(value & opt_all non_dir_file [] & info [ "setup" ] ~docv:"FILE" ~doc)
-
-let dir =
-  let doc =
-    "Run the commands in $(docv) instead of a new empty temporary directory."
-  in
-  Arg.(value & opt (some dir) None & info [ "dir" ] ~docv:"DIR" ~doc)
-
-let input =
-  let doc = "The cram test to record." in
-  Arg.(required & pos 0 (some non_dir_file) None & info [] ~docv:"CRAM" ~doc)
-
-let man =
-  [
-    `S Manpage.s_description;
-    `P
-      "$(cmd) records the cram test $(i,CRAM). It types each $(b,\\$) command \
-       into a terminal running bash and waits for the prompt to come back \
-       before the next. It ignores the expected output and exit codes. As dune \
-       does, it runs the commands in a new empty temporary directory, which it \
-       removes afterwards, unless $(b,--dir) names another one.";
-    `P
-      "$(cmd) records an $(b,.svg) output and the text outputs without \
-       $(b,vhs). It runs bash on a pseudo-terminal itself and draws its \
-       screens as an animated SVG image, which plays in an HTML $(i,img) \
-       element, or writes their text as VHS does. $(b,vhs) records the other \
-       outputs, and needs $(b,ttyd), $(b,ffmpeg) and a browser.";
-    `P
-      "The prompt hooks of the setup scripts still run first, and a command \
-       that replaces $(b,PROMPT_COMMAND) makes the next wait time out. So does \
-       a command that leaves bash waiting for more input, such as an \
-       unterminated quote or here-document, and $(cmd) then names that \
-       command. In a native recording, a wait that times out names the command \
-       whose prompt did not come back, and a shell that exits ends the \
-       recording at once.";
-    `P
-      "On SIGINT or SIGTERM, $(cmd) types no more commands, writes what it \
-       recorded so far, and exits 130 or 143.";
-    `S "THE PROMPT MARK";
-    `P
-      "Before the first command, and after the setup scripts, $(cmd) makes the \
-       last command of $(b,PROMPT_COMMAND) set $(b,PS1) to the VHS prompt \
-       followed by a mark. The mark is sixteen zero-width characters, U+200B \
-       and U+2060, that spell a digest of the setup scripts and the commands. \
-       It tells the prompt from output, even output that ends with $(b,>) or \
-       with a zero-width space, and does not show in a GIF or a video. The \
-       text outputs hold it after each prompt.";
-    `S Manpage.s_examples;
-    `Pre
-      "$(cmd) --output demo.svg demo.t\n\
-       $(cmd) --columns 100 --output demo.svg demo.t\n\
-       $(cmd) --output demo.gif demo.t\n\
-       $(cmd) --print --output demo.gif demo.t   # show the tape";
-  ]
-
-let cmd =
-  let doc = "type a cram test into bash and record the session" in
-  let run print vhs setup dir settings env wait_timeout_s output input =
-    Eio_main.run @@ fun stdenv ->
-    run stdenv ~print ~vhs ~setup ?dir ~settings ~env ?wait_timeout_s ~output
-      input
-  in
-  Cmd.make
-    (Cmd.info "cram" ~doc ~man ~exits:Flags.exits)
-    Term.(
-      const run $ Flags.print $ Flags.vhs $ setup $ dir $ Flags.settings
-      $ Flags.env $ Flags.wait_timeout $ output $ input)

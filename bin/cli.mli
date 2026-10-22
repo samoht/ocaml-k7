@@ -6,4 +6,4 @@
 (** The [k7] command line. *)
 
 val cmd : int Cmdliner.Cmd.t
-(** [cmd] is the [k7] command and its subcommands [cram], [run] and [tape]. *)
+(** [cmd] is the [k7] command and its subcommands [play] and [rec]. *)

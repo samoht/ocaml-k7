@@ -15,7 +15,7 @@ let contains ~sub s =
   at 0
 
 let tape ?(setup = []) ?(output = "demo.gif") ?wait_timeout_s src =
-  Cram_cmd.tape ~setup ~output ?wait_timeout_s ~name:"input.t" src
+  Play_cram.tape ~setup ~outputs:[ output ] ?wait_timeout_s ~name:"input.t" src
   |> Result.map K7.to_string
 
 let test_tape () =
@@ -85,7 +85,7 @@ let fake_vhs status =
     status
 
 let run env ?(print = false) ~vhs input =
-  Cram_cmd.run env ~print ~vhs ~setup:[] ~output:"demo.gif" input
+  Play_cram.run env ~print ~vhs ~setup:[] ~outputs:[ "demo.gif" ] input
 
 let test_run () =
   with_files
@@ -282,7 +282,7 @@ let test_command () =
   let err = Format.formatter_of_buffer (Buffer.create 256) in
   let eval args =
     Cmdliner.Cmd.eval_value ~err ~help
-      ~argv:(Array.of_list ("k7" :: "cram" :: args))
+      ~argv:(Array.of_list ("k7" :: "play" :: args))
       Cli.cmd
   in
   (match eval [] with
@@ -363,7 +363,9 @@ let test_history ~native () =
   let src = "  $ echo one\n  $ echo \"x!!y\"\n" in
   let t =
     Result.get_ok
-      (Cram_cmd.tape ~setup:[ path "history.sh" ] ~output ~name:"history.t" src)
+      (Play_cram.tape
+         ~setup:[ path "history.sh" ]
+         ~outputs:[ output ] ~name:"history.t" src)
   in
   let result =
     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 60. (fun () ->
@@ -455,10 +457,10 @@ let test_unfinished ~native () =
   @@ fun env path ->
   let code, msg =
     captured path @@ fun () ->
-    Cram_cmd.run env ~print:false
+    Play_cram.run env ~print:false
       ~vhs:(Option.value oracle ~default:"vhs")
       ~setup:[]
-      ~output:(path (if native then "out.svg" else "out.gif"))
+      ~outputs:[ path (if native then "out.svg" else "out.gif") ]
       (path "demo.t")
   in
   Alcotest.(check int) "exit code" 123 code;
@@ -473,8 +475,9 @@ let run_err env path ?wait_timeout_s src =
     Eio.Path.(Eio.Stdenv.fs env / path "demo.t")
     src;
   captured path @@ fun () ->
-  Cram_cmd.run env ~print:false ~vhs:"vhs" ~setup:[] ?wait_timeout_s
-    ~output:(path "out.svg") (path "demo.t")
+  Play_cram.run env ~print:false ~vhs:"vhs" ~setup:[] ?wait_timeout_s
+    ~outputs:[ path "out.svg" ]
+    (path "demo.t")
 
 let check_message msg ~has ~lacks =
   List.iter
@@ -492,8 +495,9 @@ let test_native_text () =
   List.iter
     (fun output ->
       let code =
-        Cram_cmd.run env ~print:false ~vhs:"vhs-no-such-executable" ~setup:[]
-          ~output:(path output) (path "demo.t")
+        Play_cram.run env ~print:false ~vhs:"vhs-no-such-executable" ~setup:[]
+          ~outputs:[ path output ]
+          (path "demo.t")
       in
       Alcotest.(check int) output 0 code;
       Native_test.check_contains output ~sub:"native-text"
@@ -519,7 +523,7 @@ let test_tape_timeout () =
         "Output %S\nType \"echo hi\"\nEnter\nWait@1s /never/\n" (path "t.svg"));
   let code, msg =
     captured path @@ fun () ->
-    Tape_cmd.run env ~print:false ~vhs:"vhs" ~settings:[] ~env:[] ~outputs:[]
+    Play_tape.run env ~print:false ~vhs:"vhs" ~settings:[] ~env:[] ~outputs:[]
       tape
   in
   Alcotest.(check int) "exit code" 123 code;
@@ -528,7 +532,7 @@ let test_tape_timeout () =
     ~lacks:[ "line 3"; "~timeout" ];
   let code, msg =
     captured path @@ fun () ->
-    Tape_cmd.run env ~print:false ~vhs:"vhs" ~settings:[] ~env:[]
+    Play_tape.run env ~print:false ~vhs:"vhs" ~settings:[] ~env:[]
       ~outputs:[ path "a.svg"; path "b.gif" ]
       tape
   in
@@ -582,7 +586,7 @@ let test_run_exec_failure () =
   @@ fun env path ->
   let code, error =
     captured path @@ fun () ->
-    Run_cmd.run env ~settings:[] ~env:[] ~output:(path "failed.svg")
+    Rec_cmd.run env ~settings:[] ~env:[] ~output:(path "failed.svg")
       [ path "not-executable" ]
   in
   Alcotest.(check int) "recording failure has documented exit code" 123 code;
@@ -593,7 +597,7 @@ let test_tape_output_option () =
   @@ fun env path ->
   let code, error =
     captured path @@ fun () ->
-    Tape_cmd.run env ~print:true ~vhs:"vhs" ~settings:[] ~env:[]
+    Play_tape.run env ~print:true ~vhs:"vhs" ~settings:[] ~env:[]
       ~outputs:[ path "out.txt" ]
       (path "t.tape")
   in
@@ -610,8 +614,10 @@ let test_cram_dir () =
   @@ fun env path ->
   let shown ?dir () =
     let code =
-      Cram_cmd.run env ~print:false ~vhs:"vhs" ~setup:[] ?dir
-        ~settings:[ Columns 1000 ] ~output:(path "pwd.txt") (path "pwd.t")
+      Play_cram.run env ~print:false ~vhs:"vhs" ~setup:[] ?dir
+        ~settings:[ Columns 1000 ]
+        ~outputs:[ path "pwd.txt" ]
+        (path "pwd.t")
     in
     Alcotest.(check int) "exit code" 0 code;
     let text = In_channel.with_open_bin (path "pwd.txt") In_channel.input_all in
@@ -649,25 +655,26 @@ let test_interrupt () =
   Unix.mkdir (path "cram") 0o755;
   interrupt env path ~signal:Sys.sigint ~ready:"ready.run" (fun () ->
       code :=
-        Run_cmd.run env ~settings:[] ~env:[] ~output:(path "run.svg")
+        Rec_cmd.run env ~settings:[] ~env:[] ~output:(path "run.svg")
           [
             "sh";
             "-c";
             Fmt.str "echo RUN_$((1 + 1)); touch %s; sleep 30" (path "ready.run");
           ]);
-  Alcotest.(check int) "k7 run, SIGINT" 130 !code;
+  Alcotest.(check int) "k7 rec, SIGINT" 130 !code;
   Alcotest.(check bool)
-    "k7 run image" true
+    "k7 rec image" true
     (contains ~sub:"RUN_2"
        (In_channel.with_open_bin (path "run.svg") In_channel.input_all));
   interrupt env path ~signal:Sys.sigterm ~ready:"cram/ready" (fun () ->
       code :=
-        Cram_cmd.run env ~print:false ~vhs:"vhs" ~setup:[]
+        Play_cram.run env ~print:false ~vhs:"vhs" ~setup:[]
           ~dir:(Filename.dirname (path "cram/x"))
-          ~output:(path "cram.svg") (path "wait.t"));
-  Alcotest.(check int) "k7 cram, SIGTERM" 143 !code;
+          ~outputs:[ path "cram.svg" ]
+          (path "wait.t"));
+  Alcotest.(check int) "k7 play, SIGTERM" 143 !code;
   Alcotest.(check bool)
-    "k7 cram output" true
+    "k7 play output" true
     (contains ~sub:"CRAM_2"
        (In_channel.with_open_bin (path "cram.svg") In_channel.input_all))
 
