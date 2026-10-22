@@ -208,12 +208,25 @@ let test_framerate_limit () =
   | Ok _ -> ()
   | Error e -> Alcotest.failf "svg: %a" Vhs.pp_error e
 
+(* Cursor redraws obey the same format-character policy as row text and
+   the accessible description. *)
+let test_cursor_format () =
+  let s = svg [ (Ms 0, "a\u{200B}\u{202E}b\r") ] in
+  check_contains "row text" ~sub:">ab</tspan>" s;
+  check_contains "description" ~sub:"<desc>ab</desc>" s;
+  check_contains "cursor glyph" ~sub:{|<text class="ka k" x="0" y="22">a</text>|} s;
+  Alcotest.(check bool) "zero-width space removed everywhere" false
+    (contains ~sub:"\u{200B}" s);
+  Alcotest.(check bool) "bidi override removed everywhere" false
+    (contains ~sub:"\u{202E}" s)
+
 let suite =
   ( "svg",
     List.map
       (fun (name, fn) -> Alcotest.test_case name `Quick fn)
       [
         ("hostile text", test_hostile);
+        ("cursor format characters", test_cursor_format);
         ("positive frame rate above the pixel limit", test_framerate_limit);
         ("row dedup", test_dedup);
         ("keyframes", test_keyframes);
