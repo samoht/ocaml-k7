@@ -1462,10 +1462,23 @@ let test_replace_dimensions n =
   let pixels = get (K7.with_settings K7.[ Width 800; Height 400 ] cells) in
   check_eq ~pp:pp_string (K7.to_string original) (K7.to_string pixels)
 
+let test_replace_outputs n =
+  let get = function Ok t -> t | Error e -> failf "%a" K7.pp_error e in
+  let raw = Fmt.str "Output raw-%d.txt" n in
+  let original = get (K7.tape ~outputs:[ "old.gif" ] [ K7.raw raw; last ]) in
+  let replaced = get (K7.with_outputs [ "new.svg" ] original) in
+  check_eq ~pp:pp_string (raw ^ "\nSleep 100ms\n") (K7.to_string replaced);
+  match K7.with_outputs [] original with
+  | Error (Invalid _) -> ()
+  | Error e -> failf "%a" K7.pp_error e
+  | Ok _ -> fail "with_outputs accepted the empty outputs that tape refuses"
+
 let bounds =
   [
     test_case "cell and pixel dimensions replace each other" [ uint8 ]
       test_replace_dimensions;
+    test_case "replacing outputs retains raw Output lines" [ uint8 ]
+      test_replace_outputs;
     test_case "raw margin fits the frame"
       [ choose [ int; const max_int; const (max_int - 59); const 240 ] ]
       test_raw_margin_bound;
