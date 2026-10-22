@@ -97,16 +97,21 @@ let test_type_keys () =
     (body [ type' "ls\tx\n\n" ]);
   expect "empty" "" (body [ type' "" ]);
   error "control"
-    {|Type "bad\001byte": holds a control character other than tab and newline|}
+    {|Type "bad\x01byte": holds a control character other than tab and newline|}
     [ type' "bad\x01byte" ];
   rejects "carriage return" [ type' "a\r\n" ];
   (* A terminal reads U+009B as CSI: this would clear the screen. *)
   error "C1 control"
-    {|Type "X\194\1552J": holds a control character other than tab and newline|}
+    {|Type "X\u{9B}2J": holds a control character other than tab and newline|}
     [ type' "X\xc2\x9b2J" ];
   expect "not C1" "Type \"\xc2\xa0\xc3\x9b\"\n"
     (body [ type' "\xc2\xa0\xc3\x9b" ]);
-  error "invalid UTF-8" {|Type "\255": invalid UTF-8|} [ type' "\xff" ]
+  error "invalid UTF-8" "Type \"\u{FFFD}\": invalid UTF-8" [ type' "\xff" ];
+  (* A message keeps the UTF-8 of what it quotes. *)
+  error "UTF-8 kept" ~outputs:[ "caf\u{e9}\".GIF" ]
+    "Output \"caf\u{e9}\\\".GIF\": not .gif, .mp4, .webm, .txt, .ascii, .test, \
+     .png or .svg; extensions are lower case"
+    []
 
 let test_line_injection () =
   let open Vhs in

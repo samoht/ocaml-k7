@@ -418,7 +418,7 @@ let set p =
         && not
              (String.length fill = 7
              && String.for_all Char.Ascii.is_hex_digit (String.sub fill 1 6))
-      then fail "%S is not a valid color." fill
+      then fail "%a is not a valid color." Quote.pp fill
   | "CursorBlink" ->
       ignore (take p);
       if not (is_word "true" (cur p) || is_word "false" (cur p)) then

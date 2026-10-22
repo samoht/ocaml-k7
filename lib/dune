@@ -6,6 +6,7 @@
   casefold_data
   native
   palette
+  quote
   regexp_match
   regexp_syntax
   screen

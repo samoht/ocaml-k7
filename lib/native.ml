@@ -379,7 +379,7 @@ let sourced ~source line path =
   List.filter_map
     (fun l ->
       if has_control ~except:"\t\r" l then
-        invalid "%S holds a control character" l
+        invalid "%a holds a control character" Quote.pp l
       else
         match check l with
         | Error e -> invalid "%s: %s" l e

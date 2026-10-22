@@ -486,15 +486,16 @@ let test_error_item n =
     | Error e -> failf "not Invalid: %a" Vhs.pp_error e
   in
   check_error
-    (Fmt.str "Output %S:" (bad ^ ".gif"))
+    (Fmt.str "Output %a:" Quote.pp (bad ^ ".gif"))
     (Vhs.tape ~outputs:[ "good.gif"; bad ^ ".gif" ] []);
-  check_error (Fmt.str "Type %S:" bad)
+  check_error
+    (Fmt.str "Type %a:" Quote.pp bad)
     (Vhs.tape ~outputs [ Vhs.type' "good"; Vhs.hidden [ Vhs.type' bad ] ]);
   check_error
-    (Fmt.str "Set FontFamily %S:" bad)
+    (Fmt.str "Set FontFamily %a:" Quote.pp bad)
     (Vhs.tape ~settings:[ Vhs.Font_family bad ] ~outputs []);
   check_error
-    (Fmt.str "Wait+Screen %S:" bad)
+    (Fmt.str "Wait+Screen %a:" Quote.pp bad)
     (Vhs.tape ~outputs [ Vhs.wait (Screen bad) ])
 
 let with_dir fn =

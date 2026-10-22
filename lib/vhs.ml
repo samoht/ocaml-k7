@@ -114,7 +114,7 @@ let quotable_problem s =
 let check_quotable what s =
   match quotable_problem s with
   | None -> Ok ()
-  | Some why -> Fmt.error "%s %S: %s" what s why
+  | Some why -> Fmt.error "%s %a: %s" what Quote.pp s why
 
 (* The largest Go [time.Duration], in whole milliseconds. *)
 let max_ms = 9_223_372_036_854
@@ -126,9 +126,11 @@ let check_ms what n =
   else Ok ()
 
 let check_type s =
-  if not (String.is_valid_utf_8 s) then Fmt.error "Type %S: invalid UTF-8" s
+  if not (String.is_valid_utf_8 s) then
+    Fmt.error "Type %a: invalid UTF-8" Quote.pp s
   else if has_control ~except:"\t\n" s then
-    Fmt.error "Type %S: holds a control character other than tab and newline" s
+    Fmt.error "Type %a: holds a control character other than tab and newline"
+      Quote.pp s
   else Ok ()
 
 let check_chord name valid c =
@@ -158,10 +160,11 @@ let check_wait timeout w =
   match w with
   | Prompt -> Ok ()
   | (Line re | Screen re) when has_control re ->
-      Fmt.error "%s %S: holds a control character" (wait_name w) re
+      Fmt.error "%s %a: holds a control character" (wait_name w) Quote.pp re
   | Line re | Screen re ->
       Regexp_syntax.check re
-      |> Result.map_error (fun e -> Fmt.str "%s %S: %s" (wait_name w) re e)
+      |> Result.map_error (fun e ->
+          Fmt.str "%s %a: %s" (wait_name w) Quote.pp re e)
 
 (* VHS hands an unknown extension to ffmpeg as a GIF, and ffmpeg then picks
    the format from the extension and fails. *)
@@ -189,7 +192,7 @@ let output_problem path =
 
 let check_output path =
   Option.fold ~none:(Ok ())
-    ~some:(Fmt.error "Output %S: %s" path)
+    ~some:(Fmt.error "Output %a: %s" Quote.pp path)
     (output_problem path)
 
 (* VHS keeps one output of each kind and writes the last one it reads;
@@ -212,10 +215,11 @@ let check_kinds paths =
     | q :: rest -> (
         match List.assoc_opt (kind q) seen with
         | Some p when kind q = "SVG" ->
-            Fmt.error "Output %S: a tape has one SVG output, not also %S" p q
+            Fmt.error "Output %a: a tape has one SVG output, not also %a"
+              Quote.pp p Quote.pp q
         | Some p ->
-            Fmt.error "Output %S: VHS writes only the last %s output, %S" p
-              (kind q) q
+            Fmt.error "Output %a: VHS writes only the last %s output, %a"
+              Quote.pp p (kind q) Quote.pp q
         | None -> go ((kind q, q) :: seen) rest)
   in
   go [] paths
@@ -253,7 +257,8 @@ let check_screenshots outputs shots =
   match shared outputs shots with
   | None -> Ok ()
   | Some p ->
-      Fmt.error "Screenshot %S: the path of an output or another screenshot" p
+      Fmt.error "Screenshot %a: the path of an output or another screenshot"
+        Quote.pp p
 
 (* VHS refuses a frame sized both by its pixels and by its cells in one
    direction. *)
@@ -287,24 +292,27 @@ let constructors =
    other command. *)
 let check_raw ~started line =
   if has_control line then
-    Fmt.error "raw line %S: holds a control character" line
+    Fmt.error "raw line %a: holds a control character" Quote.pp line
   else
     match Tape_syntax.check line with
-    | Error e -> Fmt.error "raw line %S: %s" line e
-    | Ok (Hide | Show) -> Fmt.error "raw line %S: use hidden instead" line
+    | Error e -> Fmt.error "raw line %a: %s" Quote.pp line e
+    | Ok (Hide | Show) ->
+        Fmt.error "raw line %a: use hidden instead" Quote.pp line
     | Ok (Blank | Set ("TypingSpeed", _)) -> Ok started
     | Ok (Output path) when is_svg path ->
-        Fmt.error "raw line %S: VHS cannot write .svg, give it in outputs" line
+        Fmt.error "raw line %a: VHS cannot write .svg, give it in outputs"
+          Quote.pp line
     | Ok (Output path) -> (
         match output_problem path with
         | None -> Ok started
-        | Some why -> Fmt.error "raw line %S: %s" line why)
+        | Some why -> Fmt.error "raw line %a: %s" Quote.pp line why)
     | Ok (Set ("Shell", _)) ->
-        Fmt.error "raw line %S: use the setting Shell instead" line
+        Fmt.error "raw line %a: use the setting Shell instead" Quote.pp line
     | Ok (Set _ | Require) when started ->
-        Fmt.error "raw line %S: VHS ignores it after the first action" line
+        Fmt.error "raw line %a: VHS ignores it after the first action" Quote.pp
+          line
     | Ok (Set (name, _)) when List.mem_assoc name constructors ->
-        Fmt.error "raw line %S: use the setting %s instead" line
+        Fmt.error "raw line %a: use the setting %s instead" Quote.pp line
           (List.assoc name constructors)
     | Ok (Set _ | Require) -> Ok false
     | Ok (Screenshot _ | Other) -> Ok true
@@ -376,11 +384,12 @@ let check_theme t =
     match Palette.of_json t with
     | Ok _ | Error (`Colour _) -> Ok ()
     | Error (`Json msg) ->
-        Fmt.error "Set Theme %S: VHS cannot read it: %s" t msg
+        Fmt.error "Set Theme %a: VHS cannot read it: %s" Quote.pp t msg
     | Error (`Unread msg) ->
         Fmt.error
-          "Set Theme %S: this library cannot read it, though VHS does: %s" t msg
-  else Fmt.error "Set Theme %S: not a VHS theme" t
+          "Set Theme %a: this library cannot read it, though VHS does: %s"
+          Quote.pp t msg
+  else Fmt.error "Set Theme %a: not a VHS theme" Quote.pp t
 
 (* VHS fonts are set by browser code that quotes the list with [']. *)
 let check_setting = function
@@ -389,7 +398,8 @@ let check_setting = function
   | Framerate n when n <= 0 -> Fmt.error "Set Framerate %d: not positive" n
   | Padding n when n < 0 -> Fmt.error "Set Padding %d: negative" n
   | Font_family f when String.exists (fun c -> c = '\'' || c = '\\') f ->
-      Fmt.error "Set FontFamily %S: holds a single quote or a backslash" f
+      Fmt.error "Set FontFamily %a: holds a single quote or a backslash"
+        Quote.pp f
   | Font_family f -> check_quotable "Set FontFamily" f
   | Theme t -> check_theme t
   | Typing_speed (Ms n) -> check_ms "Set TypingSpeed " n
@@ -1023,8 +1033,8 @@ let refuse ~by ~other kinds t =
         | "WebM" -> "a WebM video"
         | k -> "a " ^ k
       in
-      err_unsupported "not recorded %s: Output %S: %s, which Vhs.%s records" by
-        p what other
+      err_unsupported "not recorded %s: Output %a: %s, which Vhs.%s records" by
+        Quote.pp p what other
 
 (* Directories *)
 
@@ -1101,9 +1111,9 @@ let render ?(vhs = "vhs") ~clock ~proc ~cwd t =
     | None -> Ok ()
     | Some p ->
         err_unsupported
-          "not recorded by vhs: Screenshot %S: an SVG image, which Vhs.record \
+          "not recorded by vhs: Screenshot %a: an SVG image, which Vhs.record \
            takes"
-          p
+          Quote.pp p
   in
   let* () =
     check_dirs cwd

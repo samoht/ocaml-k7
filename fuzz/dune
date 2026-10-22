@@ -2,7 +2,7 @@
 ; library; their properties compile them in.
 
 (copy_files
- ../lib/{screen,tape_syntax,regexp_syntax,unicode,unicode_data}.{ml,mli})
+ ../lib/{screen,tape_syntax,quote,regexp_syntax,unicode,unicode_data}.{ml,mli})
 
 (executable
  (name fuzz)

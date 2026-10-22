@@ -14,8 +14,8 @@ let tape ~setup ~output ?wait_timeout_s ~name src =
   with
   | true, _ -> Fmt.error "%s: no command: no line starts with \"  $ \"" name
   | false, Some path ->
-      Fmt.error "setup path %s: holds invalid UTF-8 or a control character"
-        (Cram.quote path)
+      Fmt.error "setup path %a: holds invalid UTF-8 or a control character"
+        Quote.pp path
   | false, None ->
       let timeout =
         match wait_timeout_s with
@@ -61,7 +61,7 @@ let after cram tape line =
   in
   match Cram.command cram (waits - 1) with
   | Some first ->
-      Fmt.str "the prompt after command %d, %s" (waits - 1) (Cram.quote first)
+      Fmt.str "the prompt after command %d, %a" (waits - 1) Quote.pp first
   | None -> "the prompt after the setup scripts"
 
 (* [rest_after sub l] is what follows the first [sub] in [l], if any. *)
@@ -110,9 +110,9 @@ let render_error ~setup ~wait ~name ~tape src e =
   match (Option.bind output unfinished, e, cram) with
   | Some (n, line), _, _ ->
       Fmt.str
-        "%s: command %d, %s, left bash waiting for more input, such as the end \
+        "%s: command %d, %a, left bash waiting for more input, such as the end \
          of a quote or of a here-document"
-        name n (Cram.quote line)
+        name n Quote.pp line
   | None, Timeout { line; last; _ }, Some cram ->
       Fmt.str "%s: timed out after %s waiting for %s%s%s" name (seconds_of wait)
         (after cram tape line) (last_value last) longer
@@ -175,7 +175,7 @@ let max_seconds = 9_223_372_036
 
 let seconds s =
   let too_large () =
-    Fmt.error "%s is too large: a wait lasts at most %d seconds" (Cram.quote s)
+    Fmt.error "%a is too large: a wait lasts at most %d seconds" Quote.pp s
       max_seconds
   in
   match int_of_string_opt s with
@@ -183,7 +183,7 @@ let seconds s =
   | Some n when n > 0 -> too_large ()
   (* A number of digits [int_of_string] cannot read is beyond [max_int]. *)
   | None when s <> "" && String.for_all Char.Ascii.is_digit s -> too_large ()
-  | _ -> Fmt.error "%s is not a positive number of seconds" (Cram.quote s)
+  | _ -> Fmt.error "%a is not a positive number of seconds" Quote.pp s
 
 let output =
   let doc =
