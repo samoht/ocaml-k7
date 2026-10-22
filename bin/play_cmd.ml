@@ -119,11 +119,12 @@ let man =
     `S "TAPES";
     `P
       "The $(b,Output) lines of a tape, wherever they are, are its outputs, \
-       which $(b,-o) replaces. The $(b,Set) lines of a tape before its first \
-       action are its settings, which $(b,--columns), $(b,--rows), \
-       $(b,--font-size), $(b,--theme) and $(b,--framerate) replace. \
-       $(b,--setup), $(b,--dir) and $(b,--wait-timeout) apply to cram tests \
-       only.";
+       which $(b,-o) replaces. A relative path, there or in $(b,-o), is \
+       relative to the current directory, not to the tape's, as in VHS. The \
+       $(b,Set) lines of a tape before its first action are its settings, \
+       which $(b,--columns), $(b,--rows), $(b,--font-size), $(b,--theme) and \
+       $(b,--framerate) replace. $(b,--setup), $(b,--dir) and \
+       $(b,--wait-timeout) apply to cram tests only.";
     `S "CRAM TESTS";
     `P
       "$(cmd) types each $(b,\\$) command of a cram test into a terminal \

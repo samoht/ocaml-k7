@@ -20,10 +20,10 @@ let man =
       "$(b,k7 play) $(i,FILE) plays a tape in VHS's $(b,.tape) syntax to its \
        outputs, or to those of $(b,-o). $(b,k7 play) $(b,-o) $(i,OUTPUT) \
        $(i,FILE.t) types each command of the cram test $(i,FILE.t) into bash \
-       and waits for the prompt before the next. Either writes an $(b,.svg) \
-       output as an animated SVG image, and the text outputs $(b,.txt), \
-       $(b,.ascii) and $(b,.test) as VHS does, itself, and runs $(b,vhs) for \
-       the other extensions.";
+       and waits for the prompt before the next. k7 writes an $(b,.svg) output \
+       itself, as an animated SVG image, and the text outputs $(b,.txt), \
+       $(b,.ascii) and $(b,.test), as VHS does, and runs $(b,vhs) for the \
+       other extensions.";
     `S "RECORDING A PROGRAM";
     `P
       "$(b,k7 rec) $(b,-o) $(i,FILE.svg) $(b,--) $(i,COMMAND) runs \

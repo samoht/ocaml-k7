@@ -81,8 +81,9 @@ let binding s =
 
 let env =
   let doc =
-    "Set the variable $(i,VAR) to $(i,VALUE) in the environment of the shell \
-     or the program that k7 records. Repeatable."
+    "Set the variable $(i,VAR) to $(i,VALUE) in the environment of what k7 \
+     records: the shell of $(b,k7 play), the program of $(b,k7 rec). \
+     Repeatable."
   in
   let pp ppf (k, v) = Fmt.pf ppf "%s=%s" k v in
   Arg.(
