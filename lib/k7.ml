@@ -980,6 +980,10 @@ let pp_last ppf = function
   | "" -> ()
   | last -> Fmt.pf ppf "; last value was: %s" (one_line last)
 
+(* Eio's statuses carry OCaml's signal numbers; one OCaml has no system
+   number for is printed as it is. *)
+let signal_number n = try Sys.signal_to_int n with Invalid_argument _ -> n
+
 let pp_error ppf = function
   | Executable_not_found exe ->
       Fmt.pf ppf "executable not found: %s" (one_line exe)
@@ -988,7 +992,7 @@ let pp_error ppf = function
       (match status with
       | `Exited n -> Fmt.pf ppf "%s exited with code %d" vhs n
       | `Signaled n ->
-          Fmt.pf ppf "%s was killed by signal %d" vhs (Sys.signal_to_int n));
+          Fmt.pf ppf "%s was killed by signal %d" vhs (signal_number n));
       let lines =
         String.split_on_char '\n' (printable output)
         |> List.map String.trim
@@ -1007,7 +1011,7 @@ let pp_error ppf = function
       (match status with
       | `Exited n -> Fmt.pf ppf "the shell exited (status %d)" n
       | `Signaled n ->
-          Fmt.pf ppf "the shell was killed by signal %d" (Sys.signal_to_int n));
+          Fmt.pf ppf "the shell was killed by signal %d" (signal_number n));
       Fmt.pf ppf " while waiting for line %d, %s%a" line (one_line wait) pp_last
         last
   | Invalid msg -> Fmt.string ppf (one_line msg)

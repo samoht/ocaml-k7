@@ -16,7 +16,7 @@ let check_output output =
 
 let exit_code = function
   | `Exited n -> n
-  | `Signaled s -> 128 + Sys.signal_to_int s
+  | `Signaled s -> 128 + Flags.signal_number s
 
 let record ?show ?stop stdenv ~settings ~env ~output argv =
   let* () = check_output output in
