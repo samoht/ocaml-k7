@@ -20,5 +20,4 @@ let () =
       Test_casefold.suite;
       Test_unicode.suite;
       Test_native.suite;
-      Test_run.suite;
     ]

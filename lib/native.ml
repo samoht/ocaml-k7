@@ -779,6 +779,15 @@ let feed st buf n =
   send st (Screen.take_replies st.term);
   refresh st
 
+(* What is left to read once the program has exited. *)
+let rec drain st buf =
+  match Pty.read st.pty buf 0 (Bytes.length buf) with
+  | 0 -> ()
+  | n ->
+      feed st buf n;
+      drain st buf
+  | exception Unix.Unix_error _ -> ()
+
 (* How often the reader looks for the program's exit while the terminal is
    quiet, in seconds. *)
 let poll = 0.02
@@ -805,14 +814,6 @@ and ended st buf =
   else (
     Eio.Time.Mono.sleep st.clock poll;
     reader st buf)
-
-and drain st buf =
-  match Pty.read st.pty buf 0 (Bytes.length buf) with
-  | 0 -> ()
-  | n ->
-      feed st buf n;
-      drain st buf
-  | exception Unix.Unix_error _ -> ()
 
 (* Typing scrolls the screen back down. A carriage return or a line feed
    submits the line under the cursor. *)
@@ -1017,7 +1018,7 @@ let open_terminal ~env ~cwd ~winsize prog args =
           Unix.close fd;
         Unix.chdir cwd;
         Unix.execvpe prog argv (Eio.Process.Env.to_array env)
-      with _ -> Unix._exit 127)
+      with Unix.Unix_error _ -> Unix._exit 127)
   | pid -> { pty; slave; pid }
   | exception e ->
       Pty.close pty;
