@@ -294,7 +294,7 @@ let add_cursor t b screen (r, c) =
     "<use href=\"#%s\" class=\"k\" x=\"%d\" y=\"%d\"/>"
     (if cell.width = 2 then "w" else "c")
     (c * t.cell_width) (r * t.cell_height);
-  if cell.width > 0 && cell.text <> " " then (
+  if cell.width > 0 && cell.text <> " " && not (has Hidden cell) then (
     Fmt.kstr (Buffer.add_string b) "<text class=\"ka k\" x=\"%d\" y=\"%d\">"
       (c * t.cell_width)
       ((r * t.cell_height) + t.baseline);
