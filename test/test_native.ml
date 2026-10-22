@@ -145,6 +145,48 @@ let test_timeout_precedence () =
   times_out ~within:15.
     (tape (Ms 300) K7.[ type' "echo hi\n"; wait (Screen "never") ])
 
+(* At 50 frames a second, a frame lasts at least 10ms, so a recording plays
+   at most twice as fast, whatever the speed. *)
+let test_playback_speed () =
+  with_dir @@ fun env cwd ->
+  let loop speed =
+    with_virtual_clock @@ fun clock ->
+    let t =
+      Result.get_ok
+        (K7.tape ~settings ~outputs:[ "demo.svg" ]
+           K7.
+             [
+               raw ("Set PlaybackSpeed " ^ speed);
+               sleep (Ms 500);
+               type' "x";
+               sleep (Ms 450);
+             ])
+    in
+    match
+      K7.record ~engine:Native ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd t
+    with
+    | Error e -> Alcotest.failf "%a" K7.pp_error e
+    | Ok () ->
+        let svg = Eio.Path.load Eio.Path.(cwd / "demo.svg") in
+        let suffix = "ms steps(1,end) infinite" in
+        let n = String.length suffix in
+        let rec find i =
+          if i + n > String.length svg then Alcotest.fail "no animation"
+          else if String.sub svg i n = suffix then i
+          else find (i + 1)
+        in
+        let j = find 0 in
+        let k = ref j in
+        while Char.Ascii.is_digit svg.[!k - 1] do
+          decr k
+        done;
+        int_of_string (String.sub svg !k (j - !k))
+  in
+  let real = loop "1" in
+  Alcotest.(check int) "twice as fast" ((real + 1) / 2) (loop "2");
+  Alcotest.(check int) "clamped" ((real + 1) / 2) (loop "100000");
+  Alcotest.(check int) "slower" (4 * real) (loop "0.25")
+
 let test_hidden () =
   with_dir @@ fun env cwd ->
   let t =
@@ -1647,6 +1689,7 @@ let suite =
          ("timeout", test_timeout);
          ("shell exit", test_shell_exit);
          ("timeout precedence", test_timeout_precedence);
+         ("playback speed", test_playback_speed);
          ("hidden", test_hidden);
          ("scroll", test_scroll);
          ("scroll far", test_scroll_far);
