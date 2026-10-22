@@ -694,6 +694,32 @@ let test_dry_run_directory_output () =
   Alcotest.(check int) "dry-run rejects a directory destination" 123 status;
   Native_test.check_contains "names the destination" ~sub:"occupied.svg" error
 
+(* k7 play --help: -o writes "in place of the Output lines of a tape". *)
+let test_output_option_replaces_late_output () =
+  with_files [ ("err", 0o644, "") ] @@ fun env path ->
+  let src =
+    Fmt.str "Type \"echo hi\"\nEnter\nOutput %S\nSleep 100ms\n"
+      (path "late.txt")
+  in
+  Eio.Path.save ~create:(`Or_truncate 0o644)
+    Eio.Path.(Eio.Stdenv.fs env / path "late.tape")
+    src;
+  let play ~dry_run output =
+    captured path @@ fun () ->
+    Play_tape.run env ~dry_run ~print:false ~vhs:"vhs" ~settings:[] ~env:[]
+      ~outputs:[ path output ]
+      (path "late.tape")
+  in
+  Alcotest.(check (pair int string))
+    "-o out.txt replaces the Output line" (0, "")
+    (play ~dry_run:true "out.txt");
+  Alcotest.(check (pair int string))
+    "-o out.svg records" (0, "")
+    (play ~dry_run:false "out.svg");
+  Alcotest.(check bool)
+    "the replaced Output line is not written" false
+    (Sys.file_exists (path "late.txt"))
+
 let suite =
   ( "cli",
     List.map
@@ -715,6 +741,8 @@ let suite =
          ("interrupted recordings", test_interrupt);
          ("command line", test_command);
          ("dry-run rejects directory outputs", test_dry_run_directory_output);
+         ( "-o replaces a late Output line",
+           test_output_option_replaces_late_output );
        ]
       @ readiness ~native:true
       @ if Option.is_some oracle then readiness ~native:false else []) )
