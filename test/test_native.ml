@@ -1522,6 +1522,24 @@ let test_record_env () =
   | Ok () -> ()
   | Error e -> Alcotest.failf "%a" K7.pp_error e
 
+let test_record_term_override () =
+  with_dir @@ fun env cwd ->
+  let t =
+    tape K7.[ type' "printf '%s' \"$TERM\" > received-term\n"; wait Prompt ]
+  in
+  (match
+     K7.record ~engine:Native
+       ~env:[ ("TERM", "vt100") ]
+       ~clock:(Eio.Stdenv.mono_clock env)
+       ~proc:(Eio.Stdenv.process_mgr env)
+       ~cwd t
+   with
+  | Ok () -> ()
+  | Error e -> Alcotest.failf "%a" K7.pp_error e);
+  Alcotest.(check string)
+    "the shell gets the explicit TERM" "vt100"
+    (Eio.Path.load Eio.Path.(cwd / "received-term"))
+
 let test_check () =
   with_dir @@ fun _ cwd ->
   let check ?engine name outputs expected =
@@ -1652,6 +1670,7 @@ let suite =
            test_run_cancel_descendant );
          ("record refuses Env names", test_record_env_names);
          ("record environment", test_record_env);
+         ("record respects TERM override", test_record_term_override);
          ("check", test_check);
          ("output directory preflight", test_output_directory_preflight);
          ("concurrent runs keep their terminals", test_run_concurrent_terminals);
