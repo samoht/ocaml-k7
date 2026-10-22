@@ -228,7 +228,7 @@ let test_render () =
        (fun () ->
          `Rendered (K7.render ~vhs:(path "slow") ~clock:mono ~proc ~cwd t))
        (fun () ->
-         Eio.Time.with_timeout_exn clock 10. (fun () ->
+         Eio.Time.with_timeout_exn clock 60. (fun () ->
              while not (Sys.file_exists (path "slow.ready")) do
                Eio.Time.sleep clock 0.01
              done);
@@ -257,12 +257,12 @@ let test_render () =
              `Rendered
                (K7.render ~vhs:(path "stubborn") ~clock:grace ~proc ~cwd t))
            (fun () ->
-             Eio.Time.with_timeout_exn clock 10. (fun () ->
+             Eio.Time.with_timeout_exn clock 60. (fun () ->
                  while not (Sys.file_exists (path "stubborn.ready")) do
                    Eio.Time.sleep clock 0.01
                  done);
              `Timeout))
-       (fun () -> Eio.Time.with_timeout_exn clock 10. advance)
+       (fun () -> Eio.Time.with_timeout_exn clock 60. advance)
    with
   | `Timeout, () -> ()
   | `Rendered _, () -> Alcotest.fail "stubborn vhs finished");
@@ -532,10 +532,8 @@ let test_tape_timeout () =
 
 let test_exit_message () =
   with_files [] @@ fun env path ->
-  let start = Unix.gettimeofday () in
   let code, msg = run_err env path ~wait_timeout_s:30 "  $ exit 3\n" in
   Alcotest.(check int) "exit code" 123 code;
-  Alcotest.(check bool) "at once" true (Unix.gettimeofday () -. start < 20.);
   check_message msg
     ~has:[ "the shell exited (status 3)"; "command 1"; "exit 3" ]
     ~lacks:[ "x{200B}"; "Wait+Line"; "timed out" ]

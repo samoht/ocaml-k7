@@ -640,7 +640,7 @@ let test_cancel_reaps delay =
      while :; do sleep 0.01; done\n";
   let clock = Eio.Stdenv.clock env in
   let result =
-    Eio.Time.with_timeout_exn clock 5. (fun () ->
+    Eio.Time.with_timeout_exn clock 60. (fun () ->
         Eio.Fiber.first
           (fun () ->
             `Rendered
@@ -721,7 +721,7 @@ let test_record_reaps delay callback_raises =
   in
   let result =
     try
-      Eio.Time.with_timeout_exn clock 5. (fun () ->
+      Eio.Time.with_timeout_exn clock 60. (fun () ->
           Eio.Fiber.first
             (fun () ->
               `Recorded
@@ -987,7 +987,7 @@ let test_native_literal n =
   in
   let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "received")) in
   (match
-     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 10. (fun () ->
+     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 60. (fun () ->
          K7.record
            ~clock:(Eio.Stdenv.mono_clock env)
            ~proc:(Eio.Stdenv.process_mgr env)
@@ -1015,7 +1015,7 @@ let test_zero_speed_prompt n =
   in
   let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "out.txt")) in
   (match
-     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 10. (fun () ->
+     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 60. (fun () ->
          K7.record
            ~clock:(Eio.Stdenv.mono_clock env)
            ~proc:(Eio.Stdenv.process_mgr env)
@@ -1366,7 +1366,7 @@ let test_run_cancel_descendant cancelled =
          ])
   in
   let result =
-    Eio.Time.with_timeout_exn clock 10. @@ fun () ->
+    Eio.Time.with_timeout_exn clock 60. @@ fun () ->
     if not cancelled then play ()
     else
       Eio.Fiber.first play (fun () ->

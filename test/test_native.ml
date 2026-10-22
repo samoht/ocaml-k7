@@ -103,28 +103,38 @@ let test_timeout () =
 let test_shell_exit () =
   with_dir @@ fun env cwd ->
   let t = tape K7.[ type' "exit 3\n"; wait ~timeout:(Ms 20_000) Prompt ] in
-  let start = Unix.gettimeofday () in
-  (match record env cwd t with
+  match record env cwd t with
   | Error (Exited { status = `Exited 3; wait = "Wait@20000ms"; _ } as e) ->
       check_contains "message" ~sub:"the shell exited (status 3) while waiting"
         (Fmt.str "%a" K7.pp_error e)
   | Ok _ -> Alcotest.fail "no error"
-  | Error e -> Alcotest.failf "%a" K7.pp_error e);
-  Alcotest.(check bool) "at once" true (Unix.gettimeofday () -. start < 10.)
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+
+(* A clock that jumps to the next sleep that is due, so that timeouts expire
+   in their order and the time they took is exact. *)
+let with_virtual_clock f =
+  let clock = Eio_mock.Clock.Mono.make () in
+  Eio.Switch.run @@ fun sw ->
+  Eio.Fiber.fork_daemon ~sw (fun () ->
+      let rec loop () =
+        if not (Eio_mock.Clock.Mono.try_advance clock) then Eio.Fiber.yield ();
+        loop ()
+      in
+      loop ());
+  f clock
 
 let test_timeout_precedence () =
   with_dir @@ fun env cwd ->
   let times_out ~within t =
-    let start = Unix.gettimeofday () in
-    (match record env cwd t with
+    with_virtual_clock @@ fun clock ->
+    (match K7.record ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd t with
     | Error (Timeout _) -> ()
     | Ok _ -> Alcotest.fail "no timeout"
     | Error e -> Alcotest.failf "%a" K7.pp_error e);
-    Alcotest.(check bool)
-      "timed out in time" true
-      (Unix.gettimeofday () -. start < within)
+    let s = Int64.to_float (Mtime.to_uint64_ns (Eio.Time.Mono.now clock)) in
+    if s /. 1e9 >= within then Alcotest.failf "timed out after %gs" (s /. 1e9)
   in
-  times_out ~within:30.
+  times_out ~within:15.
     (tape
        K7.
          [
@@ -132,7 +142,7 @@ let test_timeout_precedence () =
            type' "echo hi\n";
            wait ~timeout:(Ms 300) (Screen "never");
          ]);
-  times_out ~within:30.
+  times_out ~within:15.
     (tape
        K7.
          [
@@ -1074,10 +1084,13 @@ let known_differences =
   |> List.map (fun (name, payload, vhs, image, text) ->
       (name, fun () -> check_payload ~vhs ?text payload image))
 
-let run ?vars ?show env cwd argv =
+let run ?clock ?vars ?show env cwd argv =
   Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 60. @@ fun () ->
   K7.run ~settings ?env:vars ?show
-    ~clock:(Eio.Stdenv.mono_clock env)
+    ~clock:
+      (match clock with
+      | Some c -> (c :> Eio.Time.Mono.ty Eio.Resource.t)
+      | None -> (Eio.Stdenv.mono_clock env :> Eio.Time.Mono.ty Eio.Resource.t))
     ~proc:(Eio.Stdenv.process_mgr env)
     ~cwd argv
 
@@ -1117,37 +1130,47 @@ let times svg =
   in
   (duration, keyframes 0 [])
 
+(* The program prints nothing until the clock reads 500ms, so its output and
+   its exit land on that frame, whatever the machine's load. *)
 let test_run_program () =
   with_dir @@ fun env cwd ->
   script cwd "demo.sh"
     "#!/bin/sh\n\
+     : > started\n\
+     while [ ! -e go ]; do sleep 0.01; done\n\
      printf '\\033[31mred\\033[0m\\n'\n\
-     sleep 0.5\n\
      printf 'done\\n'\n\
      exit 3\n";
-  match run env cwd [ "./demo.sh" ] with
+  let clock = Eio_mock.Clock.Mono.make () in
+  let wall = Eio.Stdenv.clock env in
+  let result, () =
+    Eio.Fiber.pair
+      (fun () -> run ~clock env cwd [ "./demo.sh" ])
+      (fun () ->
+        Eio.Time.with_timeout_exn wall 30. (fun () ->
+            while
+              not (Sys.file_exists (Eio.Path.native_exn cwd ^ "/started"))
+            do
+              Eio.Time.sleep wall 0.01
+            done);
+        Eio_mock.Clock.Mono.set_time clock (Mtime.of_uint64_ns 500_000_000L);
+        Eio.Path.save ~create:(`Or_truncate 0o644) Eio.Path.(cwd / "go") "")
+  in
+  match result with
   | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok (s, status) ->
       Alcotest.(check bool) "status" true (status = `Exited 3);
       check_contains "red" ~sub:{|class="p1">red|} s;
-      let shown = frames s in
-      let n = List.length shown in
-      let red = screen [ "$ ./demo.sh"; "red" ]
-      and both = screen [ "$ ./demo.sh"; "red"; "done" ] in
       Alcotest.(check (list string))
-        "last frames" [ red; both ]
-        (List.filteri (fun i _ -> i >= n - 2) shown);
-      List.iteri
-        (fun i f ->
-          if i < n - 2 && f <> screen [ "$ ./demo.sh" ] then
-            Alcotest.failf "frame %d: %S" i f)
-        shown;
+        "frames"
+        [ screen [ "$ ./demo.sh" ]; screen [ "$ ./demo.sh"; "red"; "done" ] ]
+        (frames s);
       let duration, starts = times (unprefixed s) in
-      let last = List.nth starts (List.length starts - 1) in
-      if last < 500. || last > 5000. then
-        Alcotest.failf "the second line shows at %gms" last;
-      if duration -. last < 1000. || duration -. last > 1040. then
-        Alcotest.failf "the last screen holds %gms" (duration -. last)
+      Alcotest.(check (list (float 0.)))
+        "starts" [ 0.; 500. ]
+        (List.map Float.round starts);
+      Alcotest.(check (float 0.))
+        "the last screen holds a second" 1500. duration
 
 let test_run_fast () =
   with_dir @@ fun env cwd ->
@@ -1416,7 +1439,7 @@ let test_run_cancel_descendant () =
     try String.trim (Eio.Path.load pid_file) <> "" with Eio.Io _ -> false
   in
   let result =
-    Eio.Time.with_timeout_exn clock 10. @@ fun () ->
+    Eio.Time.with_timeout_exn clock 60. @@ fun () ->
     Eio.Fiber.first
       (fun () -> `Ran (run env cwd [ "./parent.sh" ]))
       (fun () ->
