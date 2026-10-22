@@ -727,10 +727,15 @@ let test_cli_wait_timeout seconds =
   in
   let output = Buffer.create 256 in
   let sink = Eio.Flow.buffer_sink output in
+  let proc = Eio.Stdenv.process_mgr env in
+  (* cmdliner styles its messages unless [TERM] is [dumb]. *)
+  let env =
+    Eio.Process.environment proc
+    |> Eio.Process.Env.override [ ("TERM", Some "dumb") ]
+  in
   let status =
     Eio.Switch.run @@ fun sw ->
-    Eio.Process.spawn ~sw ~stdout:sink ~stderr:sink
-      (Eio.Stdenv.process_mgr env)
+    Eio.Process.spawn ~sw ~env ~stdout:sink ~stderr:sink proc
       [
         cli;
         "--print";
