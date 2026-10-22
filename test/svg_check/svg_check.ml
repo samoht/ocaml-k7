@@ -41,19 +41,10 @@ let graphemes s =
   in
   go [] 0
 
-let measure = Matrix_text.measure ~width_method:`Unicode ~tab_width:2
-
-(* The cells a grapheme takes: those of its characters, without the
-   zero-width ones that join a cell, such as a variation selector, which
-   [measure] counts as making an emoji wide. *)
-let width g =
-  let b = Buffer.create (String.length g) in
-  List.iter
-    (fun c ->
-      let u = Uchar.utf_decode_uchar (String.get_utf_8_uchar c 0) in
-      if Uchar.to_int u < 0xa0 || measure c > 0 then Buffer.add_string b c)
-    (graphemes g);
-  max 1 (measure (Buffer.contents b))
+(* The cells a grapheme takes: those of its characters, each as wide as
+   xterm.js makes it, so a spacing mark adds a cell and a variation
+   selector none. *)
+let width g = max 1 (Matrix_text.measure ~width_method:`Wcwidth ~tab_width:2 g)
 
 let trim_end s =
   let rec go n = if n > 0 && s.[n - 1] = ' ' then go (n - 1) else n in
