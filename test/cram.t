@@ -16,6 +16,12 @@ k7 reports its version, which a release substitutes.
   $ k7 --version | wc -l | tr -d ' '
   1
 
+An input is a file of at most 10 MiB, not a stream.
+
+  $ k7 cram --output demo.svg /dev/zero
+  k7: /dev/zero: larger than 10 MiB
+  [123]
+
 Numbers are plain decimal digits, as the messages say.
 
   $ k7 cram --print --cols 0x50 --output demo.gif demo.t 2> /dev/null
