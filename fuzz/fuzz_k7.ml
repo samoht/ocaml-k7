@@ -1581,8 +1581,46 @@ let test_check_preflight_parity n =
   check_eq ~pp:Fmt.Dump.string checked recorded;
   check (before = entries ())
 
+let test_cli_dry_run_preflight n =
+  with_dir @@ fun env path ->
+  let name, src, flags =
+    match n mod 5 with
+    | 0 ->
+        ( "input.tape",
+          "Sleep 100ms\n",
+          [ "-o"; path "out.svg"; "-o"; path "out.gif" ] )
+    | 1 ->
+        ( "input.tape",
+          "Source missing.tape\nSleep 100ms\n",
+          [ "-o"; path "out.svg" ] )
+    | 2 -> ("input.t", "  $ touch played\n", [])
+    | 3 ->
+        ( "input.tape",
+          "Sleep 100ms\n",
+          [ "-o"; path "out.svg"; "--setup"; path "setup.sh" ] )
+    | _ ->
+        ( "input.tape",
+          "Screenshot absent/shot.svg\nSleep 100ms\n",
+          [ "-o"; path "out.svg" ] )
+  in
+  save env (path name) src;
+  save env (path "setup.sh") "true\n";
+  let entries () =
+    List.sort compare
+      (Array.to_list (Sys.readdir (Filename.dirname (path name))))
+  in
+  let before = entries () in
+  let checked, _ = run_cli env ([ "--dry-run" ] @ flags @ [ path name ]) in
+  check (entries () = before);
+  let recorded, _ = run_cli env (flags @ [ path name ]) in
+  check (checked = `Exited 123);
+  check (recorded = checked);
+  check (entries () = before)
+
 let with_processes =
   [
+    test_case "CLI dry-run and recording refuse the same preflight failures"
+      [ uint8 ] test_cli_dry_run_preflight;
     test_case "check rejects directory destinations for outputs and screenshots"
       [ uint8 ] test_check_directory_destination;
     test_case "record respects the explicit terminal environment" [ uint8 ]
