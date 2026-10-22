@@ -78,7 +78,7 @@ let test_settings () =
 
 (* Sizes far beyond a screen are refused, not computed with overflow. *)
 let test_huge () =
-  (match Vhs.svg ~settings:[ Width max_int ] [] with
+  (match Vhs.svg ~settings:[ Width 1_000_000 ] [] with
   | Error (Unsupported why) ->
       check_contains "names the setting" ~sub:"Width" why
   | Ok _ -> Alcotest.fail "a huge width played"
@@ -123,15 +123,34 @@ let test_times () =
       [ (Ms 0, "a"); (Ms max_int, "b") ];
     ]
 
-(* Direct callers of [svg] have not passed through [tape]'s validation. *)
+(* [svg] refuses the settings [tape] refuses, and starts no shell. *)
 let test_setting_errors () =
-  List.iter
-    (fun setting ->
+  List.iteri
+    (fun i setting ->
       match Vhs.svg ~settings:[ setting ] [ (Ms 0, "hello") ] with
-      | Error (Invalid _ | Unsupported _) -> ()
-      | Error e -> Alcotest.failf "%a" Vhs.pp_error e
-      | Ok _ -> ())
-    [ Font_family "Mono\nSpace"; Font_family "\"'`"; Theme "{\n}" ]
+      | Error (Invalid _) -> ()
+      | Error e -> Alcotest.failf "setting %d: %a" i Vhs.pp_error e
+      | Ok _ -> Alcotest.failf "setting %d: played" i)
+    Vhs.
+      [
+        Font_family "Mono\nSpace";
+        Font_family "\"'`";
+        Theme "{\n}";
+        Theme "Dracula\nSet Width 50";
+        Framerate 0;
+        Font_size 0;
+        Width 0;
+        Height 1;
+        Width (-10);
+        Padding (-1);
+        Font_size (-5);
+        Framerate (-1);
+        Typing_speed (Ms (-1));
+        Width max_int;
+      ];
+  match Vhs.svg ~settings:[ Shell Cmd ] [ (Ms 0, "hello") ] with
+  | Ok _ -> ()
+  | Error e -> Alcotest.failf "Shell Cmd: %a" Vhs.pp_error e
 
 (* A screen reader must not receive text concealed on the last screen. *)
 let test_concealed_description () =
