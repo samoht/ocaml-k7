@@ -44,6 +44,10 @@ val pp_error : K7.error Fmt.t
     times out suggests [Wait@30s] or [Set WaitTimeout], and an output names [k7]
     or [vhs] rather than the function that writes it. *)
 
+val pp_play_error : vhs:string -> K7.error Fmt.t
+(** [pp_play_error ~vhs] is {!pp_error}, and says where to get VHS when the
+    executable [vhs] is not found. *)
+
 val interruptible : (unit Eio.Promise.t -> 'a) -> 'a * Sys.signal option
 (** [interruptible f] is [f stop] and the signal, [SIGINT] or [SIGTERM], that
     interrupted it, if any. [stop] resolves on the first of them that [k7] gets

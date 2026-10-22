@@ -203,6 +203,15 @@ let pp_error ppf = function
            library_names)
   | e -> K7.pp_error ppf e
 
+let pp_play_error ~vhs ppf = function
+  | K7.Executable_not_found exe as e when exe = vhs ->
+      Fmt.pf ppf
+        "%a; a GIF or a video needs Charm's VHS, see \
+         https://github.com/charmbracelet/vhs#installation, and an .svg output \
+         does not"
+        K7.pp_error e
+  | e -> pp_error ppf e
+
 let interruptible f =
   let received = Atomic.make None and signalled = Eio.Condition.create () in
   let handle s =

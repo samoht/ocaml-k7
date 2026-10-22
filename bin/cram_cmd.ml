@@ -80,7 +80,7 @@ let vhs_timeout output =
 let seconds_of n = Fmt.str "%d second%s" n (if n = 1 then "" else "s")
 
 (* A command left at bash's continuation prompt times the next wait out. *)
-let render_error ~setup ~wait ~name ~tape src e =
+let render_error ~vhs ~setup ~wait ~name ~tape src e =
   let cram = Result.to_option (Cram.parse src) in
   let unfinished output =
     Option.bind cram (fun t -> Cram.unfinished ~setup t output)
@@ -116,7 +116,7 @@ let render_error ~setup ~wait ~name ~tape src e =
         name (seconds_of wait)
         (last_value (Option.get (vhs_timeout output)))
         longer
-  | None, _, _ -> Fmt.str "%s: %a" name Flags.pp_error e
+  | None, _, _ -> Fmt.str "%s: %a" name (Flags.pp_play_error ~vhs) e
 
 let absolute path =
   if Filename.is_relative path then Filename.concat (Sys.getcwd ()) path
@@ -148,15 +148,20 @@ let record ?stop env ~print ~vhs ~setup ?dir ?settings ?env:vars ?wait_timeout_s
     let* tape =
       tape ~setup:(List.map absolute setup) ~output:(absolute output)
     in
-    let named = function K7.Failed f -> K7.Failed { f with vhs } | e -> e in
+    let run_vhs = if String.contains vhs '/' then absolute vhs else vhs in
+    let named = function
+      | K7.Failed f -> K7.Failed { f with vhs }
+      | K7.Executable_not_found exe when exe = run_vhs ->
+          K7.Executable_not_found vhs
+      | e -> e
+    in
     in_dir env dir @@ fun cwd ->
-    K7.play ?stop
-      ~vhs:(if String.contains vhs '/' then absolute vhs else vhs)
+    K7.play ?stop ~vhs:run_vhs
       ~clock:(Eio.Stdenv.mono_clock env)
       ~proc:(Eio.Stdenv.process_mgr env)
       ~cwd tape
     |> Result.map_error (fun e ->
-        render_error ~setup
+        render_error ~vhs ~setup
           ~wait:(Option.value wait_timeout_s ~default:15)
           ~name:input ~tape:given src (named e))
 
