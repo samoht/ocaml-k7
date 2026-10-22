@@ -5,7 +5,8 @@
 
 let ( let* ) = Result.bind
 
-let record ?stop stdenv ~dry_run ~print ~vhs ~settings ~env ~outputs input =
+let record ?stop ?engine stdenv ~dry_run ~print ~vhs ~settings ~env ~outputs
+    input =
   let* src = Flags.load stdenv input in
   let error = function
     | K7.Invalid msg when String.starts_with ~prefix:"no output" msg ->
@@ -22,16 +23,18 @@ let record ?stop stdenv ~dry_run ~print ~vhs ~settings ~env ~outputs input =
     else Result.map_error error (K7.with_outputs outputs t)
   in
   if dry_run then
-    K7.check ~env ~cwd:(Eio.Stdenv.cwd stdenv) t |> Result.map_error error
+    K7.check ?engine ~env ~cwd:(Eio.Stdenv.cwd stdenv) t
+    |> Result.map_error error
   else if print then Flags.print_tape stdenv t
   else
-    K7.record ?stop ~vhs ~env
+    K7.record ?engine ?stop ~vhs ~env
       ~clock:(Eio.Stdenv.mono_clock stdenv)
       ~proc:(Eio.Stdenv.process_mgr stdenv)
       ~cwd:(Eio.Stdenv.cwd stdenv) t
     |> Result.map_error error
 
-let run stdenv ~dry_run ~print ~vhs ~settings ~env ~outputs input =
+let run stdenv ?engine ~dry_run ~print ~vhs ~settings ~env ~outputs input =
   Flags.interruptible (fun stop ->
-      record ~stop stdenv ~dry_run ~print ~vhs ~settings ~env ~outputs input)
+      record ~stop ?engine stdenv ~dry_run ~print ~vhs ~settings ~env ~outputs
+        input)
   |> Flags.exit stdenv ~ok:(fun () -> 0)

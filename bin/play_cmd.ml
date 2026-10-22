@@ -21,13 +21,13 @@ let cram_only ~setup ~dir ~wait_timeout =
       (Option.is_some wait_timeout, "--wait-timeout");
     ]
 
-let run stdenv ~dry_run ~print ~vhs ~settings ~env ~outputs ~setup ~dir
+let run stdenv ?engine ~dry_run ~print ~vhs ~settings ~env ~outputs ~setup ~dir
     ~wait_timeout input =
   match kind input with
   | Error msg -> Flags.fail stdenv msg
   | Ok Cram ->
-      Play_cram.run stdenv ~dry_run ~print ~vhs ~setup ?dir ~settings ~env
-        ?wait_timeout_s:wait_timeout ~outputs input
+      Play_cram.run stdenv ?engine ~dry_run ~print ~vhs ~setup ?dir ~settings
+        ~env ?wait_timeout_s:wait_timeout ~outputs input
   | Ok Tape -> (
       match cram_only ~setup ~dir ~wait_timeout with
       | Some flag ->
@@ -35,8 +35,8 @@ let run stdenv ~dry_run ~print ~vhs ~settings ~env ~outputs ~setup ~dir
             (Fmt.str "%s: %s applies to a cram test (.t), not to a tape" input
                flag)
       | None ->
-          Play_tape.run stdenv ~dry_run ~print ~vhs ~settings ~env ~outputs
-            input)
+          Play_tape.run stdenv ?engine ~dry_run ~print ~vhs ~settings ~env
+            ~outputs input)
 
 open Cmdliner
 
@@ -48,6 +48,17 @@ let outputs =
      $(b,.test), and $(b,vhs) records the others."
   in
   Arg.(value & opt_all string [] & info [ "o"; "output" ] ~docv:"FILE" ~doc)
+
+let engine =
+  let doc =
+    "Record with $(docv): $(b,native), k7 itself, or $(b,vhs), in place of the \
+     one that writes the outputs."
+  in
+  let engines = [ ("native", K7.Native); ("vhs", K7.Vhs) ] in
+  Arg.(
+    value
+    & opt (some (enum engines)) None
+    & info [ "engine" ] ~docv:"ENGINE" ~doc)
 
 let dry_run =
   let doc =
@@ -92,7 +103,9 @@ let man =
        which plays in an HTML $(i,img) element, or writes their text as VHS \
        does. Otherwise $(b,vhs), which needs $(b,ttyd), $(b,ffmpeg) and a \
        browser, records it. A file cannot ask for both an $(b,.svg) image and \
-       an output only $(b,vhs) writes.";
+       an output only $(b,vhs) writes. $(b,--engine) picks the recorder \
+       instead, such as $(b,vhs) for a text output of a tape whose shell \
+       $(cmd) does not start itself.";
     `P
       "$(b,--dry-run) checks $(i,FILE) as $(b,vhs validate) does, and also \
        that the chosen recorder writes the outputs, with the other options \
@@ -142,13 +155,14 @@ let man =
 
 let cmd =
   let doc = "play a tape or a cram test and record it" in
-  let run dry_run print vhs settings env outputs setup dir wait_timeout input =
+  let run engine dry_run print vhs settings env outputs setup dir wait_timeout
+      input =
     Eio_main.run @@ fun stdenv ->
-    run stdenv ~dry_run ~print ~vhs ~settings ~env ~outputs ~setup ~dir
+    run stdenv ?engine ~dry_run ~print ~vhs ~settings ~env ~outputs ~setup ~dir
       ~wait_timeout input
   in
   Cmd.make
     (Cmd.info "play" ~doc ~man ~exits:Flags.exits)
     Term.(
-      const run $ dry_run $ Flags.print $ Flags.vhs $ Flags.settings $ Flags.env
-      $ outputs $ setup $ dir $ Flags.wait_timeout $ input)
+      const run $ engine $ dry_run $ Flags.print $ Flags.vhs $ Flags.settings
+      $ Flags.env $ outputs $ setup $ dir $ Flags.wait_timeout $ input)

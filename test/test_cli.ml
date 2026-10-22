@@ -732,6 +732,34 @@ let test_rec_creates_output_directory () =
   Alcotest.(check (pair int string)) "recorded" (0, "") (code, error);
   Alcotest.(check bool) "image written" true (Sys.file_exists output)
 
+(* A tape with a text output plays natively, which refuses pwsh; vhs
+   starts it. *)
+let test_engine () =
+  with_files
+    [
+      ("pwsh.tape", 0o644, "Set Shell \"pwsh\"\nSleep 100ms\n");
+      ("err", 0o644, "");
+    ]
+  @@ fun env path ->
+  let play ?engine () =
+    captured path @@ fun () ->
+    Play_cmd.run env ?engine ~dry_run:true ~print:false ~vhs:"vhs" ~settings:[]
+      ~env:[]
+      ~outputs:[ path "out.txt" ]
+      ~setup:[] ~dir:None ~wait_timeout:None (path "pwsh.tape")
+  in
+  Alcotest.(check int) "native refuses pwsh" 123 (fst (play ()));
+  Alcotest.(check (pair int string))
+    "vhs starts pwsh" (0, "") (play ~engine:K7.Vhs ());
+  Alcotest.(check int)
+    "--engine native refuses a GIF" 123
+    (fst
+       ( captured path @@ fun () ->
+         Play_cmd.run env ~engine:K7.Native ~dry_run:true ~print:false
+           ~vhs:"vhs" ~settings:[] ~env:[]
+           ~outputs:[ path "out.gif" ]
+           ~setup:[] ~dir:None ~wait_timeout:None (path "pwsh.tape") ))
+
 let suite =
   ( "cli",
     List.map
@@ -756,6 +784,7 @@ let suite =
          ( "-o replaces a late Output line",
            test_output_option_replaces_late_output );
          ("rec creates the output directory", test_rec_creates_output_directory);
+         ("engine", test_engine);
        ]
       @ readiness ~native:true
       @ if Option.is_some oracle then readiness ~native:false else []) )

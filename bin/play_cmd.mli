@@ -7,6 +7,7 @@
 
 val run :
   Eio_unix.Stdenv.base ->
+  ?engine:K7.engine ->
   dry_run:bool ->
   print:bool ->
   vhs:string ->
@@ -18,7 +19,7 @@ val run :
   wait_timeout:int option ->
   string ->
   int
-(** [run stdenv ~dry_run ~print ~vhs ~settings ~env ~outputs ~setup ~dir
+(** [run stdenv ~engine ~dry_run ~print ~vhs ~settings ~env ~outputs ~setup ~dir
      ~wait_timeout input] is {!Play_tape.run} on a [.tape] file [input] and
     {!Play_cram.run} on a [.t] one, with the [setup] scripts, the directory
     [dir] and the [wait_timeout] seconds of a cram test. It is [123] after
