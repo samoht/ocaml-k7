@@ -454,6 +454,29 @@ let test_publish_environment () =
   | Ok () -> Alcotest.fail "recorded"
   | Error e -> Alcotest.failf "%a" K7.pp_error e
 
+let test_vhs_path_override () =
+  Native_test.with_dir @@ fun env cwd ->
+  let name = "k7-r14-path-vhs" in
+  let executable = Eio.Path.(cwd / name) in
+  Eio.Path.save ~create:(`Or_truncate 0o755) executable
+    "#!/bin/sh\n/bin/cat > /dev/null\nprintf started > launched\n";
+  let vars = [ ("PATH", Eio.Path.native_exn cwd) ] in
+  let record vhs =
+    K7.record ~engine:Vhs ~vhs ~env:vars
+      ~clock:(Eio.Stdenv.mono_clock env)
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd (tape [])
+  in
+  (match record (Eio.Path.native_exn executable) with
+  | Ok () -> ()
+  | Error e -> Alcotest.failf "absolute path: %a" K7.pp_error e);
+  Eio.Path.unlink Eio.Path.(cwd / "launched");
+  (match record name with
+  | Ok () -> ()
+  | Error e -> Alcotest.failf "PATH override: %a" K7.pp_error e);
+  expect "the executable on the supplied PATH ran" "started"
+    (Eio.Path.load Eio.Path.(cwd / "launched"))
+
 let suite =
   ( "eio",
     List.map
@@ -472,4 +495,5 @@ let suite =
         ("cancel", test_cancel);
         ("cancel a vhs ignoring SIGTERM", test_cancel_kill);
         ("publish environment", test_publish_environment);
+        ("vhs searches overridden PATH", test_vhs_path_override);
       ] )
