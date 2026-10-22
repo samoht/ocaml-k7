@@ -109,7 +109,13 @@ let init mark =
 
 let prepare mark setup =
   let line =
-    List.map (fun s -> "source " ^ sh_quote s) setup
+    List.map
+      (fun s ->
+        (* bash's [source] looks a name without a slash up in the PATH
+           first. *)
+        let s = if Filename.is_relative s then "./" ^ s else s in
+        "source " ^ sh_quote s)
+      setup
     @ [ Fmt.str {|eval "$%s"|} var; "clear" ]
   in
   Vhs.hidden

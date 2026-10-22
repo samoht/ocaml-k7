@@ -126,9 +126,14 @@ let test_setup scripts command =
   match submitted tape with
   | [ prelude; c ] ->
       check (String.equal c command);
+      (* A relative path starts with ./, which bash's source does not
+         search for in the PATH. *)
+      let path s = if Filename.is_relative s then "./" ^ s else s in
       let sources =
         String.concat ""
-          (List.map (fun s -> "source " ^ Filename.quote s ^ "; ") scripts)
+          (List.map
+             (fun s -> "source " ^ Filename.quote (path s) ^ "; ")
+             scripts)
       in
       check (String.starts_with ~prefix:(sources ^ "eval ") prelude);
       check (String.ends_with ~suffix:"; clear" prelude)

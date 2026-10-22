@@ -139,7 +139,7 @@ let test_setup () =
   expect "setup"
     (prelude
        ~typed:
-         {|Type `source 'slow.sh'; source 'it'\''s.sh'; eval "$VHS_CRAM_PROMPT"; clear`|}
+         {|Type `source './slow.sh'; source './it'\''s.sh'; eval "$VHS_CRAM_PROMPT"; clear`|}
        ()
     ^ "Type \"echo ready\"\nEnter\n" ^ ready ^ "Sleep 1000ms\n")
     (cram ~setup:[ "slow.sh"; "it's.sh" ] "  $ echo ready\n")
