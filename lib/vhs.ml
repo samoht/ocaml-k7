@@ -181,7 +181,8 @@ let check_output path =
     ~some:(Fmt.error "Output %S: %s" path)
     (output_problem path)
 
-(* VHS keeps one output of each kind and writes the last one it reads. *)
+(* VHS keeps one output of each kind and writes the last one it reads;
+   [record] writes one SVG output. *)
 let kind path =
   if String.ends_with ~suffix:"/" path then "frames"
   else
@@ -199,6 +200,8 @@ let check_kinds paths =
     | [] -> Ok ()
     | q :: rest -> (
         match List.assoc_opt (kind q) seen with
+        | Some p when kind q = "SVG" ->
+            Fmt.error "Output %S: a tape has one SVG output, not also %S" p q
         | Some p ->
             Fmt.error "Output %S: VHS writes only the last %s output, %S" p
               (kind q) q

@@ -193,7 +193,8 @@ val tape :
     - [outputs] is empty, or one has another extension, none and no trailing
       slash, or starts with [-], which ffmpeg reads as an option;
     - two outputs, {!raw} [Output] lines included, are of the same kind (GIF,
-      MP4, WebM, text, PNG frames or SVG), of which VHS writes only the last;
+      MP4, WebM, text, PNG frames or SVG): VHS writes only the last of each kind
+      but SVG, which it never reads, and {!record} writes one SVG image;
     - a string holds a control character, C1 controls included (the tabs and
       newlines of {!type'} aside), or, in typed text, invalid UTF-8;
     - an output path, a {!Theme} or a {!Font_family} holds all three quote
@@ -335,7 +336,7 @@ val record :
   (string, error) result
 (** [record ~clock ~proc ~cwd t] plays [t] in its shell in the directory [cwd],
     with the environment {!render} gives [vhs], and is the SVG image of what it
-    showed. [record] also writes the image to each [.svg] output of [t] and the
+    showed. [record] also writes the image to the [.svg] output of [t] and the
     {{!native}text output} to the [.txt], [.ascii] or [.test] output of [t] and
     the {{!native}screenshots} of [t], relative to [cwd], and writes no other
     output. The waits of [t] time out by [clock]. It is {!Executable_not_found}

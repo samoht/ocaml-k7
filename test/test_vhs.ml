@@ -282,6 +282,10 @@ let test_outputs () =
   error "two frame directories"
     {|Output "a/": VHS writes only the last frames output, "b.png"|}
     ~outputs:[ "a/"; "b.png" ] [];
+  (* VHS never reads an .svg output, and record writes one. *)
+  error "two SVGs"
+    {|Output "a.svg": a tape has one SVG output, not also "b.svg"|}
+    ~outputs:[ "a.svg"; "b.svg" ] [];
   rejects "raw output" [ Vhs.raw "Output b.mp4" ] ~outputs:[ "a.mp4" ];
   (* VHS hands any other extension to ffmpeg as a GIF, and ffmpeg picks the
      format from the extension. *)
