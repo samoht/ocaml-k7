@@ -205,7 +205,9 @@ whose parser defines the syntax, key names and checks that this library
 follows. The `.t` format comes from Mercurial's test runner, made popular by
 Brodie Rao's cram, and is the one dune runs. The native recorder runs on the
 pseudo-terminals and the terminal emulator of Thibaut Mattio's
-[matrix](https://github.com/tmattio/mosaic) (ISC).
+[matrix](https://github.com/tmattio/mosaic) (ISC); until matrix 0.2.0 is
+released, the emulator is a copy of matrix's unreleased terminal core in
+[lib/matrix_backport](lib/matrix_backport/README.md).
 
 ## License
 

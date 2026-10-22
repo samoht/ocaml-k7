@@ -12,14 +12,13 @@
   number_cases.txt
   theme_cases.txt
   match_cases.txt)
+ (flags
+  (:standard -open Matrix_backport))
  (libraries
   vhs
   vhs_cram
   svg_check
-  matrix.ansi
-  matrix.grid
-  matrix.text
-  matrix.vte
+  matrix_backport
   native_test
   fmt
   alcotest

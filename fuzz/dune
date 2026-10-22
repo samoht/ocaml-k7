@@ -4,14 +4,13 @@
 
 (executable
  (name fuzz)
+ (flags
+  (:standard -open Matrix_backport))
  (libraries
   vhs
   vhs_cram
   svg_check
-  matrix.ansi
-  matrix.grid
-  matrix.text
-  matrix.vte
+  matrix_backport
   fmt
   alcobar
   eio

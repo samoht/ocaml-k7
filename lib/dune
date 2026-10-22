@@ -14,16 +14,16 @@
   themes
   unicode
   unicode_data)
+ ; The terminal core comes from matrix_backport until matrix 0.2.0.
+ (flags
+  (:standard -open Matrix_backport))
  (libraries
   cstruct
   eio
   eio.unix
   fmt
-  matrix.ansi
-  matrix.grid
-  matrix.text
+  matrix_backport
   matrix.pty
-  matrix.vte
   mtime
   re
   unix))

@@ -22,4 +22,5 @@
   GIF, MP4 or WebM output takes.
 - `vhs-cram` keeps typed non-ASCII text without a UTF-8 locale.
 - The library needs OCaml 5.4, for matrix's pseudo-terminals and terminal
-  emulator, and matrix 0.2.0.
+  emulator, and matrix 0.1.0. The emulator is a private copy of matrix's
+  terminal core at mosaic 90a3f220, whose fixes are not released yet.
