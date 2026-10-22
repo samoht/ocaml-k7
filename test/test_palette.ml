@@ -24,8 +24,6 @@ let test_colours () =
   check_contains "inverse background" ~sub:{|class="d"/>|} s;
   check_contains "underline" ~sub:{|class="xu">u|} s
 
-(* A JSON theme is read as Go reads it, keys ignoring case, and a colour it
-   lacks is xterm.js's. *)
 let test_json_theme () =
   let s =
     svg
@@ -42,8 +40,6 @@ let test_json_theme () =
   check_contains "foreground" ~sub:"text{fill:#ffffff}" s;
   check_contains "cursor" ~sub:".kc{fill:#ffffff}" s;
   check_contains "green" ~sub:".p2{fill:#4e9a06}" s;
-  (* The text under the cursor takes the theme's accent, or the one of its
-     background and foreground that stands out more on the cursor. *)
   let accent theme = svg ~settings:[ Theme theme ] [ (Ms 0, "x") ] in
   check_contains "named theme" ~sub:".ka{fill:#1e1f29}" (accent "Dracula");
   check_contains "missing accent" ~sub:".ka{fill:#102030}" s;
@@ -55,7 +51,6 @@ let test_json_theme () =
   (match K7.svg ~settings:[ Theme {|{"red": "tomato"}|} ] [] with
   | Error (Unsupported why) ->
       check_contains "names it" ~sub:"tomato" why;
-      (* svg records nothing: it draws. *)
       check_contains "drawn" ~sub:"not drawn natively: " why
   | Ok _ -> Alcotest.fail "a colour name played"
   | Error e -> Alcotest.failf "%a" K7.pp_error e);
@@ -80,9 +75,7 @@ let test_json_theme () =
       | Ok _ -> Alcotest.failf "%s accepted" theme)
     [ {|{"background": "\ud800"}|}; "{\"background\": \"\xff\"}" ]
 
-(* JSON themes as Go reads them, written by theme_oracle.go: whether VHS
-   reads the theme and, if it does, the bytes of its background and red
-   colours, in hex. *)
+(* Written by theme_oracle.go. *)
 let test_go_oracle () =
   let unhex h =
     String.init
@@ -106,9 +99,7 @@ let test_go_oracle () =
               [ K7.type' "x" ]
           in
           let accepted = Result.is_ok result in
-          (* jsont refuses invalid UTF-8 and unpaired surrogate escapes in a
-             string, which Go reads as U+FFFD: the README's known
-             limitation. *)
+          (* Go reads these as U+FFFD; jsont refuses them. *)
           let refused_as_documented =
             match result with
             | Error (Invalid msg) ->
@@ -134,7 +125,6 @@ let test_go_oracle () =
       | [ "" ] -> ()
       | _ -> Alcotest.failf "bad case %S" line)
 
-(* Without a theme, or with a blank one, the colours are VHS's defaults. *)
 let test_default () =
   List.iter
     (fun settings ->
@@ -145,15 +135,12 @@ let test_default () =
       check_contains "cursor accent" ~sub:".ka{fill:#171717}" s)
     [ settings; K7.Theme "  " :: settings ]
 
-(* A theme without a cursor colour gets xterm.js's white, and text under the
-   cursor is black. *)
 let test_no_cursor () =
   let s = svg ~settings:(K7.Theme "TokyoNight" :: settings) [ (Ms 0, "x") ] in
   check_contains "cursor" ~sub:".kc{fill:#ffffff}" s;
   check_contains "accent" ~sub:".ka{fill:#16161e}" s
 
-(* Go's encoding/json counts the root object in its 10,000-level limit,
-   including values of unknown fields. VHS uses json.Unmarshal for themes. *)
+(* Go's encoding/json counts the root in its 10,000-level limit. *)
 let test_json_depth () =
   let build arrays =
     let theme =

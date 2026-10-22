@@ -3,11 +3,8 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(* The matcher is internal: test it through the waits of [K7.record]. *)
-
 open Native_test
 
-(* The command prints "hello Wörld 42 x>y end". *)
 let format = {|hello W\303\266rld 42 x>y end\n|}
 
 let record_waits waits =
@@ -15,7 +12,6 @@ let record_waits waits =
   record env cwd
     (tape ([ K7.type' ("printf '" ^ format ^ "'\n"); K7.wait Prompt ] @ waits))
 
-(* Each pattern holds on the screen, so no wait times out. *)
 let test_matching () =
   let patterns =
     [
@@ -44,9 +40,6 @@ let test_matching () =
   | Ok _ -> ()
   | Error e -> Alcotest.failf "%a" K7.pp_error e
 
-(* A pattern that does not hold times out, even one that matches a prefix
-   of the text, a byte of a multi-byte character or across lines without
-   [(?s)]. *)
 let test_not_matching () =
   List.iter
     (fun p ->
@@ -56,8 +49,6 @@ let test_not_matching () =
       | Error e -> Alcotest.failf "%S: %a" p K7.pp_error e)
     [ "helloo"; "^hello"; "W[^\\x{f6}]rld"; "end.>"; {|\bell|}; "x{3}" ]
 
-(* Unicode classes match as Go's tables say: a lower-case letter, a digit
-   and a script the text has hold; a script it lacks times out. *)
 let test_unicode_class () =
   (match
      record_waits
@@ -70,9 +61,6 @@ let test_unicode_class () =
   | Ok _ -> Alcotest.fail "\\p{Greek} matched"
   | Error e -> Alcotest.failf "%a" K7.pp_error e
 
-(* Go folds case with Unicode's simple folding, counts ASCII word
-   characters only at a word boundary, keeps a branch's flags in the branches
-   after it and repeats the item before a flag group. *)
 let test_go_semantics () =
   List.iter
     (fun (p, t, expected) ->
@@ -109,9 +97,7 @@ let test_go_semantics () =
       ("\\p{Lc}", "a", true);
     ]
 
-(* Patterns and texts Go's MatchString judged, written by match_oracle.go.
-   The cases are too many to wait on each one, so they reach the matcher
-   directly. *)
+(* Written by match_oracle.go; too many to wait on each. *)
 let test_go_oracle () =
   let unhex h =
     String.init
@@ -130,9 +116,6 @@ let test_go_oracle () =
       | [ "" ] -> ()
       | _ -> Alcotest.failf "bad case %S" line)
 
-(* VHS and the native recorder agree on Unicode case folding and ASCII word
-   boundaries: the waits that hold end both recordings, and one that does not
-   hold makes both time out. *)
 let test_vhs_oracle () =
   with_dir @@ fun env cwd ->
   let clock = Eio.Stdenv.mono_clock env and proc = Eio.Stdenv.process_mgr env in

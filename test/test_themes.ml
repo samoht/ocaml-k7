@@ -3,8 +3,6 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(* The theme list is internal: test it through [K7.Theme]. *)
-
 let expect = Alcotest.(check string)
 
 let tape settings =
@@ -25,8 +23,6 @@ let rejects name settings =
   | Ok s -> Alcotest.failf "%s: accepted %S" name s
   | Error _ -> ()
 
-(* VHS finds a theme by its exact name, reads a value starting with [{] as
-   JSON, which Go must read, and a blank one as its default theme. *)
 let test_names () =
   let open K7 in
   expect "name" "Output \"demo.gif\"\nSet Theme \"Dracula\"\nSleep 100ms\n"
@@ -42,7 +38,6 @@ let test_names () =
   rejects "invalid UTF-8" [ Theme " \xff" ];
   rejects "line break" [ Theme "Dracula\n" ]
 
-(* Every theme [vhs themes] lists is a theme. *)
 let test_vhs () =
   match Sys.getenv_opt "VHS_ORACLE" with
   | None -> ()

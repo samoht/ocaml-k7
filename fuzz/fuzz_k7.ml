@@ -8,8 +8,7 @@ open Alcobar
 let outputs = [ "demo.gif" ]
 let max_ms = 9_223_372_036_854
 
-(* VHS records no frame without a visible action, so each tape ends with
-   [last], which [tape] does not print. *)
+(* VHS records no frame without a visible action. *)
 let last = K7.sleep (Ms 100)
 let last_line = "Sleep 100ms\n"
 
@@ -19,7 +18,6 @@ let tape ?settings ?(outputs = outputs) actions =
       let s = K7.to_string t in
       String.sub s 0 (String.length s - String.length last_line))
 
-(* The printed lines of the actions, without the [Output] line. *)
 let lines ?settings actions =
   match tape ?settings actions with
   | Error _ -> None
@@ -30,7 +28,6 @@ let lines ?settings actions =
 
 let accepted ?settings actions = Option.is_some (lines ?settings actions)
 
-(* C0 other than [except], DEL and C1, decoded from UTF-8 where valid. *)
 let has_control ?(except = "") s =
   let control d =
     Uchar.utf_decode_is_valid d
@@ -47,8 +44,6 @@ let has_control ?(except = "") s =
   in
   go 0
 
-(* [decode s] is [s] as the stdlib decodes it: each character, U+FFFD for a
-   maximal invalid subpart, with its bytes. *)
 let decode s =
   let rec go i acc =
     if i >= String.length s then List.rev acc
@@ -60,8 +55,6 @@ let decode s =
   in
   go 0 []
 
-(* [Tape_syntax.has_control] finds a C0 control but [except], DEL or a C1
-   control where the stdlib decodes one. *)
 let test_control_decoding s except =
   let control (u, _) =
     (u < 0x20 && not (String.contains except (Char.chr u)))
@@ -71,8 +64,6 @@ let test_control_decoding s except =
     (List.exists control (decode s))
     (Tape_syntax.has_control ~except s)
 
-(* [Screen.trim_end] drops the JavaScript white space that ends the
-   characters the stdlib decodes. *)
 let test_trim_end_decoding s =
   let js_space u =
     List.mem u
@@ -103,9 +94,6 @@ let test_trim_end_decoding s =
   in
   check_eq ~pp:Fmt.Dump.string expected (Screen.trim_end s)
 
-(* [strip_format] removes the invisible characters and every variation
-   selector that follows no character that shows, and keeps what it
-   returns. *)
 let test_strip_format s =
   if String.is_valid_utf_8 s then (
     let t = Unicode.strip_format s in
@@ -130,8 +118,6 @@ let test_strip_format s =
     in
     scan 0 None)
 
-(* An independent reader for the [Type] subset of VHS: no escapes, the
-   matching quote ends the string. *)
 let decode_type line =
   let n = String.length line in
   if n < 7 || not (String.starts_with ~prefix:"Type " line) then
@@ -143,15 +129,12 @@ let decode_type line =
   if String.contains payload q then failf "quote inside: %S" line;
   payload
 
-(* What the printed lines type, [Tab] and [Enter] included. *)
 let typed lines =
   String.concat ""
     (List.map
        (function "Tab" -> "\t" | "Enter" -> "\n" | line -> decode_type line)
        lines)
 
-(* [type' s] is accepted iff [s] is UTF-8 without control characters other
-   than tab and newline, and then types exactly [s]. *)
 let test_type s =
   let typeable =
     String.is_valid_utf_8 s && not (has_control ~except:"\t\n" s)
@@ -163,8 +146,6 @@ let test_type s =
       let got = typed lines in
       if got <> s then failf "%S typed as %S" s got
 
-(* Every builder and setting is total: [tape] returns, it never raises, and
-   an accepted tape prints lines without control characters. *)
 let test_total s t n =
   let c = Char.chr (abs n mod 256) in
   let actions =
@@ -208,8 +189,6 @@ let test_total s t n =
       ([], [ t ^ ".gif" ], List.map (fun a -> K7.hidden [ a ]) actions);
     ]
 
-(* [of_string] reads back what [to_string] prints, and a tape it reads
-   prints as a tape it reads the same. *)
 let check_reads t =
   let printed = K7.to_string t in
   match K7.of_string printed with
@@ -242,8 +221,6 @@ let test_of_string s t n =
       | Error _ -> ())
     [ (settings, actions); ([], actions); (settings, [ K7.type' s ]) ]
 
-(* A sleep accepts [0] to [max_ms], a wait timeout [1] to [max_ms], and both
-   print the value. *)
 let test_durations n =
   let in_range lo = n >= lo && n <= max_ms in
   (match lines [ K7.sleep (Ms n) ] with
@@ -255,9 +232,6 @@ let test_durations n =
   | Some _ -> fail "wait printed several lines"
   | None -> check (not (in_range 1))
 
-(* An accepted pattern is one VHS regexp token: no slash between the
-   delimiters, no line break, no odd run of backslashes before the closing
-   slash; and the token's own text is an accepted pattern. *)
 let test_screen re =
   match lines [ K7.wait (Screen re) ] with
   | None -> ()
@@ -279,8 +253,6 @@ let test_screen re =
         failf "%S written as the invalid %S" re body
   | Some _ -> fail "wait printed several lines"
 
-(* A raw line is printed as is; a [Set] other than [TypingSpeed] or a
-   [Require] is refused after the first other action. *)
 let test_raw line =
   (match lines [ K7.raw line ] with
   | Some [ l ] -> check (l = line)
@@ -303,8 +275,6 @@ let test_raw line =
   if late && accepted [ K7.key Enter; K7.raw line ] then
     failf "accepted %S after an action" line
 
-(* [hidden] prints one [Hide] ... [Show] pair around the actions it hides,
-   however deep the nesting, and nothing for no action. *)
 let test_hidden texts depth =
   let actions = List.map K7.type' texts in
   let rec nest d a = if d <= 0 then a else nest (d - 1) [ K7.hidden a ] in
@@ -315,13 +285,10 @@ let test_hidden texts depth =
   | None, None -> ()
   | _ -> fail "hidden changed acceptance"
 
-(* Integer settings are accepted in their documented ranges, the frame size
-   being at least twice the padding, defaults included. *)
 let test_sizes w h p =
   (* [2 * p] overflows for large [p]; compare in a wider type. *)
   let fits size = Int64.(compare (of_int size) (mul 2L (of_int p))) >= 0 in
-  (* The GIF output's encoder takes at most 65535 pixels a side, and ffmpeg
-     a frame below (8 w + 1024) (h + 128) = 2{^31}. *)
+  (* GIF takes 65535 pixels a side; ffmpeg (8 w + 1024) (h + 128) < 2{^31}. *)
   let encodes =
     w <= 65535 && h <= 65535
     && Int64.(
@@ -342,9 +309,6 @@ let test_sizes w h p =
            ])
   | None -> check (not ok)
 
-(* An output is accepted iff it ends with a slash or one of the documented
-   extensions in its last segment, does not start with a dash, and holds no
-   control character nor all three quotes. *)
 let test_output path suffix =
   let path = path ^ suffix in
   let ext =
@@ -363,9 +327,6 @@ let test_output path suffix =
   in
   check (Result.is_ok (tape ~outputs:[ path ] []) = ok)
 
-(* [pp_error] never raises nor prints a control character but newlines;
-   [Io] prints a printable message without its format characters, and [Failed] at most ten lines of
-   output under one header line. *)
 let test_pp_error s n =
   let pp e = Fmt.str "%a" K7.pp_error e in
   List.iter
@@ -384,7 +345,6 @@ let test_pp_error s n =
       check (List.length lines <= 11))
     [ `Exited n; `Signaled n ]
 
-(* The unified API's native errors have the same printable, one-line form. *)
 let test_unified_errors message last =
   List.iter
     (fun error ->
@@ -399,8 +359,6 @@ let test_unified_errors message last =
         Exited { status = `Exited 1; wait = message; line = 1; last };
       ]
 
-(* [Ctrl c] is accepted iff [c] is an ASCII letter or one of [@[\\]^-.];
-   [Alt c] iff [c] is a letter other than [m] and [s], [.] or a bracket. *)
 let test_keys c =
   let letter = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') in
   let ctrl = letter || String.contains {|@[\]^-.|} c in
@@ -412,8 +370,6 @@ let test_keys c =
   | Some _ -> fail "Alt printed several lines"
   | None -> ()
 
-(* Scalar settings are accepted in their documented ranges, and a font list
-   iff it holds no single quote, backslash or control character. *)
 let test_settings n font =
   check (accepted ~settings:[ Font_size n ] [] = (n > 0));
   check (accepted ~settings:[ Framerate n ] [] = (n > 0));
@@ -428,8 +384,6 @@ let test_settings n font =
   in
   check (accepted ~settings:[ Font_family font ] [] = ok)
 
-(* [to_string] prints the outputs, then the settings, then the actions; [pp]
-   prints the same text. *)
 let test_order path text =
   match
     K7.tape ~settings:[ Width 1000 ]
@@ -447,8 +401,7 @@ let test_order path text =
           check (String.equal set "Set Width 1000")
       | _ -> fail "missing lines")
 
-(* The vhs executable of the properties that run it, from [VHS_ORACLE]:
-   the oracle alias sets it, runtest does not. *)
+(* Set by the oracle alias only. *)
 let oracle = Sys.getenv_opt "VHS_ORACLE"
 
 let vhs_validates t =
@@ -463,7 +416,6 @@ let vhs_validates t =
            ~stdout:"/dev/null" ~stderr:"/dev/null")
       = 0)
 
-(* Check against the real parser, rather than a second tape lexer. *)
 let test_validates text n =
   let open K7 in
   let candidates =
@@ -488,8 +440,6 @@ let test_validates text n =
             failf "accepted tape rejected by VHS: %s" (K7.to_string t))
     candidates
 
-(* Raw lines from VHS's own vocabulary reach the parser far more often than
-   arbitrary bytes do. *)
 let fragments =
   [ "Type"; "Sleep"; "Wait"; "Wait+Line"; "Wait+Screen"; "Set"; "Output";
     "Require"; "Env"; "Screenshot"; "Copy"; "Paste"; "Ctrl"; "Alt"; "Shift";
@@ -521,8 +471,7 @@ let test_padding_bound padding =
   let expected = padding >= 0 && padding <= 300 in
   check (Result.is_ok (K7.tape ~settings ~outputs [ last ]) = expected)
 
-(* With the default frame and padding, a nonnegative margin fits iff it
-   is at most 240; no multiplication of a generated margin is needed. *)
+(* With the default frame and padding, a margin fits iff it is at most 240. *)
 let test_raw_margin_bound margin =
   let margin = margin land max_int in
   let line = Fmt.str "Set Margin %d" margin in
@@ -532,8 +481,6 @@ let test_raw_margin_bound margin =
 
 let test_no_injection text =
   let hostile = text ^ "\"'`\\\nOutput injected.gif\nHide\nSet Shell bash\n" in
-  (* Decoding must recover only typed text, tabs and Enter, never a new
-     setting, output, visibility change or executable tape command. *)
   test_type hostile
 
 let test_error_item n =
@@ -577,7 +524,6 @@ let save env path contents =
 
 let render_tape () = Result.get_ok (K7.tape ~outputs:[ "demo.gif" ] [ last ])
 
-(* Supply a manager environment without mutating the test runner's process. *)
 module Inherited = struct
   type tag = [ `Generic ]
 
@@ -639,11 +585,7 @@ let test_no_publication term =
   | Ok () -> ()
   | Error e -> failf "ambient environment enables upload: %a" K7.pp_error e
 
-(* All documented ambient overrides are removed, while an unrelated
-   application variable survives byte for byte. The stand-in reads its
-   environment with [env], not its shell's variables: dash, Linux's
-   [/bin/sh], sets [PS1] in every shell, where bash sets it only in an
-   interactive one. *)
+(* The stand-in reads [env]: dash, Linux's /bin/sh, sets [PS1] in any shell. *)
 let test_environment_isolation n =
   with_dir @@ fun env path ->
   let executable = path "recorder" in
@@ -726,8 +668,6 @@ let test_cancel_reaps delay =
   in
   if alive then failf "cancelled render left process %d alive" pid
 
-(* A tape whose shell writes its pid and that of a nested shell, which
-   loops, then waits for what never shows. *)
 let nested_shells =
   lazy
     (Result.get_ok
@@ -740,7 +680,6 @@ let nested_shells =
               wait ~timeout:(Ms 10000) (Line "NEVER_READY");
             ]))
 
-(* Fails if the shells of [nested_shells] are alive, after killing them. *)
 let check_reaped cwd =
   let pids =
     List.map
@@ -761,7 +700,6 @@ let check_reaped cwd =
   if left <> [] then
     failf "recording left shells alive: %a" Fmt.(Dump.list int) left
 
-(* Losing a recording's switch also stops a command's nested shell. *)
 let test_record_reaps delay callback_raises =
   with_dir @@ fun env path ->
   let clock = Eio.Stdenv.clock env in
@@ -855,8 +793,7 @@ let contains ~sub s =
   in
   go 0
 
-(* The exit status of k7 cram on [args] and what it printed. cmdliner
-   styles its messages unless [TERM] is [dumb]. *)
+(* cmdliner styles its messages unless [TERM] is [dumb]. *)
 let run_cli env args =
   let cli = Option.value ~default:"k7" (Sys.getenv_opt "K7_TEST_EXE") in
   let output = Buffer.create 256 in
@@ -874,7 +811,6 @@ let run_cli env args =
   in
   (status, Buffer.contents output)
 
-(* [output] says why k7 cram refused [--wait-timeout=seconds]. *)
 let check_refused seconds output =
   check (List.mem (string_of_int seconds) (String.split_on_char '"' output));
   (* cmdliner wraps the message. *)
@@ -896,7 +832,6 @@ let check_refused seconds output =
        (String.starts_with ~prefix:"k7: option '--wait-timeout':")
        (String.split_on_char '\n' output))
 
-(* Command-line seconds must fit Go's duration and be strictly positive. *)
 let test_cli_wait_timeout seconds =
   with_dir @@ fun env path ->
   save env (path "input.t") "  $ true\n";
@@ -968,22 +903,18 @@ let check_output_order decoy =
     in
     scan 0
   in
-  (* The command line holds [FIRST_DONE] too; its output follows [decoy]. *)
   match (position (decoy ^ "FIRST_DONE"), position "echo SECOND_DONE") with
   | Some first, Some second when first < second -> ()
   | _ -> failf "next command was typed before the first output for %S" src
 
 let test_output_order n = Fmt.kstr check_output_order "progress-%d>" (n land 255)
 
-(* U+200B is ordinary Unicode output, even though the recorder uses it as
-   the suffix of its private prompt. *)
 let test_invisible_output_order n =
   let decoy = Buffer.create 32 in
   Fmt.kstr (Buffer.add_string decoy) "progress-%d>" (n land 255);
   Buffer.add_utf_8_uchar decoy (Uchar.of_int 0x200b);
   check_output_order (Buffer.contents decoy)
 
-(* A setup's prompt hook must not undo the recorder's readiness prompt. *)
 let test_setup_prompt_hook n =
   with_dir @@ fun env path ->
   let script = path "setup.sh" in
@@ -996,8 +927,6 @@ let test_setup_prompt_hook n =
   if not (String.split_on_char '\n' screen |> List.mem "READY") then
     fail "setup prevented the command from running"
 
-(* A JSON theme is accepted or refused, never an exception, and a tape that
-   accepts it plays it or names why not. *)
 let test_json_theme s =
   let theme = K7.Theme ("{" ^ s) in
   match K7.tape ~settings:[ theme ] ~outputs:[ "a.gif" ] [ K7.type' "x" ] with
@@ -1007,8 +936,7 @@ let test_json_theme s =
       | Ok _ | Error (Unsupported _) -> ()
       | Error e -> failf "%a" K7.pp_error e)
 
-(* Unknown JSON values are skipped by Go, but still count towards the
-   maximum nesting depth of 10,000, including the theme's root object. *)
+(* Go skips unknown values but counts them in its 10,000-level limit. *)
 let test_json_depth n =
   let depth = 9_997 + (n mod 7) in
   let theme =
@@ -1025,8 +953,6 @@ let test_json_depth n =
     failf "JSON array depth %d: Go accepts=%b, tape accepts=%b" depth expected
       accepted
 
-(* Check the shell's actual input bytes, independently of the tape parser
-   and the emulator's rendering of combining marks and joined emoji. *)
 let test_native_literal n =
   with_dir @@ fun env path ->
   let scripts =
@@ -1071,8 +997,7 @@ let test_native_literal n =
   | Error e -> failf "%a" K7.pp_error e);
   check_eq ~pp:pp_string payload (Eio.Path.load Eio.Path.(cwd / "received"))
 
-(* Zero typing delay cannot make Wait match the prompt that preceded the
-   submitted command. A leading sleep ensures at least one real frame. *)
+(* The leading sleep gives at least one frame. *)
 let test_zero_speed_prompt n =
   with_dir @@ fun env path ->
   let marker = Fmt.str "READY_%d" n in
@@ -1102,8 +1027,6 @@ let test_zero_speed_prompt n =
   if not (contains ~sub:("\n" ^ marker ^ "\n>") output) then
     failf "prompt wait returned without the output of echo %s" marker
 
-(* Mixed outputs must be refused before spawning either engine or opening
-   an earlier text output, including one whose parent directory is absent. *)
 let test_output_preflight n =
   with_dir @@ fun env path ->
   let text = if n mod 2 = 0 then path "keep.txt" else path "absent/keep.txt" in
@@ -1179,8 +1102,6 @@ let check_native_path env cwd marker (output, actual, rate) =
        ~sub:("\n" ^ marker ^ "\n")
        (Eio.Path.load Eio.Path.(Eio.Stdenv.fs env / actual)))
 
-(* A native recording writes the exact requested path even from a scoped
-   cwd, with quoted Unicode names, at every positive frame-rate boundary. *)
 let test_native_paths n =
   with_dir @@ fun env path ->
   let sub = path "cwd" in
@@ -1209,7 +1130,6 @@ let test_native_paths n =
       ("nested/" ^ name, nested_output, 50);
     ]
 
-(* Properties that run [vhs] itself, so need [oracle]. *)
 let with_vhs =
   [
     test_case "invisible output precedes next input" [ int8 ]
@@ -1223,9 +1143,7 @@ let with_vhs =
       test_raw_validates;
   ]
 
-(* Properties that run stand-ins for vhs and k7. *)
-(* What a program prints shows as [svg] draws the same bytes, which the
-   terminal's line discipline gives a carriage return before each newline. *)
+(* The line discipline adds a carriage return before each newline. *)
 let test_run_screen bytes =
   with_dir @@ fun env path ->
   let text =
@@ -1297,7 +1215,6 @@ let with_processes =
       test_no_publication;
   ]
 
-(* Properties of the frame and of the values [tape] accepts. *)
 let bounds =
   [
     test_case "raw margin fits the frame"
@@ -1315,8 +1232,6 @@ let bounds =
       test_type;
   ]
 
-(* Properties of the tapes [tape] makes. *)
-(* The library's UTF-8 readers against the stdlib's decoding. *)
 let decoding =
   [
     test_case "control characters as the stdlib decodes them"

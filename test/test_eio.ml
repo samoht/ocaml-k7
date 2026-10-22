@@ -12,7 +12,7 @@ let tape actions =
 
 let str t = Fmt.str "%a" K7.pp t
 
-(* An in-memory pipe: Eio_mock has none. The empty string marks the end. *)
+(* Eio_mock has no pipe. [""] ends the stream. *)
 module Pipe = struct
   module Source = struct
     type t = { chunks : string Eio.Stream.t; mutable pending : string }
@@ -63,8 +63,7 @@ module Pipe = struct
     (source, sink)
 end
 
-(* A child process whose body runs in a fiber of the test's switch, so that it
-   outlives a cancelled [render]. *)
+(* In the test's switch, so that it outlives a cancelled [render]. *)
 module Child = struct
   type t = {
     status : Eio.Process.exit_status Eio.Promise.t;
@@ -140,15 +139,10 @@ let manager ?(inherited = [||])
     ( Manager.{ sw; start; inherited; inspect_env },
       Eio.Process.Pi.mgr (module Manager) )
 
-(* render only forwards this capability; no directory operations are needed. *)
 let cwd = (Eio.Resource.T ((), Eio.Resource.handler []), "mock-cwd")
 let read_all flow = Eio.Buf_read.(take_all (of_flow flow ~max_size:1_000_000))
-
-(* A clock nothing advances, for a render that is not cancelled. *)
 let clock () = Eio_mock.Clock.Mono.make ()
 
-(* [run ~status writes t] renders [t] with a child that checks its arguments
-   and its standard input, writes [writes] and exits with [status]. *)
 let run ?vhs ?(status = `Exited 3) writes t =
   Eio_mock.Backend.run @@ fun () ->
   Eio.Switch.run @@ fun sw ->
@@ -193,7 +187,6 @@ let test_split_utf8 () =
        [ "cost " ^ String.sub euro 0 1; String.sub euro 1 2 ^ "\n" ]
        (tape []))
 
-(* A chatty vhs cannot grow the kept output without bound. *)
 let test_long_output () =
   let line i = Fmt.str "line %07d\n" i in
   let writes = List.init 100_000 line in
@@ -242,8 +235,6 @@ let test_pp_error () =
     (Fmt.str "%a" K7.pp_error
        (Failed { vhs = "vhs"; status = `Exited 1; output = output ^ "\n\n" }))
 
-(* No escape sequence or control character of what vhs prints reaches the
-   report: a terminal would run them. *)
 let test_pp_error_controls () =
   let output =
     "\027]8;;https://x\027\\link\027]8;;\027\\ end\n\
@@ -267,8 +258,6 @@ let test_pp_error_controls () =
     (Fmt.str "%a" K7.pp_error
        (Failed { vhs = "vhs"; status = `Exited 1; output }))
 
-(* The executable and the message come from paths, which can hold
-   anything. *)
 let test_pp_error_names () =
   let pp e = Fmt.str "%a" K7.pp_error e in
   expect "executable" "executable not found: ab"
@@ -314,8 +303,6 @@ let test_spawn_errors () =
       (Executable_format_error "vhs", "vhs: not an executable");
     ]
 
-(* [render] refuses an [.svg] output, which [record] writes, before it runs
-   anything. *)
 let test_svg_refused () =
   Eio_mock.Backend.run @@ fun () ->
   Eio.Switch.run @@ fun sw ->
@@ -351,8 +338,6 @@ let test_svg_refused () =
   | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok () -> Alcotest.fail "an SVG screenshot rendered"
 
-(* Cancelling render sends vhs SIGTERM, which it cleans up after, and waits
-   for it to exit. *)
 let test_cancel () =
   Eio_mock.Backend.run @@ fun () ->
   Eio.Switch.run @@ fun sw ->
@@ -381,7 +366,6 @@ let test_cancel () =
   | `Rendered _ -> Alcotest.fail "render finished");
   Alcotest.(check bool) "child exited before render returned" true !exited
 
-(* A vhs that ignores SIGTERM gets SIGKILL ten seconds later. *)
 let test_cancel_kill () =
   Eio_mock.Backend.run_full @@ fun env ->
   Eio.Switch.run @@ fun sw ->

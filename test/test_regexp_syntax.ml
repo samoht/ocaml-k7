@@ -3,8 +3,6 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(* The checker and writer are internal: test them through [K7.wait]. *)
-
 let line re =
   match K7.tape ~outputs:[ "x.gif" ] [ K7.wait (Screen re) ] with
   | Error e -> Error (Native_test.invalid e)
@@ -24,12 +22,10 @@ let valid name ok re =
 
 let test_slashes () =
   written "slashes" {|/a\x2fb\x2fc\\\x2f[\x2f]/|} {|a/b\/c\\/[/]|};
-  (* Inside \Q...\E a hex escape is literal text, so the quote is ended
-     around the slash. *)
+  (* Inside \Q...\E a hex escape is literal, so the quote ends around the
+     slash. *)
   written "quoted slash" {|/\Q\E\x2f\Q\E/|} {|\Q/\E|};
   written "quoted backslash" {|/\Qa\\E\x2f\Qb\E/|} {|\Qa\/b\E|};
-  (* An unterminated quote is closed so the token cannot end in an escaped
-     slash. *)
   written "unterminated quote" {|/\Qa\\E/|} {|\Qa\|}
 
 let test_syntax () =
@@ -61,8 +57,7 @@ let test_syntax () =
       (false, "\xff");
     ]
 
-(* Classes that open with [[:] but close no name: the check reads the
-   pattern in linear time, so this takes milliseconds, not minutes. *)
+(* The check is linear: milliseconds, not minutes. *)
 let test_linear () =
   let n = 200_000 in
   let re = "[" ^ String.concat "" (List.init n (fun _ -> "[:")) ^ "a]" in
@@ -70,8 +65,7 @@ let test_linear () =
   let re = String.concat "" (List.init n (fun _ -> "[[:a]")) in
   valid "many classes" true re
 
-(* Cases from Go's regexp.Compile, the check VHS runs, written by
-   regexp_oracle.go. *)
+(* Go's regexp.Compile, which VHS runs, written by regexp_oracle.go. *)
 let test_oracle () =
   let cases =
     In_channel.with_open_bin "regexp_cases.txt" In_channel.input_all

@@ -1,9 +1,8 @@
 // Copyright (c) 2026 Thomas Gazagnaire. All rights reserved.
 // SPDX-License-Identifier: ISC
 
-// regexp_oracle writes regexp_cases.txt: random patterns built from RE2
-// fragments, each with 1 if Go's regexp.Compile (what VHS runs on a wait
-// pattern) accepts it and 0 otherwise. Regenerate with
+// regexp_oracle writes regexp_cases.txt: random patterns, each with whether
+// Go's regexp.Compile accepts it. Regenerate with
 //
 //	go run regexp_oracle.go 3000 > regexp_cases.txt
 package main

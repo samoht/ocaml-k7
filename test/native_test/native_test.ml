@@ -3,7 +3,6 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(* A 46 x 9 terminal of 14 x 29 pixel cells. *)
 let settings = K7.[ Width 800; Height 400; Font_size 22 ]
 let cell_width = 14
 let cell_height = 29
@@ -74,8 +73,7 @@ let invalid = function
   | K7.Invalid msg -> msg
   | e -> Alcotest.failf "not Invalid: %a" K7.pp_error e
 
-(* The vhs executable of the tests that run it, from [VHS_ORACLE]: the
-   oracle alias sets it, runtest does not. *)
+(* Set by the oracle alias only. *)
 let oracle = Sys.getenv_opt "VHS_ORACLE"
 let separator = String.concat "" (List.init 80 (fun _ -> "\xe2\x94\x80"))
 

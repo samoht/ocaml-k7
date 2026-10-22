@@ -5,13 +5,11 @@
 
 open Native_test
 
-(* A wide glyph takes two cells, and the next glyph is placed after both. *)
 let test_wide () =
   let s = svg [ (Ms 0, "\xe4\xb8\xadab") ] in
   check_contains "positions" ~sub:{|<tspan x="0 28 42">中ab</tspan>|} s;
   Alcotest.(check (list string)) "text" [ screen [ "中ab" ] ] (frames s)
 
-(* SGR 39 resets the foreground to the theme's, not to its background. *)
 let test_default_fg () =
   let s = svg [ (Ms 0, "\027[31ma\027[39mb") ] in
   check_contains "default" ~sub:">b</tspan>" s;
@@ -23,8 +21,6 @@ let test_cursor () =
   let s = svg [ (Ms 0, "ab") ] in
   check_contains "cursor" ~sub:{|<use href="#c" class="k" x="28" y="0"/>|} s;
   check_contains "blink" ~sub:".k{animation:b" s;
-  (* The blink is decoration, which a reader can ask to stop; the frames
-     are the recording and play on. *)
   check_contains "reduced motion"
     ~sub:"@media (prefers-reduced-motion:reduce){.k{animation:none}}" s;
   let hidden = svg [ (Ms 0, "ab\027[?25l") ] in
@@ -32,15 +28,12 @@ let test_cursor () =
     "hidden cursor" false
     (contains ~sub:{|href="#c"|} hidden)
 
-(* A block cursor must not reveal an SGR-concealed glyph. *)
 let test_concealed_cursor () =
   let s = svg [ (Ms 0, "\027[8msecret\r") ] in
   Alcotest.(check bool)
     "concealed glyph is not redrawn over the cursor" false
     (contains ~sub:{|<text class="ka k"|} s)
 
-(* A backspace moves the cursor without erasing, also when a terminal title
-   holds one. *)
 let test_backspace () =
   Alcotest.(check (list string))
     "moved"
@@ -51,8 +44,6 @@ let test_backspace () =
     [ screen [ "ab" ] ]
     (frames (svg [ (Ms 0, "a\027]0;t\bitle\007b") ]))
 
-(* A zero-width character joins the cell before it, as in xterm.js, also
-   when it arrives on its own, after a wide glyph or in the last column. *)
 let test_zero_width () =
   let check name expected output =
     Alcotest.(check string) name expected (last (frames (svg output)))
@@ -64,7 +55,6 @@ let test_zero_width () =
   check "wide"
     (screen [ "\xe4\xb8\xad\xcc\x81a" ])
     [ (Ms 0, "\xe4\xb8\xad\xcc\x81a") ];
-  (* The image leaves the format character out. *)
   check "zero-width space" (screen [ "> x" ]) [ (Ms 0, "> \xe2\x80\x8bx") ];
   check "last column"
     (screen [ String.make 45 'a' ^ "b\xcc\x81" ])
@@ -76,7 +66,6 @@ let test_zero_width () =
   check_contains "cursor after the sequence"
     ~sub:{|<use href="#c" class="k" x="70" y="0"/>|} s
 
-(* CSI 3 J erases the scrollback, not the screen. *)
 let test_erase_scrollback () =
   Alcotest.(check string)
     "kept" (screen [ "ab" ])
@@ -90,10 +79,6 @@ let check_screens cases =
         (last (frames (svg [ (Ms 0, output) ]))))
     cases
 
-(* After a character in the last column, the cursor waits there for the
-   next one to wrap it, as in xterm: a control moves it from the last
-   column, a move beyond it stops there, and an erasure clears that column
-   and ends the wait. *)
 let test_pending_wrap () =
   let full = String.make 46 'a' in
   check_screens
@@ -109,10 +94,6 @@ let test_pending_wrap () =
       ("character", full ^ "\027[31mX", [ full; "X" ]);
     ]
 
-(* A line feed, a vertical tab and a form feed move down a row and keep the
-   column, as an index does; a next line also returns; a reverse index moves
-   up a row, and scrolls the scroll region down at its top; and CSI S and T
-   scroll it, as in xterm. *)
 let test_line_feeds () =
   let full = String.make 46 'a' in
   check_screens
@@ -132,10 +113,6 @@ let test_line_feeds () =
       ("scroll down", "a\r\nb\r\nc\027[T", [ ""; "a"; "b"; "c" ]);
     ]
 
-(* xterm's controls: the relative and absolute moves, erasing and repeating
-   characters, no auto-wrap, origin mode, line edits in the scroll region
-   and from its first column, wrapping at the region's last row, and DEC
-   line drawing. *)
 let test_controls () =
   let full = String.make 46 'a' in
   check_screens
@@ -165,8 +142,6 @@ let test_controls () =
       ("shift out", "\027)0\014q\015q", [ "\xe2\x94\x80q" ]);
     ]
 
-(* A line feed at the bottom of the screen and CSI S keep the lines they
-   scroll out in the scrollback, as in xterm; deleted lines drop theirs. *)
 let test_history () =
   let history s =
     let t = Screen.terminal ~rows:2 ~cols:5 in
@@ -180,16 +155,11 @@ let test_history () =
     "after a clear, a wrap" 2
     (history "a\r\nb\r\nc\027[3J\r\n0123456789")
 
-(* DECSC saves the active character set as well as the cursor position.
-   Real VHS writes U+2500 for this stream. *)
+(* Real VHS writes U+2500 for this stream. *)
 let test_saved_charset () =
   check_screens
     [ ("restored line drawing", "\027(0\0277\027(B\0278q", [ "\xe2\x94\x80" ]) ]
 
-(* The terminal reads the national character sets, designates G0 to G3 and
-   shifts to G2 and G3: the UK set maps [#] to [£] and a designation that is
-   not DEC line drawing ends it, and the Dutch [\[] is U+0133, as in xterm.
-   ESC % G selects UTF-8 and leaves the designations alone. *)
 let test_charsets () =
   check_screens
     [
@@ -199,7 +169,6 @@ let test_charsets () =
       ("UTF-8", "\027(0\027%Gq", [ "\xe2\x94\x80" ]);
     ]
 
-(* The colour of the first cell of the screen after [s]. *)
 let first_fg s =
   let t = Screen.terminal ~rows:2 ~cols:5 in
   Screen.feed t s;
@@ -213,11 +182,6 @@ let colour =
       | Rgb c -> Fmt.pf ppf "#%06x" c)
     ( = )
 
-(* As in xterm, a restore brings back the colours, the character set
-   designations and the shift the save saw, and the row the save was on;
-   it leaves the cursor's visibility alone, and without a save, it homes
-   the cursor. Leaving the alternate screen of mode 1049 restores the save
-   that entering it made. *)
 let test_restore () =
   check_screens
     [
@@ -241,10 +205,6 @@ let test_restore () =
     "hidden cursor" false
     (contains ~sub:{|href="#c"|} (svg [ (Ms 0, "\0277\027[?25l\0278") ]))
 
-(* The two screens share the scroll region, as in xterm, and leaving the
-   alternate one keeps the cursor's visibility. A CSI sequence with a
-   private prefix, such as a query of the kitty keyboard, restores
-   nothing. *)
 let test_screens () =
   check_screens
     [
@@ -260,8 +220,7 @@ let test_screens () =
     (contains ~sub:{|href="#c"|}
        (svg [ (Ms 0, "\027[?1049h\027[?25l\027[?1049l") ]))
 
-(* TBC removes all tab stops; the next tab reaches the right margin.
-   VHS keeps X at column 9 and puts Y in column 46. *)
+(* VHS keeps X at column 9 and puts Y in column 46. *)
 let test_clear_tabs () =
   check_screens
     [
@@ -270,9 +229,6 @@ let test_clear_tabs () =
         [ "a" ^ String.make 7 ' ' ^ "X" ^ String.make 36 ' ' ^ "Y" ] );
     ]
 
-(* HTS sets a tab stop and TBC 0 clears one; CHT and CBT move over several
-   stops; a tab after a character in the last column leaves the next one to
-   wrap; and the two screens share the stops, as in xterm. *)
 let test_tab_stops () =
   let full = String.make 46 'a' in
   check_screens
@@ -289,17 +245,12 @@ let test_tab_stops () =
         [ String.make 45 ' ' ^ "X" ] );
     ]
 
-(* DCH deletes one cell, even when it cuts a wide glyph in half. The
-   remaining half becomes a blank; VHS leaves the following text at column 2. *)
+(* VHS leaves the following text at column 2. *)
 let test_delete_wide () =
   check_screens
     [ ("delete half of a wide glyph", "\xe4\xb8\xadab\r\027[P", [ " ab" ]) ]
 
-(* As in xterm.js, an edit of characters splits a wide glyph it cuts into
-   blank cells and keeps the other columns: DCH and ICH from its second
-   cell, ECH from it or up to its first, and DCH up to its first. The column
-   edits, SL, SR, DECIC and DECDC, edit each row of the scroll region. Real
-   VHS writes these screens. *)
+(* As in xterm.js; real VHS writes these screens. *)
 let test_cell_edits () =
   let wide = "\xe4\xb8\xad" in
   check_screens
@@ -318,20 +269,12 @@ let test_cell_edits () =
       ("delete column", "abc\r\ndef\027[2G\027['~", [ "ac"; "df" ]);
     ]
 
-(* The attributes of the first cell of the screen after [s]. *)
 let first_attrs s =
   let t = Screen.terminal ~rows:2 ~cols:5 in
   Screen.feed t s;
   (Screen.cells (Screen.rows (Screen.of_terminal t)).(0)).(0).attrs
 
-(* xterm.js ignores the escape sequences it has no handler for, such as the
-   keypad modes, S7C1T, a CSI sequence with a private prefix that only
-   looks like SGR, and the strings of DCS, PM and APC, which end at ST or
-   at the next escape and not at BEL. A C0 control inside a sequence runs
-   and the sequence goes on; CAN ends it. DECSTR resets the modes, the
-   scroll region and the character sets, ESC # 8 fills the screen with E,
-   and CSI ? 3 J erases the scrollback, not the screen. Real VHS writes
-   these screens. *)
+(* As in xterm.js; real VHS writes these screens. *)
 let test_sequences () =
   let e = String.make 46 'E' in
   check_screens
@@ -351,10 +294,6 @@ let test_sequences () =
     "modifyOtherKeys" true
     (Ansi.Attr.is_empty (first_attrs "\027[>4;2mx"))
 
-(* The terminal answers the queries xterm answers, once each: the primary
-   and secondary device attributes, the status report and the cursor
-   position, which stays in the last column after a character there, and
-   whose DECXCPR form has the page. *)
 let test_replies () =
   let replies s =
     let t = Screen.terminal ~rows:9 ~cols:46 in
@@ -379,8 +318,6 @@ let test_replies () =
       ("\027[=c\027[?5n", "");
     ]
 
-(* U+06DD has the Unicode Prepend grapheme property. PTY reads can split
-   its UTF-8 bytes from the following character without changing the image. *)
 let test_prepend_chunk_boundaries () =
   let whole = last (frames (svg [ (Ms 0, "\xdb\x9dq") ])) in
   let split = last (frames (svg [ (Ms 0, "\xdb"); (Ms 20, "\x9dq") ])) in
@@ -399,8 +336,7 @@ let test_prepend_no_wrap_boundaries () =
   Alcotest.(check string)
     "same text with automatic wrapping disabled" whole split
 
-(* U+2764 is narrow in xterm's Unicode 11 width table. A plain text heart
-   in the last column fits before the following character wraps. *)
+(* U+2764 is narrow in xterm's Unicode 11 width table. *)
 let test_text_emoji_width () =
   let b = Buffer.create 4 in
   Buffer.add_utf_8_uchar b (Uchar.of_int 0x2764);

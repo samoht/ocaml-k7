@@ -3,8 +3,6 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(* The table is internal; the matcher reaches it through (?i). *)
-
 let mem c ranges = List.exists (fun (lo, hi) -> lo <= c && c <= hi) ranges
 
 let check name c ~folds ~not_folds =
@@ -16,9 +14,6 @@ let check name c ~folds ~not_folds =
     (fun f -> if mem f r then Alcotest.failf "%s: %x has %x" name c f)
     not_folds
 
-(* Each orbit of Go's SimpleFold, whatever its member: the Kelvin sign and
-   the long s fold with the ASCII letters, the three sigmas together, and
-   the titlecase digraph with both of its cases. *)
 let test_orbits () =
   check "k" 0x6b ~folds:[ 0x4b; 0x212a ] ~not_folds:[ 0x6c ];
   check "Kelvin" 0x212a ~folds:[ 0x4b; 0x6b ] ~not_folds:[];
@@ -28,7 +23,6 @@ let test_orbits () =
   check "e acute" 0xe9 ~folds:[ 0xc9 ] ~not_folds:[ 0x65 ];
   check "no case" 0x4e2d ~folds:[] ~not_folds:[ 0x4e2c; 0x4e2e ]
 
-(* A range folds each of its code points, its ends included. *)
 let test_ranges () =
   let r = Casefold.fold [ (0x61, 0x63); (0x3b1, 0x3b1) ] in
   List.iter

@@ -34,7 +34,6 @@ Wait+Line /\x{200B}\x{2060}\x{2060}\x{200B}\x{200B}\x{2060}\x{200B}\x{200B}\x{20
 Sleep 1000ms
 |}
     (Result.get_ok (tape "  $ true\n"));
-  (* A wait times out after 15 seconds unless the command line says. *)
   Alcotest.(check bool)
     "wait timeout" true
     (contains ~sub:"\nSet WaitTimeout 60s\n"
@@ -53,8 +52,6 @@ Sleep 1000ms
   error "upper case"
     {|Output "demo.SVG": not .gif, .mp4, .webm, .txt, .ascii, .test, .png or .svg; extensions are lower case|}
     "  $ true\n" ~setup:[] ~output:"demo.SVG";
-  (* Typed into bash, a tab completes and a newline continues the line, so
-     neither reaches [source] as part of the path. *)
   List.iter
     (fun path ->
       match tape ~setup:[ path ] "  $ true\n" with
@@ -65,8 +62,6 @@ Sleep 1000ms
       | Ok s -> Alcotest.failf "accepted %S" s)
     [ "bad\000setup"; "a\tb.sh"; "a\nb.sh"; "a\xc2\x85b.sh"; "\xff.sh" ]
 
-(* Real processes: [run] owns the whole Eio environment. A shell script
-   stands in for vhs. *)
 let with_files files fn =
   Eio_main.run @@ fun env ->
   let dir = Filename.temp_dir "k7-cli" "" in
@@ -109,8 +104,6 @@ let test_run () =
     "missing input" 123
     (run env ~vhs:(path "ok") (path "missing.t"))
 
-(* [redirect fd target fn] runs [fn] with [fd] replaced by [target], or
-   closed if [target] is [None]. *)
 let redirect fd target fn =
   let saved = Unix.dup fd in
   (match target with Some t -> Unix.dup2 t fd | None -> Unix.close fd);
@@ -120,8 +113,6 @@ let redirect fd target fn =
       Unix.close saved)
     fn
 
-(* [captured path fn] is [fn ()] and what it wrote on standard error, which
-   goes to the file [path "err"]. *)
 let captured path fn =
   let err = Unix.openfile (path "err") [ O_WRONLY; O_TRUNC; O_CREAT ] 0o644 in
   let r =
@@ -130,9 +121,6 @@ let captured path fn =
   in
   (r, In_channel.with_open_bin (path "err") In_channel.input_all)
 
-(* Where [run] writes cannot fail with an exception: a reader that stops
-   reading the tape is not an error, and another write error is reported in
-   one line. *)
 let test_write_errors () =
   with_files [ ("demo.t", 0o644, "  $ echo hi\n"); ("err", 0o644, "") ]
   @@ fun env path ->
@@ -146,8 +134,7 @@ let test_write_errors () =
   let result = cli ~stdout:(Some w) () in
   Unix.close w;
   Alcotest.(check (pair int string)) "closed pipe" (0, "") result;
-  (* The reason is the system's: "Bad file descriptor" on macOS, "Invalid
-     argument" on Linux. *)
+  (* macOS says "Bad file descriptor", Linux "Invalid argument". *)
   let code, msg = cli ~stdout:None () in
   Alcotest.(check int) "closed standard output" 123 code;
   Native_test.check_contains "names standard output"
@@ -157,7 +144,6 @@ let test_write_errors () =
     ( redirect Unix.stderr None @@ fun () ->
       run env ~print:true ~vhs:"vhs" (path "missing.t") )
 
-(* A failure that is not about a command names the cram test. *)
 let test_error_names_input () =
   with_files [ ("demo.t", 0o644, "  $ echo hi\n"); ("err", 0o644, "") ]
   @@ fun env path ->
@@ -203,7 +189,6 @@ let test_render () =
         (path "ko" ^ " exited with code 3\n  from stdout\n  from stderr")
         (Fmt.str "%a" K7.pp_error e)
   | _ -> Alcotest.fail "lost the failure");
-  (* A directory other than the test's, where the output can be written. *)
   let dir = Filename.dirname (path "pwd") in
   (match
      K7.render ~vhs:(path "pwd") ~clock:mono ~proc
@@ -213,8 +198,6 @@ let test_render () =
   | Error (Failed { output; _ }) when output = Unix.realpath dir ^ "\n" -> ()
   | Error e -> Alcotest.failf "not run in %s: %a" dir K7.pp_error e
   | Ok () -> Alcotest.fail "pwd succeeded");
-  (* A vhs that exits without reading a tape larger than a pipe buffer is
-     reported by its status, not by the broken pipe. *)
   let big =
     Result.get_ok
       (K7.tape ~outputs:[ "x.gif" ]
@@ -235,7 +218,6 @@ let test_render () =
         msg
   | Error e -> Alcotest.failf "unexpected %a" K7.pp_error e
   | Ok () -> Alcotest.fail "ran in a missing directory");
-  (* Cancelling render stops vhs with SIGTERM and waits for it. *)
   let clock = Eio.Stdenv.clock env in
   (match
      Eio.Fiber.first
@@ -253,7 +235,6 @@ let test_render () =
   Alcotest.(check bool)
     "vhs stopped before render returned" true
     (Sys.file_exists (path "slow.stopped"));
-  (* A vhs that ignores SIGTERM is killed once the grace period is over. *)
   let grace = Eio_mock.Clock.Mono.make () in
   let rec advance () =
     if
@@ -311,12 +292,9 @@ let test_command () =
       if not (contains ~sub:s man) then Alcotest.failf "manual lacks %S" s)
     [ "--print"; "123"; "PS1"; "U+200B"; "cannot be written"; "--wait-timeout" ]
 
-(* The vhs executable of the tests that run it, from [VHS_ORACLE]: the
-   oracle alias sets it, runtest does not. *)
+(* Set by the oracle alias only. *)
 let oracle = Sys.getenv_opt "VHS_ORACLE"
 
-(* [play ~native env t] records [t] natively if [native], or with the vhs
-   of [oracle]. *)
 let play ~native env t =
   let clock = Eio.Stdenv.mono_clock env and proc = Eio.Stdenv.process_mgr env in
   let cwd = Eio.Stdenv.cwd env in
@@ -363,15 +341,13 @@ let test_output_order ~native () =
     in
     scan 0
   in
-  (* The command line holds [FIRST_DONE] too; its output follows [decoy>]. *)
   match (position "decoy>FIRST_DONE", position "echo SECOND_DONE") with
   | Some first, Some second ->
       Alcotest.(check bool)
         "first output precedes typing the second command" true (first < second)
   | _ -> Alcotest.failf "recording did not show both commands: %s" screen
 
-(* VHS starts bash without history, and a typed [!] is not expanded even
-   after a setup turns history expansion back on. *)
+(* VHS starts bash without history. *)
 let test_history ~native () =
   with_files [ ("history.sh", 0o644, "set -o history -H\n") ] @@ fun env path ->
   let output = path "history.txt" in
@@ -420,8 +396,6 @@ let record_cram ~native ?(setup = []) env path src =
   | Error e -> Alcotest.failf "%a" K7.pp_error e);
   Eio.Path.load Eio.Path.(Eio.Stdenv.fs env / output)
 
-(* A setup may install bash's usual dynamic prompt hook. The recorder must
-   establish its own prompt after the hook has run, before waiting for it. *)
 let test_setup_prompt_command ~native () =
   with_files [ ("setup.sh", 0o644, "PROMPT_COMMAND='PS1=custom'\n") ]
   @@ fun env path ->
@@ -431,7 +405,6 @@ let test_setup_prompt_command ~native () =
   if not (contains ~sub:"\nREADY" screen) then
     Alcotest.failf "setup prevented the command from running: %s" screen
 
-(* The invisible prompt marker is also ordinary output from user programs. *)
 let test_invisible_output_order ~native () =
   with_files [] @@ fun env path ->
   let src =
@@ -454,8 +427,7 @@ let test_invisible_output_order ~native () =
     "command output precedes the next input even after U+200B" true
     (first < second)
 
-(* Output one column short of the width puts the prompt's [>] in the last
-   column, and its space on the next line, under the cursor. *)
+(* One column short puts the prompt's [>] in the last column. *)
 let test_wrapped_prompt ~native () =
   with_files [] @@ fun env path ->
   let screen =
@@ -465,8 +437,6 @@ let test_wrapped_prompt ~native () =
   if not (contains ~sub:"\nafter" screen) then
     Alcotest.failf "the prompt after a full line was missed: %s" screen
 
-(* An unterminated here-document leaves bash at its continuation prompt,
-   where no wait can end; the error names the command that did. *)
 let test_unfinished ~native () =
   with_files
     [
@@ -489,8 +459,6 @@ let test_unfinished ~native () =
         Alcotest.failf "error lacks %S: %s" sub msg)
     [ "command 1"; "cat <<EOF"; "waiting for more input" ]
 
-(* [run_err env path ~wait_timeout_s src] runs k7 cram natively on [src]
-   and is its exit code and what it printed on standard error. *)
 let run_err env path ?wait_timeout_s src =
   Eio.Path.save ~create:(`Or_truncate 0o644)
     Eio.Path.(Eio.Stdenv.fs env / path "demo.t")
@@ -510,7 +478,6 @@ let check_message msg ~has ~lacks =
       if contains ~sub msg then Alcotest.failf "error has %S: %s" sub msg)
     lacks
 
-(* k7 cram records the text outputs natively too, without vhs. *)
 let test_native_text () =
   with_files [ ("demo.t", 0o644, "  $ echo native-text\n") ] @@ fun env path ->
   List.iter
@@ -524,9 +491,6 @@ let test_native_text () =
         (In_channel.with_open_bin (path output) In_channel.input_all))
     [ "out.txt"; "out.ascii"; "out.test" ]
 
-(* A command that does not give the prompt back in time is named, with the
-   option that waits longer, and the wait is in words, without the prompt
-   mark. *)
 let test_timeout_message () =
   with_files [] @@ fun env path ->
   let code, msg =
@@ -537,7 +501,6 @@ let test_timeout_message () =
     ~has:[ "command 2"; "sleep 5"; "1 second"; "--wait-timeout" ]
     ~lacks:[ "x{200B}"; "x{2060}"; "Wait+Line"; "\u{200B}" ]
 
-(* A shell that exits fails the recording at once, naming the command. *)
 let test_exit_message () =
   with_files [] @@ fun env path ->
   let start = Unix.gettimeofday () in
@@ -548,8 +511,6 @@ let test_exit_message () =
     ~has:[ "the shell exited (status 3)"; "command 1"; "exit 3" ]
     ~lacks:[ "x{200B}"; "Wait+Line"; "timed out" ]
 
-(* Without a UTF-8 locale, bash's readline still takes and shows typed
-   non-ASCII text. *)
 let test_non_ascii ~native () =
   with_files [] @@ fun env path ->
   let saved = Sys.getenv_opt "LC_ALL" in
@@ -562,7 +523,6 @@ let test_non_ascii ~native () =
   if not (contains ~sub:"\ncaf\xc3\xa9\n" screen) then
     Alcotest.failf "typed text lost: %s" screen
 
-(* The tests of the readiness of the prompt, with each recorder. *)
 let readiness ~native =
   List.map
     (fun (name, fn) -> ((if native then "native " else "") ^ name, fn ~native))

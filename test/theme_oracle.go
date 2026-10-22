@@ -1,10 +1,9 @@
 // Copyright (c) 2026 Thomas Gazagnaire. All rights reserved.
 // SPDX-License-Identifier: ISC
 
-// theme_oracle writes theme_cases.txt: random JSON themes built from
-// fragments, each with 1 and the hex bytes of the background and of the red
-// colour if Go's json.Unmarshal into VHS's Theme (what VHS runs on a
-// `Set Theme {...}`) accepts it, and 0 otherwise. Regenerate with
+// theme_oracle writes theme_cases.txt: random JSON themes, each with
+// whether VHS's json.Unmarshal accepts it, and its background and red.
+// Regenerate with
 //
 //	go run theme_oracle.go 2000 > theme_cases.txt
 package main
@@ -51,7 +50,6 @@ func main() {
 	for i := 0; i < n; i++ {
 		var s string
 		if r.Intn(2) == 0 {
-			// A well-formed object, so that most cases decode.
 			s = "{"
 			k := r.Intn(4)
 			for j := 0; j < k; j++ {

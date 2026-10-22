@@ -1,10 +1,8 @@
 // Copyright (c) 2026 Thomas Gazagnaire. All rights reserved.
 // SPDX-License-Identifier: ISC
 
-// number_oracle writes number_cases.txt: random values built from number
-// fragments, each with 1 or 0 for whether Go's strconv.Atoi and then
-// strconv.ParseFloat (what VHS runs on an integer and a float setting)
-// accept it. Regenerate with
+// number_oracle writes number_cases.txt: random values, each with whether
+// Go's strconv.Atoi and strconv.ParseFloat accept it. Regenerate with
 //
 //	go run number_oracle.go 3000 > number_cases.txt
 package main

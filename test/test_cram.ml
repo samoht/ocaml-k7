@@ -7,7 +7,6 @@ open K7_cli
 
 let expect = Alcotest.(check string)
 
-(* [replace ~sub ~by s] is [s] with each [sub] replaced by [by]. *)
 let replace ~sub ~by s =
   let n = String.length sub in
   let b = Buffer.create (String.length s) in
@@ -24,8 +23,6 @@ let replace ~sub ~by s =
   go 0;
   Buffer.contents b
 
-(* [unmarked s] is [s] with each character of the prompt mark written as a
-   zero-width space, so that tapes compare whatever the mark. *)
 let unmarked s =
   s
   |> replace ~sub:{|\x{2060}|} ~by:{|\x{200B}|}
@@ -47,7 +44,6 @@ let env =
       {|'$__k7_n'\]'; }; __k7=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} __k7_prompt); unset PROMPT_COMMAND; PROMPT_COMMAND=$__k7; unset __k7 K7_PROMPT`|};
     ]
 
-(* What every recording starts with, hidden. *)
 let prelude ?(typed = {|Type 'eval "$K7_PROMPT"; clear'|}) () =
   "Hide\n" ^ env ^ "\n" ^ typed ^ "\nEnter\n" ^ ready ^ "Show\n"
 
@@ -92,8 +88,6 @@ let test_crlf () =
     (prelude () ^ "Type \"echo hi\"\nEnter\n" ^ ready ^ "Sleep 1000ms\n")
     (cram "  $ echo hi\r\n  hi\r\n")
 
-(* As in dune, a bare [  >] continues the command with an empty line, so a
-   heredoc keeps its blank lines; a CRLF line ending reads as LF. *)
 let test_empty_continuation () =
   let heredoc =
     "Type \"cat <<EOF\"\n\
@@ -123,11 +117,9 @@ let test_parse_errors () =
   in
   error "control" {|line 2: "echo \x01" holds a control character|}
     "prose\n  $ echo \x01\n";
-  (* A tab would reach bash's completion, not the command. *)
   error "tab" {|line 1: "a\tb" holds a control character|} "  $ a\tb\n";
   (* A terminal reads U+009B as CSI. *)
   error "C1" {|line 1: "a\u{9B}b" holds a control character|} "  $ a\xc2\x9bb\n";
-  (* The message keeps valid UTF-8 as it is and replaces an invalid byte. *)
   error "continuation" "line 2: \"caf\u{e9} \u{FFFD}\" is not valid UTF-8"
     "  $ a\n  > caf\xc3\xa9 \xff\n";
   error "UTF-8"
@@ -137,8 +129,6 @@ let test_parse_errors () =
     "empty" true
     (Cram.is_empty (Result.get_ok (Cram.parse "prose\n  > orphan\n")))
 
-(* The setup and the clear finish while the recording is hidden, and the
-   prompt [ready] relies on survives a setup that changes [PS1]. *)
 let test_setup () =
   expect "setup"
     (prelude
@@ -148,8 +138,6 @@ let test_setup () =
     ^ "Type \"echo ready\"\nEnter\n" ^ ready ^ "Sleep 1000ms\n")
     (cram ~setup:[ "slow.sh"; "it's.sh" ] "  $ echo ready\n")
 
-(* The mark is the same for the same test and differs between tests, so
-   that a recording is not ready on the prompt of another one. *)
 let test_mark () =
   let wait src =
     String.split_on_char '\n' (printed src)
@@ -161,9 +149,7 @@ let test_mark () =
     "sixteen characters" true
     (unmarked (wait "  $ false\n") = String.trim ready)
 
-(* After a timeout, vhs prints the line under the cursor; at bash's
-   continuation prompt, it is the mark followed by one more character per
-   prompt shown, which counts the commands. *)
+(* After a timeout, vhs prints the line under the cursor. *)
 let test_unfinished () =
   let t = Result.get_ok (Cram.parse "  $ cat <<EOF\n  $ echo b\n") in
   let wait =

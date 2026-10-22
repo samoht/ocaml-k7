@@ -6,8 +6,7 @@
 let expect = Alcotest.(check string)
 let outputs = [ "demo.gif" ]
 
-(* VHS records no frame without a visible action, so each tape ends with
-   [last], which [tape] does not print. *)
+(* VHS records no frame without a visible action. *)
 let last = "Sleep 100ms\n"
 
 let tape ?settings ?(outputs = outputs) actions =
@@ -22,7 +21,6 @@ let str ?settings ?outputs actions =
   | Ok s -> s
   | Error e -> Alcotest.failf "rejected: %s" e
 
-(* The printed actions, without the [Output] line. *)
 let body ?settings actions =
   let s = str ?settings actions in
   let header = "Output \"demo.gif\"\n" in
@@ -84,8 +82,7 @@ let test_quotes () =
   expect "theme" "Set Theme '{\"name\": \"x\"}'\n"
     (body ~settings:[ Theme {|{"name": "x"}|} ] [])
 
-(* A docker format string forces double quotes and VHS types it verbatim, so
-   the [\t] must reach the shell as one backslash. *)
+(* VHS types it verbatim: [\t] reaches the shell as one backslash. *)
 let test_backslash_verbatim () =
   expect "backslash"
     "Type \"docker ps --format 'table {{.Names}}\\t{{.Image}}'\"\n"
@@ -100,14 +97,13 @@ let test_type_keys () =
     {|Type "bad\x01byte": holds a control character other than tab and newline|}
     [ type' "bad\x01byte" ];
   rejects "carriage return" [ type' "a\r\n" ];
-  (* A terminal reads U+009B as CSI: this would clear the screen. *)
+  (* A terminal reads U+009B as CSI. *)
   error "C1 control"
     {|Type "X\u{9B}2J": holds a control character other than tab and newline|}
     [ type' "X\xc2\x9b2J" ];
   expect "not C1" "Type \"\xc2\xa0\xc3\x9b\"\n"
     (body [ type' "\xc2\xa0\xc3\x9b" ]);
   error "invalid UTF-8" "Type \"\u{FFFD}\": invalid UTF-8" [ type' "\xff" ];
-  (* A message keeps the UTF-8 of what it quotes. *)
   error "UTF-8 kept" ~outputs:[ "caf\u{e9}\".GIF" ]
     "Output \"caf\u{e9}\\\".GIF\": not .gif, .mp4, .webm, .txt, .ascii, .test, \
      .png or .svg; extensions are lower case"
@@ -145,7 +141,6 @@ let test_raw () =
     [ key Enter; raw "Set Shell fish" ];
   rejects "setting after env" [ raw "Env A b"; raw "Set Margin 2" ];
   rejects "setting in hidden" [ hidden [ raw "Set Margin 2" ] ];
-  (* An action that prints nothing does not end the settings. *)
   expect "setting after empty actions" "Set Margin 2\n"
     (body [ type' ""; hidden [ type' "" ]; raw "Set Margin 2" ]);
   error "hide" {|raw line "Hide": use hidden instead|} [ raw "Hide" ];
@@ -165,8 +160,7 @@ let test_durations () =
   error "zero timeout" "Wait@0ms: the timeout must be positive"
     [ wait ~timeout:(Ms 0) Prompt ];
   rejects "negative timeout" [ wait ~timeout:(Ms (-1)) Prompt ];
-  (* Go durations are signed 64-bit nanoseconds; one more millisecond
-     overflows and fails [vhs validate]. *)
+  (* Go durations are signed 64-bit nanoseconds. *)
   expect "largest" "Wait@9223372036854ms\n"
     (body [ wait ~timeout:(Ms 9_223_372_036_854) Prompt ]);
   rejects "overflowing timeout" [ wait ~timeout:(Ms 9_223_372_036_855) Prompt ];
@@ -199,7 +193,6 @@ let test_settings () =
     ~settings:[ Width 100 ] [];
   error "small height" "Set Height 100: below twice the padding (60)"
     ~settings:[ Padding 60; Height 100 ] [];
-  (* The size the user did not set is not named as an offending line. *)
   error "padding and default height"
     "Set Padding 400: above half the default height (600)"
     ~settings:[ Padding 400; Width 1000 ]
@@ -214,8 +207,7 @@ let test_settings () =
   (* VHS puts the font list in single quotes in browser code. *)
   rejects "font quote" ~settings:[ Font_family "x'; alert(1); '" ] [];
   rejects "font backslash" ~settings:[ Font_family {|x\|} ] [];
-  (* VHS fits twice the padding and the margin in the frame, and the window
-     bar too in its height. *)
+  (* VHS fits twice the padding and margin, and the window bar's height. *)
   error "margin"
     "Set Margin 300: the frame needs at least 720 x 720 pixels, not 1200 x 600"
     [ raw "Set Margin 300" ];
@@ -292,18 +284,16 @@ let test_outputs () =
   error "two frame directories"
     {|Output "a/": VHS writes only the last frames output, "b.png"|}
     ~outputs:[ "a/"; "b.png" ] [];
-  (* VHS never reads an .svg output, and record writes one. *)
+  (* VHS never reads an .svg output. *)
   error "two SVGs"
     {|Output "a.svg": a tape has one SVG output, not also "b.svg"|}
     ~outputs:[ "a.svg"; "b.svg" ] [];
   rejects "raw output" [ K7.raw "Output b.mp4" ] ~outputs:[ "a.mp4" ];
-  (* VHS hands any other extension to ffmpeg as a GIF, and ffmpeg picks the
-     format from the extension. *)
+  (* VHS hands other extensions to ffmpeg, which picks the format. *)
   error "unknown extension"
     {|Output "demo.gfi": not .gif, .mp4, .webm, .txt, .ascii, .test, .png or .svg|}
     ~outputs:[ "demo.gfi" ] [];
-  (* ffmpeg reads its last argument, the output, as an option if it starts
-     with a dash. *)
+  (* ffmpeg reads an output starting with a dash as an option. *)
   error "dash"
     {|Output "-y.gif": starts with -, which ffmpeg reads as an option|}
     ~outputs:[ "-y.gif" ] []
@@ -350,7 +340,7 @@ let test_waits () =
     [ wait (Screen "[") ];
   rejects "line break" [ wait (Screen "a\nb") ]
 
-(* Only validation runs here: the oracle must never record or publish. *)
+(* Validation only: the oracle must never record or publish. *)
 let validate_accepted actions =
   match K7.tape ~outputs:[ "demo.gif" ] actions with
   | Error _ -> ()
@@ -373,14 +363,12 @@ let test_padding_overflow () =
   rejects "padding exceeds the default frame" ~settings:[ K7.Padding max_int ]
     []
 
-(* Adding twice a raw margin to the default padding must not wrap. *)
 let test_raw_margin_overflow () =
   rejects "raw margin exceeds the default frame"
     [ K7.raw "Set Margin 4611686018427387903" ]
 
-(* The browser VHS drives takes a viewport, the frame less twice the padding
-   and, unless [MarginFill] is empty, twice the margin, from 0 to 10,000,000
-   pixels a side; vhs panics on another. *)
+(* VHS's browser takes a viewport of 0 to 10,000,000 pixels a side; vhs
+   panics on another. *)
 let test_viewport () =
   rejects "wider than the browser" ~settings:[ K7.Width 10_000_121 ] [];
   rejects "taller than the browser" ~settings:[ K7.Height 10_000_121 ] [];
@@ -394,9 +382,7 @@ let test_viewport () =
       K7.raw "Set WindowBar Colorful"; K7.raw {|Set WindowBarSize "-20000000"|};
     ]
     ~settings:[ K7.Rows 10 ];
-  (* VHS measures the cells at up to 32 times the viewport, where a cell
-     takes at least a pixel: the 1080 x 480 pixels of the default frame
-     less its padding hold at most 34560 columns and 15360 rows. *)
+  (* VHS measures cells at up to 32 times the viewport, a pixel at least. *)
   ignore (body ~settings:[ K7.Columns 34560 ] []);
   ignore (body ~settings:[ K7.Rows 15360 ] []);
   rejects "more columns than VHS measures" ~settings:[ K7.Columns 34561 ] [];
@@ -405,9 +391,8 @@ let test_viewport () =
     ~settings:[ K7.Padding 0; K7.Rows 1 ]
     [ K7.raw "Set Margin 300" ]
 
-(* ffmpeg encodes a GIF of at most 65535 pixels a side, libx264 an MP4 of
-   16384 and libvpx a WebM of 65536, and takes a frame of at most about
-   268 million pixels: (8 width + 1024) (height + 128) below 2{^31}. *)
+(* ffmpeg's limits: GIF 65535 pixels a side, libx264 16384, libvpx 65536,
+   and (8 width + 1024) (height + 128) below 2{^31}. *)
 let test_encoders () =
   let accepts name ~outputs settings =
     match K7.tape ~settings ~outputs [ K7.sleep (Ms 100) ] with
@@ -430,8 +415,6 @@ let test_encoders () =
   refuses "too many pixels" ~outputs:[ "a.gif" ] [ Width 65534; Height 4000 ];
   accepts "text" ~outputs:[ "a.txt" ] [ Width 70000 ]
 
-(* A tape file reads as the values that print it, settings and hidden
-   actions included. *)
 let test_of_string () =
   let read src = Result.map_error Native_test.invalid (K7.of_string src) in
   (match
@@ -466,7 +449,6 @@ let test_of_string () =
          Type \"ls\"\n\
          Sleep 1s\n"
         (K7.to_string t));
-  (* Settings and outputs given later replace the tape's. *)
   (match
      Result.bind
        (K7.of_string "Output a.gif\nSet Width 900\nSet FontSize 18\nType x\n")
@@ -480,7 +462,7 @@ let test_of_string () =
         "Output \"b.txt\"\nSet Columns 100\nSet FontSize 12\nType x\n"
         (K7.to_string t)
   | Error e -> Alcotest.failf "%a" K7.pp_error e);
-  (* A setting after the first action is a raw line, which VHS ignores. *)
+  (* VHS ignores a setting after the first action. *)
   Alcotest.(check (result string string))
     "late setting"
     (Error {|raw line "Set FontSize 10": VHS ignores it after the first action|})

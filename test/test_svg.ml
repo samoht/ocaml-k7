@@ -25,8 +25,6 @@ let test_dedup () =
     [ screen [ "same"; "same"; "same" ] ]
     (frames s)
 
-(* Frames switch at their times, in a loop that ends a frame after the last
-   output, and screens that do not change make no frame. *)
 let test_keyframes () =
   let s =
     svg [ (Ms 0, "a"); (Ms 500, "b"); (Ms 700, ""); (Ms 1000, "\r\nc") ]
@@ -41,9 +39,6 @@ let test_keyframes () =
     [ screen [ "a" ]; screen [ "ab" ]; screen [ "ab"; "c" ] ]
     (frames s)
 
-(* A reader who prefers reduced motion sees the last screen as a still
-   (WCAG 2.2.2), and the image names itself and holds that screen's text as
-   its text alternative. *)
 let test_accessible () =
   let s = svg [ (Ms 0, "a"); (Ms 500, "\r\n<b>") ] in
   check_contains "still"
@@ -67,9 +62,8 @@ let test_one_frame () =
     "no strip animation" false
     (contains ~sub:"@keyframes s" s)
 
-(* 10px makes 7 x 13 pixel cells. Pixels give 50 columns and 13 rows;
-   columns and rows give the frame they need with the padding and xterm.js's
-   25 x 10 pixels, rounded up to even. *)
+(* 10px makes 7 x 13 pixel cells; xterm.js adds 25 x 10 pixels, rounded up
+   to even. *)
 let test_settings () =
   List.iter
     (fun (settings, size, grid) ->
@@ -89,7 +83,6 @@ let test_settings () =
         {|<svg x="10" y="10" width="700" height="65">|} );
     ]
 
-(* Sizes far beyond a screen are refused, not computed with overflow. *)
 let test_huge () =
   (match K7.svg ~settings:[ Width 1_000_000 ] [] with
   | Error (Unsupported why) ->
@@ -101,14 +94,12 @@ let test_huge () =
   | Ok _ -> Alcotest.fail "a huge terminal played"
   | Error e -> Alcotest.failf "%a" K7.pp_error e
 
-(* The same output gives the same image. *)
 let test_deterministic () =
   let output =
     [ (K7.Ms 0, "a\027[31mb"); (Ms 33, "\r\nc"); (Ms 65, "\027[2J") ]
   in
   Alcotest.(check string) "same bytes" (svg output) (svg output)
 
-(* An .svg output never reaches VHS. *)
 let test_svg_output () =
   match K7.tape ~outputs:[ "demo.svg"; "demo.gif" ] [ K7.type' "x" ] with
   | Error e -> Alcotest.failf "%a" K7.pp_error e
@@ -122,7 +113,6 @@ let test_svg_output () =
            (K7.tape ~outputs:[ "a.gif" ]
               [ K7.raw "Output b.svg"; K7.type' "x" ]))
 
-(* Times are a tape's durations, in increasing order. *)
 let test_times () =
   List.iter
     (fun output ->
@@ -136,7 +126,6 @@ let test_times () =
       [ (Ms 0, "a"); (Ms max_int, "b") ];
     ]
 
-(* [svg] refuses the settings [tape] refuses, and starts no shell. *)
 let test_setting_errors () =
   List.iteri
     (fun i setting ->
@@ -165,8 +154,6 @@ let test_setting_errors () =
   | Ok _ -> ()
   | Error e -> Alcotest.failf "Shell Cmd: %a" K7.pp_error e
 
-(* A screen reader must not receive text concealed on the last screen, and
-   a blank last screen has no description, only the title. *)
 let test_concealed_description () =
   let s = svg [ (Ms 0, "\027[8msecret\027[?25l") ] in
   Alcotest.(check bool) "no description" false (contains ~sub:"<desc" s);
@@ -178,8 +165,6 @@ let test_concealed_description () =
   let s = svg [ (Ms 0, "hello"); (Ms 100, "\027[2J\027[H") ] in
   Alcotest.(check bool) "cleared" false (contains ~sub:"<desc" s)
 
-(* The zero-width characters of k7 cram's prompt mark do not reach the text
-   alternative; a joiner and a combining mark, which shape what shows, do. *)
 let test_zero_width_description () =
   let s =
     svg
@@ -198,14 +183,10 @@ let test_zero_width_description () =
   Alcotest.(check (pair int int))
     "nor the image's text" (0, 0)
     (count ~sub:"\xe2\x80\x8b" s, count ~sub:"\xe2\x81\xa0" s);
-  (* A prepended concatenation mark, U+0605, shows over the digits; it
-     joins the cell before it, as a zero-width character does. *)
   let s = svg [ (Ms 0, "a\xd8\x8512") ] in
   check_contains "number mark" ~sub:"<desc id=\"d\">a\xd8\x8512</desc>" s;
   check_contains "number mark shown" ~sub:">a\xd8\x85</tspan>" s
 
-(* A spacing mark, such as the vowel sign after Devanagari KA, joins the
-   cluster before it but adds a cell to it, the cell xterm.js gives it. *)
 let test_spacing_mark () =
   let s = svg [ (Ms 0, "\u{0915}\u{093E}x \u{0F7F}\xff") ] in
   Alcotest.(check (list string))
@@ -213,8 +194,6 @@ let test_spacing_mark () =
     [ screen [ "\u{0915}\u{093E}x \u{0F7F}\u{FFFD}" ] ]
     (frames s)
 
-(* Framerate is documented as positive; the native limits enumerate pixel
-   sizes and terminal dimensions, without a frame-rate ceiling. *)
 let test_framerate_limit () =
   let settings = K7.Framerate 100_001 :: settings in
   (match K7.tape ~settings ~outputs:[ "x.svg" ] [ K7.sleep (Ms 100) ] with
@@ -224,8 +203,6 @@ let test_framerate_limit () =
   | Ok _ -> ()
   | Error e -> Alcotest.failf "svg: %a" K7.pp_error e
 
-(* Cursor redraws obey the same format-character policy as row text and
-   the accessible description. *)
 let test_cursor_format () =
   let s = svg [ (Ms 0, "a\u{200B}\u{202E}b\r") ] in
   check_contains "row text" ~sub:">ab</tspan>" s;
@@ -239,8 +216,6 @@ let test_cursor_format () =
     "bidi override removed everywhere" false
     (contains ~sub:"\u{202E}" s)
 
-(* A cursor moved onto the second cell of a wide glyph covers the whole
-   glyph, as the cursor at its first cell does. *)
 let test_cursor_wide_right () =
   let s = svg [ (Ms 0, "\u{4e2d}\027[D") ] in
   check_contains "wide cursor on the glyph"
@@ -248,12 +223,9 @@ let test_cursor_wide_right () =
   check_contains "glyph under the cursor"
     ~sub:"<text class=\"ka k\" x=\"0\" y=\"22\">\u{4e2d}</text>" s
 
-(* SGR 21 draws a double underline, as xterm.js does, and SGR 4 a single
-   one. *)
 let test_double_underline () =
   let s = svg [ (Ms 0, "\027[21md\027[0m \027[4ms\027[0m") ] in
-  (* Two lines, as rectangles in the text's colour, under a cell of 14
-     pixels whose baseline is at 22. *)
+  (* A 14-pixel cell with its baseline at 22. *)
   check_contains "double"
     ~sub:
       {|<rect x="0" y="24" width="14" height="1" class="d"/><rect x="0" y="26" width="14" height="1" class="d"/>|}
@@ -261,8 +233,6 @@ let test_double_underline () =
   check_contains "no single line" ~sub:{|<tspan x="0">d</tspan>|} s;
   check_contains "single" ~sub:{|<tspan x="28" class="xu">s</tspan>|} s
 
-(* Reverse video paints a wide glyph's two cells with its foreground, as
-   xterm.js does, not its right half with the default foreground. *)
 let test_inverse_wide () =
   let s = svg [ (Ms 0, "\027[7;31m\u{4e2d}\027[0m") ] in
   check_contains "both halves"
@@ -271,9 +241,6 @@ let test_inverse_wide () =
     "no default-foreground half" 0
     (count ~sub:{|height="29" class="d"/>|} s)
 
-(* Tag characters are format characters that pick a subdivision flag: the
-   image text and its description keep them, or Scotland's flag shows as a
-   plain black flag. *)
 let test_tag_flag () =
   let flag =
     "\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}"
@@ -282,8 +249,6 @@ let test_tag_flag () =
   check_contains "description" ~sub:("<desc id=\"d\">" ^ flag ^ "</desc>") s;
   check_contains "image text" ~sub:(">" ^ flag ^ "</tspan>") s
 
-(* A variation selector shows only after a base: the image text and its
-   description keep the one after the heart and drop the stray ones. *)
 let test_stray_selector () =
   let s = svg [ (Ms 0, "\u{2764}\u{FE0F}\u{FE0F}a \u{FE0F}b") ] in
   check_contains "description" ~sub:"<desc id=\"d\">\u{2764}\u{FE0F}a b</desc>"

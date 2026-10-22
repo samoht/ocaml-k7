@@ -3,16 +3,12 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(* The checker is internal: test it through [K7.raw]. *)
-
 (* VHS records no frame without a visible action. *)
 let tape actions =
   K7.tape ~outputs:[ "demo.gif" ] (actions @ [ K7.sleep (Ms 100) ])
   |> Result.map ignore
   |> Result.map_error Native_test.invalid
 
-(* A raw line is one command VHS's parser reads without error, and that
-   takes nothing from the line after it. *)
 let test_accepted () =
   List.iter
     (fun line ->
@@ -95,14 +91,12 @@ let test_rejected () =
   fails "padding" "Set Padding 400" "use the setting Padding instead";
   fails "output" "Output x.foo"
     "not .gif, .mp4, .webm, .txt, .ascii, .test, .png or .svg";
-  (* The same reason as for [~outputs]. *)
   fails "output without extension" "Output demo"
     "neither an extension nor a trailing slash";
   fails "output dash" {|Output "-y.gif"|}
     "starts with -, which ffmpeg reads as an option"
 
-(* Lines [vhs validate] judged one by one, written by tape_oracle.go: a line
-   accepted here is one VHS reads without error. *)
+(* Written by tape_oracle.go from [vhs validate]. *)
 let test_oracle () =
   let cases = In_channel.with_open_bin "tape_cases.txt" In_channel.input_all in
   String.split_on_char '\n' cases
@@ -113,8 +107,7 @@ let test_oracle () =
         | Ok () when l.[0] = '0' -> Alcotest.failf "accepted %S" line
         | _ -> ())
 
-(* Durations follow Go's time.ParseDuration, up to its signed 64-bit range
-   of nanoseconds. *)
+(* Go's time.ParseDuration, up to its signed 64-bit nanoseconds. *)
 let test_durations () =
   List.iter
     (fun line ->
@@ -135,9 +128,7 @@ let test_durations () =
   fails "huge integer" "Sleep 99999999999999999999ms"
     "time 99999999999999999999ms: not a Go duration"
 
-(* Values judged by Go's strconv.Atoi and strconv.ParseFloat, written by
-   number_oracle.go: VHS fails the recording on a value its setting cannot
-   parse. *)
+(* Go's strconv.Atoi and strconv.ParseFloat, written by number_oracle.go. *)
 let test_numbers () =
   let cases =
     In_channel.with_open_bin "number_cases.txt" In_channel.input_all

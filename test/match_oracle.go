@@ -1,11 +1,9 @@
 // Copyright (c) 2026 Thomas Gazagnaire. All rights reserved.
 // SPDX-License-Identifier: ISC
 
-// match_oracle writes match_cases.txt: random patterns, built from RE2
-// fragments that stress case folding, word boundaries and Unicode classes,
-// and random texts, each with 1 if Go's regexp MatchString (what VHS's Wait
-// runs) holds and 0 otherwise, the pattern and the text in hexadecimal.
-// Patterns Go does not compile are left out. Regenerate with
+// match_oracle writes match_cases.txt: random patterns and texts, each
+// with whether Go's regexp MatchString, which VHS's Wait runs, holds.
+// Regenerate with
 //
 //	go run match_oracle.go 4000 > match_cases.txt
 package main

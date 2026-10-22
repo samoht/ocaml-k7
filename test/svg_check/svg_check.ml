@@ -41,9 +41,7 @@ let graphemes s =
   in
   go [] 0
 
-(* The cells a grapheme takes: those of its characters, each as wide as
-   xterm.js makes it, so a spacing mark adds a cell and a variation
-   selector none. *)
+(* Each character as wide as xterm.js makes it. *)
 let width g = max 1 (Matrix_text.measure ~width_method:`Wcwidth ~tab_width:2 g)
 
 let trim_end s =
@@ -53,8 +51,6 @@ let trim_end s =
 let trim_rows s =
   String.concat "\n" (List.map trim_end (String.split_on_char '\n' s))
 
-(* The cells of a row definition: those of the rows it uses, then each code
-   point of its tspans at its [x], or a whole tspan at its only [x]. *)
 let rec row_cells ~cell_width defs def =
   let cells = Hashtbl.create 80 in
   let add = function

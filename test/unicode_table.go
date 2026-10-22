@@ -1,11 +1,8 @@
 // Copyright (c) 2026 Thomas Gazagnaire. All rights reserved.
 // SPDX-License-Identifier: ISC
 
-// unicode_table writes lib/unicode.txt, the table of lib/unicode.ml: the
-// code points of each table a \p class of Go's regexp/syntax names, one per
-// line as its name and hexadecimal ranges, then the names Go's
-// unicodeTable resolves to another table, one per line as name=table, with
-// a caret before a table the name negates. Regenerate with
+// unicode_table writes lib/unicode.txt: the tables and the aliases of the
+// \p classes of Go's regexp/syntax. Regenerate with
 //
 //	go run unicode_table.go > ../lib/unicode.txt
 package main

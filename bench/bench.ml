@@ -3,8 +3,7 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(* Timings on a shared machine are noisy: report the fastest of five
-   batches. Allocation is exact. *)
+(* Timings are noisy: report the fastest of five batches. *)
 let measure name ~runs f =
   ignore (Sys.opaque_identity (f ()));
   Gc.full_major ();

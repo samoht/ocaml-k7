@@ -6,7 +6,6 @@
 open Alcobar
 open K7_cli
 
-(* C0, DEL and C1. *)
 let is_control u =
   Uchar.to_int u < 0x20 || (Uchar.to_int u >= 0x7f && Uchar.to_int u <= 0x9f)
 
@@ -20,8 +19,7 @@ let has_control s =
   in
   go 0
 
-(* A cram test without commands records no frame; the final sleep keeps
-   its tape one VHS can record. *)
+(* VHS records no frame without a command: the sleep gives it one. *)
 let printed ?(setup = []) cram =
   match
     K7.tape ~outputs:[ "x.gif" ]
@@ -30,7 +28,6 @@ let printed ?(setup = []) cram =
   | Ok t -> Fmt.str "%a" K7.pp t
   | Error e -> failf "rejected actions: %a" K7.pp_error e
 
-(* The text the printed tape types, one string per [Enter]. *)
 let submitted tape =
   let decode line =
     let n = String.length line in
@@ -45,8 +42,6 @@ let submitted tape =
   in
   go "" [] (String.split_on_char '\n' tape)
 
-(* Make arbitrary bytes a typeable command: valid UTF-8, no control
-   characters. *)
 let typeable s =
   let b = Buffer.create (String.length s) in
   let rec go i =
@@ -59,8 +54,6 @@ let typeable s =
   go 0;
   Buffer.contents b
 
-(* [parse] is total, and fails iff a command line holds a control character
-   or invalid UTF-8. *)
 let test_parse src =
   let command_lines =
     String.split_on_char '\n' src
@@ -76,13 +69,8 @@ let test_parse src =
   | Ok cram ->
       if List.exists bad command_lines then failf "accepted %S" src;
       ignore (printed cram)
-  | Error _ ->
-      (* A rejected line may also be a continuation. *)
-      ()
+  | Error _ -> ()
 
-(* Commands and continuations are typed in order, each line submitted, a
-   bare [  >] as an empty line; prose, output and orphan continuations are
-   not; CRLF reads as LF. *)
 let test_commands commands eol =
   let commands = List.map typeable commands in
   let src =
@@ -108,9 +96,6 @@ let test_commands commands eol =
           (List.length expected);
       check (Cram.is_empty cram = (commands = []))
 
-(* A setup is sourced hidden, in order, then the prompt is set and the
-   screen cleared, before the first command; without a setup, only the
-   prompt and the clear are. *)
 let test_setup scripts command =
   let scripts = List.map typeable scripts and command = typeable command in
   let cram = Result.get_ok (Cram.parse ("  $ " ^ command)) in
@@ -121,8 +106,7 @@ let test_setup scripts command =
   match submitted tape with
   | [ prelude; c ] ->
       check (String.equal c command);
-      (* A relative path starts with ./, which bash's source does not
-         search for in the PATH. *)
+      (* bash's [source] does not look ./ up in the PATH. *)
       let path s = if Filename.is_relative s then "./" ^ s else s in
       let sources =
         String.concat ""

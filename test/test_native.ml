@@ -36,8 +36,7 @@ let test_record () =
            ])
         (last (frames s))
 
-(* A prompt wait must observe the prompt after the submitted command, even
-   when typing has no delay. The leading sleep gives the tape real frames. *)
+(* The leading sleep gives the tape frames. *)
 let test_zero_speed_prompt () =
   with_dir @@ fun env cwd ->
   let t =
@@ -57,9 +56,6 @@ let test_zero_speed_prompt () =
     ~sub:"\nREADY\n>"
     (last_screen (Eio.Path.load Eio.Path.(cwd / "demo.txt")))
 
-(* A screenshot of demo.png is a PNG image, which only render writes:
-   record refuses the tape before it plays, rather than write a still to
-   demo.svg, the path of the recording. *)
 let test_screenshot_clash () =
   with_dir @@ fun env cwd ->
   let t =
@@ -92,7 +88,6 @@ let test_timeout () =
   match record env cwd t with
   | Error (Timeout { wait; line; last } as e) ->
       Alcotest.(check string) "wait" "Wait+Screen@300ms /never/" wait;
-      (* The line of [K7.to_string t]: settings, then Type and Enter. *)
       Alcotest.(check string)
         "line" "Wait+Screen@300ms /never/"
         (List.nth (String.split_on_char '\n' (K7.to_string t)) (line - 1));
@@ -105,8 +100,6 @@ let test_timeout () =
   | Ok _ -> Alcotest.fail "no timeout"
   | Error e -> Alcotest.failf "%a" K7.pp_error e
 
-(* A shell that exits while a wait waits for it fails the wait at once,
-   with its status, not after the wait's timeout. *)
 let test_shell_exit () =
   with_dir @@ fun env cwd ->
   let t = tape K7.[ type' "exit 3\n"; wait ~timeout:(Ms 20_000) Prompt ] in
@@ -119,8 +112,6 @@ let test_shell_exit () =
   | Error e -> Alcotest.failf "%a" K7.pp_error e);
   Alcotest.(check bool) "at once" true (Unix.gettimeofday () -. start < 10.)
 
-(* A wait's own timeout takes precedence over a raw [Set WaitTimeout], which
-   the other waits take. *)
 let test_timeout_precedence () =
   with_dir @@ fun env cwd ->
   let times_out ~within t =
@@ -170,7 +161,6 @@ let test_hidden () =
         (screen [ "> echo shown"; "shown"; ">" ])
         (last (frames s))
 
-(* Scrolling shows the scrollback, and typing scrolls back down. *)
 let test_scroll () =
   with_dir @@ fun env cwd ->
   let t =
@@ -194,8 +184,6 @@ let test_scroll () =
         (String.concat "\n" (List.init 9 (fun i -> Int.to_string (i + 10))))
         (last (frames s))
 
-(* Scrolling further up than the screen is high shows the scrollback in
-   order. *)
 let test_scroll_far () =
   with_dir @@ fun env cwd ->
   let t =
@@ -217,9 +205,7 @@ let test_scroll_far () =
         (String.concat "\n" (List.init 9 (fun i -> Int.to_string (i + 11))))
         (last (frames s))
 
-(* A screen wait reads the first lines of the buffer, as VHS's does: the
-   scrollback first, of at most a thousand lines as in xterm.js, which
-   [clear] empties. *)
+(* As VHS, scrollback first, at most a thousand lines as in xterm.js. *)
 let test_buffer () =
   with_dir @@ fun env cwd ->
   let shows re = K7.wait ~timeout:(Ms 5000) (Screen re) in
@@ -247,7 +233,6 @@ let test_buffer () =
         (screen [ "> echo x"; "x"; ">" ])
         (last (frames s))
 
-(* The lines [clear] erases stay erased once the scrollback is full. *)
 let test_full_scrollback () =
   with_dir @@ fun env cwd ->
   let shows re = K7.wait ~timeout:(Ms 10000) (Screen re) in
@@ -266,8 +251,6 @@ let test_full_scrollback () =
   | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok _ -> ()
 
-(* After a scroll, a line wait reads the line as far above the cursor as
-   the screen scrolled, as VHS does. *)
 let test_scrolled_line () =
   with_dir @@ fun env cwd ->
   let t =
@@ -284,8 +267,7 @@ let test_scrolled_line () =
   | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok _ -> ()
 
-(* A line ends at its last character that JavaScript's [trimEnd] keeps,
-   which VHS calls on it: a no-break space is not one. *)
+(* VHS trims lines with JavaScript's [trimEnd], which drops a no-break space. *)
 let test_trim () =
   with_dir @@ fun env cwd ->
   let t =
@@ -300,9 +282,6 @@ let test_trim () =
   | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok _ -> ()
 
-(* The text output holds the first lines of the buffer after each command
-   VHS records, from the first action, or from the [Output] line that names
-   it. *)
 let test_text () =
   with_dir @@ fun env cwd ->
   let tape outputs actions =
@@ -325,8 +304,7 @@ let test_text () =
   (match record env cwd (tape [ "demo.svg"; "demo.txt" ] actions) with
   | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok _ -> (
-      (* The echo of the typing can lag behind it, so the screens after the
-         typing and the key are left out. *)
+      (* The echo can lag behind the typing. *)
       match text "demo.txt" with
       | [ show; _; _; prompt ] ->
           Alcotest.(check string) "show" (screen [ "> x=1"; ">" ]) show;
@@ -346,7 +324,6 @@ let test_text () =
         "from the output" 5
         (List.length (text "later.ascii"))
 
-(* A window bar takes the top of the window, with VHS's dots or rings. *)
 let test_window_bar () =
   with_dir @@ fun env cwd ->
   let bar raws =
@@ -376,8 +353,6 @@ let test_window_bar () =
       {|<svg x="65" y="105" |};
     ]
 
-(* The margin is an image, stretched to the frame, or none without a
-   fill. *)
 let test_margin_fill () =
   with_dir @@ fun env cwd ->
   Eio.Path.save ~create:(`Or_truncate 0o644)
@@ -398,10 +373,6 @@ let test_margin_fill () =
   check_contains "no margin" ~sub:{|<svg x="60" y="60" |} s;
   Alcotest.(check bool) "no image" false (contains ~sub:"<image" s)
 
-(* The image of a margin is a regular file, followed through symlinks, of
-   at most 10 MiB, with the signature of an image a browser draws; a
-   [Source] tape is a regular file too. Anything else is refused before
-   playing, without blocking on a FIFO. *)
 let test_margin_fill_refused () =
   with_dir @@ fun env cwd ->
   let dir = Option.get (Eio.Path.native cwd) in
@@ -435,9 +406,6 @@ let test_margin_fill_refused () =
       ({|Source "fifo.tape"|}, "not a regular file");
     ]
 
-(* Each engine reports an output it cannot write before it plays: a
-   [Screenshot] needs its directory, and the other outputs a directory VHS
-   can create, as it creates them. *)
 let test_output_dirs () =
   with_dir @@ fun env cwd ->
   let dir = Option.get (Eio.Path.native cwd) in
@@ -487,7 +455,6 @@ let test_output_dirs () =
     "none/shot.png: no directory none";
   refused "render, frames" ~engine:render ~outputs:[ "none/frames/" ] ~raws:[]
     "none/frames/: no directory none";
-  (* VHS creates the directories of the other outputs, and so does record. *)
   let t =
     match
       K7.tape ~settings
@@ -505,8 +472,6 @@ let test_output_dirs () =
     (Eio.Path.is_file Eio.Path.(cwd / "a" / "b" / "demo.svg")
     && Eio.Path.is_file Eio.Path.(cwd / "c" / "demo.txt"))
 
-(* zsh plays natively, with VHS's prompt. zsh is in CI; the test skips
-   where it is missing. *)
 let on_path exe =
   List.exists
     (fun dir -> dir <> "" && Sys.file_exists (Filename.concat dir exe))
@@ -535,9 +500,6 @@ let test_zsh () =
         (screen [ "> echo $ZSH_NAME"; "zsh"; ">" ])
         (last (frames s))
 
-(* fish plays natively, started as VHS starts it: no greeting, VHS's
-   prompt and its typed command. fish is in CI; the test skips where it is
-   not on the [PATH]. *)
 let test_fish () =
   if not (on_path "fish") then Alcotest.skip ();
   with_dir @@ fun env cwd ->
@@ -564,10 +526,8 @@ let test_fish () =
       Alcotest.(check bool) "no greeting" false (contains ~sub:"Welcome" text);
       check_contains "command" ~sub:"> echo fish-$status" text
 
-(* A program that asks the terminal for its attributes gets its
-   answer. The terminal answers as soon as it reads the query, so echo is
-   off before it, as a program sets it: the tty would otherwise echo a
-   reply that arrives before [read] turns echo off itself. *)
+(* The terminal answers at once, so echo goes off before the query: the tty
+   would otherwise echo the reply. *)
 let test_replies () =
   with_dir @@ fun env cwd ->
   let t =
@@ -584,8 +544,6 @@ let test_replies () =
   | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok _ -> ()
 
-(* Keys send what xterm sends: the line editor sees arrows, control and alt
-   chords. *)
 let test_keys () =
   with_dir @@ fun env cwd ->
   let t =
@@ -611,8 +569,6 @@ let test_keys () =
         (screen [ "> echo X abc"; "X abc"; ">" ])
         (last (frames s))
 
-(* A modified arrow carries xterm's modifier parameter, as xterm.js sends
-   it: 1 plus 1 for Shift, 2 for Alt and 4 for Control. *)
 let test_modified_arrows () =
   with_dir @@ fun env cwd ->
   let t =
@@ -637,8 +593,6 @@ let test_modified_arrows () =
       check_contains "bytes" ~sub:"^[[1;5A^[[1;7A^[[1;6B^[[1;8D"
         (last (frames s))
 
-(* Settings whose sizes or times leave the integer range are refused, or
-   reduced to the loop they offset, rather than wrapping around. *)
 let test_bounds () =
   with_dir @@ fun env cwd ->
   let play ?settings raws =
@@ -683,8 +637,6 @@ let test_unsupported () =
   | Ok _ -> Alcotest.fail "played nushell"
   | Error e -> Alcotest.failf "%a" K7.pp_error e
 
-(* A screenshot of an [.svg] path is a still SVG image of the next frame at
-   that path, also when it is taken while hidden. *)
 let test_screenshot () =
   with_dir @@ fun env cwd ->
   let t =
@@ -715,9 +667,6 @@ let test_screenshot () =
         [ screen [ "> true"; ">" ] ]
         (frames (still "hidden.svg"))
 
-(* [record] writes outputs where [render] has [vhs] write them: relative to
-   [cwd], or anywhere an absolute or [..] path leads, even when [cwd] is a
-   capability that does not reach there. *)
 let test_output_paths () =
   with_dir @@ fun env top ->
   Eio.Path.mkdir ~perm:0o755 Eio.Path.(top / "sub");
@@ -747,8 +696,6 @@ let test_output_paths () =
   check_contains "text" ~sub:"sourced"
     (Eio.Path.load Eio.Path.(top / "abs.txt"))
 
-(* [record] refuses an output that only [render] writes before it plays
-   anything. *)
 let test_render_outputs () =
   with_dir @@ fun env cwd ->
   let played = Eio.Path.(cwd / "played") in
@@ -793,8 +740,6 @@ let test_render_outputs () =
       );
     ]
 
-(* A Source line plays the lines of its tape but their outputs, and is
-   refused where VHS refuses it. *)
 let test_source () =
   with_dir @@ fun env cwd ->
   let file name contents =
@@ -805,7 +750,6 @@ let test_source () =
   file "nested.tape" "Source \"inc.tape\"\n";
   file "empty.tape" "";
   file "bad.tape" "Type\n";
-  (* The tape inline would be refused for its escape. *)
   file "control.tape" "Type \"\027]8;;x\007click\"\n";
   let play name =
     record env cwd (tape K7.[ raw ("Source " ^ name); sleep (Ms 100) ])
@@ -835,10 +779,8 @@ let test_source () =
       ({|"missing.tape"|}, "missing.tape");
     ]
 
-(* [after_settings tape txt] is [txt], a text output of VHS for [tape],
-   without the screens it reads while it applies the settings, before it
-   sizes the terminal: one per [Set], [Output] and [Require] line from the
-   line of the text output, but [Set Shell]. *)
+(* VHS reads a screen per [Set] but [Set Shell], [Output] and [Require] line
+   before it sizes the terminal. *)
 let after_settings tape txt =
   let lines = String.split_on_char '\n' (K7.to_string tape) in
   let rec header = function
@@ -871,9 +813,6 @@ let after_settings tape txt =
   in
   skip n 0
 
-(* [same_text env cwd t] records [t] with VHS and natively and checks
-   that the native text output is VHS's, byte for byte, but for the screens
-   VHS reads before it sizes the terminal. It is the native image. *)
 let same_text env cwd (vhs_tape, native_tape) =
   let clock = Eio.Stdenv.mono_clock env and proc = Eio.Stdenv.process_mgr env in
   (match K7.render ?vhs:oracle ~clock ~proc ~cwd vhs_tape with
@@ -887,8 +826,6 @@ let same_text env cwd (vhs_tape, native_tape) =
       Alcotest.(check string) "text output" (after_settings vhs_tape vhs) native;
       (native, s)
 
-(* [oracle_tape ~settings actions] are the tapes of [actions] for {!K7.render},
-   to [oracle.txt], and for {!K7.record}, also to [oracle.svg]. *)
 let oracle_tape ?(settings = []) actions =
   let tape outputs =
     match
@@ -899,8 +836,6 @@ let oracle_tape ?(settings = []) actions =
   in
   (tape [ "oracle.txt" ], tape [ "oracle.txt"; "oracle.svg" ])
 
-(* For a 60 x 12 terminal, with colours, a wide character, a combining mark,
-   a trailing no-break space and scrolling. *)
 let test_oracle () =
   with_dir @@ fun env cwd ->
   let t =
@@ -932,13 +867,8 @@ let test_oracle () =
            (List.init 11 (fun i -> Int.to_string (i + 10)) @ [ ">" ]))
         (last frames)
 
-(* xterm's controls: raw line feeds and indexes, a reverse index, scroll
-   regions, line edits, character erases and repeats, no auto-wrap, origin
-   mode, the cursor in the last column and DEC line drawing. *)
 let test_oracle_controls () =
   with_dir @@ fun env cwd ->
-  (* Each printf leaves the cursor at the start of the cleared last row,
-     for the prompt. *)
   let printf s =
     K7.type'
       ("sleep 1; stty -onlcr; printf '" ^ s ^ {|\033[12;1H\033[K'; stty onlcr|})
@@ -969,7 +899,6 @@ let test_oracle_controls () =
   in
   ignore (same_text env cwd t)
 
-(* zsh, started as VHS starts it. *)
 let test_oracle_zsh () =
   with_dir @@ fun env cwd ->
   let t =
@@ -987,9 +916,6 @@ let test_oracle_zsh () =
   in
   ignore (same_text env cwd t)
 
-(* Stable screens isolate terminal interpretation from echo timing. The same
-   tape, when VHS_ORACLE is set, checks the expected text against real VHS
-   before checking both outputs of the native recorder. *)
 let test_terminal_state () =
   with_dir @@ fun env cwd ->
   let command =
@@ -1036,16 +962,9 @@ let test_terminal_state () =
             "native text and SVG" (expected, expected)
             (text (), last images))
 
-(* [rows lines] are the rows of a 60 x 12 screen that shows [lines], then
-   the prompt on its tenth row. *)
 let rows lines =
   lines @ List.init (9 - List.length lines) (fun _ -> "") @ [ ">"; ""; "" ]
 
-(* [check_payload ?vhs ?text payload image] records a shell that clears the
-   screen and prints [payload], then puts the prompt on the tenth row, below
-   it, so shell echo cannot affect its cells. The native image shows [image],
-   the native text output [text] (defaults to [image]), and, when
-   VHS_ORACLE is set, VHS's text output [vhs] (defaults to [text]). *)
 let check_payload ?vhs ?text payload image =
   let text = Option.value text ~default:image in
   let vhs = Option.value vhs ~default:text in
@@ -1081,55 +1000,27 @@ let check_payload ?vhs ?text payload image =
 
 let check_terminal_payload payload lines = check_payload payload (rows lines)
 
-(* REP repeats the complete preceding cell, including its combining marks. *)
 let test_repeat_combining () =
   check_terminal_payload {|a\314\201\033[3b|}
     [ String.concat "" (List.init 4 (fun _ -> "a\xcc\x81")) ]
 
-(* The UTF-8 encodings of C1 CSI, OSC and ST have their control meanings,
-   just like ESC [, ESC ] and ESC backslash in xterm.js. *)
 let test_c1_controls () =
   check_terminal_payload {|a\302\2332Cb\302\235title\302\234c|} [ "a  bc" ]
 
-(* Unlike 1049, modes 47 and 1047 share the cursor between buffers. *)
 let test_alternate_cursor () =
   check_terminal_payload
     {|abc\033[?47hALT\033[?47lX\033[2;1Habc\033[?1047hALT\033[?1047lX|}
     [ "abc   X"; "abc   X" ]
 
-(* DECSCA marks cells as protected. DECSEL erases only unprotected cells,
-   as used by terminal forms and status displays. *)
 let test_selective_erase () =
   check_terminal_payload {|\033[1"qabc\033[0"qdef\r\033[?2K|} [ "abc" ]
 
-(* Reverse-wrap mode lets backspace cross a line that auto-wrap produced. *)
 let test_reverse_wrap () =
   check_terminal_payload {|\033[?45h\033[60GAZ\b\bX|}
     [ String.make 59 ' ' ^ "X"; "Z" ]
 
-(* The native terminal follows xterm, as matrix emulates it, where VHS's
-   xterm.js departs from it. These are the differences that show in a
-   recording, each with what VHS writes and what the native recorder does:
-   - an erasure in the last column after a character there: xterm erases
-     that column and ends the pending wrap, xterm.js starts beyond it and
-     keeps the wrap pending;
-   - CSI S: xterm keeps the lines it scrolls out in the scrollback, which the
-     text output reads, and xterm.js drops them;
-   - a restore after scrolling: xterm returns to the row the save was on,
-     xterm.js to the buffer line, which moved up;
-   - a restore brings back the character set designations in xterm; xterm.js
-     brings back only the set in use, and the next shift invokes the
-     designation made since;
-   - ESC % G: xterm selects UTF-8 and keeps the designations, xterm.js also
-     invokes ASCII into G0;
-   - the two screens share the scroll region and the tab stops in xterm, and
-     each has its own in xterm.js;
-   - the cursor position report after a character in the last column: xterm
-     reports that column and xterm.js the one beyond, and xterm's DECXCPR
-     reply has the page, as the screen tests check;
-   - a scroll of the alternate screen: VHS's text output reads xterm.js's
-     buffer lines by their absolute index rather than the viewport, so it is
-     a row off the screen its screenshots show, which the native one draws. *)
+(* Where VHS's xterm.js departs from xterm, the native recorder follows xterm,
+   as matrix emulates it: each case has VHS's screen, then the native one. *)
 let known_differences =
   let blank n = List.init n (fun _ -> "") in
   let margin = String.make 59 ' ' in
@@ -1183,8 +1074,6 @@ let known_differences =
   |> List.map (fun (name, payload, vhs, image, text) ->
       (name, fun () -> check_payload ~vhs ?text payload image))
 
-(* Recording a program with [K7.run]. *)
-
 let run ?vars env cwd argv =
   Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 60. @@ fun () ->
   K7.run ~settings ?env:vars
@@ -1195,8 +1084,6 @@ let run ?vars env cwd argv =
 let script cwd name src =
   Eio.Path.save ~create:(`Or_truncate 0o755) Eio.Path.(cwd / name) src
 
-(* The duration of the animation and the time each frame starts, in
-   milliseconds, from its keyframes. *)
 let times svg =
   let number s i =
     let j = ref i in
@@ -1217,7 +1104,6 @@ let times svg =
     | Some i -> fst (number svg (i + 13))
     | None -> Alcotest.fail "no animation"
   in
-  (* The keyframes are [P%{transform:...}], the last one at [100%]. *)
   let rec keyframes i acc =
     match find "%{transform:translateX(" i with
     | None -> List.rev (List.tl acc)
@@ -1231,9 +1117,6 @@ let times svg =
   in
   (duration, keyframes 0 [])
 
-(* The program's own screens, without a prompt or a typed command: a
-   coloured line, then another half a second later, held for a second after
-   the program exits. *)
 let test_run_program () =
   with_dir @@ fun env cwd ->
   script cwd "demo.sh"
@@ -1264,7 +1147,6 @@ let test_run_program () =
       if duration -. last < 1000. || duration -. last > 1040. then
         Alcotest.failf "the last screen holds %gms" (duration -. last)
 
-(* A program that prints and exits at once still shows all it printed. *)
 let test_run_fast () =
   with_dir @@ fun env cwd ->
   Eio.Path.save ~create:(`Or_truncate 0o644)
@@ -1279,8 +1161,6 @@ let test_run_fast () =
         (screen [ "one"; "two"; "three" ])
         (last (frames s))
 
-(* [check_run ?vars name argv status lines] checks that [argv] exits with
-   [status] and shows [lines] last. *)
 let check_run ?vars name argv status lines =
   with_dir @@ fun env cwd ->
   match run ?vars env cwd argv with
@@ -1325,13 +1205,11 @@ let test_run_errors () =
   | Error e -> Alcotest.failf "width and columns: %a" K7.pp_error e
   | Ok _ -> Alcotest.fail "width and columns: ran"
 
-(* A killed program still gives its image. *)
 let test_run_signal () =
   check_run "killed"
     [ "sh"; "-c"; "echo bye; kill -TERM $$" ]
     (`Signaled Sys.sigterm) [ "bye" ]
 
-(* Cancelling [run] stops the program. *)
 let test_run_cancel () =
   with_dir @@ fun env cwd ->
   let clock = Eio.Stdenv.clock env in

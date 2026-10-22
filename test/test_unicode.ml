@@ -10,8 +10,6 @@ let table name =
   | Some t -> t
   | None -> Alcotest.failf "no class %S" name
 
-(* Each table is sorted and disjoint, holds what Go's does, and leaves out
-   the rest. *)
 let test_tables () =
   let check name ~has ~lacks =
     let ranges, negated = table name in
@@ -41,8 +39,6 @@ let test_tables () =
   check "Ascii" ~has:[ 0; 0x7f ] ~lacks:[ 0x80; 0x17f ];
   check "Lc" ~has:[ 0x41; 0x61 ] ~lacks:[ 0x2b0 ]
 
-(* Go reads a name ignoring underscores, hyphens, spaces and the case of
-   its letters, reads long category names and negates Cn for Assigned. *)
 let test_names () =
   let same a b =
     Alcotest.(check bool) (a ^ " is " ^ b) true (table a = table b)
@@ -62,10 +58,6 @@ let test_names () =
       Alcotest.(check bool) (n ^ " unknown") true (Unicode.find n = None))
     [ ""; "Klingon"; "Lx"; "^L"; "Ll\xc3\xa9" ]
 
-(* [strip_format] follows console's rule: it keeps an emoji tag sequence and
-   a variation selector after a base, and removes stray tags, stray
-   selectors and the invisible characters U+200B, U+2060 to U+2064 and
-   U+FEFF. *)
 let test_strip_format () =
   let check name ~expected s =
     Alcotest.(check string) name expected (Unicode.strip_format s)

@@ -1,9 +1,8 @@
 // Copyright (c) 2026 Thomas Gazagnaire. All rights reserved.
 // SPDX-License-Identifier: ISC
 
-// tape_oracle writes tape_cases.txt: random tape lines built from VHS
-// fragments, each with 1 if `vhs validate` (VHS's lexer and parser) accepts
-// the line on its own and 0 otherwise. Regenerate with
+// tape_oracle writes tape_cases.txt: random tape lines, each with whether
+// `vhs validate` accepts it. Regenerate with
 //
 //	go run tape_oracle.go 3000 > tape_cases.txt
 package main

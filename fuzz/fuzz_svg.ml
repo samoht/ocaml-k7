@@ -5,12 +5,10 @@
 
 open Alcobar
 
-(* A 50 x 13 terminal of 7 x 13 pixel cells. *)
 let settings = K7.[ Width 400; Height 200; Font_size 10; Padding 10 ]
 let cols = 50
 let rows = 13
 
-(* The characters XML cannot hold show as U+FFFD. *)
 let xml_text s =
   let b = Buffer.create (String.length s) in
   let rec go i =
@@ -24,8 +22,6 @@ let xml_text s =
   go 0;
   Buffer.contents b
 
-(* The text of each row of a screen as the image draws it: a hidden cell
-   is blank, format characters and trailing spaces do not show. *)
 let drawn screen =
   Array.to_list (Screen.rows screen)
   |> List.map (fun r ->
@@ -42,8 +38,6 @@ let rec collapse = function
   | a :: rest -> a :: collapse rest
   | [] -> []
 
-(* Whatever a program prints, the image is well-formed XML and each of its
-   screens has the text the screen shows, in order. *)
 let test_frames chunks =
   let output = List.mapi (fun i s -> (K7.Ms (i * 20), s)) chunks in
   match K7.svg ~settings output with
@@ -96,10 +90,6 @@ let marks =
     "\xcc\x81"; "\xe2\x80\x8d"; "\xe2\x80\x8b"; "\xe2\x81\xa0"; "\xef\xb8\x8f";
   |]
 
-(* Each character followed by a zero-width one shows both, whether they
-   arrive together or apart: the first row holds them all, in order, but the
-   format characters U+200B and U+2060 and a variation selector after a
-   space, which the image leaves out. *)
 let test_zero_width items =
   let items = List.take 20 items in
   let pieces =
@@ -136,8 +126,6 @@ let test_zero_width items =
           in
           check_eq ~pp:pp_string expected first)
 
-(* Saving and restoring a cursor also restores its active G0 character set.
-   These DEC mappings were checked against native and VHS text recordings. *)
 let test_saved_charset n dec =
   let glyphs =
     [| ('q', 0x2500); ('x', 0x2502); ('l', 0x250c); ('k', 0x2510) |]
@@ -154,7 +142,6 @@ let test_saved_charset n dec =
   check_eq ~pp:pp_string (Buffer.contents b)
     (Screen.line (Screen.of_terminal term) 0)
 
-(* Without any tab stops, HT moves to the last column at every width. *)
 let test_clear_tabs n =
   let cols = 10 + (n mod 70) in
   let term = Screen.terminal ~rows:2 ~cols in
@@ -163,7 +150,6 @@ let test_clear_tabs n =
     ("a" ^ String.make 7 ' ' ^ "X" ^ String.make (cols - 10) ' ' ^ "Y")
     (Screen.line (Screen.of_terminal term) 0)
 
-(* Deleting one cell cannot shift the suffix by a whole wide character. *)
 let test_delete_wide n glyph =
   let prefix = String.make (n mod 20) 'a' in
   let b = Buffer.create 4 in
@@ -177,8 +163,6 @@ let test_delete_wide n glyph =
   check_eq ~pp:pp_string (prefix ^ " bc")
     (Screen.line (Screen.of_terminal term) 0)
 
-(* PTY reads may split anywhere, including inside UTF-8 and escape sequences.
-   Delivery boundaries must not change the screen, cursor or scrollback. *)
 let test_chunk_boundaries chunks =
   let output = String.concat "" chunks in
   let whole = Screen.terminal ~rows ~cols in
@@ -192,8 +176,6 @@ let test_chunk_boundaries chunks =
     ~pp:Fmt.(Dump.array string)
     (Screen.buffer whole a) (Screen.buffer split b)
 
-(* Check both the matrix.vte scenario and the public SVG output against text
-   specified independently of the emulator. *)
 let check_output_rows output lines =
   let expected =
     String.concat "\n"
@@ -209,7 +191,6 @@ let check_output_rows output lines =
       | Error e -> failf "%s" e
       | Ok frames -> check_eq ~pp:pp_string expected (List.hd frames))
 
-(* REP copies a cell's complete grapheme, rather than its base code point. *)
 let test_repeat_combining n mark =
   let marks = [| 0x0301; 0x0308; 0x0327 |] in
   let b = Buffer.create 8 in
@@ -221,7 +202,6 @@ let test_repeat_combining n mark =
   let expected = String.concat "" (List.init (count + 1) (fun _ -> glyph)) in
   check_output_rows output [ expected ]
 
-(* C1 controls, encoded as UTF-8, are equivalent to their ESC forms. *)
 let test_c1_controls n osc =
   let count = 1 + (n mod 20) in
   let control, expected =
@@ -230,16 +210,13 @@ let test_c1_controls n osc =
   in
   check_output_rows ("a" ^ control ^ "b") [ expected ]
 
-(* After a character in the last column, the cursor waits there to wrap.
-   As in xterm, ED 0 and EL 1 erase that column and end the wait, so the
-   next character takes it. *)
+(* As in xterm, ED 0 and EL 1 end the pending wrap of the last column. *)
 let test_margin_erasure n display =
   let c = Char.chr (Char.code 'a' + (n mod 26)) in
   let line = String.make cols c in
   let erase, kept = if display then ("\027[J", c) else ("\027[1K", ' ') in
   check_output_rows (line ^ erase ^ "X") [ String.make (cols - 1) kept ^ "X" ]
 
-(* Modes 47 and 1047 share the cursor; they do not restore a saved one. *)
 let test_alternate_cursor n mode =
   let count = 1 + (n mod 10) in
   let mode = if mode then 47 else 1047 in
@@ -248,8 +225,6 @@ let test_alternate_cursor n mode =
   in
   check_output_rows output [ "abc" ^ String.make count ' ' ^ "X" ]
 
-(* Mode 1049, used by full-screen programs, restores the original cursor
-   and main-screen text regardless of what they wrote to the other buffer. *)
 let test_alternate_restore prefix_len alternate_len =
   let prefix = String.make (1 + (prefix_len mod 20)) 'a' in
   let alternate = String.make (1 + (alternate_len mod 20)) 'z' in
@@ -257,8 +232,6 @@ let test_alternate_restore prefix_len alternate_len =
     (prefix ^ "\027[?1049h" ^ alternate ^ "\027[?1049lX")
     [ prefix ^ "X" ]
 
-(* Protected cells survive selective erasure; an ordinary erase still clears
-   them. Check matrix directly as well as the public SVG path. *)
 let test_selective_erase n selective =
   let prefix = String.make (1 + (n mod 20)) 'a' in
   let erase = if selective then "\027[?2K" else "\027[2K" in
@@ -272,8 +245,6 @@ let test_selective_erase n selective =
   check_eq ~pp:pp_string expected (Matrix_grid.to_text (Vte.grid term));
   check_output_rows output lines
 
-(* With reverse wrap enabled, enough backspaces cross an automatic wrap.
-   Disabled, backspace stops in the first column of the current row. *)
 let test_reverse_wrap n enabled =
   let count = 1 + (n mod 10) in
   let mode = if enabled then "\027[?45h" else "\027[?45l" in
@@ -291,8 +262,6 @@ let test_reverse_wrap n enabled =
   check_eq ~pp:pp_string expected (Matrix_grid.to_text (Vte.grid term));
   check_output_rows output lines
 
-(* Input grouping must not change a Unicode Prepend character's placement.
-   Compare the underlying emulator and the public image independently. *)
 let test_prepend_boundaries n =
   let b = Buffer.create 8 in
   Buffer.add_string b "\027[?7l";
@@ -318,8 +287,6 @@ let test_prepend_boundaries n =
     (final
        (List.init (String.length output) (fun i -> String.make 1 output.[i])))
 
-(* Full-screen programs scroll their body while keeping a header and footer.
-   Neither boundary row may move, even if the whole body scrolls away. *)
 let test_scroll_region_boundaries n =
   let count = 1 + (n mod (rows - 2)) in
   let body = List.init (rows - 2) (fun i -> Fmt.str "row-%d" i) in
@@ -340,8 +307,6 @@ let test_scroll_region_boundaries n =
   check_eq ~pp:pp_string expected (Matrix_grid.to_text (Vte.grid term));
   check_output_rows output lines
 
-(* [svg] refuses as [Invalid] the settings [tape] refuses, and only
-   those. *)
 let test_setting_errors setting =
   let tape =
     K7.tape ~settings:[ setting ] ~outputs:[ "x.svg" ] [ K7.type' "hi" ]
@@ -369,9 +334,6 @@ let setting =
       const (K7.Shell Cmd);
     ]
 
-(* Several settings can interact, and repeated settings must be checked in
-   the same order by both public entry points. Native size and colour limits
-   are documented separately from tape validation. *)
 let test_setting_list_errors settings =
   let tape = K7.tape ~settings ~outputs:[ "x.svg" ] [ K7.type' "hi" ] in
   match (tape, K7.svg ~settings [ (Ms 0, "hello") ]) with
@@ -381,8 +343,6 @@ let test_setting_list_errors settings =
   | Error e, _ -> failf "tape: %a, but svg did not agree" K7.pp_error e
   | Ok _, Error e -> failf "svg: %a" K7.pp_error e
 
-(* A frame rate is not a pixel dimension and has no documented native
-   upper bound. Keep ordinary rates and the size-check boundary in scope. *)
 let test_positive_framerate n =
   let settings = K7.Framerate (max 1 n) :: settings in
   (match K7.tape ~settings ~outputs:[ "x.svg" ] [ K7.sleep (Ms 100) ] with
@@ -399,7 +359,6 @@ let contains ~sub s =
   in
   go 0
 
-(* SGR conceal is retained by matrix and respected by every SVG text path. *)
 let concealed n =
   let secret = String.make (1 + (n mod 20)) 's' in
   let column = n mod String.length secret in
@@ -422,7 +381,6 @@ let test_concealed_description n =
   | Error e -> failf "%a" K7.pp_error e
   | Ok image -> check (not (contains ~sub:"<desc" image))
 
-(* The XML guarantee also holds when themes change the generated style. *)
 let test_theme_xml output theme =
   let settings = K7.Theme theme :: settings in
   match K7.tape ~settings ~outputs:[ "a.svg" ] [ K7.sleep (Ms 100) ] with
@@ -436,7 +394,6 @@ let test_theme_xml output theme =
           | Ok _ -> ()
           | Error e -> failf "not well-formed XML: %s" e))
 
-(* Timestamps are ordered durations, including equal adjacent times. *)
 let test_time_bounds first second =
   let max_ms = 9_223_372_036_854 in
   let valid = first >= 0 && first <= second && second <= max_ms in
@@ -457,9 +414,7 @@ let theme =
       const {|{"name":"<>&\u0000","red":null,"extra":[1,{}]}|};
     ]
 
-(* xterm's Unicode 11 tables give these text-presentation symbols one cell,
-   and either variation selector zero. Fragmenting PTY output changes neither
-   their width nor the row on which a following character lands. *)
+(* xterm's Unicode 11 tables: one cell, and none for a variation selector. *)
 let test_narrow_symbols n selector split_at =
   let symbols = [| 0x2600; 0x263a; 0x2665; 0x2708; 0x2764 |] in
   let b = Buffer.create 8 in
@@ -504,9 +459,7 @@ let test_narrow_symbols n selector split_at =
     (Matrix_grid.to_text (Vte.grid term), image);
   check_eq ~pp:Fmt.(Dump.pair int int) cursor (Vte.cursor_pos term)
 
-(* A cursor redraw cannot reintroduce a format character removed from
-   the rows and description. Check that matrix retains the exact input cell,
-   so a dropped terminal character cannot make the property vacuous. *)
+(* Checks matrix keeps the input cell, so that the property is not vacuous. *)
 let test_cursor_format n =
   let forbidden =
     [|
@@ -541,8 +494,6 @@ let test_cursor_format n =
       check (contains ~sub:"<desc id=\"d\">ab</desc>" image);
       check (not (contains ~sub:mark image))
 
-(* The documented Cf exceptions shape visible text, so every SVG text
-   path and every human-readable error must retain them. *)
 let test_visible_format n =
   let allowed =
     [|
@@ -579,9 +530,7 @@ let test_visible_format n =
            ~sub:("<text class=\"ka k\" x=\"0\" y=\"10\">a" ^ mark ^ "</text>")
            image)
 
-(* xterm's wcwidth gives regional indicators one cell each, including
-   when a pair straddles the right margin. Every byte split must preserve
-   their cells and the final public image. *)
+(* xterm's wcwidth gives each regional indicator one cell. *)
 let test_regional_splits n =
   let glyph u =
     let b = Buffer.create 4 in
@@ -620,7 +569,6 @@ let test_regional_splits n =
             check_eq ~pp:pp_string expected (List.hd (List.rev frames)))
   done
 
-(* The emulator's terminal state across reads, through the SVG image. *)
 let terminal =
   [
     test_case "scroll regions preserve header and footer" [ uint8 ]
