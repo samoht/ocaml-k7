@@ -1435,6 +1435,24 @@ let test_run_cancel_descendant () =
   Alcotest.(check bool) "recording was cancelled" true (result = `Cancelled);
   Alcotest.(check bool) "cancelled recording leaves no descendant" false alive
 
+(* A tape [Env] whose name the environment cannot take is an error, before
+   or as the tape plays, never an exception. *)
+let test_record_env_names () =
+  with_dir @@ fun env cwd ->
+  List.iter
+    (fun line ->
+      match
+        Result.bind
+          (K7.tape ~settings ~outputs:[ "demo.svg" ]
+             K7.[ raw line; type' "echo hi\n"; wait Prompt ])
+          (play env cwd)
+      with
+      | Error _ -> ()
+      | Ok () -> Alcotest.failf "%s: recorded" line
+      | exception e ->
+          Alcotest.failf "%s: raised %s" line (Printexc.to_string e))
+    [ {|Env "A=B" "x"|}; {|Env "" "x"|} ]
+
 let suite =
   ( "native",
     List.map
@@ -1492,6 +1510,7 @@ let suite =
          ("run cancelled", test_run_cancel);
          ( "run cancellation reaps resistant descendants",
            test_run_cancel_descendant );
+         ("record refuses Env names", test_record_env_names);
        ]
       @ known_differences
       @
