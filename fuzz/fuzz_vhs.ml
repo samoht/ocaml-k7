@@ -267,6 +267,16 @@ let test_pp_error s n =
       check (List.length lines <= 11))
     [ `Exited n; `Signaled n ]
 
+(* The unified API's native errors have the same printable, one-line form. *)
+let test_unified_errors message last =
+  List.iter
+    (fun error ->
+      let output = Fmt.str "%a" Vhs.pp_error error in
+      check (String.is_valid_utf_8 output);
+      if has_control output then failf "non-printable error: %S" output)
+    Vhs.
+      [ Invalid message; Unsupported message; Timeout { wait = message; last } ]
+
 (* [Ctrl c] is accepted iff [c] is an ASCII letter or one of [@[\\]^-.];
    [Alt c] iff [c] is a letter other than [m] and [s], [.] or a bracket. *)
 let test_keys c =
@@ -873,6 +883,8 @@ let tapes =
       ]
       test_output;
     test_case "pp_error" [ bytes; int ] test_pp_error;
+    test_case "unified errors are printable single lines" [ bytes; bytes ]
+      test_unified_errors;
     test_case "keys" [ char ] test_keys;
     test_case "settings" [ int; bytes ] test_settings;
     test_case "order" [ bytes; bytes ] test_order;
