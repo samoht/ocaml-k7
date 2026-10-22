@@ -1424,8 +1424,32 @@ let with_programs =
       test_run_screen;
   ]
 
+let test_check_directory_destination n =
+  with_dir @@ fun env path ->
+  let name, engine, actions =
+    match n mod 4 with
+    | 0 -> ("occupied.svg", K7.Native, [])
+    | 1 -> ("occupied.txt", K7.Native, [])
+    | 2 -> ("occupied.gif", K7.Vhs, [])
+    | _ ->
+        ( "occupied.svg",
+          K7.Native,
+          [ K7.raw (Fmt.str "Screenshot %S" (path "occupied.svg")) ] )
+  in
+  Unix.mkdir (path name) 0o755;
+  Fun.protect ~finally:(fun () -> Unix.rmdir (path name)) @@ fun () ->
+  let outputs = if actions = [] then [ path name ] else [ path "out.txt" ] in
+  let t = Result.get_ok (K7.tape ~outputs (actions @ [ last ])) in
+  let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path name)) in
+  match K7.check ~engine ~cwd t with
+  | Error (Io message) -> check (contains ~sub:name message)
+  | Error e -> failf "expected I/O error for %s: %a" name K7.pp_error e
+  | Ok () -> failf "check accepted directory destination %s" name
+
 let with_processes =
   [
+    test_case "check rejects directory destinations for outputs and screenshots"
+      [ uint8 ] test_check_directory_destination;
     test_case "native output paths and positive frame-rate boundaries" [ uint8 ]
       test_native_paths;
     test_case "mixed outputs are refused before playing or writing" [ uint8 ]
