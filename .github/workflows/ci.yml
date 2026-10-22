@@ -55,6 +55,22 @@ jobs:
       - run: opam exec -- dune build
       - run: opam exec -- dune test
 
+  # odoc's warnings come from the private copy of matrix's terminal core,
+  # whose documentation is upstream's.
+  doc:
+    name: Documentation
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: '5.4'
+
+      - run: opam install . --deps-only --with-doc
+      - run: opam exec -- dune build @doc
+
   lint-fmt:
     name: Format
     timeout-minutes: 15
