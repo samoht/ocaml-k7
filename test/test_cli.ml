@@ -536,6 +536,17 @@ let readiness ~native =
       ("non-ASCII", test_non_ascii);
     ]
 
+let test_run_exec_failure () =
+  with_files [ ("not-executable", 0o644, "#!/bin/sh\nexit 0\n") ]
+  @@ fun env path ->
+  let code, error =
+    captured path @@ fun () ->
+    Run_cmd.run env ~settings:[] ~env:[] ~output:(path "failed.svg")
+      [ path "not-executable" ]
+  in
+  Alcotest.(check int) "recording failure has documented exit code" 123 code;
+  Alcotest.(check bool) "exec error is explained" true (String.trim error <> "")
+
 let suite =
   ( "cli",
     List.map
@@ -543,6 +554,7 @@ let suite =
       ([
          ("tape", test_tape);
          ("run", test_run);
+         ("run reports exec failure", test_run_exec_failure);
          ("write errors", test_write_errors);
          ("errors name the input", test_error_names_input);
          ("render real processes", test_render);
