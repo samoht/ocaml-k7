@@ -1179,7 +1179,12 @@ let with_terminal ~clock t (terminal : terminal) f =
   Pty.set_nonblock terminal.pty;
   f st
 
-let play ~clock ~env ~cwd t =
+let until interrupt f =
+  match interrupt with
+  | None -> f ()
+  | Some p -> Eio.Fiber.first f (fun () -> Eio.Promise.await p)
+
+let play ?interrupt ~clock ~env ~cwd t =
   let clock = (clock :> Eio.Time.Mono.ty Eio.Resource.t) in
   match
     with_terminal ~clock t (spawn ~env ~cwd t) @@ fun st ->
@@ -1188,6 +1193,7 @@ let play ~clock ~env ~cwd t =
         reader st (Bytes.create 65536);
         closed st)
       (fun () ->
+        until interrupt @@ fun () ->
         await_prompt st;
         st.hidden <- false;
         st.started <- now st;
@@ -1200,7 +1206,16 @@ let play ~clock ~env ~cwd t =
 
 let hold = 1000
 
-let run ~clock ~env ~vars ~cwd ~line t argv =
+(* As [stop_terminal], without hanging up, so that the reader reads what the
+   program prints until it exits. *)
+let terminate clock (t : terminal) =
+  let signal s = try Unix.kill (-t.pid) s with Unix.Unix_error _ -> () in
+  signal Sys.sigterm;
+  Eio.Time.Mono.sleep clock 1.;
+  signal Sys.sigkill;
+  Eio.Fiber.await_cancel ()
+
+let run ?interrupt ~clock ~env ~vars ~cwd ~line t argv =
   let clock = (clock :> Eio.Time.Mono.ty Eio.Resource.t) in
   match
     let prog, args =
@@ -1218,7 +1233,14 @@ let run ~clock ~env ~vars ~cwd ~line t argv =
     Screen.feed st.term line;
     refresh st;
     record st;
-    reader st (Bytes.create 65536);
+    Eio.Fiber.first
+      (fun () -> reader st (Bytes.create 65536))
+      (fun () ->
+        match interrupt with
+        | None -> Eio.Fiber.await_cancel ()
+        | Some p ->
+            Eio.Promise.await p;
+            terminate clock terminal);
     let end_ms = stamp st + hold in
     match st.exited with
     | Some status -> (svg t st.tl ~end_ms, status)

@@ -1073,7 +1073,7 @@ module Tail = struct
     if n <= kept then Buffer.contents b else Buffer.sub b (n - kept) kept
 end
 
-let render_vhs ~vhs ~clock ~proc ~cwd t =
+let render_vhs ?stop ~vhs ~clock ~proc ~cwd t =
   let output = Buffer.create 256 in
   let sink = Eio.Resource.T (output, Eio.Flow.Pi.sink (module Tail)) in
   let tape = to_string t in
@@ -1088,10 +1088,24 @@ let render_vhs ~vhs ~clock ~proc ~cwd t =
       | exception (Eio.Io _ as e) -> Error e)
   in
   let wait () =
-    match Eio.Promise.await finished with
-    | outcome -> outcome
-    | exception (Eio.Cancel.Cancelled _ as e) ->
+    let stopped () =
+      match stop with
+      | None -> Eio.Fiber.await_cancel ()
+      | Some p -> Eio.Promise.await p
+    in
+    match
+      Eio.Fiber.first
+        (fun () -> Some (Eio.Promise.await finished))
+        (fun () ->
+          stopped ();
+          None)
+    with
+    | Some outcome -> outcome
+    | None ->
         Eio.Promise.resolve cancel ();
+        Eio.Promise.await finished
+    | exception (Eio.Cancel.Cancelled _ as e) ->
+        ignore (Eio.Promise.try_resolve cancel ());
         raise e
   in
   match
@@ -1181,7 +1195,7 @@ let check_has_output t =
     Error (Invalid "no output: the tape names no file to write")
   else Ok ()
 
-let render ?(vhs = "vhs") ~clock ~proc ~cwd t =
+let render ?stop ?(vhs = "vhs") ~clock ~proc ~cwd t =
   let* () = check_has_output t in
   let* () = refuse ~by:"by vhs" ~other:"record" [ "SVG" ] t in
   let* () =
@@ -1202,7 +1216,7 @@ let render ?(vhs = "vhs") ~clock ~proc ~cwd t =
       (List.map (fun p -> (creates p, p)) (t.outputs @ raw_outputs t.actions)
       @ List.map (fun p -> (false, p)) (raw_screenshots t.actions))
   in
-  render_vhs ~vhs ~clock ~proc ~cwd t
+  render_vhs ?stop ~vhs ~clock ~proc ~cwd t
 
 let native_error ?(verb = "recorded") : Native.error -> error = function
   | Unsupported why -> Unsupported ("not " ^ verb ^ " natively: " ^ why)
@@ -1265,7 +1279,7 @@ let save dir path contents =
   in
   go 0
 
-let record ~clock ~proc ~cwd t =
+let record ?stop ~clock ~proc ~cwd t =
   let* () = check_has_output t in
   let* () =
     refuse ~by:"natively" ~other:"render" [ "GIF"; "MP4"; "WebM"; "frames" ] t
@@ -1294,7 +1308,7 @@ let record ~clock ~proc ~cwd t =
   let* { svg; text; stills } =
     Result.map_error
       (native_error ~verb:"recorded")
-      (Native.play ~clock ~env:(environment proc) ~cwd:dir tape)
+      (Native.play ?interrupt:stop ~clock ~env:(environment proc) ~cwd:dir tape)
   in
   let save ?(create = false) contents path =
     match if create then mkdirs dir path with
@@ -1315,9 +1329,9 @@ let needs_vhs t =
        (fun p -> Tape_syntax.extension p <> ".svg")
        (raw_screenshots t.actions)
 
-let play ?vhs ~clock ~proc ~cwd t =
-  if needs_vhs t then render ?vhs ~clock ~proc ~cwd t
-  else record ~clock ~proc ~cwd t
+let play ?stop ?vhs ~clock ~proc ~cwd t =
+  if needs_vhs t then render ?stop ?vhs ~clock ~proc ~cwd t
+  else record ?stop ~clock ~proc ~cwd t
 
 let check_times output =
   let rec go prev = function
@@ -1402,7 +1416,7 @@ let command_line = function
   | "" -> ""
   | show -> "\027[38;2;90;86;224m$ \027[0m" ^ show ^ "\r\n"
 
-let run ?(settings = []) ?(env = []) ?show ~clock ~proc ~cwd argv =
+let run ?(settings = []) ?(env = []) ?show ?stop ~clock ~proc ~cwd argv =
   let* () = if argv = [] then Error (Invalid "no command to run") else Ok () in
   let* () = check_env env in
   let show =
@@ -1419,5 +1433,5 @@ let run ?(settings = []) ?(env = []) ?show ~clock ~proc ~cwd argv =
       (Eio.Path.native cwd)
   in
   Result.map_error native_error
-    (Native.run ~clock ~env:(environment proc) ~vars:env ~cwd:dir
-       ~line:(command_line show) tape argv)
+    (Native.run ?interrupt:stop ~clock ~env:(environment proc) ~vars:env
+       ~cwd:dir ~line:(command_line show) tape argv)

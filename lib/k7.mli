@@ -304,14 +304,15 @@ val pp : t Fmt.t
     ]} *)
 
 val render :
+  ?stop:unit Eio.Promise.t ->
   ?vhs:string ->
   clock:_ Eio.Time.Mono.t ->
   proc:_ Eio.Process.mgr ->
   cwd:_ Eio.Path.t ->
   t ->
   (unit, error) result
-(** [render ~vhs ~clock ~proc ~cwd t] runs the executable [vhs] (defaults to
-    ["vhs"]) as [vhs -q] in the directory [cwd], with the tape [t] on its
+(** [render ~stop ~vhs ~clock ~proc ~cwd t] runs the executable [vhs] (defaults
+    to ["vhs"]) as [vhs -q] in the directory [cwd], with the tape [t] on its
     standard input, so that it writes the outputs of [t]. It is:
     - [Error (Unsupported _)] on an [.svg] output or a {!raw} [Screenshot] of an
       [.svg] image, which {!record} writes, before it runs anything;
@@ -329,24 +330,28 @@ val render :
     cancelled, [render] sends [vhs] [SIGTERM], which makes it stop the terminal
     and the browser it started, and waits for it to exit. If [vhs] still runs
     ten seconds later by [clock], [render] sends it [SIGKILL], which can leave
-    the terminal and the browser running, and waits for it to exit. *)
+    the terminal and the browser running, and waits for it to exit. It does the
+    same once [stop] resolves, and is then [Error (Failed _)] unless [vhs] has
+    exited with [0]. *)
 
 val record :
+  ?stop:unit Eio.Promise.t ->
   clock:_ Eio.Time.Mono.t ->
   proc:_ Eio.Process.mgr ->
   cwd:_ Eio.Path.t ->
   t ->
   (unit, error) result
-(** [record ~clock ~proc ~cwd t] plays [t] in its shell in the directory [cwd],
-    with the environment {!render} gives [vhs]. It writes the outputs of [t] at
-    the paths {!render} would. The [.svg] output is the SVG image of what the
-    terminal showed, the [.txt], [.ascii] or [.test] output is the
+(** [record ~stop ~clock ~proc ~cwd t] plays [t] in its shell in the directory
+    [cwd], with the environment {!render} gives [vhs]. It writes the outputs of
+    [t] at the paths {!render} would. The [.svg] output is the SVG image of what
+    the terminal showed, the [.txt], [.ascii] or [.test] output is the
     {{!native_details}text output}, and the {{!native_details}screenshots} are
-    written too. The waits of [t] time out by [clock]. When the recording ends
-    or fails, or the calling fiber is cancelled, [record] sends the shell and
-    its process group [SIGTERM], hangs up its terminal, sends them [SIGKILL] if
-    one still runs a second later by [clock], and waits for the shell to exit.
-    It is:
+    written too. Once [stop] resolves, [record] runs no more actions and writes
+    the outputs of what it recorded so far. The waits of [t] time out by
+    [clock]. When the recording ends or fails, or the calling fiber is
+    cancelled, [record] sends the shell and its process group [SIGTERM], hangs
+    up its terminal, sends them [SIGKILL] if one still runs a second later by
+    [clock], and waits for the shell to exit. It is:
     - [Error (Unsupported _)] on a [.gif], [.mp4], [.webm] or PNG frames output,
       or a [Screenshot] of a [.png] image, which {!render} writes, and on what
       the {{!native_details}native recorder} does not play, before it plays
@@ -363,15 +368,17 @@ val record :
       and on any other I/O failure. *)
 
 val play :
+  ?stop:unit Eio.Promise.t ->
   ?vhs:string ->
   clock:_ Eio.Time.Mono.t ->
   proc:_ Eio.Process.mgr ->
   cwd:_ Eio.Path.t ->
   t ->
   (unit, error) result
-(** [play ~vhs ~clock ~proc ~cwd t] is [render ~vhs ~clock ~proc ~cwd t] if [t]
-    has an output or a [Screenshot] that only {!render} writes, and
-    [record ~clock ~proc ~cwd t] otherwise, which needs no [vhs]. *)
+(** [play ~stop ~vhs ~clock ~proc ~cwd t] is
+    [render ~stop ~vhs ~clock ~proc ~cwd t] if [t] has an output or a
+    [Screenshot] that only {!render} writes, and
+    [record ~stop ~clock ~proc ~cwd t] otherwise, which needs no [vhs]. *)
 
 val svg :
   ?settings:setting list -> (duration * string) list -> (string, error) result
@@ -388,33 +395,36 @@ val run :
   ?settings:setting list ->
   ?env:(string * string) list ->
   ?show:string ->
+  ?stop:unit Eio.Promise.t ->
   clock:_ Eio.Time.Mono.t ->
   proc:_ Eio.Process.mgr ->
   cwd:_ Eio.Path.t ->
   string list ->
   (string * Eio.Process.exit_status, error) result
-(** [run ~settings ~env ~show ~clock ~proc ~cwd argv] runs the program [argv] in
-    the directory [cwd] on a pseudo-terminal, with no shell and nothing typed.
-    It is the SVG image of what the terminal showed, as {!svg} draws a terminal
-    with [settings] (defaults to [[]]), paired with how the program exited. Each
-    output shows at the time it arrived since the program started, rounded down
-    to a frame, and the last screen holds for a second after the program exits.
-    The image's first line is [$ ] in the colour of VHS's prompt, then [show]
-    (defaults to [argv], each argument shell-quoted where needed), and the
-    program's output starts on the next line; an empty [show] shows no line. The
-    first element of [argv] is the executable, looked up in the [PATH] the
-    program gets unless it holds a slash, and relative to [cwd] if it does. The
-    program gets the environment {!render} gives [vhs], with
-    [TERM=xterm-256color], then the variables of [env] (defaults to [[]]).
+(** [run ~settings ~env ~show ~stop ~clock ~proc ~cwd argv] runs the program
+    [argv] in the directory [cwd] on a pseudo-terminal, with no shell and
+    nothing typed. It is the SVG image of what the terminal showed, as {!svg}
+    draws a terminal with [settings] (defaults to [[]]), paired with how the
+    program exited. Each output shows at the time it arrived since the program
+    started, rounded down to a frame, and the last screen holds for a second
+    after the program exits. The image's first line is [$ ] in the colour of
+    VHS's prompt, then [show] (defaults to [argv], each argument shell-quoted
+    where needed), and the program's output starts on the next line; an empty
+    [show] shows no line. The first element of [argv] is the executable, looked
+    up in the [PATH] the program gets unless it holds a slash, and relative to
+    [cwd] if it does. The program gets the environment {!render} gives [vhs],
+    with [TERM=xterm-256color], then the variables of [env] (defaults to [[]]).
 
     A program that exits with another status than [0], or is killed, still gives
     its image: the status says how it exited. [run] returns once the program has
     exited and what it printed is read, so a program that waits for input waits
-    until the calling fiber is cancelled. The program leads a process group.
-    When it exits, or if the calling fiber is cancelled, [run] sends the group
-    [SIGTERM], hangs up its terminal, sends the group [SIGKILL] if one of it
-    still runs a second later by [clock], and waits for the program to exit. It
-    is:
+    until the calling fiber is cancelled or [stop] resolves. Once [stop]
+    resolves, [run] sends the program's process group [SIGTERM], then [SIGKILL]
+    a second later by [clock], and returns the image of what the terminal showed
+    until the program exited. The program leads a process group. When it exits,
+    or if the calling fiber is cancelled, [run] sends the group [SIGTERM], hangs
+    up its terminal, sends the group [SIGKILL] if one of it still runs a second
+    later by [clock], and waits for the program to exit. It is:
     - [Error (Invalid _)] if [argv] is empty, if a setting is one {!svg}
       refuses, if [show] holds a control character, or if a name of [env] is
       empty or holds [=], or a name or a value holds a NUL byte;

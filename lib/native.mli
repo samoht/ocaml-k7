@@ -64,25 +64,28 @@ type recording = {
 (** The type for what a tape records. *)
 
 val play :
+  ?interrupt:unit Eio.Promise.t ->
   clock:_ Eio.Time.Mono.t ->
   env:Eio.Process.Env.t ->
   cwd:string ->
   t ->
   (recording, error) result
-(** [play ~clock ~env ~cwd t] runs [t] in its shell in the directory [cwd] and
-    is what it recorded. The text of {!text_output} is in VHS's format: the
-    first lines of the buffer, as many as the screen has rows, after each
-    command that runs while recording, from the first action or from the
-    [Output] line that names it, each screen followed by a line of 80 U+2500
-    characters. A [Screenshot] of [shot.svg] is a still SVG image of the next
-    frame it records, without the cursor blinking. The shell gets [env] with the
-    prompt VHS gives it, [TERM=xterm-256color] and the [Env] lines of [t]. *)
+(** [play ~interrupt ~clock ~env ~cwd t] runs [t] in its shell in the directory
+    [cwd] and is what it recorded, until the last action or until [interrupt]
+    resolves. The text of {!text_output} is in VHS's format: the first lines of
+    the buffer, as many as the screen has rows, after each command that runs
+    while recording, from the first action or from the [Output] line that names
+    it, each screen followed by a line of 80 U+2500 characters. A [Screenshot]
+    of [shot.svg] is a still SVG image of the next frame it records, without the
+    cursor blinking. The shell gets [env] with the prompt VHS gives it,
+    [TERM=xterm-256color] and the [Env] lines of [t]. *)
 
 val replay : t -> (int * string) list -> string
 (** [replay t output] is the SVG image of a terminal with the settings of [t]
     that receives each string of [output] at its time, in milliseconds. *)
 
 val run :
+  ?interrupt:unit Eio.Promise.t ->
   clock:_ Eio.Time.Mono.t ->
   env:Eio.Process.Env.t ->
   vars:(string * string) list ->
@@ -91,10 +94,12 @@ val run :
   t ->
   string list ->
   (string * Eio.Process.exit_status, error) result
-(** [run ~clock ~env ~vars ~cwd ~line t argv] runs the program [argv] in the
-    directory [cwd] on a terminal with the settings of [t], until it exits, and
-    is the SVG image of what the terminal showed, each output at the time it
-    arrived since the program started, after [line], which the terminal shows
-    from the first frame, with how the program exited. The image holds the last
-    screen for a second. The program gets [env] with [TERM=xterm-256color], then
-    [vars]. It is [Error (Invalid _)] if [argv] is empty. *)
+(** [run ~interrupt ~clock ~env ~vars ~cwd ~line t argv] runs the program [argv]
+    in the directory [cwd] on a terminal with the settings of [t], until it
+    exits, and is the SVG image of what the terminal showed, each output at the
+    time it arrived since the program started, after [line], which the terminal
+    shows from the first frame, with how the program exited. The image holds the
+    last screen for a second. The program gets [env] with [TERM=xterm-256color],
+    then [vars]. Once [interrupt] resolves, its process group gets [SIGTERM],
+    then [SIGKILL] a second later by [clock]. It is [Error (Invalid _)] if
+    [argv] is empty. *)

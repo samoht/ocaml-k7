@@ -18,10 +18,10 @@ let exit_code = function
   | `Exited n -> n
   | `Signaled s -> 128 + Sys.signal_to_int s
 
-let record ?show stdenv ~settings ~env ~output argv =
+let record ?show ?stop stdenv ~settings ~env ~output argv =
   let* () = check_output output in
   let* svg, status =
-    K7.run ~settings ~env ?show
+    K7.run ~settings ~env ?show ?stop
       ~clock:(Eio.Stdenv.mono_clock stdenv)
       ~proc:(Eio.Stdenv.process_mgr stdenv)
       ~cwd:(Eio.Stdenv.cwd stdenv) argv
@@ -35,9 +35,9 @@ let record ?show stdenv ~settings ~env ~output argv =
   | exception Eio.Io (err, _) -> Fmt.error "%s: %a" output Eio.Exn.pp_err err
 
 let run ?show stdenv ~settings ~env ~output argv =
-  match record ?show stdenv ~settings ~env ~output argv with
-  | Ok status -> exit_code status
-  | Error msg -> Flags.fail stdenv msg
+  Flags.interruptible (fun stop ->
+      record ?show ~stop stdenv ~settings ~env ~output argv)
+  |> Flags.exit stdenv ~ok:exit_code
 
 open Cmdliner
 
@@ -74,6 +74,10 @@ let man =
        the $(b,--env) variables. Its standard input is the terminal, where \
        nothing is typed, so a program that waits for input waits until \
        $(tname) is interrupted.";
+    `P
+      "On SIGINT or SIGTERM, $(tname) sends the program and its descendants \
+       SIGTERM, then SIGKILL a second later, writes the image of what the \
+       terminal showed until the program exited, and exits 130 or 143.";
     `S Manpage.s_examples;
     `Pre
       "$(cmd) -o ls.svg -- ls -l --color=always\n\

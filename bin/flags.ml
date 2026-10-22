@@ -123,6 +123,9 @@ let exits =
           "when the recording fails, when $(b,vhs) cannot run or fails, or \
            when the tape of $(b,--print) cannot be written; the reason is on \
            standard error.";
+      info 130
+        ~doc:"when interrupted by SIGINT, once what was recorded is written.";
+      info 143 ~doc:"when interrupted by SIGTERM, likewise.";
       info cli_error ~doc:"on command line parsing errors.";
       info internal_error ~doc:"on unexpected internal errors (bugs).";
     ]
@@ -154,7 +157,39 @@ let print_tape env t =
   | Ok () | Error None -> Ok ()
   | Error (Some msg) -> Fmt.error "standard output: %s" msg
 
+let interruptible f =
+  let received = Atomic.make None and signalled = Eio.Condition.create () in
+  let handle s =
+    Atomic.set received (Some s);
+    Eio.Condition.broadcast signalled
+  in
+  let signals = [ Sys.sigint; Sys.sigterm ] in
+  let previous =
+    List.map (fun s -> Sys.signal s (Sys.Signal_handle handle)) signals
+  in
+  Fun.protect ~finally:(fun () -> List.iter2 Sys.set_signal signals previous)
+  @@ fun () ->
+  let stop, stopped = Eio.Promise.create () in
+  let result =
+    Eio.Fiber.first
+      (fun () -> f stop)
+      (fun () ->
+        ignore
+          (Eio.Condition.loop_no_mutex signalled (fun () -> Atomic.get received));
+        Eio.Promise.resolve stopped ();
+        Eio.Fiber.await_cancel ())
+  in
+  (result, Atomic.get received)
+
 let fail env msg =
   (* With standard error closed, the exit code still reports. *)
   ignore (write (Eio.Stdenv.stderr env) (Fmt.str "k7: %s\n" msg));
   Cmd.Exit.some_error
+
+let exit env ~ok = function
+  | Ok x, None -> ok x
+  | Error msg, None -> fail env msg
+  | Ok _, Some s -> 128 + Sys.signal_to_int s
+  | Error msg, Some s ->
+      ignore (fail env msg);
+      128 + Sys.signal_to_int s

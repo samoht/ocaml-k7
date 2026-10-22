@@ -136,7 +136,7 @@ let in_dir env dir f =
               try Eio.Path.rmtree ~missing_ok:true dir with Eio.Io _ -> ())
             (fun () -> f dir))
 
-let record env ~print ~vhs ~setup ?dir ?settings ?env:vars ?wait_timeout_s
+let record ?stop env ~print ~vhs ~setup ?dir ?settings ?env:vars ?wait_timeout_s
     ~output input =
   let* src = Flags.load env input in
   let tape ~setup ~output =
@@ -150,7 +150,7 @@ let record env ~print ~vhs ~setup ?dir ?settings ?env:vars ?wait_timeout_s
     in
     let named = function K7.Failed f -> K7.Failed { f with vhs } | e -> e in
     in_dir env dir @@ fun cwd ->
-    K7.play
+    K7.play ?stop
       ~vhs:(if String.contains vhs '/' then absolute vhs else vhs)
       ~clock:(Eio.Stdenv.mono_clock env)
       ~proc:(Eio.Stdenv.process_mgr env)
@@ -162,12 +162,10 @@ let record env ~print ~vhs ~setup ?dir ?settings ?env:vars ?wait_timeout_s
 
 let run env ~print ~vhs ~setup ?dir ?settings ?env:vars ?wait_timeout_s ~output
     input =
-  match
-    record env ~print ~vhs ~setup ?dir ?settings ?env:vars ?wait_timeout_s
-      ~output input
-  with
-  | Ok () -> 0
-  | Error msg -> Flags.fail env msg
+  Flags.interruptible (fun stop ->
+      record ~stop env ~print ~vhs ~setup ?dir ?settings ?env:vars
+        ?wait_timeout_s ~output input)
+  |> Flags.exit env ~ok:(fun () -> 0)
 
 open Cmdliner
 
@@ -230,6 +228,9 @@ let man =
     `P
       "Each $(b,--env) variable is set with an $(b,Env) line of the tape, \
        before bash starts.";
+    `P
+      "On SIGINT or SIGTERM, $(tname) types no more commands, writes what it \
+       recorded so far, and exits 130 or 143.";
     `S Manpage.s_examples;
     `Pre
       "$(cmd) --output demo.svg demo.t\n\

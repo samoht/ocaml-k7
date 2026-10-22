@@ -589,6 +589,47 @@ let test_cram_dir () =
   let given, _ = shown ~dir () in
   expect "--dir" (Unix.realpath dir) given
 
+let interrupt env path ~signal ~ready f =
+  let clock = Eio.Stdenv.clock env in
+  Eio.Fiber.both
+    (fun () -> f ())
+    (fun () ->
+      Eio.Time.with_timeout_exn clock 20. (fun () ->
+          while not (Sys.file_exists (path ready)) do
+            Eio.Time.sleep clock 0.01
+          done);
+      Unix.kill (Unix.getpid ()) signal)
+
+let test_interrupt () =
+  with_files
+    [ ("wait.t", 0o644, "  $ echo CRAM_$((1 + 1)); touch ready; sleep 30\n") ]
+  @@ fun env path ->
+  let code = ref 0 in
+  Unix.mkdir (path "cram") 0o755;
+  interrupt env path ~signal:Sys.sigint ~ready:"ready.run" (fun () ->
+      code :=
+        Run_cmd.run env ~settings:[] ~env:[] ~output:(path "run.svg")
+          [
+            "sh";
+            "-c";
+            Fmt.str "echo RUN_$((1 + 1)); touch %s; sleep 30" (path "ready.run");
+          ]);
+  Alcotest.(check int) "k7 run, SIGINT" 130 !code;
+  Alcotest.(check bool)
+    "k7 run image" true
+    (contains ~sub:"RUN_2"
+       (In_channel.with_open_bin (path "run.svg") In_channel.input_all));
+  interrupt env path ~signal:Sys.sigterm ~ready:"cram/ready" (fun () ->
+      code :=
+        Cram_cmd.run env ~print:false ~vhs:"vhs" ~setup:[]
+          ~dir:(Filename.dirname (path "cram/x"))
+          ~output:(path "cram.svg") (path "wait.t"));
+  Alcotest.(check int) "k7 cram, SIGTERM" 143 !code;
+  Alcotest.(check bool)
+    "k7 cram output" true
+    (contains ~sub:"CRAM_2"
+       (In_channel.with_open_bin (path "cram.svg") In_channel.input_all))
+
 let suite =
   ( "cli",
     List.map
@@ -606,6 +647,7 @@ let suite =
          ("tape -o without Output", test_tape_output_option);
          ("killed shell message", test_signal_message);
          ("cram runs in a temporary directory", test_cram_dir);
+         ("interrupted recordings", test_interrupt);
          ("command line", test_command);
        ]
       @ readiness ~native:true

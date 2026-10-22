@@ -16,7 +16,7 @@ let set_env env =
           Fmt.error "--env %a: not a variable to set" Quote.pp (k ^ "=" ^ v))
     (Ok ()) env
 
-let record stdenv ~print ~vhs ~settings ~env ~outputs input =
+let record ?stop stdenv ~print ~vhs ~settings ~env ~outputs input =
   let* src = Flags.load stdenv input in
   let error = function
     | K7.Invalid msg when String.starts_with ~prefix:"no output" msg ->
@@ -35,16 +35,16 @@ let record stdenv ~print ~vhs ~settings ~env ~outputs input =
   if print then Flags.print_tape stdenv t
   else
     let* () = set_env env in
-    K7.play ~vhs
+    K7.play ?stop ~vhs
       ~clock:(Eio.Stdenv.mono_clock stdenv)
       ~proc:(Eio.Stdenv.process_mgr stdenv)
       ~cwd:(Eio.Stdenv.cwd stdenv) t
     |> Result.map_error error
 
 let run stdenv ~print ~vhs ~settings ~env ~outputs input =
-  match record stdenv ~print ~vhs ~settings ~env ~outputs input with
-  | Ok () -> 0
-  | Error msg -> Flags.fail stdenv msg
+  Flags.interruptible (fun stop ->
+      record ~stop stdenv ~print ~vhs ~settings ~env ~outputs input)
+  |> Flags.exit stdenv ~ok:(fun () -> 0)
 
 open Cmdliner
 
