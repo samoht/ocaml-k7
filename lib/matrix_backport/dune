@@ -1,6 +1,6 @@
 ; A temporary verbatim copy of matrix's terminal core (matrix.ansi,
 ; matrix.text, matrix.grid and matrix.vte) at invariant-hq/mosaic
-; (samoht/mosaic) 3ccffa89. It exists because matrix 0.1.0 lacks those
+; (samoht/mosaic) ea6eb4b6. It exists because matrix 0.1.0 lacks those
 ; fixes, and it is deleted when vhs moves to matrix 0.2.0 (the next branch).
 ; Do not edit it: fix upstream instead. See README.md.
 ;

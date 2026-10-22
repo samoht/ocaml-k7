@@ -1034,28 +1034,42 @@ let put_text t text =
               remaining := String.sub s fit.byte_offset (len - fit.byte_offset)
     done
 
-(* A Prepend character joins the character after it into its grapheme, which
-   a later write cannot join. xterm writes each character as it comes, so
-   write the text after a Prepend character apart: a read split there then
-   draws the screen a whole one does. *)
+(* A grapheme cluster joins characters that a later write cannot join: the
+   character after a Prepend character and, with wcwidth, any character of
+   non-zero width, which a split read draws in cells of its own. xterm
+   writes each character as it comes, so write the text apart before such a
+   character: a read split there then draws the screen a whole one does. *)
 let put_run t text =
   let len = String.length text in
-  let rec go start i =
-    if i >= len then (
-      if start = 0 then put_text t text
-      else if start < len then put_text t (String.sub text start (len - start)))
-    else if Char.code (String.unsafe_get text i) < 0xD8 then
-      (* ASCII, a continuation byte, or a character below U+0600 *)
-      go start (i + 1)
-    else
-      let d = String.get_utf_8_uchar text i in
-      let next = i + Uchar.utf_decode_length d in
-      if next < len && Text.is_prepend (Uchar.utf_decode_uchar d) then (
-        put_text t (String.sub text start (next - start));
-        go next next)
-      else go start next
+  let wcwidth = Grid.width_method t.active_grid = `Wcwidth in
+  let start = ref 0 in
+  let cut i =
+    put_text t (String.sub text !start (i - !start));
+    start := i
   in
-  go 0 0
+  let rec ascii i =
+    i >= len || (Char.code (String.unsafe_get text i) < 0x80 && ascii (i + 1))
+  in
+  if not (ascii 0) then
+    Text.iter_graphemes
+      (fun ~offset ~len:n ->
+        let rec go prev i =
+          if i < offset + n then (
+            if
+              Text.is_prepend prev
+              || wcwidth
+                 && Text.width_at ~width_method:`Wcwidth ~tab_width:2 text
+                      ~byte_offset:i
+                    > 0
+            then cut i;
+            let d = String.get_utf_8_uchar text i in
+            go (Uchar.utf_decode_uchar d) (i + Uchar.utf_decode_length d))
+        in
+        let d = String.get_utf_8_uchar text offset in
+        go (Uchar.utf_decode_uchar d) (offset + Uchar.utf_decode_length d))
+      text;
+  if !start = 0 then put_text t text
+  else put_text t (String.sub text !start (len - !start))
 
 (* The next tab stop after [col], or the last column. *)
 let next_tab t col =
