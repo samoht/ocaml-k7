@@ -118,8 +118,9 @@ let man =
       "The $(b,Output) lines of a tape, wherever they are, are its outputs, \
        which $(b,-o) replaces. The $(b,Set) lines of a tape before its first \
        action are its settings, which $(b,--columns), $(b,--rows), \
-       $(b,--font-size) and $(b,--theme) replace. $(b,--setup), $(b,--dir) and \
-       $(b,--wait-timeout) apply to cram tests only.";
+       $(b,--font-size), $(b,--theme) and $(b,--framerate) replace. \
+       $(b,--setup), $(b,--dir) and $(b,--wait-timeout) apply to cram tests \
+       only.";
     `S "CRAM TESTS";
     `P
       "$(cmd) types each $(b,\\$) command of a cram test into a terminal \

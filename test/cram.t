@@ -44,6 +44,10 @@ Numbers are plain decimal digits, as the messages say.
   [124]
   $ k7 play --print --font-size +16 --output demo.gif demo.t 2> /dev/null
   [124]
+  $ k7 play --print --framerate 0 --output demo.gif demo.t 2> /dev/null
+  [124]
+  $ k7 rec --framerate 0 -o rate.svg -- true 2> /dev/null
+  [124]
 
 --print shows the tape instead of running vhs.
 
@@ -169,13 +173,14 @@ A GIF needs vhs, and k7 says where to get it.
 The terminal's size, font and theme are settings of the tape. The --env
 variables are in the environment of the shell, not in the tape.
 
-  $ k7 play --print --columns 100 --rows 20 --font-size 16 --theme Dracula --env 'GREETING=bonjour à tous' --output demo.gif demo.t | head -n 7
+  $ k7 play --print --columns 100 --rows 20 --font-size 16 --theme Dracula --framerate 20 --env 'GREETING=bonjour à tous' --output demo.gif demo.t | head -n 8
   Output "demo.gif"
   Set Shell "bash"
   Set Columns 100
   Set Rows 20
   Set FontSize 16
   Set Theme "Dracula"
+  Set Framerate 20
   Hide
   $ k7 play --print --env NOVALUE --output demo.gif demo.t 2> /dev/null
   [124]

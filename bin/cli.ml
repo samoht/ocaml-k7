@@ -13,8 +13,8 @@ let man =
        browser. For a GIF or a video, $(b,k7 play) runs Charm's $(b,vhs).";
     `P
       "Every subcommand takes $(b,--columns), $(b,--rows), $(b,--font-size), \
-       $(b,--theme) and $(b,--env). Run $(b,k7) $(i,COMMAND) $(b,--help) for \
-       the manual of a subcommand.";
+       $(b,--theme), $(b,--framerate) and $(b,--env). Run $(b,k7) $(i,COMMAND) \
+       $(b,--help) for the manual of a subcommand.";
     `S "PLAYING A TAPE OR A CRAM TEST";
     `P
       "$(b,k7 play) $(i,FILE) plays a tape in VHS's $(b,.tape) syntax to its \

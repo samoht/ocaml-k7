@@ -53,8 +53,8 @@ prints `k7:` and the reason on standard error, and exits 123.
 $ k7 rec --output ls.svg -- ls -l
 ```
 
-Both subcommands take `--columns`, `--rows`, `--font-size`, `--theme`
-and `--env VAR=VALUE`. k7 writes `.svg` outputs and the text outputs
+Both subcommands take `--columns`, `--rows`, `--font-size`, `--theme`,
+`--framerate` and `--env VAR=VALUE`. k7 writes `.svg` outputs and the text outputs
 (`.txt`, `.ascii` and `.test`) itself, and `k7 play` runs `vhs` for the
 others. `k7 play` calls `K7.record`, and `k7 rec` calls `K7.run`.
 `k7 COMMAND --help` gives the details.

@@ -50,17 +50,28 @@ let settings =
        themes) lists them, or of a theme in JSON."
     in
     Arg.(value & opt (some string) None & info [ "theme" ] ~docv:"NAME" ~doc)
+  and framerate =
+    let doc =
+      "Record at most $(docv) frames a second (defaults to 50, as in VHS). A \
+       lower rate makes a smaller image of a program that redraws often; 20 \
+       still moves smoothly."
+    in
+    Arg.(
+      value
+      & opt (some (count ~docv:"N" "frame rate")) None
+      & info [ "framerate" ] ~docv:"N" ~doc)
   in
-  let make columns rows font_size theme =
+  let make columns rows font_size theme framerate =
     List.filter_map Fun.id
       [
         Option.map (fun n -> K7.Columns n) columns;
         Option.map (fun n -> K7.Rows n) rows;
         Option.map (fun n -> K7.Font_size n) font_size;
         Option.map (fun t -> K7.Theme t) theme;
+        Option.map (fun n -> K7.Framerate n) framerate;
       ]
   in
-  Term.(const make $ columns $ rows $ font_size $ theme)
+  Term.(const make $ columns $ rows $ font_size $ theme $ framerate)
 
 let binding s =
   match String.index_opt s '=' with
