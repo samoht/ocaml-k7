@@ -718,6 +718,13 @@ let test_exit_codes n =
   eval 0 [ "--help=plain" ];
   eval 124 [ "--unknown-adversarial-flag" ]
 
+let contains ~sub s =
+  let n = String.length sub in
+  let rec go i =
+    i + n <= String.length s && (String.sub s i n = sub || go (i + 1))
+  in
+  go 0
+
 (* Command-line seconds must fit Go's duration and be strictly positive. *)
 let test_cli_wait_timeout seconds =
   with_dir @@ fun env path ->
@@ -760,6 +767,20 @@ let test_cli_wait_timeout seconds =
          (String.split_on_char '\n' output))
   else (
     check (List.mem (string_of_int seconds) (String.split_on_char '"' output));
+    (* cmdliner wraps the message. *)
+    let words =
+      String.split_on_char '\n' output
+      |> List.concat_map (String.split_on_char ' ')
+      |> List.filter (( <> ) "")
+      |> String.concat " "
+    in
+    check
+      (contains
+         ~sub:
+           (if seconds > 0 then
+              "is too large: a wait lasts at most 9223372036 seconds"
+            else "is not a positive number of seconds")
+         words);
     check
       (List.exists
          (String.starts_with ~prefix:"vhs-cram: option '--wait-timeout':")
@@ -876,6 +897,7 @@ let with_processes =
             const 1;
             const 9_223_372_036;
             const 9_223_372_037;
+            const 99_999_999_999;
           ];
       ]
       test_cli_wait_timeout;
