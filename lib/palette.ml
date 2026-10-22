@@ -910,14 +910,38 @@ let theme_of_members members =
       | t -> Ok t
       | exception Colour c -> Error (`Colour c))
 
+(* Go's encoding/json refuses arrays and objects nested deeper than this,
+   the outermost one included. *)
+let max_depth = 10_000
+
+(* [too_deep s] is [true] iff [s] opens more than [max_depth] arrays and
+   objects at once, outside its strings. *)
+let too_deep s =
+  let n = String.length s in
+  let rec go i depth ~quoted =
+    i < n
+    &&
+    match s.[i] with
+    | '\\' when quoted -> go (i + 2) depth ~quoted
+    | '"' -> go (i + 1) depth ~quoted:(not quoted)
+    | ('[' | '{') when not quoted ->
+        depth >= max_depth || go (i + 1) (depth + 1) ~quoted
+    | (']' | '}') when not quoted -> go (i + 1) (depth - 1) ~quoted
+    | _ -> go (i + 1) depth ~quoted
+  in
+  go 0 0 ~quoted:false
+
 let of_json s =
-  match Jsont_bytesrw.decode_string' ~locs:true Jsont.json s with
-  | Ok (Object (members, _)) -> theme_of_members members
-  | Ok _ -> Error (`Json "a theme is a JSON object")
-  | Error (_, meta, kind) ->
-      let at = Jsont.Textloc.first_byte (Jsont.Meta.textloc meta) in
-      Error
-        (`Json
-           (Fmt.str "%s at offset %d"
-              (plain (Jsont.Error.kind_to_string kind))
-              at))
+  if too_deep s then
+    Error (`Json (Fmt.str "nested deeper than %d levels" max_depth))
+  else
+    match Jsont_bytesrw.decode_string' ~locs:true Jsont.json s with
+    | Ok (Object (members, _)) -> theme_of_members members
+    | Ok _ -> Error (`Json "a theme is a JSON object")
+    | Error (_, meta, kind) ->
+        let at = Jsont.Textloc.first_byte (Jsont.Meta.textloc meta) in
+        Error
+          (`Json
+             (Fmt.str "%s at offset %d"
+                (plain (Jsont.Error.kind_to_string kind))
+                at))

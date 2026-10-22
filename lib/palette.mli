@@ -31,7 +31,8 @@ val of_json : string -> (t, [ `Json of string | `Colour of string ]) result
     keys that match it, and is xterm.js's default colour if it is missing,
     [null] or empty. It is [Error (`Json msg)] if jsont does not read [s], which
     includes invalid UTF-8 and unpaired surrogate escapes that Go reads as
-    U+FFFD, or if a field is neither a string nor [null], and
+    U+FFFD, if [s] nests arrays and objects deeper than the 10000 levels of Go's
+    [encoding/json], or if a field is neither a string nor [null], and
     [Error (`Colour c)] if a colour [c] is not [#RGB], [#RGBA], [#RRGGBB],
     [#RRGGBBAA], [rgb()] or [rgba()], the forms xterm.js reads without a
     browser. *)
