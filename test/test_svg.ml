@@ -25,6 +25,45 @@ let test_dedup () =
     [ screen [ "same"; "same"; "same" ] ]
     (frames s)
 
+let values ~key s =
+  let n = String.length key in
+  let rec go i acc =
+    if i + n > String.length s then List.rev acc
+    else if String.sub s i n = key then
+      let j = i + n in
+      let k = String.index_from s j '"' in
+      go k (String.sub s j (k - j) :: acc)
+    else go (i + 1) acc
+  in
+  go 0 []
+
+let test_ids () =
+  let raw output =
+    match K7.svg ~settings output with
+    | Ok s -> s
+    | Error e -> Alcotest.failf "%a" K7.pp_error e
+  in
+  let a = raw [ (Ms 0, "a"); (Ms 500, "\r\nb") ]
+  and b = raw [ (Ms 0, "c"); (Ms 300, "\r\nd") ] in
+  let pa = Option.get (prefix a) and pb = Option.get (prefix b) in
+  Alcotest.(check bool) "distinct prefixes" true (pa <> pb);
+  Alcotest.(check string)
+    "same content, same prefix" a
+    (raw [ (Ms 0, "a"); (Ms 500, "\r\nb") ]);
+  List.iter
+    (fun (p, s) ->
+      let ids = values ~key:" id=\"" s and refs = values ~key:"href=\"#" s in
+      List.iter
+        (fun id ->
+          if not (String.starts_with ~prefix:p id) then
+            Alcotest.failf "id %S lacks %S" id p)
+        (ids @ refs);
+      Alcotest.(check bool) "references" true (refs <> []);
+      check_contains "scoped style" ~sub:("<style>#" ^ p ^ " text{") s;
+      check_contains "own animation" ~sub:("{animation:" ^ p ^ "s ") s;
+      check_contains "own keyframes" ~sub:("@keyframes " ^ p ^ "s{") s)
+    [ (pa, a); (pb, b) ]
+
 let test_keyframes () =
   let s =
     svg [ (Ms 0, "a"); (Ms 500, "b"); (Ms 700, ""); (Ms 1000, "\r\nc") ]
@@ -271,6 +310,7 @@ let suite =
         ("cursor on a wide glyph's second cell", test_cursor_wide_right);
         ("positive frame rate above the pixel limit", test_framerate_limit);
         ("row dedup", test_dedup);
+        ("ids", test_ids);
         ("keyframes", test_keyframes);
         ("accessible", test_accessible);
         ("concealed text alternative", test_concealed_description);

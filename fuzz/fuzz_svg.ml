@@ -491,7 +491,7 @@ let test_cursor_format n =
   match K7.svg ~settings [ (Ms 0, output) ] with
   | Error e -> failf "%a" K7.pp_error e
   | Ok image ->
-      check (contains ~sub:"<desc id=\"d\">ab</desc>" image);
+      check (contains ~sub:"d\">ab</desc>" image);
       check (not (contains ~sub:mark image))
 
 let test_visible_format n =
@@ -523,7 +523,7 @@ let test_visible_format n =
   match K7.svg ~settings [ (Ms 0, "a" ^ mark ^ "b\r") ] with
   | Error e -> failf "%a" K7.pp_error e
   | Ok image ->
-      check (contains ~sub:("<desc id=\"d\">a" ^ mark ^ "b</desc>") image);
+      check (contains ~sub:("d\">a" ^ mark ^ "b</desc>") image);
       check (contains ~sub:(">a" ^ mark ^ "</tspan>") image);
       check
         (contains

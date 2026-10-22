@@ -8,9 +8,41 @@ let cell_width = 14
 let cell_height = 29
 let rows = 9
 
+let replace ~sub ~by s =
+  let n = String.length sub in
+  let b = Buffer.create (String.length s) in
+  let rec go i =
+    if i + n > String.length s then
+      Buffer.add_substring b s i (String.length s - i)
+    else if String.sub s i n = sub then (
+      Buffer.add_string b by;
+      go (i + n))
+    else (
+      Buffer.add_char b s.[i];
+      go (i + 1))
+  in
+  go 0;
+  Buffer.contents b
+
+let prefix svg =
+  let key = "<svg xmlns=\"http://www.w3.org/2000/svg\" id=\"" in
+  let rec find i =
+    if i + String.length key > String.length svg then None
+    else if String.sub svg i (String.length key) = key then
+      let j = i + String.length key in
+      Some (String.sub svg j (String.index_from svg j '"' - j))
+    else find (i + 1)
+  in
+  find 0
+
+let unprefixed svg =
+  match prefix svg with
+  | None -> svg
+  | Some p -> replace ~sub:p ~by:"" (replace ~sub:("#" ^ p ^ " ") ~by:"" svg)
+
 let svg ?(settings = settings) output =
   match K7.svg ~settings output with
-  | Ok s -> s
+  | Ok s -> unprefixed s
   | Error e -> Alcotest.failf "%a" K7.pp_error e
 
 let frames svg =

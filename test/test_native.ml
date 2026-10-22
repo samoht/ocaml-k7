@@ -1142,7 +1142,7 @@ let test_run_program () =
           if i < n - 2 && f <> screen [ "$ ./demo.sh" ] then
             Alcotest.failf "frame %d: %S" i f)
         shown;
-      let duration, starts = times s in
+      let duration, starts = times (unprefixed s) in
       let last = List.nth starts (List.length starts - 1) in
       if last < 500. || last > 5000. then
         Alcotest.failf "the second line shows at %gms" last;

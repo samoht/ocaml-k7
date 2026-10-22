@@ -271,6 +271,10 @@ let markup t d ~base row =
         ( Fmt.str "<use href=\"#%s\"/>%s" id (row_markup t ~from:k row),
           depth + 1 )
 
+(* Stands for the image's id prefix until the image is complete: escaped text
+   never holds a C0 control. *)
+let ns = "\001"
+
 let base36 n =
   let digits = "0123456789abcdefghijklmnopqrstuvwxyz" in
   let rec go n acc =
@@ -292,7 +296,7 @@ let row_id t d ~base row =
           match Hashtbl.find_opt d.by_markup markup with
           | Some id -> Some id
           | None ->
-              let id = "r" ^ base36 d.count in
+              let id = ns ^ "r" ^ base36 d.count in
               d.count <- d.count + 1;
               Hashtbl.replace d.by_markup markup id;
               Hashtbl.replace d.depths id depth;
@@ -305,16 +309,16 @@ let row_id t d ~base row =
 
 let add_cursor_defs t b =
   Fmt.kstr (Buffer.add_string b)
-    "<rect id=\"c\" class=\"kc\" width=\"%d\" height=\"%d\"/><rect id=\"w\" \
-     class=\"kc\" width=\"%d\" height=\"%d\"/>"
-    t.cell_width t.cell_height (2 * t.cell_width) t.cell_height
+    "<rect id=\"%sc\" class=\"kc\" width=\"%d\" height=\"%d\"/><rect \
+     id=\"%sw\" class=\"kc\" width=\"%d\" height=\"%d\"/>"
+    ns t.cell_width t.cell_height ns (2 * t.cell_width) t.cell_height
 
 let add_cursor t b screen (r, c) =
   let cells = Screen.cells (Screen.rows screen).(r) in
   let c = if c > 0 && cells.(c).width = 0 then c - 1 else c in
   let cell = cells.(c) in
   Fmt.kstr (Buffer.add_string b)
-    "<use href=\"#%s\" class=\"k\" x=\"%d\" y=\"%d\"/>"
+    "<use href=\"#%s%s\" class=\"k\" x=\"%d\" y=\"%d\"/>" ns
     (if cell.width = 2 then "w" else "c")
     (c * t.cell_width) (r * t.cell_height);
   let text = Unicode.strip_format cell.text in
@@ -351,23 +355,43 @@ let percent ~duration ms =
 
 let add_style t b ~duration frames =
   let p = t.palette in
-  Fmt.kstr (Buffer.add_string b)
-    "<style>text{fill:%s}.d{fill:%s}.e{fill:%s}.kc{fill:%s}.ka{fill:%s}"
-    (hex p.foreground) (hex p.foreground) (hex p.background) (hex p.cursor)
-    (hex p.cursor_accent);
-  Array.iteri
-    (fun i c -> Fmt.kstr (Buffer.add_string b) ".p%x{fill:%s}" i (hex c))
-    p.ansi;
-  Buffer.add_string b
-    ".b{font-weight:bold}.f{fill-opacity:.5}.i{font-style:italic}.xu{text-decoration:underline}.xs{text-decoration:line-through}.xo{text-decoration:overline}.xus{text-decoration:underline \
-     line-through}.xuo{text-decoration:underline \
-     overline}.xso{text-decoration:line-through \
-     overline}.xuso{text-decoration:underline line-through overline}";
-  if t.blink then
-    Buffer.add_string b
-      ".k{animation:b 1.2s step-end infinite}@keyframes \
-       b{50%{opacity:0}}@media \
-       (prefers-reduced-motion:reduce){.k{animation:none}}";
+  let rule selector decl =
+    Fmt.kstr (Buffer.add_string b) "#%s %s{%s}" ns selector decl
+  in
+  Buffer.add_string b "<style>";
+  List.iter
+    (fun (selector, c) -> rule selector ("fill:" ^ hex c))
+    [
+      ("text", p.foreground);
+      (".d", p.foreground);
+      (".e", p.background);
+      (".kc", p.cursor);
+      (".ka", p.cursor_accent);
+    ];
+  Array.iteri (fun i c -> rule (Fmt.str ".p%x" i) ("fill:" ^ hex c)) p.ansi;
+  List.iter
+    (fun (selector, decl) -> rule selector decl)
+    [
+      (".b", "font-weight:bold");
+      (".f", "fill-opacity:.5");
+      (".i", "font-style:italic");
+      (".xu", "text-decoration:underline");
+      (".xs", "text-decoration:line-through");
+      (".xo", "text-decoration:overline");
+      (".xus", "text-decoration:underline line-through");
+      (".xuo", "text-decoration:underline overline");
+      (".xso", "text-decoration:line-through overline");
+      (".xuso", "text-decoration:underline line-through overline");
+    ];
+  let reduced f =
+    Buffer.add_string b "@media (prefers-reduced-motion:reduce){";
+    f ();
+    Buffer.add_string b "}"
+  in
+  if t.blink then (
+    rule ".k" (Fmt.str "animation:%sb 1.2s step-end infinite" ns);
+    Fmt.kstr (Buffer.add_string b) "@keyframes %sb{50%%{opacity:0}}" ns;
+    reduced (fun () -> rule ".k" "animation:none"));
   (match frames with
   | [] | [ _ ] -> ()
   | _ ->
@@ -378,8 +402,9 @@ let add_style t b ~duration frames =
           Fmt.str ";animation-delay:-%dms"
             (int_of_float (Float.round (float t.loop_offset /. t.speed)))
       in
-      Fmt.kstr (Buffer.add_string b)
-        ".s{animation:s %dms steps(1,end) infinite%s}@keyframes s{" ms delay;
+      rule ".s"
+        (Fmt.str "animation:%ss %dms steps(1,end) infinite%s" ns ms delay);
+      Fmt.kstr (Buffer.add_string b) "@keyframes %ss{" ns;
       List.iteri
         (fun i (time, _) ->
           Fmt.kstr (Buffer.add_string b) "%s{transform:translateX(%dpx)}"
@@ -388,10 +413,8 @@ let add_style t b ~duration frames =
         frames;
       let last = -(List.length frames - 1) * t.cols * t.cell_width in
       Fmt.kstr (Buffer.add_string b) "100%%{transform:translateX(%dpx)}}" last;
-      Fmt.kstr (Buffer.add_string b)
-        "@media \
-         (prefers-reduced-motion:reduce){.s{animation:none;transform:translateX(%dpx)}}"
-        last);
+      reduced (fun () ->
+          rule ".s" (Fmt.str "animation:none;transform:translateX(%dpx)" last)));
   Buffer.add_string b "</style>"
 
 (* VHS's draw.go; Go antialiases a circle of radius [r] from [r - 1]. *)
@@ -443,7 +466,7 @@ let add_desc b screen =
   match List.rev (drop_blank (List.rev lines)) with
   | [] -> ()
   | lines ->
-      Buffer.add_string b "<desc id=\"d\">";
+      Fmt.kstr (Buffer.add_string b) "<desc id=\"%sd\">" ns;
       List.iteri
         (fun i line ->
           if i > 0 then Buffer.add_char b '\n';
@@ -479,9 +502,9 @@ let image t ~duration frames =
   let shown = Array.make t.rows None in
   List.iteri (fun i (_, screen) -> add_frame t d strip shown i screen) frames;
   Fmt.kstr (Buffer.add_string b)
-    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" \
-     viewBox=\"0 0 %d %d\" font-family=\""
-    t.width t.height t.width t.height;
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" id=\"%s\" width=\"%d\" \
+     height=\"%d\" viewBox=\"0 0 %d %d\" font-family=\""
+    ns t.width t.height t.width t.height;
   add_escaped b t.font_family;
   let desc = Buffer.create 256 in
   (match List.rev frames with
@@ -489,9 +512,11 @@ let image t ~duration frames =
   | [] -> ());
   Fmt.kstr (Buffer.add_string b)
     "\" font-size=\"%d\" xml:space=\"preserve\" role=\"img\" \
-     aria-labelledby=\"t\"%s><title id=\"t\">Terminal recording</title>"
-    t.font_size
-    (if Buffer.length desc > 0 then " aria-describedby=\"d\"" else "");
+     aria-labelledby=\"%st\"%s><title id=\"%st\">Terminal recording</title>"
+    t.font_size ns
+    (if Buffer.length desc > 0 then Fmt.str " aria-describedby=\"%sd\"" ns
+     else "")
+    ns;
   Buffer.add_buffer b desc;
   add_style t b ~duration frames;
   add_margin t b;
@@ -511,4 +536,6 @@ let image t ~duration frames =
     (t.cols * t.cell_width) (t.rows * t.cell_height);
   Buffer.add_buffer b strip;
   Buffer.add_string b "</g></svg></svg>\n";
-  Buffer.contents b
+  let s = Buffer.contents b in
+  let prefix = "k" ^ String.sub (Digest.to_hex (Digest.string s)) 0 6 in
+  String.concat prefix (String.split_on_char ns.[0] s)

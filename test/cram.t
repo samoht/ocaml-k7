@@ -200,16 +200,16 @@ The image shows the command line first, shell-quoted where needed, then
 the program's output. --show replaces the line and --show "" hides it.
 
   $ k7 run -o cmd.svg --cols 40 --rows 3 -- printf '%s\n' 'hello world'
-  $ grep -o '<desc id="d">.*' cmd.svg
-  <desc id="d">$ printf '%s\n' 'hello world'
+  $ grep -o '<desc id="k[0-9a-f]*d">.*' cmd.svg | sed 's/id="[^"]*"//'
+  <desc >$ printf '%s\n' 'hello world'
   $ grep -o '^[^<]*</desc>' cmd.svg
   hello world</desc>
   $ k7 run -o show.svg --cols 40 --rows 3 --show 'dune exec -- ./main.exe' -- printf 'hi\n'
-  $ grep -o '<desc id="d">.*' show.svg
-  <desc id="d">$ dune exec -- ./main.exe
+  $ grep -o '<desc id="k[0-9a-f]*d">.*' show.svg | sed 's/id="[^"]*"//'
+  <desc >$ dune exec -- ./main.exe
   $ k7 run -o hide.svg --cols 40 --rows 3 --show '' -- printf 'hi\n'
-  $ grep -o '<desc id="d">[^<]*</desc>' hide.svg
-  <desc id="d">hi</desc>
+  $ grep -o '<desc id="k[0-9a-f]*d">[^<]*</desc>' hide.svg | sed 's/id="[^"]*"//'
+  <desc >hi</desc>
 
 k7 tape reads a tape in VHS's syntax; the command line replaces its
 settings and outputs.
