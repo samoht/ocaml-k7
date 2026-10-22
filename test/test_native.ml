@@ -1193,6 +1193,14 @@ let test_run_path_override () =
         (screen [ "PATH_OVERRIDE_WORKED" ])
         (last (frames image))
 
+let test_run_sigpipe () =
+  let previous = Sys.signal Sys.sigpipe Sys.Signal_ignore in
+  Fun.protect ~finally:(fun () -> Sys.set_signal Sys.sigpipe previous)
+  @@ fun () ->
+  check_run "normal terminal SIGPIPE disposition"
+    [ "/bin/sh"; "-c"; "kill -PIPE $$; printf SIGPIPE_WAS_IGNORED" ]
+    (`Signaled Sys.sigpipe) []
+
 let test_run_errors () =
   with_dir @@ fun env cwd ->
   let error name ?vars argv check =
@@ -1371,6 +1379,7 @@ let suite =
          ("run a program that exits at once", test_run_fast);
          ("run environment", test_run_env);
          ("run searches the overridden PATH", test_run_path_override);
+         ("run restores SIGPIPE", test_run_sigpipe);
          ("run errors", test_run_errors);
          ("run a killed program", test_run_signal);
          ("run shows the command line", test_run_command_line);
