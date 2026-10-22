@@ -1196,6 +1196,37 @@ let test_run_path_override n =
   | Ok _ -> fail "the executable in the overridden PATH did not run"
   | Error e -> failf "%a" K7.pp_error e
 
+let test_run_large_burst n =
+  with_dir @@ fun env path ->
+  let text =
+    String.make (65_536 * (1 + (n mod 32))) 'x' ^ "\r\027[2KFINAL_MARKER"
+  in
+  save env (path "burst") text;
+  let settings = K7.[ Columns 40; Rows 6; Font_size 10 ] in
+  let last image =
+    match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows:6 image with
+    | Ok frames -> List.nth frames (List.length frames - 1)
+    | Error e -> failf "%s" e
+  in
+  match
+    ( K7.run ~settings
+        ~clock:(Eio.Stdenv.mono_clock env)
+        ~proc:(Eio.Stdenv.process_mgr env)
+        ~cwd:Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "burst"))
+        [ "/bin/cat"; "burst" ],
+      K7.svg ~settings
+        [
+          ( Ms 0,
+            String.concat "\r\n"
+              (List.init 5 (fun _ -> String.make 40 'x') @ [ "FINAL_MARKER" ])
+          );
+        ] )
+  with
+  | Ok (image, `Exited 0), Ok expected ->
+      check_eq ~pp:pp_string (last expected) (last image)
+  | Error e, _ | _, Error e -> failf "%a" K7.pp_error e
+  | Ok _, _ -> fail "cat did not exit successfully"
+
 let test_run_signal_disposition n =
   with_dir @@ fun env _ ->
   let previous = Sys.signal Sys.sigpipe Sys.Signal_ignore in
@@ -1312,6 +1343,8 @@ let with_processes =
   [
     test_case "run searches the overridden PATH" [ uint8 ]
       test_run_path_override;
+    test_case "run drains large immediate bursts before returning" [ uint8 ]
+      test_run_large_burst;
     test_case "run children have normal signal dispositions" [ uint8 ]
       test_run_signal_disposition;
     test_case "run reports exec errors instead of a program status" [ uint8 ]
