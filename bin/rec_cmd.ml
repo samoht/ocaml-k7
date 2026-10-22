@@ -86,9 +86,14 @@ let man =
        the time it arrived since the program started, and the last one holds \
        for a second after the program exits. The first line of the image shows \
        $(b,\\$) and $(i,COMMAND), each argument shell-quoted where needed, and \
-       the program's output starts on the next line. The terminal has 16 rows \
-       and 75 columns unless $(b,--rows) and $(b,--columns) say otherwise, and \
-       output beyond its last row scrolls its first rows away.";
+       the program's output starts on the next line. Output beyond the last \
+       row of the terminal scrolls its first rows away.";
+    `P
+      "Without $(b,--columns) and $(b,--rows), the terminal has as many \
+       columns and rows as a frame of 1200 by 600 pixels holds, as in VHS, \
+       with characters $(b,--font-size) pixels high: 75 columns and 16 rows at \
+       the default 22 pixels, and 150 columns and 33 rows at 11. With them, \
+       the image is as wide and as high as they need at that font size.";
     `P
       "The program is looked up in the $(b,PATH) it gets unless its name holds \
        a slash. It gets the environment of $(cmd) without $(b,COLUMNS) and \
