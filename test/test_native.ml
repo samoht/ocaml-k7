@@ -159,12 +159,33 @@ let test_timeout_precedence () =
   times_out ~within:15.
     (tape (Ms 300) K7.[ type' "echo hi\n"; wait (Screen "never") ])
 
-(* At 50 frames a second, a frame lasts at least 10ms, so a recording of a
-   second plays in 500ms at least, whatever the speed. *)
+(* A clock on which a sleep of more than [longest] seconds never ends, so that
+   a wait lasts until what it waits for arrives, however late. *)
+module Held = struct
+  type t = { clock : Eio_mock.Clock.Mono.t; longest : int64 }
+  type time = Mtime.t
+
+  let now t = Eio.Time.Mono.now t.clock
+
+  let sleep_until t time =
+    let ns = Int64.sub (Mtime.to_uint64_ns time) (Mtime.to_uint64_ns (now t)) in
+    if ns > t.longest then Eio.Fiber.await_cancel ()
+    else Eio.Time.Mono.sleep_until t.clock time
+end
+
+let held ~longest clock =
+  let longest = Int64.of_float (longest *. 1e9) in
+  Eio.Resource.T ({ Held.clock; longest }, Eio.Time.Pi.clock (module Held))
+
+(* The waits never time out, so the frames are the prompt at 0ms and the
+   command at 500ms, in a recording of a second, however late the shell's
+   output arrives. A frame lasts at least 10ms at 50 frames a second, so a
+   speed above 2 plays as 2. *)
 let test_playback_speed () =
   with_dir @@ fun env cwd ->
   let loop speed =
-    with_virtual_clock ~started:(started cwd) @@ fun clock ->
+    with_virtual_clock @@ fun clock ->
+    let clock = held ~longest:1. clock in
     let t =
       Result.get_ok
         (K7.tape
@@ -173,9 +194,9 @@ let test_playback_speed () =
            K7.
              [
                raw ("Set PlaybackSpeed " ^ speed);
-               start;
                sleep (Ms 500);
-               type' "x";
+               type' "echo hi\n";
+               wait Prompt;
                sleep (Ms 500);
              ])
     in
@@ -199,13 +220,10 @@ let test_playback_speed () =
         done;
         int_of_string (String.sub svg !k (j - !k))
   in
-  let at_least what n ms =
-    if ms < n then Alcotest.failf "%s: a loop of %dms" what ms
-  in
-  at_least "real time" 1000 (loop "1");
-  at_least "twice as fast" 500 (loop "2");
-  at_least "clamped" 500 (loop "100000");
-  at_least "slower" 4000 (loop "0.25")
+  Alcotest.(check int) "real time" 1000 (loop "1");
+  Alcotest.(check int) "twice as fast" 500 (loop "2");
+  Alcotest.(check int) "clamped" 500 (loop "100000");
+  Alcotest.(check int) "slower" 4000 (loop "0.25")
 
 (* A shell that shows no prompt fails the recording within the tape's wait
    timeout, by the clock of record. *)
