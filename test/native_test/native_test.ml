@@ -83,12 +83,56 @@ let executable path contents =
   Out_channel.with_open_gen [ Open_wronly; Open_creat; Open_trunc; Open_binary ]
     0o755 path (fun oc -> Out_channel.output_string oc contents)
 
+type clock = Eio.Time.Mono.ty Eio.Resource.t
+
+module Held = struct
+  type t = {
+    clock : Eio_mock.Clock.Mono.t;
+    hold : float;
+    released : unit Eio.Promise.t;
+  }
+
+  type time = Mtime.t
+
+  let now t = Eio.Time.Mono.now t.clock
+
+  let sleep_until t time =
+    let ns = Int64.sub (Mtime.to_uint64_ns time) (Mtime.to_uint64_ns (now t)) in
+    if Int64.to_float ns /. 1e9 > t.hold then Eio.Promise.await t.released;
+    Eio.Time.Mono.sleep_until t.clock time
+end
+
+let silent = { Eio.Debug.traceln = (fun ?__POS__:_ -> Fmt.kstr ignore) }
+
+(* The clock moves until [f] returns, so that a recording that is cancelled
+   still stops its program. It moves silently, as a command's standard error
+   may be what a test checks. *)
+let with_clock ?(hold = 1.) ?(release = fun () -> false) f =
+  let clock = Eio_mock.Clock.Mono.make () in
+  let released, set = Eio.Promise.create () in
+  let finished = ref false in
+  Eio.Switch.run @@ fun sw ->
+  Eio.Fiber.fork ~sw (fun () ->
+      Eio.Cancel.protect @@ fun () ->
+      Eio.Fiber.with_binding Eio.Private.Debug.v#traceln silent @@ fun () ->
+      while not !finished do
+        if (not (Eio.Promise.is_resolved released)) && release () then
+          Eio.Promise.resolve set ();
+        if not (Eio_mock.Clock.Mono.try_advance clock) then Eio.Fiber.yield ()
+      done);
+  Fun.protect ~finally:(fun () -> finished := true) @@ fun () ->
+  f
+    (Eio.Resource.T
+       ({ Held.clock; hold; released }, Eio.Time.Pi.clock (module Held)))
+
+let rec until p =
+  if not (p ()) then (
+    Eio.Fiber.yield ();
+    until p)
+
 let play env cwd t =
-  Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 60. @@ fun () ->
-  K7.record ~engine:Native
-    ~clock:(Eio.Stdenv.mono_clock env)
-    ~proc:(Eio.Stdenv.process_mgr env)
-    ~cwd t
+  with_clock @@ fun clock ->
+  K7.record ~engine:Native ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd t
 
 let record ?(image = "demo.svg") env cwd t =
   (try Eio.Path.unlink Eio.Path.(cwd / image) with Eio.Io _ -> ());

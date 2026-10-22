@@ -488,7 +488,7 @@ let test_vhs_path_override () =
   let vars = [ ("PATH", Eio.Path.native_exn cwd) ] in
   let record vhs =
     K7.record ~engine:Vhs ~vhs ~env:vars
-      ~clock:(Eio.Stdenv.mono_clock env)
+      ~clock:(Eio_mock.Clock.Mono.make ())
       ~proc:(Eio.Stdenv.process_mgr env)
       ~cwd (tape [])
   in

@@ -62,8 +62,15 @@ Sleep 1000ms
       | Ok s -> Alcotest.failf "accepted %S" s)
     [ "bad\000setup"; "a\tb.sh"; "a\nb.sh"; "a\xc2\x85b.sh"; "\xff.sh" ]
 
-let with_files files fn =
+(* The commands run on a {!Native_test.with_clock} clock, or on the real one
+   with [~real_time:true]. *)
+let with_files ?(real_time = false) files fn =
   Eio_main.run @@ fun env ->
+  (if real_time then fun f -> f env
+   else fun f ->
+     Native_test.with_clock @@ fun clock ->
+     f (Eio_unix.Stdenv.override env ~mono_clock:clock))
+  @@ fun env ->
   let dir = Filename.temp_dir "k7-cli" "" in
   let path name = Filename.concat dir name in
   List.iter
@@ -187,7 +194,7 @@ let test_render () =
     ]
   @@ fun env path ->
   let proc = Eio.Stdenv.process_mgr env in
-  let mono = Eio.Stdenv.mono_clock env in
+  let mono = Eio_mock.Clock.Mono.make () in
   let cwd = Eio.Stdenv.cwd env in
   let t = Result.get_ok (K7.tape ~outputs:[ "x.gif" ] [ K7.sleep (Ms 100) ]) in
   (match K7.record ~engine:Vhs ~vhs:(path "ko") ~clock:mono ~proc ~cwd t with
@@ -228,17 +235,13 @@ let test_render () =
         msg
   | Error e -> Alcotest.failf "unexpected %a" K7.pp_error e
   | Ok () -> Alcotest.fail "ran in a missing directory");
-  let clock = Eio.Stdenv.clock env in
   (match
      Eio.Fiber.first
        (fun () ->
          `Rendered
            (K7.record ~engine:Vhs ~vhs:(path "slow") ~clock:mono ~proc ~cwd t))
        (fun () ->
-         Eio.Time.with_timeout_exn clock 60. (fun () ->
-             while not (Sys.file_exists (path "slow.ready")) do
-               Eio.Time.sleep clock 0.01
-             done);
+         Native_test.until (fun () -> Sys.file_exists (path "slow.ready"));
          `Timeout)
    with
   | `Timeout -> ()
@@ -253,7 +256,7 @@ let test_render () =
         (Sys.file_exists (path "stubborn.term")
         && Eio_mock.Clock.Mono.try_advance grace)
     then (
-      Eio.Time.sleep clock 0.01;
+      Eio.Fiber.yield ();
       advance ())
   in
   (match
@@ -265,12 +268,10 @@ let test_render () =
                (K7.record ~engine:Vhs ~vhs:(path "stubborn") ~clock:grace ~proc
                   ~cwd t))
            (fun () ->
-             Eio.Time.with_timeout_exn clock 60. (fun () ->
-                 while not (Sys.file_exists (path "stubborn.ready")) do
-                   Eio.Time.sleep clock 0.01
-                 done);
+             Native_test.until (fun () ->
+                 Sys.file_exists (path "stubborn.ready"));
              `Timeout))
-       (fun () -> Eio.Time.with_timeout_exn clock 60. advance)
+       advance
    with
   | `Timeout, () -> ()
   | `Rendered _, () -> Alcotest.fail "stubborn vhs finished");
@@ -335,13 +336,9 @@ let test_output_order ~native () =
                Typing_speed (Ms 5);
              ]
          ~outputs:[ output ]
-         (Cram.actions ~setup:[] cram @ [ K7.sleep (Ms 3500) ]))
+         (Cram.actions ~setup:[] cram @ [ K7.sleep (Ms 500) ]))
   in
-  let result =
-    Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 30. (fun () ->
-        play ~native env t)
-  in
-  (match result with
+  (match play ~native env t with
   | Ok () -> ()
   | Error e -> Alcotest.failf "%a" K7.pp_error e);
   let screen = Eio.Path.load Eio.Path.(Eio.Stdenv.fs env / output) in
@@ -370,11 +367,7 @@ let test_history ~native () =
          ~setup:[ path "history.sh" ]
          ~outputs:[ output ] ~name:"history.t" src)
   in
-  let result =
-    Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 60. (fun () ->
-        play ~native env t)
-  in
-  (match result with
+  (match play ~native env t with
   | Ok () -> ()
   | Error e -> Alcotest.failf "%a" K7.pp_error e);
   let screen = Eio.Path.load Eio.Path.(Eio.Stdenv.fs env / output) in
@@ -400,12 +393,9 @@ let record_cram ~native ?(setup = []) env path src =
                Wait_timeout (Ms 3000);
              ]
          ~outputs:[ output ]
-         (Cram.actions ~setup cram @ [ K7.sleep (Ms 2000) ]))
+         (Cram.actions ~setup cram @ [ K7.sleep (Ms 500) ]))
   in
-  (match
-     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 40. (fun () ->
-         play ~native env t)
-   with
+  (match play ~native env t with
   | Ok () -> ()
   | Error e -> Alcotest.failf "%a" K7.pp_error e);
   Eio.Path.load Eio.Path.(Eio.Stdenv.fs env / output)
@@ -451,8 +441,10 @@ let test_wrapped_prompt ~native () =
   if not (contains ~sub:"\nafter" screen) then
     Alcotest.failf "the prompt after a full line was missed: %s" screen
 
+(* Its wait times out once bash shows its continuation prompt, which no clock
+   can tell, so it runs in real time. *)
 let test_unfinished ~native () =
-  with_files
+  with_files ~real_time:true
     [
       ("demo.t", 0o644, "  $ cat <<EOF\n  > a\n  $ echo after\n");
       ("err", 0o644, "");
@@ -509,14 +501,21 @@ let test_native_text () =
         (In_channel.with_open_bin (path output) In_channel.input_all))
     [ "out.txt"; "out.ascii"; "out.test" ]
 
+(* The waits stand still until the second command runs. *)
 let test_timeout_message () =
   with_files [] @@ fun env path ->
+  let started = path "started" in
   let code, msg =
-    run_err env path ~wait_timeout_s:1 "  $ true\n  $ sleep 5\n"
+    Native_test.with_clock ~release:(fun () -> Sys.file_exists started)
+    @@ fun clock ->
+    run_err
+      (Eio_unix.Stdenv.override env ~mono_clock:clock)
+      path ~wait_timeout_s:2
+      (Fmt.str "  $ true\n  $ touch %s; sleep 5\n" (Filename.quote started))
   in
   Alcotest.(check int) "exit code" 123 code;
   check_message msg
-    ~has:[ "command 2"; "sleep 5"; "1 second"; "--wait-timeout" ]
+    ~has:[ "command 2"; "sleep 5"; "2 seconds"; "--wait-timeout" ]
     ~lacks:[ "x{200B}"; "x{2060}"; "Wait+Line"; "\u{200B}" ]
 
 let test_tape_timeout () =
@@ -642,15 +641,11 @@ let test_cram_dir () =
   let given, _ = shown ~dir () in
   expect "--dir" (Unix.realpath dir) given
 
-let interrupt env path ~signal ~ready f =
-  let clock = Eio.Stdenv.clock env in
+let interrupt path ~signal ~ready f =
   Eio.Fiber.both
     (fun () -> f ())
     (fun () ->
-      Eio.Time.with_timeout_exn clock 20. (fun () ->
-          while not (Sys.file_exists (path ready)) do
-            Eio.Time.sleep clock 0.01
-          done);
+      Native_test.until (fun () -> Sys.file_exists (path ready));
       Unix.kill (Unix.getpid ()) signal)
 
 let test_interrupt () =
@@ -659,7 +654,7 @@ let test_interrupt () =
   @@ fun env path ->
   let code = ref 0 in
   Unix.mkdir (path "cram") 0o755;
-  interrupt env path ~signal:Sys.sigint ~ready:"ready.run" (fun () ->
+  interrupt path ~signal:Sys.sigint ~ready:"ready.run" (fun () ->
       code :=
         Rec_cmd.run env ~settings:[] ~env:[] ~output:(path "run.svg")
           [
@@ -672,7 +667,7 @@ let test_interrupt () =
     "k7 rec image" true
     (contains ~sub:"RUN_2"
        (In_channel.with_open_bin (path "run.svg") In_channel.input_all));
-  interrupt env path ~signal:Sys.sigterm ~ready:"cram/ready" (fun () ->
+  interrupt path ~signal:Sys.sigterm ~ready:"cram/ready" (fun () ->
       code :=
         Play_cram.run env ~dry_run:false ~print:false ~vhs:"vhs" ~setup:[]
           ~dir:(Filename.dirname (path "cram/x"))

@@ -118,7 +118,8 @@ let test_go_oracle () =
 
 let test_vhs_oracle () =
   with_dir @@ fun env cwd ->
-  let clock = Eio.Stdenv.mono_clock env and proc = Eio.Stdenv.process_mgr env in
+  let clock = Eio_mock.Clock.Mono.make ()
+  and proc = Eio.Stdenv.process_mgr env in
   let text = {|\307\204 \305\277tra\303\237e K caf\303\251|} in
   let tape waits =
     match

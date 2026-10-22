@@ -58,12 +58,26 @@ val executable : string -> string -> unit
     with a blocking [close]. Under io_uring, Eio closes a file late, and running
     it at once fails with [ETXTBSY]. *)
 
+type clock = Eio.Time.Mono.ty Eio.Resource.t
+(** The type for the clocks of recordings. *)
+
+val with_clock : ?hold:float -> ?release:(unit -> bool) -> (clock -> 'a) -> 'a
+(** [with_clock ~hold ~release f] is [f c], where [c] is a mock {!type-clock}
+    that jumps to the next sleep that is due, so that a tape's sleeps take no
+    time and timeouts expire in their order. A sleep of more than [hold] seconds
+    (defaults to [1.]), such as the timeout of a wait, starts once [release ()]
+    holds (defaults to never), so that until then a wait lasts as long as what
+    it waits for takes to arrive. *)
+
+val until : (unit -> bool) -> unit
+(** [until p] yields until [p ()] holds. *)
+
 val play :
   Eio_unix.Stdenv.base ->
   Eio.Fs.dir_ty Eio.Path.t ->
   K7.t ->
   (unit, K7.error) result
-(** [play env cwd t] is {!K7.record} of [t] in [cwd], within a minute. *)
+(** [play env cwd t] records [t] in [cwd] on a {!with_clock} clock. *)
 
 val record :
   ?image:string ->

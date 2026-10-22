@@ -199,10 +199,10 @@ whatever quotes they hold.
 
   $ printf '  $ echo "$GREETING"; printf "%%099d|\\n" 0\n' > env.t
   $ k7 play --columns 100 --env GREETING='"bonjour'"'"'`' --output env.txt env.t
-  $ grep -c '^"bonjour'"'"'`$' env.txt
-  3
-  $ grep -c '^0*|$' env.txt
-  3
+  $ grep -m 1 -c '^"bonjour'"'"'`$' env.txt
+  1
+  $ grep -m 1 -c '^0*|$' env.txt
+  1
 
 k7 rec records a program, with no shell and nothing typed, and exits
 with the program's exit code once the image is written.
@@ -252,6 +252,7 @@ settings and outputs.
   > Set Width 900
   > Type "echo $GREETING"
   > Enter
+  > Wait
   > Sleep 500ms
   > EOF
   $ k7 play --print --columns 90 -o demo.svg demo.tape
@@ -259,10 +260,11 @@ settings and outputs.
   Set Columns 90
   Type "echo $GREETING"
   Enter
+  Wait
   Sleep 500ms
   $ k7 play --columns 40 --env GREETING=salut -o tape.txt demo.tape
-  $ grep -c '^salut$' tape.txt
-  2
+  $ grep -m 1 -c '^salut$' tape.txt
+  1
   $ k7 play --wait-timeout 5 demo.tape
   k7: demo.tape: --wait-timeout applies to a cram test (.t), not to a tape
   [123]

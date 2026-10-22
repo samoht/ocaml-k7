@@ -83,7 +83,13 @@ let test_screenshot_clash () =
 let test_timeout () =
   with_dir @@ fun env cwd ->
   let t =
-    tape K7.[ type' "echo hi\n"; wait ~timeout:(Ms 300) (Screen "never") ]
+    tape
+      K7.
+        [
+          type' "echo hi\n";
+          wait (Screen "(?m)^hi$");
+          wait ~timeout:(Ms 300) (Screen "never");
+        ]
   in
   match record env cwd t with
   | Error (Timeout { wait; line; last } as e) ->
@@ -110,34 +116,20 @@ let test_shell_exit () =
   | Ok _ -> Alcotest.fail "no error"
   | Error e -> Alcotest.failf "%a" K7.pp_error e
 
-(* A clock that jumps to the next sleep that is due, so that timeouts expire
-   in their order and the time they took is exact. Until [started] exists, it
-   stands still, so that the shell's first prompt arrives in its time. *)
-let with_virtual_clock ?started f =
-  let clock = Eio_mock.Clock.Mono.make () in
-  let ready () = Option.fold ~none:true ~some:Sys.file_exists started in
-  Eio.Switch.run @@ fun sw ->
-  Eio.Fiber.fork_daemon ~sw (fun () ->
-      let rec loop () =
-        if not (ready () && Eio_mock.Clock.Mono.try_advance clock) then
-          Eio.Fiber.yield ();
-        loop ()
-      in
-      loop ());
-  f clock
-
 (* Typed at once, before the clock moves. *)
 let start = K7.type' "touch started\n"
 
+(* The clock stands still until [start] has run, so that the shell's first
+   prompt arrives in its time. *)
 let started cwd =
   let path = Eio.Path.native_exn cwd ^ "/started" in
   if Sys.file_exists path then Sys.remove path;
-  path
+  fun () -> Sys.file_exists path
 
 let test_timeout_precedence () =
   with_dir @@ fun env cwd ->
   let times_out ~within t =
-    with_virtual_clock ~started:(started cwd) @@ fun clock ->
+    with_clock ~hold:0. ~release:(started cwd) @@ fun clock ->
     (match
        K7.record ~engine:Native ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd t
      with
@@ -159,24 +151,6 @@ let test_timeout_precedence () =
   times_out ~within:15.
     (tape (Ms 300) K7.[ type' "echo hi\n"; wait (Screen "never") ])
 
-(* A clock on which a sleep of more than [longest] seconds never ends, so that
-   a wait lasts until what it waits for arrives, however late. *)
-module Held = struct
-  type t = { clock : Eio_mock.Clock.Mono.t; longest : int64 }
-  type time = Mtime.t
-
-  let now t = Eio.Time.Mono.now t.clock
-
-  let sleep_until t time =
-    let ns = Int64.sub (Mtime.to_uint64_ns time) (Mtime.to_uint64_ns (now t)) in
-    if ns > t.longest then Eio.Fiber.await_cancel ()
-    else Eio.Time.Mono.sleep_until t.clock time
-end
-
-let held ~longest clock =
-  let longest = Int64.of_float (longest *. 1e9) in
-  Eio.Resource.T ({ Held.clock; longest }, Eio.Time.Pi.clock (module Held))
-
 (* The waits never time out, so the frames are the prompt at 0ms and the
    command at 500ms, in a recording of a second, however late the shell's
    output arrives. A frame lasts at least 10ms at 50 frames a second, so a
@@ -184,8 +158,7 @@ let held ~longest clock =
 let test_playback_speed () =
   with_dir @@ fun env cwd ->
   let loop speed =
-    with_virtual_clock @@ fun clock ->
-    let clock = held ~longest:1. clock in
+    with_clock @@ fun clock ->
     let t =
       Result.get_ok
         (K7.tape
@@ -229,7 +202,7 @@ let test_playback_speed () =
    timeout, by the clock of record. *)
 let test_first_prompt () =
   with_dir @@ fun env cwd ->
-  with_virtual_clock @@ fun clock ->
+  with_clock ~hold:Float.infinity @@ fun clock ->
   let t =
     Result.get_ok
       (K7.tape
@@ -543,7 +516,7 @@ let test_output_dirs () =
   let record = play env cwd in
   let render t =
     K7.record ~engine:Vhs ~vhs:fake
-      ~clock:(Eio.Stdenv.mono_clock env)
+      ~clock:(Eio_mock.Clock.Mono.make ())
       ~proc:(Eio.Stdenv.process_mgr env)
       ~cwd t
   in
@@ -681,8 +654,8 @@ let test_modified_arrows () =
     tape
       K7.
         [
-          type' "stty -echo; cat -v; stty echo\n";
-          sleep (Ms 300);
+          type' "stty -echo; echo READY; cat -v; stty echo\n";
+          wait (Screen "(?m)^READY$");
           raw "Ctrl+Up";
           raw "Ctrl+Alt+Up";
           raw "Ctrl+Shift+Down";
@@ -920,7 +893,8 @@ let after_settings tape txt =
   skip n 0
 
 let same_text env cwd (vhs_tape, native_tape) =
-  let clock = Eio.Stdenv.mono_clock env and proc = Eio.Stdenv.process_mgr env in
+  let clock = Eio_mock.Clock.Mono.make ()
+  and proc = Eio.Stdenv.process_mgr env in
   (match K7.record ~engine:Vhs ?vhs:oracle ~clock ~proc ~cwd vhs_tape with
   | Ok () -> ()
   | Error e -> Alcotest.failf "%a" K7.pp_error e);
@@ -1052,7 +1026,7 @@ let test_terminal_state () =
   | Some vhs -> (
       match
         K7.record ~engine:Vhs ~vhs
-          ~clock:(Eio.Stdenv.mono_clock env)
+          ~clock:(Eio_mock.Clock.Mono.make ())
           ~proc:(Eio.Stdenv.process_mgr env)
           ~cwd (fst t)
       with
@@ -1087,7 +1061,7 @@ let check_payload ?vhs ?text payload image =
   | Some exe -> (
       match
         K7.record ~engine:Vhs ~vhs:exe
-          ~clock:(Eio.Stdenv.mono_clock env)
+          ~clock:(Eio_mock.Clock.Mono.make ())
           ~proc:(Eio.Stdenv.process_mgr env)
           ~cwd (fst t)
       with
@@ -1181,14 +1155,12 @@ let known_differences =
       (name, fun () -> check_payload ~vhs ?text payload image))
 
 let run ?clock ?vars ?show ?delay env cwd argv =
-  Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 60. @@ fun () ->
-  K7.run ~settings ?env:vars ?show ?delay
-    ~clock:
-      (match clock with
-      | Some c -> (c :> Eio.Time.Mono.ty Eio.Resource.t)
-      | None -> (Eio.Stdenv.mono_clock env :> Eio.Time.Mono.ty Eio.Resource.t))
-    ~proc:(Eio.Stdenv.process_mgr env)
-    ~cwd argv
+  let run clock =
+    K7.run ~settings ?env:vars ?show ?delay ~clock
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd argv
+  in
+  match clock with Some c -> run (c :> clock) | None -> with_clock run
 
 let script cwd name src =
   executable (Eio.Path.native_exn Eio.Path.(cwd / name)) src
@@ -1239,17 +1211,11 @@ let test_run_program () =
      printf 'done\\n'\n\
      exit 3\n";
   let clock = Eio_mock.Clock.Mono.make () in
-  let wall = Eio.Stdenv.clock env in
   let result, () =
     Eio.Fiber.pair
       (fun () -> run ~clock env cwd [ "./demo.sh" ])
       (fun () ->
-        Eio.Time.with_timeout_exn wall 30. (fun () ->
-            while
-              not (Sys.file_exists (Eio.Path.native_exn cwd ^ "/started"))
-            do
-              Eio.Time.sleep wall 0.01
-            done);
+        until (fun () -> Sys.file_exists (Eio.Path.native_exn cwd ^ "/started"));
         Eio_mock.Clock.Mono.set_time clock (Mtime.of_uint64_ns 500_000_000L);
         Eio.Path.save ~create:(`Or_truncate 0o644) Eio.Path.(cwd / "go") "")
   in
@@ -1475,7 +1441,7 @@ let test_run_errors () =
   error "NUL" ~vars:[ ("A", "x\000y") ] [ "true" ] invalid;
   match
     K7.run ~settings:[ Width 800; Columns 80 ]
-      ~clock:(Eio.Stdenv.mono_clock env)
+      ~clock:(Eio_mock.Clock.Mono.make ())
       ~proc:(Eio.Stdenv.process_mgr env)
       ~cwd [ "true" ]
   with
@@ -1560,7 +1526,6 @@ let test_run_signal () =
 
 let test_run_cancel () =
   with_dir @@ fun env cwd ->
-  let clock = Eio.Stdenv.clock env in
   let pid_file = Eio.Path.(cwd / "run.pid") in
   let ready () =
     match String.trim (Eio.Path.load pid_file) with
@@ -1573,9 +1538,7 @@ let test_run_cancel () =
       (fun () ->
         `Ran (run env cwd [ "sh"; "-c"; "echo $$ > run.pid; exec sleep 30" ]))
       (fun () ->
-        while not (ready ()) do
-          Eio.Time.sleep clock 0.001
-        done;
+        until ready;
         `Cancelled)
   in
   (match result with
@@ -1590,36 +1553,29 @@ let test_run_cancel () =
 
 let test_run_cancel_descendant () =
   with_dir @@ fun env cwd ->
-  let clock = Eio.Stdenv.clock env in
   script cwd "parent.sh"
     "#!/bin/sh\n\
      trap '' HUP TERM\n\
-     /bin/sh -c 'trap \"\" HUP TERM; echo $$ > child.pid; exec sleep 30' &\n\
+     /bin/sh -c 'trap \"\" HUP TERM; echo $$ > child.pid; exec sleep 100000' &\n\
      wait\n";
   let pid_file = Eio.Path.(cwd / "child.pid") in
   let ready () =
     try String.trim (Eio.Path.load pid_file) <> "" with Eio.Io _ -> false
   in
   let result =
-    Eio.Time.with_timeout_exn clock 60. @@ fun () ->
     Eio.Fiber.first
       (fun () -> `Ran (run env cwd [ "./parent.sh" ]))
       (fun () ->
-        while not (ready ()) do
-          Eio.Time.sleep clock 0.001
-        done;
+        until ready;
         `Cancelled)
   in
-  let pid = int_of_string (String.trim (Eio.Path.load pid_file)) in
-  let alive =
-    try
-      Unix.kill pid 0;
-      true
-    with Unix.Unix_error (ESRCH, _, _) -> false
-  in
-  (if alive then try Unix.kill pid Sys.sigkill with Unix.Unix_error _ -> ());
   Alcotest.(check bool) "recording was cancelled" true (result = `Cancelled);
-  Alcotest.(check bool) "cancelled recording leaves no descendant" false alive
+  (* Only k7's SIGKILL ends it, at a time of the kernel's choosing. *)
+  let pid = int_of_string (String.trim (Eio.Path.load pid_file)) in
+  until (fun () ->
+      match Unix.kill pid 0 with
+      | () -> false
+      | exception Unix.Unix_error (ESRCH, _, _) -> true)
 
 let test_record_env_names () =
   with_dir @@ fun env cwd ->
@@ -1646,9 +1602,10 @@ let test_record_env () =
         ]
   in
   match
+    with_clock @@ fun clock ->
     K7.record ~engine:Native
       ~env:[ ("GREETING", "bonjour") ]
-      ~clock:(Eio.Stdenv.mono_clock env)
+      ~clock
       ~proc:(Eio.Stdenv.process_mgr env)
       ~cwd t
   with
@@ -1661,9 +1618,10 @@ let test_record_term_override () =
     tape K7.[ type' "printf '%s' \"$TERM\" > received-term\n"; wait Prompt ]
   in
   (match
+     with_clock @@ fun clock ->
      K7.record ~engine:Native
        ~env:[ ("TERM", "vt100") ]
-       ~clock:(Eio.Stdenv.mono_clock env)
+       ~clock
        ~proc:(Eio.Stdenv.process_mgr env)
        ~cwd t
    with
@@ -1730,10 +1688,10 @@ let test_run_command_line_invalid_utf_8 () =
   let arg = "a\x9b[2Jb" in
   let image =
     match
+      with_clock @@ fun clock ->
       K7.run
         ~settings:K7.[ Columns 200; Rows 6; Font_size 10; Padding 0 ]
-        ~clock:(Eio.Stdenv.mono_clock env)
-        ~proc ~cwd
+        ~clock ~proc ~cwd
         [ "/usr/bin/printf"; "%s"; arg ]
     with
     | Ok (image, `Exited 0) -> image
@@ -1757,19 +1715,22 @@ let test_run_command_line_invalid_utf_8 () =
     (String.escaped arg)
     (String.escaped (Buffer.contents output))
 
+(* The first program runs until the second one is done. *)
 let test_run_concurrent_terminals () =
   with_dir @@ fun env cwd ->
+  script cwd "first.sh"
+    "#!/bin/sh\n: > first\nwhile [ ! -e second ]; do sleep 0.01; done\n";
   script cwd "ttys.sh"
     "#!/bin/bash\n\
      for f in /dev/fd/*; do n=${f##*/}; if [ \"$n\" -gt 2 ] && [ -t \"$n\" ]; \
      then printf 'LEAK%s ' \"$n\"; fi; done\n\
-     printf DONE\n";
-  let clock = Eio.Stdenv.clock env in
+     printf DONE\n\
+     : > second\n";
   let _, second =
     Eio.Fiber.pair
-      (fun () -> run env cwd [ "sleep"; "2" ])
+      (fun () -> run env cwd [ "./first.sh" ])
       (fun () ->
-        Eio.Time.sleep clock 0.5;
+        until (fun () -> Eio.Path.is_file Eio.Path.(cwd / "first"));
         run ~show:"" env cwd [ "./ttys.sh" ])
   in
   match second with
