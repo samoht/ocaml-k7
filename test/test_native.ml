@@ -380,7 +380,9 @@ let test_window_bar () =
    fill. *)
 let test_margin_fill () =
   with_dir @@ fun env cwd ->
-  Eio.Path.save ~create:(`Or_truncate 0o644) Eio.Path.(cwd / "m.png") "abcd";
+  Eio.Path.save ~create:(`Or_truncate 0o644)
+    Eio.Path.(cwd / "m.png")
+    "\x89PNG\r\n\x1a\nabcd";
   let play raws =
     match record env cwd (tape (List.map Vhs.raw raws @ [ Vhs.type' "x" ])) with
     | Ok s -> s
@@ -389,12 +391,50 @@ let test_margin_fill () =
   let s = play [ "Set Margin 20"; {|Set MarginFill "m.png"|} ] in
   check_contains "image"
     ~sub:
-      {|<image width="800" height="400" preserveAspectRatio="none" href="data:image/png;base64,YWJjZA=="/>|}
+      {|<image width="800" height="400" preserveAspectRatio="none" href="data:image/png;base64,iVBORw0KGgphYmNk"/>|}
     s;
   check_contains "inside the margin" ~sub:{|<svg x="80" y="80" |} s;
   let s = play [ "Set Margin 20"; {|Set MarginFill ""|} ] in
   check_contains "no margin" ~sub:{|<svg x="60" y="60" |} s;
   Alcotest.(check bool) "no image" false (contains ~sub:"<image" s)
+
+(* The image of a margin is a regular file, followed through symlinks, of
+   at most 10 MiB, with the signature of an image a browser draws; a
+   [Source] tape is a regular file too. Anything else is refused before
+   playing, without blocking on a FIFO. *)
+let test_margin_fill_refused () =
+  with_dir @@ fun env cwd ->
+  let dir = Option.get (Eio.Path.native cwd) in
+  let file name = Filename.concat dir name in
+  Eio.Path.save ~create:(`Or_truncate 0o644) Eio.Path.(cwd / "text.png") "hi";
+  Eio.Path.save ~create:(`Or_truncate 0o644)
+    Eio.Path.(cwd / "big.png")
+    ("\x89PNG\r\n\x1a\n" ^ String.make (10 * 1024 * 1024) 'x');
+  Unix.symlink "/etc/hosts" (file "leak.png");
+  Unix.symlink dir (file "dir.png");
+  Unix.mkfifo (file "fifo.png") 0o644;
+  Unix.mkfifo (file "fifo.tape") 0o644;
+  let played = Eio.Path.(cwd / "played") in
+  List.iter
+    (fun (raw, sub) ->
+      let t =
+        tape
+          [ Vhs.raw "Set Margin 20"; Vhs.raw raw; Vhs.type' "touch played\n" ]
+      in
+      match record env cwd t with
+      | Error (Invalid msg) ->
+          check_contains raw ~sub msg;
+          Alcotest.(check bool) "not played" false (Eio.Path.is_file played)
+      | Ok _ -> Alcotest.failf "%s played" raw
+      | Error e -> Alcotest.failf "%s: %a" raw Vhs.pp_error e)
+    [
+      ({|Set MarginFill "text.png"|}, "not a PNG, JPEG, GIF, WebP or BMP image");
+      ({|Set MarginFill "leak.png"|}, "not a PNG, JPEG, GIF, WebP or BMP image");
+      ({|Set MarginFill "big.png"|}, "larger than 10 MiB");
+      ({|Set MarginFill "dir.png"|}, "not a regular file");
+      ({|Set MarginFill "fifo.png"|}, "not a regular file");
+      ({|Source "fifo.tape"|}, "not a regular file");
+    ]
 
 (* zsh plays natively, with VHS's prompt. *)
 let test_zsh () =
@@ -1068,6 +1108,7 @@ let suite =
          ("text", test_text);
          ("window bar", test_window_bar);
          ("margin fill", test_margin_fill);
+         ("margin fill refused", test_margin_fill_refused);
          ("zsh", test_zsh);
          ("fish", test_fish);
          ("replies", test_replies);
