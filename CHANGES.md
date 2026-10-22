@@ -17,10 +17,18 @@
   nothing typed, and returns the animated SVG image of its screens below
   its command line, timed as they arrived, with how the program exited.
   `?show` (`--show`) replaces the command line, or hides it.
+- `K7.play` plays a tape with `K7.record`, or with `K7.render` when an
+  output or a screenshot needs `vhs`, as `k7 cram` and `k7 tape` do.
+- `K7.run`, `K7.record`, `K7.render` and `K7.play` take `?stop`, which ends
+  a recording and keeps what it recorded; `k7 cram`, `k7 run` and
+  `k7 tape` resolve it on SIGINT or SIGTERM, then exit 130 or 143.
+- `k7 cram` runs the commands in a new empty temporary directory, as dune
+  does, or in the directory of `--dir`.
 - `K7.of_string` reads a tape in the `.tape` syntax, its settings as
   `K7.setting` values and `Hide`/`Show` as `K7.hidden`, and
   `K7.with_settings` and `K7.with_outputs` replace a tape's settings and
-  outputs.
+  outputs. A tape may have no output until it plays, so a tape without an
+  `Output` line reads, and `k7 tape -o` gives it one.
 - The native recorder plays bash, zsh and fish as VHS starts them, VHS's
   window bar, named and JSON themes, margin colours and images, `Screenshot`
   of an `.svg` path (a still SVG image), `Source` and the `.txt`, `.ascii`

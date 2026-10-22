@@ -23,16 +23,19 @@ GIF and video outputs also need [VHS](https://github.com/charmbracelet/vhs#insta
 ## Command line
 
 `k7 cram` records a cram test, the `.t` format that dune runs. It types each
-command into bash and waits for the prompt before it types the next.
+command into bash, in a new empty temporary directory as dune does, and
+waits for the prompt before it types the next.
 
 ```sh
 $ printf '  $ echo hello\n  hello\n' > hello.t
 $ k7 cram --output hello.svg hello.t
 ```
 
-`k7 run` records a program, with no shell and nothing typed. Each screen
-shows at the time the program printed it, and `k7 run` exits with the
-program's exit code.
+`k7 run` records a program, with no shell and nothing typed. The image's
+first line is `$ ` and the command, which `--show` replaces or, empty,
+hides. Each screen shows at the time the program printed it. `k7 run` exits
+with the program's exit code; an error of k7 itself prints `k7:` and the
+reason on standard error, and exits 123.
 
 ```sh
 $ k7 run --output ls.svg -- ls -l
@@ -48,14 +51,15 @@ $ k7 tape hello.tape
 Each subcommand takes `--cols`, `--rows`, `--font-size`, `--theme` and
 `--env VAR=VALUE`. k7 writes `.svg` outputs and the text outputs (`.txt`,
 `.ascii` and `.test`) itself, and `k7 cram` and `k7 tape` run `vhs` for the
-others. `k7 COMMAND --help` gives the details.
+others. `k7 cram` and `k7 tape` call `K7.play`, and `k7 run` calls `K7.run`.
+`k7 COMMAND --help` gives the details.
 
 ## OCaml
 
 `K7.record` plays a tape in bash, zsh or fish and writes its SVG and text
-outputs.
-`K7.svg` returns the image of output given with its times, such as the
-bytes a test captured. `K7.run` records a program as `k7 run` does.
+outputs. `K7.play` calls `K7.record`, or `K7.render` when an output needs
+`vhs`. `K7.svg` returns the image of output given with its times, such as
+the bytes a test captured. `K7.run` records a program as `k7 run` does.
 
 ```ocaml
 let record_ls env =
@@ -138,8 +142,9 @@ Other limitations:
   shows as its separate emoji, and an emoji made wide by U+FE0F can overlap
   the next cell.
 - `k7 run` types nothing, so a program that waits for input waits until
-  `k7` is interrupted. Recording stops when the program exits, so what a
-  background process prints after that is not in the image.
+  `k7` is interrupted, and then writes what it recorded. Recording stops
+  when the program exits, so what a background process prints after that
+  is not in the image.
 - Under heavy load on macOS, `/bin/bash` 3.2 can print `bash: child setpgid
   (N to N): Operation not permitted` as it starts a command. The command
   still runs, but the line shows on the screen and can make a wait fail.
