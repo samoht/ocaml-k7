@@ -20,5 +20,7 @@ val is_format : int -> bool
 *)
 
 val strip_format : string -> string
-(** [strip_format s] is [s] without the characters {!is_format} holds of. The
-    other bytes of [s], invalid UTF-8 included, are kept. *)
+(** [strip_format s] is [s] without the characters {!is_format} holds of, but
+    for the tag characters of an emoji tag sequence, U+1F3F4 followed by tag
+    characters and U+E007F, which picks a subdivision flag such as Scotland's.
+    The other bytes of [s], invalid UTF-8 included, are kept. *)

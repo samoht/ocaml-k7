@@ -187,10 +187,10 @@ val pp_error : error Fmt.t
 (** [pp_error] formats an error for humans: one line, followed for
     {!constructor-Failed} by the last ten lines [vhs] printed, indented. Escape
     sequences and control characters are removed from every string it prints,
-    and so are the invisible format characters (Unicode category [Cf]), such as
-    U+200B, which leave out the joiners U+200C and U+200D and the prepended
-    concatenation marks, such as U+0605, which show; invalid UTF-8 is replaced
-    by U+FFFD. *)
+    and so are the format characters (Unicode category [Cf]) other than the
+    joiners U+200C and U+200D, the prepended concatenation marks, such as
+    U+0605, and the tag characters of a subdivision flag, such as Scotland's,
+    which show; invalid UTF-8 is replaced by U+FFFD. *)
 
 val tape :
   ?settings:setting list ->

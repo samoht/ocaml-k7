@@ -71,15 +71,38 @@ let is_format u =
   && (not (is_concatenation_mark u))
   && List.exists (fun (lo, hi) -> lo <= u && u <= hi) (Lazy.force format)
 
+(* The length of the emoji tag sequence at [i] of [s], which picks a
+   subdivision flag: U+1F3F4, then tag characters, then U+E007F CANCEL TAG;
+   [0] if there is none. *)
+let tag_sequence s i =
+  let decode j =
+    let d = String.get_utf_8_uchar s j in
+    (Uchar.to_int (Uchar.utf_decode_uchar d), Uchar.utf_decode_length d)
+  in
+  let rec tags j n =
+    if j >= String.length s then 0
+    else
+      match decode j with
+      | 0xe007f, l when n > 0 -> j + l - i
+      | u, l when u >= 0xe0020 && u <= 0xe007e -> tags (j + l) (n + 1)
+      | _ -> 0
+  in
+  match decode i with 0x1f3f4, l -> tags (i + l) 0 | _ -> 0
+
 let strip_format s =
   let b = Buffer.create (String.length s) in
   let rec go i =
-    if i < String.length s then (
-      let d = String.get_utf_8_uchar s i in
-      let n = Uchar.utf_decode_length d in
-      if not (is_format (Uchar.to_int (Uchar.utf_decode_uchar d))) then
-        Buffer.add_substring b s i n;
-      go (i + n))
+    if i < String.length s then
+      match tag_sequence s i with
+      | 0 ->
+          let d = String.get_utf_8_uchar s i in
+          let n = Uchar.utf_decode_length d in
+          if not (is_format (Uchar.to_int (Uchar.utf_decode_uchar d))) then
+            Buffer.add_substring b s i n;
+          go (i + n)
+      | n ->
+          Buffer.add_substring b s i n;
+          go (i + n)
   in
   go 0;
   Buffer.contents b

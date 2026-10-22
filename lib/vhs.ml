@@ -756,12 +756,11 @@ let utf_8 s =
       let d = String.get_utf_8_uchar s i in
       let u = Uchar.utf_decode_uchar d in
       let c = Uchar.to_int u in
-      if (c < 0x80 || c > 0x9f) && not (Unicode.is_format c) then
-        Buffer.add_utf_8_uchar b u;
+      if c < 0x80 || c > 0x9f then Buffer.add_utf_8_uchar b u;
       go (i + Uchar.utf_decode_length d))
   in
   go 0;
-  Buffer.contents b
+  Unicode.strip_format (Buffer.contents b)
 
 (* [printable s] is [s] without its escape sequences (CSI, OSC, DCS and the
    other ECMA-48 strings, two-byte ESC sequences, and their C1 forms) and
