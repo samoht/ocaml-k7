@@ -32,6 +32,13 @@ let test_cursor () =
     "hidden cursor" false
     (contains ~sub:{|href="#c"|} hidden)
 
+(* A block cursor must not reveal an SGR-concealed glyph. *)
+let test_concealed_cursor () =
+  let s = svg [ (Ms 0, "\027[8msecret\r") ] in
+  Alcotest.(check bool)
+    "concealed glyph is not redrawn over the cursor" false
+    (contains ~sub:{|<text class="ka k"|} s)
+
 (* A backspace moves the cursor without erasing, also when a terminal title
    holds one. *)
 let test_backspace () =
@@ -405,6 +412,7 @@ let suite =
           test_prepend_chunk_boundaries );
         ("default foreground", test_default_fg);
         ("cursor", test_cursor);
+        ("concealed cursor text", test_concealed_cursor);
         ("backspace", test_backspace);
         ("zero width", test_zero_width);
         ("erase scrollback", test_erase_scrollback);
