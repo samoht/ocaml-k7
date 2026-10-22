@@ -343,7 +343,8 @@ val record :
 val svg :
   ?settings:setting list -> (duration * string) list -> (string, error) result
 (** [svg ~settings output] is the SVG image of a terminal with [settings]
-    (defaults to [[]]) that receives each string of [output] at its time. It is
-    [Error (Invalid _)] if a time is out of the range of a {!duration} or before
-    the one ahead of it, and [Error (Unsupported _)] on the {!Theme} colours and
-    the sizes {!record} refuses. *)
+    (defaults to [[]]) that receives each string of [output] at its time. [svg]
+    starts no shell, so it ignores {!Shell}. It is [Error (Invalid _)] if a
+    setting is one {!val-tape} refuses, or if a time is out of the range of a
+    {!duration} or before the one ahead of it, and [Error (Unsupported _)] on
+    the {!Theme} colours and the sizes {!record} refuses. *)

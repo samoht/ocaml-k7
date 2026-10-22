@@ -1008,8 +1008,14 @@ let check_times output =
   Result.map_error (fun msg -> Invalid msg) (go 0 output)
 
 let svg ?(settings = []) output =
+  let* () =
+    Result.map_error
+      (fun msg -> Invalid msg)
+      (let* () = iter_result check_setting settings in
+       check_size settings [])
+  in
   let* () = check_times output in
   let b = Buffer.create 256 in
-  List.iter (add_setting b) settings;
+  List.iter (function Shell _ -> () | s -> add_setting b s) settings;
   let* tape = native (String.split_on_char '\n' (Buffer.contents b)) in
   Ok (Native.replay tape (List.map (fun (Ms ms, s) -> (ms, s)) output))
