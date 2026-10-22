@@ -121,14 +121,18 @@ let test_parse_errors () =
       name (Error expected)
       (Result.map ignore (Cram.parse src))
   in
-  error "control" {|line 2: "echo \001" holds a control character|}
+  error "control" {|line 2: "echo \x01" holds a control character|}
     "prose\n  $ echo \x01\n";
   (* A tab would reach bash's completion, not the command. *)
   error "tab" {|line 1: "a\tb" holds a control character|} "  $ a\tb\n";
   (* A terminal reads U+009B as CSI. *)
-  error "C1" {|line 1: "a\194\155b" holds a control character|}
-    "  $ a\xc2\x9bb\n";
-  error "continuation" {|line 2: "\255" is not valid UTF-8|} "  $ a\n  > \xff\n";
+  error "C1" {|line 1: "a\u{9B}b" holds a control character|} "  $ a\xc2\x9bb\n";
+  (* The message keeps valid UTF-8 as it is and replaces an invalid byte. *)
+  error "continuation" "line 2: \"caf\u{e9} \u{FFFD}\" is not valid UTF-8"
+    "  $ a\n  > caf\xc3\xa9 \xff\n";
+  error "UTF-8"
+    "line 1: \"\\\"caf\u{e9}\\\" \\\\ \\x01\" holds a control character"
+    "  $ \"caf\xc3\xa9\" \\ \x01\n";
   Alcotest.(check bool)
     "empty" true
     (Cram.is_empty (Result.get_ok (Cram.parse "prose\n  > orphan\n")))

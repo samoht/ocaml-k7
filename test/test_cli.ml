@@ -45,7 +45,7 @@ Sleep 1000ms
   in
   error "no command" {|input.t: no command, a line that starts with "  $ "|}
     "prose only" ~setup:[] ~output:"x.gif";
-  error "control" {|input.t: line 1: "echo \001" holds a control character|}
+  error "control" {|input.t: line 1: "echo \x01" holds a control character|}
     "  $ echo \001\n" ~setup:[] ~output:"x.gif";
   error "output" {|Output "demo": neither an extension nor a trailing slash|}
     "  $ true\n" ~setup:[] ~output:"demo";

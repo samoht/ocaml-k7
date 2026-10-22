@@ -44,7 +44,7 @@ A command the tape cannot type is an error, not an exception.
 
   $ printf '  $ echo \001\n' > bad.t
   $ vhs-cram --output demo.gif bad.t
-  vhs-cram: bad.t: line 1: "echo \001" holds a control character
+  vhs-cram: bad.t: line 1: "echo \x01" holds a control character
   [123]
 
 So is a test without commands, and an output path VHS cannot read.
