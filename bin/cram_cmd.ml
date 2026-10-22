@@ -118,28 +118,53 @@ let render_error ~setup ~wait ~name ~tape src e =
         longer
   | None, _, _ -> Fmt.str "%s: %a" name K7.pp_error e
 
-let record env ~print ~vhs ~setup ?settings ?env:vars ?wait_timeout_s ~output
-    input =
+let absolute path =
+  if Filename.is_relative path then Filename.concat (Sys.getcwd ()) path
+  else path
+
+let in_dir env dir f =
+  let fs = Eio.Stdenv.fs env in
+  match dir with
+  | Some dir -> f Eio.Path.(fs / absolute dir)
+  | None -> (
+      match Filename.temp_dir "k7-cram-" "" with
+      | exception Sys_error msg -> Error msg
+      | dir ->
+          let dir = Eio.Path.(fs / dir) in
+          Fun.protect
+            ~finally:(fun () ->
+              try Eio.Path.rmtree ~missing_ok:true dir with Eio.Io _ -> ())
+            (fun () -> f dir))
+
+let record env ~print ~vhs ~setup ?dir ?settings ?env:vars ?wait_timeout_s
+    ~output input =
   let* src = Flags.load env input in
-  let* tape =
+  let tape ~setup ~output =
     tape ~setup ?settings ?env:vars ~output ?wait_timeout_s ~name:input src
   in
-  if print then Flags.print_tape env tape
+  let* given = tape ~setup ~output in
+  if print then Flags.print_tape env given
   else
-    K7.play ~vhs
+    let* tape =
+      tape ~setup:(List.map absolute setup) ~output:(absolute output)
+    in
+    let named = function K7.Failed f -> K7.Failed { f with vhs } | e -> e in
+    in_dir env dir @@ fun cwd ->
+    K7.play
+      ~vhs:(if String.contains vhs '/' then absolute vhs else vhs)
       ~clock:(Eio.Stdenv.mono_clock env)
       ~proc:(Eio.Stdenv.process_mgr env)
-      ~cwd:(Eio.Stdenv.cwd env) tape
-    |> Result.map_error
-         (render_error ~setup
-            ~wait:(Option.value wait_timeout_s ~default:15)
-            ~name:input ~tape src)
+      ~cwd tape
+    |> Result.map_error (fun e ->
+        render_error ~setup
+          ~wait:(Option.value wait_timeout_s ~default:15)
+          ~name:input ~tape:given src (named e))
 
-let run env ~print ~vhs ~setup ?settings ?env:vars ?wait_timeout_s ~output input
-    =
+let run env ~print ~vhs ~setup ?dir ?settings ?env:vars ?wait_timeout_s ~output
+    input =
   match
-    record env ~print ~vhs ~setup ?settings ?env:vars ?wait_timeout_s ~output
-      input
+    record env ~print ~vhs ~setup ?dir ?settings ?env:vars ?wait_timeout_s
+      ~output input
   with
   | Ok () -> 0
   | Error msg -> Flags.fail env msg
@@ -161,6 +186,12 @@ let setup =
   in
   Arg.(value & opt_all non_dir_file [] & info [ "setup" ] ~docv:"FILE" ~doc)
 
+let dir =
+  let doc =
+    "Run the commands in $(docv) instead of a new empty temporary directory."
+  in
+  Arg.(value & opt (some dir) None & info [ "dir" ] ~docv:"DIR" ~doc)
+
 let input =
   let doc = "The cram test to record." in
   Arg.(required & pos 0 (some non_dir_file) None & info [] ~docv:"CRAM" ~doc)
@@ -171,7 +202,9 @@ let man =
     `P
       "$(tname) records the cram test $(i,CRAM). It types each $(b,\\$) \
        command into a terminal running bash and waits for the prompt to come \
-       back before the next. It ignores the expected output and exit codes.";
+       back before the next. It ignores the expected output and exit codes. As \
+       dune does, it runs the commands in a new empty temporary directory, \
+       which it removes afterwards, unless $(b,--dir) names another one.";
     `P
       "$(tname) records an $(b,.svg) output and the text outputs without \
        $(b,vhs). It runs bash on a pseudo-terminal itself and draws its \
@@ -207,12 +240,13 @@ let man =
 
 let cmd =
   let doc = "record a cram test" in
-  let run print vhs setup settings env wait_timeout_s output input =
+  let run print vhs setup dir settings env wait_timeout_s output input =
     Eio_main.run @@ fun stdenv ->
-    run stdenv ~print ~vhs ~setup ~settings ~env ?wait_timeout_s ~output input
+    run stdenv ~print ~vhs ~setup ?dir ~settings ~env ?wait_timeout_s ~output
+      input
   in
   Cmd.make
     (Cmd.info "cram" ~doc ~man ~exits:Flags.exits)
     Term.(
-      const run $ Flags.print $ Flags.vhs $ setup $ Flags.settings $ Flags.env
-      $ Flags.wait_timeout $ output $ input)
+      const run $ Flags.print $ Flags.vhs $ setup $ dir $ Flags.settings
+      $ Flags.env $ Flags.wait_timeout $ output $ input)

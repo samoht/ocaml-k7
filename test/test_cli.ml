@@ -564,6 +564,31 @@ let test_signal_message () =
   Alcotest.(check int) "exit code" 123 code;
   check_message msg ~has:[ "signal 9"; "command 1" ] ~lacks:[ "signal -" ]
 
+let test_cram_dir () =
+  with_files [ ("pwd.t", 0o644, "  $ pwd -P; ls -A | wc -l\n") ]
+  @@ fun env path ->
+  let shown ?dir () =
+    let code =
+      Cram_cmd.run env ~print:false ~vhs:"vhs" ~setup:[] ?dir
+        ~output:(path "pwd.txt") (path "pwd.t")
+    in
+    Alcotest.(check int) "exit code" 0 code;
+    let text = In_channel.with_open_bin (path "pwd.txt") In_channel.input_all in
+    let lines = List.map String.trim (String.split_on_char '\n' text) in
+    match List.filter (String.starts_with ~prefix:"/") lines with
+    | dir :: _ -> (dir, List.mem "0" lines)
+    | [] -> Alcotest.failf "no directory in %S" text
+  in
+  let fresh, empty = shown () in
+  Alcotest.(check bool)
+    "not the current directory" false
+    (fresh = Unix.realpath (Sys.getcwd ()));
+  Alcotest.(check bool) "empty" true empty;
+  Alcotest.(check bool) "removed" false (Sys.file_exists fresh);
+  let dir = Filename.dirname (path "pwd.t") in
+  let given, _ = shown ~dir () in
+  expect "--dir" (Unix.realpath dir) given
+
 let suite =
   ( "cli",
     List.map
@@ -580,6 +605,7 @@ let suite =
          ("shell exit message", test_exit_message);
          ("tape -o without Output", test_tape_output_option);
          ("killed shell message", test_signal_message);
+         ("cram runs in a temporary directory", test_cram_dir);
          ("command line", test_command);
        ]
       @ readiness ~native:true

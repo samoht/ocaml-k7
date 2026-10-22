@@ -29,20 +29,23 @@ val run :
   print:bool ->
   vhs:string ->
   setup:string list ->
+  ?dir:string ->
   ?settings:K7.setting list ->
   ?env:(string * string) list ->
   ?wait_timeout_s:int ->
   output:string ->
   string ->
   int
-(** [run stdenv ~print ~vhs ~setup ~settings ~env ~wait_timeout_s ~output input]
-    records the cram test in the file [input] with {!K7.play}, which runs the
-    executable [vhs] only for the outputs [vhs] writes, or prints its tape on
-    standard output if [print] is [true], with the {!tape} of [setup],
-    [settings], [env], [wait_timeout_s] and [output]. It is the exit code: [0]
-    on success, also when the reader of the printed tape closes the pipe early,
-    and [123] after printing an error on standard error, if standard error can
-    be written. *)
+(** [run stdenv ~print ~vhs ~setup ~dir ~settings ~env ~wait_timeout_s ~output
+     input] records the cram test in the file [input] with {!K7.play}, which
+    runs the executable [vhs] only for the outputs [vhs] writes, or prints its
+    tape on standard output if [print] is [true], with the {!tape} of [setup],
+    [settings], [env], [wait_timeout_s] and [output]. The commands run in [dir],
+    or in a new temporary directory that [run] removes afterwards; relative
+    paths of [setup], [output] and [vhs] are read from the current directory. It
+    is the exit code: [0] on success, also when the reader of the printed tape
+    closes the pipe early, and [123] after printing an error on standard error,
+    if standard error can be written. *)
 
 val cmd : int Cmdliner.Cmd.t
 (** [cmd] is the [cram] subcommand. *)
