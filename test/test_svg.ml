@@ -123,6 +123,16 @@ let test_times () =
       [ (Ms 0, "a"); (Ms max_int, "b") ];
     ]
 
+(* Direct callers of [svg] have not passed through [tape]'s validation. *)
+let test_setting_errors () =
+  List.iter
+    (fun setting ->
+      match Vhs.svg ~settings:[ setting ] [ (Ms 0, "hello") ] with
+      | Error (Invalid _ | Unsupported _) -> ()
+      | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+      | Ok _ -> ())
+    [ Font_family "Mono\nSpace"; Font_family "\"'`"; Theme "{\n}" ]
+
 let suite =
   ( "svg",
     List.map
@@ -138,4 +148,5 @@ let suite =
         ("deterministic", test_deterministic);
         ("svg output", test_svg_output);
         ("times", test_times);
+        ("direct SVG setting errors", test_setting_errors);
       ] )
