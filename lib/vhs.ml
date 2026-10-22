@@ -1108,16 +1108,18 @@ let render ?(vhs = "vhs") ~clock ~proc ~cwd t =
 
 (* Recording natively *)
 
-let native_error : Native.error -> error = function
-  | Unsupported why -> Unsupported ("not recorded natively: " ^ why)
+(* [native_error ~verb e] is [e], an [Unsupported] one saying what was not
+   done natively: recorded by [record], drawn by [svg]. *)
+let native_error ?(verb = "recorded") : Native.error -> error = function
+  | Unsupported why -> Unsupported ("not " ^ verb ^ " natively: " ^ why)
   | Timeout { wait; line; last } -> Timeout { wait; line; last }
   | Exited { status; wait; line; last } -> Exited { status; wait; line; last }
   | Executable_not_found exe -> Executable_not_found exe
   | Io msg -> Io msg
   | Invalid msg -> Invalid msg
 
-let native ?source lines =
-  Result.map_error native_error (Native.of_lines ?source lines)
+let native ?verb ?source lines =
+  Result.map_error (native_error ?verb) (Native.of_lines ?source lines)
 
 (* [record] reads and writes its files as [vhs] does under [render]:
    relative to the native directory [dir], wherever the path leads, not only
@@ -1203,7 +1205,8 @@ let record ~clock ~proc ~cwd t =
       @ List.map (fun p -> (false, p)) (Native.stills tape))
   in
   let* { svg; text; stills } =
-    Result.map_error native_error
+    Result.map_error
+      (native_error ~verb:"recorded")
       (Native.play ~clock ~env:(environment proc) ~cwd:dir tape)
   in
   let save ?(create = false) contents path =
@@ -1237,5 +1240,7 @@ let svg ?(settings = []) output =
   let* () = check_times output in
   let b = Buffer.create 256 in
   List.iter (function Shell _ -> () | s -> add_setting b s) settings;
-  let* tape = native (String.split_on_char '\n' (Buffer.contents b)) in
+  let* tape =
+    native ~verb:"drawn" (String.split_on_char '\n' (Buffer.contents b))
+  in
   Ok (Native.replay tape (List.map (fun (Ms ms, s) -> (ms, s)) output))

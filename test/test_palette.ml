@@ -53,7 +53,10 @@ let test_json_theme () =
   check_contains "accent" ~sub:".ka{fill:#00ff00}"
     (accent {|{"cursor": "#ff0000", "cursorAccent": "#00ff00"}|});
   (match Vhs.svg ~settings:[ Theme {|{"red": "tomato"}|} ] [] with
-  | Error (Unsupported why) -> check_contains "names it" ~sub:"tomato" why
+  | Error (Unsupported why) ->
+      check_contains "names it" ~sub:"tomato" why;
+      (* svg records nothing: it draws. *)
+      check_contains "drawn" ~sub:"not drawn natively: " why
   | Ok _ -> Alcotest.fail "a colour name played"
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
   List.iter
