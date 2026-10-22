@@ -34,6 +34,6 @@
   (jsont (>= 0.4.0))
   (bytesrw (>= 0.1.0))
   (markup (and (>= 1.0.0) :with-test))
-  (alcobar :with-test)
+  (alcobar (and :with-test (>= 0.3.2)))
   (mdx :with-test)
   (odoc :with-doc)))
