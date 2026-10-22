@@ -175,6 +175,15 @@ let test_zero_width_description () =
        abc e\xcc\x81 \xf0\x9f\x91\xa9\xe2\x80\x8d\xf0\x9f\x92\xbb</desc>"
     s
 
+(* A spacing mark, such as the vowel sign after Devanagari KA, joins the
+   cluster before it but adds a cell to it, the cell xterm.js gives it. *)
+let test_spacing_mark () =
+  let s = svg [ (Ms 0, "\u{0915}\u{093E}x \u{0F7F}\xff") ] in
+  Alcotest.(check (list string))
+    "text"
+    [ screen [ "\u{0915}\u{093E}x \u{0F7F}\u{FFFD}" ] ]
+    (frames s)
+
 let suite =
   ( "svg",
     List.map
@@ -186,6 +195,7 @@ let suite =
         ("accessible", test_accessible);
         ("concealed text alternative", test_concealed_description);
         ("zero-width text alternative", test_zero_width_description);
+        ("spacing mark", test_spacing_mark);
         ("one frame", test_one_frame);
         ("settings", test_settings);
         ("huge sizes", test_huge);
