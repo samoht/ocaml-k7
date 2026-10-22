@@ -1199,8 +1199,8 @@ let test_run_sigpipe () =
   @@ fun () ->
   check_run "normal terminal SIGPIPE disposition"
     [ "/bin/sh"; "-c"; "kill -PIPE $$; printf SIGPIPE_WAS_IGNORED" ]
-    ~shown:"$ /bin/sh -c 'kill -PIPE $$; printf SIGPIPE_WAS_IGNORED'"
-    (`Signaled Sys.sigpipe) []
+    ~shown:"$ /bin/sh -c 'kill -PIPE $$; printf SIGPIPE_WA"
+    (`Signaled Sys.sigpipe) [ "S_IGNORED'" ]
 
 let test_record_sigpipe () =
   let previous = Sys.signal Sys.sigpipe Sys.Signal_ignore in
