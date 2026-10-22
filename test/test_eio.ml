@@ -276,7 +276,14 @@ let test_pp_error_names () =
   expect "failed" "ab exited with code 1"
     (pp (Failed { vhs = "a\xc2\x9b2Jb"; status = `Exited 1; output = "" }));
   expect "io" "dir x: no such file or directory"
-    (pp (Io "dir\nx\027[0m: no such file or directory"))
+    (pp (Io "dir\nx\027[0m: no such file or directory"));
+  expect "format characters" "Wait+Line /x/ timed out; last value was: > ab"
+    (pp
+       (Timeout
+          {
+            wait = "Wait+Line /x/";
+            last = "> a\u{200B}\u{2060}b\u{FEFF}\u{200B}";
+          }))
 
 let test_spawn_errors () =
   Eio_mock.Backend.run @@ fun () ->

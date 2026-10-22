@@ -64,9 +64,8 @@ let test_zero_width () =
   check "wide"
     (screen [ "\xe4\xb8\xad\xcc\x81a" ])
     [ (Ms 0, "\xe4\xb8\xad\xcc\x81a") ];
-  check "zero-width space"
-    (screen [ "> \xe2\x80\x8b" ])
-    [ (Ms 0, "> \xe2\x80\x8b") ];
+  (* The image leaves the format character out. *)
+  check "zero-width space" (screen [ "> x" ]) [ (Ms 0, "> \xe2\x80\x8bx") ];
   check "last column"
     (screen [ String.make 45 'a' ^ "b\xcc\x81" ])
     [ (Ms 0, String.make 45 'a' ^ "b\xcc\x81") ];

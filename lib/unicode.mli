@@ -11,3 +11,12 @@ val find : string -> ((int * int) list * bool) option
     letters): sorted, disjoint, inclusive ranges of code points, and whether
     [name] negates them, as [Assigned] does. It is [None] if Go has no such
     class. *)
+
+val is_format : int -> bool
+(** [is_format u] is [true] iff the code point [u] is a format character
+    (category [Cf]), which does not show, other than the joiners U+200C and
+    U+200D, which shape the characters around them. *)
+
+val strip_format : string -> string
+(** [strip_format s] is [s] without the characters {!is_format} holds of. The
+    other bytes of [s], invalid UTF-8 included, are kept. *)

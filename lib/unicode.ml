@@ -56,3 +56,22 @@ let find name =
     Option.value (Hashtbl.find_opt names name) ~default:(name, false)
   in
   Option.map (fun r -> (r, negated)) (Hashtbl.find_opt tables table)
+
+let format = lazy (match find "Cf" with Some (r, false) -> r | _ -> [])
+
+let is_format u =
+  u <> 0x200c && u <> 0x200d
+  && List.exists (fun (lo, hi) -> lo <= u && u <= hi) (Lazy.force format)
+
+let strip_format s =
+  let b = Buffer.create (String.length s) in
+  let rec go i =
+    if i < String.length s then (
+      let d = String.get_utf_8_uchar s i in
+      let n = Uchar.utf_decode_length d in
+      if not (is_format (Uchar.to_int (Uchar.utf_decode_uchar d))) then
+        Buffer.add_substring b s i n;
+      go (i + n))
+  in
+  go 0;
+  Buffer.contents b

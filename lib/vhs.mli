@@ -185,8 +185,9 @@ type error =
 val pp_error : error Fmt.t
 (** [pp_error] formats an error for humans: one line, followed for {!Failed} by
     the last ten lines [vhs] printed, indented. Escape sequences and control
-    characters are removed from every string it prints, and invalid UTF-8 is
-    replaced by U+FFFD. *)
+    characters are removed from every string it prints, and so are format
+    characters (Unicode category [Cf]) such as U+200B other than the joiners
+    U+200C and U+200D; invalid UTF-8 is replaced by U+FFFD. *)
 
 val tape :
   ?settings:setting list ->
@@ -347,10 +348,10 @@ val svg :
     Time is the tape's: a typed character, a key and a sleep last what the tape
     says, a wait lasts what the program makes it last, and output shows at the
     time it arrives within the action that runs, rounded down to a frame of
-    {!constructor-Framerate}, which lasts at least a millisecond. A tape whose program prints the same bytes within the same
-    frames gives the same image, byte for byte; the time a command takes to
-    print, including how the machine schedules it, changes the frames its output
-    lands in.
+    {!constructor-Framerate}, which lasts at least a millisecond. A tape whose
+    program prints the same bytes within the same frames gives the same image,
+    byte for byte; the time a command takes to print, including how the machine
+    schedules it, changes the frames its output lands in.
 
     The text output, [.txt], [.ascii] or [.test], is VHS's: after each command
     that runs while recording, the first lines of the terminal's buffer, as many
@@ -383,11 +384,12 @@ val svg :
     [Set BorderRadius], [Set PlaybackSpeed] and [Set LoopOffset] change the
     animation, and [Set WindowBar] and [Set WindowBarSize] draw VHS's window
     bar. For a reader who prefers reduced motion, the image shows its last
-    screen, still, and the cursor does not blink. The image's title is "Terminal
-    recording" and its description, its text alternative, is the text its last
-    screen shows, without concealed text and without format characters, such as
-    a zero-width space, but the joiners. The image of a [Set MarginFill], read
-    relative to the [cwd] of {!record}, is embedded, stretched to the frame as
-    ffmpeg stretches it. A size beyond 100000 pixels, a terminal beyond 2000
-    cells a side, a [Set LetterSpacing] or [Set LineHeight] beyond 100000 and a
-    positive [Set PlaybackSpeed] below 0.001 are {!Unsupported}. *)
+    screen, still, and the cursor does not blink. The image leaves out format
+    characters (Unicode category Cf), such as a zero-width space, other than the
+    joiners U+200C and U+200D. Its title is "Terminal recording" and its
+    description, its text alternative, is the text its last screen shows,
+    without concealed text. The image of a [Set MarginFill], read relative to
+    the [cwd] of {!record}, is embedded, stretched to the frame as ffmpeg
+    stretches it. A size beyond 100000 pixels, a terminal beyond 2000 cells a
+    side, a [Set LetterSpacing] or [Set LineHeight] beyond 100000 and a positive
+    [Set PlaybackSpeed] below 0.001 are {!Unsupported}. *)

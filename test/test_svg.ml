@@ -173,7 +173,10 @@ let test_zero_width_description () =
     ~sub:
       "<desc>&gt;\n\
        abc e\xcc\x81 \xf0\x9f\x91\xa9\xe2\x80\x8d\xf0\x9f\x92\xbb</desc>"
-    s
+    s;
+  Alcotest.(check (pair int int))
+    "nor the image's text" (0, 0)
+    (count ~sub:"\xe2\x80\x8b" s, count ~sub:"\xe2\x81\xa0" s)
 
 (* A spacing mark, such as the vowel sign after Devanagari KA, joins the
    cluster before it but adds a cell to it, the cell xterm.js gives it. *)

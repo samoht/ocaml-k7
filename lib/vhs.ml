@@ -747,14 +747,15 @@ let pp ppf t = Fmt.string ppf (to_string t)
 
 (* [utf_8 s] is [s] with each invalid byte replaced by U+FFFD, and without
    C1 controls, which dropping a byte between a lead byte and a continuation
-   byte can create. *)
+   byte can create, nor format characters, which do not show. *)
 let utf_8 s =
   let b = Buffer.create (String.length s) in
   let rec go i =
     if i < String.length s then (
       let d = String.get_utf_8_uchar s i in
       let u = Uchar.utf_decode_uchar d in
-      if Uchar.to_int u < 0x80 || Uchar.to_int u > 0x9f then
+      let c = Uchar.to_int u in
+      if (c < 0x80 || c > 0x9f) && not (Unicode.is_format c) then
         Buffer.add_utf_8_uchar b u;
       go (i + Uchar.utf_decode_length d))
   in

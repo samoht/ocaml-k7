@@ -247,7 +247,7 @@ let test_output path suffix =
   check (Result.is_ok (tape ~outputs:[ path ] []) = ok)
 
 (* [pp_error] never raises nor prints a control character but newlines;
-   [Io] prints a printable message as is and [Failed] at most ten lines of
+   [Io] prints a printable message without its format characters, and [Failed] at most ten lines of
    output under one header line. *)
 let test_pp_error s n =
   let pp e = Fmt.str "%a" Vhs.pp_error e in
@@ -257,7 +257,7 @@ let test_pp_error s n =
       if has_control printed then failf "control character in %S" printed)
     [ Vhs.Io s; Executable_not_found s ];
   if String.is_valid_utf_8 s && not (has_control s) then
-    check (pp (Vhs.Io s) = s);
+    check (pp (Vhs.Io s) = Unicode.strip_format s);
   List.iter
     (fun status ->
       let printed = pp (Failed { vhs = "vhs"; status; output = s }) in

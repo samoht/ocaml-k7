@@ -1,6 +1,7 @@
-; The emulator is private to the library; its properties compile it in.
+; The emulator and the Unicode tables are private to the library; their
+; properties compile them in.
 
-(copy_files ../lib/screen.{ml,mli})
+(copy_files ../lib/{screen,unicode,unicode_data}.{ml,mli})
 
 (executable
  (name fuzz)

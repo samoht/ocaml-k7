@@ -168,19 +168,22 @@ let add_texts t b ~from cells =
     if x >= n then Option.iter (fun f -> flush f xs text) first
     else
       let (c : Screen.cell) = cells.(x) in
+      (* A format character does not show, and a cell of only such
+         characters is blank. *)
+      let shown = match Unicode.strip_format c.text with "" -> " " | s -> s in
       if c.width = 0 then go (x + 1) first xs
       else if not (shows c) then (
         Option.iter (fun f -> flush f xs text) first;
         go (x + 1) None [])
       else
         match first with
-        | Some f when same_style f c && is_simple c.text ->
-            Buffer.add_string text c.text;
+        | Some f when same_style f c && is_simple shown ->
+            Buffer.add_string text shown;
             go (x + 1) first (x :: xs)
         | _ ->
             Option.iter (fun f -> flush f xs text) first;
-            Buffer.add_string text c.text;
-            if is_simple c.text then go (x + 1) (Some c) [ x ]
+            Buffer.add_string text shown;
+            if is_simple shown then go (x + 1) (Some c) [ x ]
             else (
               flush c [ x ] text;
               go (x + 1) None [])
@@ -412,16 +415,6 @@ let add_bar t b bar =
         circle ~cx:(centre ~gap ~r ~space i) ~cy:(cy r gap) ~r fill)
       [ {|fill="#ff4f4d"|}; {|fill="#febb00"|}; {|fill="#00cc1d"|} ]
 
-(* The format characters, which do not show, but the joiners, which shape
-   the characters around them. *)
-let is_format =
-  let ranges =
-    match Unicode.find "Cf" with Some (ranges, false) -> ranges | _ -> []
-  in
-  fun u ->
-    u <> 0x200c && u <> 0x200d
-    && List.exists (fun (lo, hi) -> lo <= u && u <= hi) ranges
-
 (* The text a row shows: a concealed cell is blank, and a format character
    is left out. *)
 let shown_text row =
@@ -429,16 +422,7 @@ let shown_text row =
   Array.iter
     (fun (c : Screen.cell) ->
       if has Hidden c then Buffer.add_string b (String.make c.width ' ')
-      else
-        let rec go i =
-          if i < String.length c.text then (
-            let d = String.get_utf_8_uchar c.text i in
-            let n = Uchar.utf_decode_length d in
-            if not (is_format (Uchar.to_int (Uchar.utf_decode_uchar d))) then
-              Buffer.add_substring b c.text i n;
-            go (i + n))
-        in
-        go 0)
+      else Buffer.add_string b (Unicode.strip_format c.text))
     (Screen.cells row);
   let s = Buffer.contents b in
   let rec stop n = if n > 0 && s.[n - 1] = ' ' then stop (n - 1) else n in
