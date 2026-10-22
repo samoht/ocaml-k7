@@ -610,6 +610,32 @@ let test_keys () =
         (screen [ "> echo X abc"; "X abc"; ">" ])
         (last (frames s))
 
+(* A modified arrow carries xterm's modifier parameter, as xterm.js sends
+   it: 1 plus 1 for Shift, 2 for Alt and 4 for Control. *)
+let test_modified_arrows () =
+  with_dir @@ fun env cwd ->
+  let t =
+    tape
+      Vhs.
+        [
+          type' "stty -echo; cat -v; stty echo\n";
+          sleep (Ms 300);
+          raw "Ctrl+Up";
+          raw "Ctrl+Alt+Up";
+          raw "Ctrl+Shift+Down";
+          raw "Ctrl+Alt+Shift+Left";
+          key Enter;
+          key (Ctrl 'd');
+          wait Prompt;
+          sleep (Ms 100);
+        ]
+  in
+  match record env cwd t with
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  | Ok s ->
+      check_contains "bytes" ~sub:"^[[1;5A^[[1;7A^[[1;6B^[[1;8D"
+        (last (frames s))
+
 (* Settings whose sizes or times leave the integer range are refused, or
    reduced to the loop they offset, rather than wrapping around. *)
 let test_bounds () =
@@ -1180,6 +1206,7 @@ let suite =
          ("margin fill", test_margin_fill);
          ("margin fill refused", test_margin_fill_refused);
          ("output directories", test_output_dirs);
+         ("modified arrows", test_modified_arrows);
          ("zsh", test_zsh);
          ("fish", test_fish);
          ("replies", test_replies);
