@@ -1037,37 +1037,42 @@ let put_text t text =
 (* A grapheme cluster joins characters that a later write cannot join: the
    character after a Prepend character and, with wcwidth, any character of
    non-zero width, which a split read draws in cells of its own. xterm
-   writes each character as it comes, so write the text apart before such a
-   character: a read split there then draws the screen a whole one does. *)
+   writes each character as it comes, so write the text apart after a
+   Prepend character and, with wcwidth, before each non-ASCII character of
+   non-zero width (an ASCII character continues a cluster only after a
+   Prepend one). No write then holds two characters that a split read draws
+   apart, whatever the clusters of each write, so a read split anywhere
+   draws the screen a whole one does. *)
 let put_run t text =
   let len = String.length text in
   let wcwidth = Grid.width_method t.active_grid = `Wcwidth in
   let start = ref 0 in
   let cut i =
-    put_text t (String.sub text !start (i - !start));
-    start := i
+    if i > !start then (
+      put_text t (String.sub text !start (i - !start));
+      start := i)
   in
-  let rec ascii i =
-    i >= len || (Char.code (String.unsafe_get text i) < 0x80 && ascii (i + 1))
+  let rec go i =
+    if i < len then (
+      let c = Char.code (String.unsafe_get text i) in
+      if c < 0x80 || ((not wcwidth) && c < 0xD8) then
+        (* ASCII or, with Unicode widths, a continuation byte or a
+           character below U+0600, which is not Prepend *)
+        go (i + 1)
+      else
+        let d = String.get_utf_8_uchar text i in
+        let next = i + Uchar.utf_decode_length d in
+        if
+          wcwidth
+          && Text.width_at ~width_method:`Wcwidth ~tab_width:2 text
+               ~byte_offset:i
+             > 0
+        then cut i;
+        if next < len && Text.is_prepend (Uchar.utf_decode_uchar d) then
+          cut next;
+        go next)
   in
-  if not (ascii 0) then
-    Text.iter_graphemes
-      (fun ~offset ~len:n ->
-        let rec go prev i =
-          if i < offset + n then (
-            if
-              Text.is_prepend prev
-              || wcwidth
-                 && Text.width_at ~width_method:`Wcwidth ~tab_width:2 text
-                      ~byte_offset:i
-                    > 0
-            then cut i;
-            let d = String.get_utf_8_uchar text i in
-            go (Uchar.utf_decode_uchar d) (i + Uchar.utf_decode_length d))
-        in
-        let d = String.get_utf_8_uchar text offset in
-        go (Uchar.utf_decode_uchar d) (offset + Uchar.utf_decode_length d))
-      text;
+  go 0;
   if !start = 0 then put_text t text
   else put_text t (String.sub text !start (len - !start))
 

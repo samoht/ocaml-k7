@@ -3,19 +3,22 @@
 A temporary verbatim copy of matrix's terminal core at
 [invariant-hq/mosaic](https://github.com/invariant-hq/mosaic)
 ([samoht/mosaic](https://github.com/samoht/mosaic)) commit
-`2b96b9aa0e4a8d4459fc95588122b9e786b24a27` (branch `vte-c1-after-partial-utf8`).
-That is `90a3f220997fc14819623a5cb98afca7a3d29bb6` with four fixes on top:
+`858724d65b01bc8cbcf146b6ca32143247e77699` (branch `vte-wcwidth-text-symbols`).
+That is `90a3f220997fc14819623a5cb98afca7a3d29bb6` with five fixes on top,
+each proposed upstream:
 
-- 3ccffa89 keeps a zero-width character at the wrap limit;
-- ea6eb4b6 draws each wcwidth character in cells of its own;
-- 7d90dc4e keeps the default foreground of a blank cell;
-- 2b96b9aa ends a truncated UTF-8 sequence at a split C1 control.
+- 3ccffa89 keeps a zero-width character at the wrap limit (#104);
+- 3ad1fac6 draws each wcwidth character in cells of its own (#105);
+- 1a0ffe38 keeps the default foreground of a blank cell (#106);
+- 74409dc7 ends a truncated UTF-8 sequence at a split C1 control (#107);
+- 858724d6 keeps the wcwidth width of text symbols, such as U+2764 and
+  U+26A0, at one cell (#108).
 
 It exists because the released matrix 0.1.0 lacks the terminal fixes that
 vhs's emulator needs: those merged on invariant-hq/mosaic since 0.1.0, the
-PR stack #46-#65, #78-#89 and #94-#96 on top of them, and those four
-commits, not yet proposed upstream. It is deleted when vhs moves to matrix
-0.2.0 (the `next` branch).
+PR stack #46-#65, #78-#89 and #94-#96 on top of them, and those five,
+#104-#108. It is deleted when vhs moves to matrix 0.2.0 (the `next`
+branch).
 
 **Do not edit these files: fix upstream instead.** dune builds the
 directory as vendored code (`vendored_dirs` in `../dune`), so it is built

@@ -212,8 +212,8 @@ seconds, or after the number of seconds `--wait-timeout` gives.
 
 - vhs 0.9.0 depends on the released matrix 0.1.0 for its pseudo-terminals,
   and carries a temporary private copy of matrix's terminal core, from
-  mosaic commit 90a3f220, in
-  [lib/matrix_backport](lib/matrix_backport/README.md).
+  mosaic commit 858724d6 (90a3f220 and the fixes of invariant-hq/mosaic
+  PRs #104-#108), in [lib/matrix_backport](lib/matrix_backport/README.md).
   matrix 0.1.0 lacks emulator fixes the native recorder needs, such as
   keeping zero-width characters, moving within scroll regions, setting tab
   stops and replying to device queries. The copy goes away once matrix 0.2.0

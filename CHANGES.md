@@ -28,7 +28,8 @@
 - `vhs-cram` keeps typed non-ASCII text without a UTF-8 locale.
 - The library needs OCaml 5.4, for matrix's pseudo-terminals and terminal
   emulator, and matrix 0.1.0. The emulator is a private copy of matrix's
-  terminal core at mosaic 90a3f220, whose fixes are not released yet.
+  terminal core at mosaic 858724d6 (90a3f220 and the fixes of PRs
+  #104-#108), whose fixes are not released yet.
 - The README lists the known limitations of this release: the private copy
   of matrix's terminal core, the queries and cursor shapes the native
   terminal does not handle yet, a rare `setpgid` error from macOS's bash 3.2
