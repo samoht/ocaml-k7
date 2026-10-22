@@ -223,12 +223,23 @@ let test_cursor_format () =
     "bidi override removed everywhere" false
     (contains ~sub:"\u{202E}" s)
 
+(* Reverse video paints a wide glyph's two cells with its foreground, as
+   xterm.js does, not its right half with the default foreground. *)
+let test_inverse_wide () =
+  let s = svg [ (Ms 0, "\027[7;31m\u{4e2d}\027[0m") ] in
+  check_contains "left half"
+    ~sub:{|<rect x="0" width="14" height="29" class="p1"/>|} s;
+  Alcotest.(check int)
+    "no default-foreground half" 0
+    (count ~sub:{|height="29" class="d"/>|} s)
+
 let suite =
   ( "svg",
     List.map
       (fun (name, fn) -> Alcotest.test_case name `Quick fn)
       [
         ("hostile text", test_hostile);
+        ("inverse wide glyph", test_inverse_wide);
         ("cursor format characters", test_cursor_format);
         ("positive frame rate above the pixel limit", test_framerate_limit);
         ("row dedup", test_dedup);
