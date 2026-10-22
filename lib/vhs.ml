@@ -70,7 +70,7 @@ type error =
   | Executable_not_found of string
   | Failed of {
       vhs : string;
-      status : [ `Exited of int | `Signaled of int ];
+      status : Eio.Process.exit_status;
       output : string;
     }
   | Io of string

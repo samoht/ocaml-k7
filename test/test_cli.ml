@@ -43,8 +43,8 @@ Sleep 1000ms
     Alcotest.(check (result string string))
       name (Error expected) (tape ~setup ~output src)
   in
-  error "no command" "input.t: no command" "prose only" ~setup:[]
-    ~output:"x.gif";
+  error "no command" {|input.t: no command, a line that starts with "  $ "|}
+    "prose only" ~setup:[] ~output:"x.gif";
   error "control" {|input.t: line 1: "echo \001" holds a control character|}
     "  $ echo \001\n" ~setup:[] ~output:"x.gif";
   error "output" {|Output "demo": neither an extension nor a trailing slash|}
@@ -54,7 +54,10 @@ Sleep 1000ms
   List.iter
     (fun path ->
       match tape ~setup:[ path ] "  $ true\n" with
-      | Error _ -> ()
+      | Error msg ->
+          Alcotest.(check bool)
+            "names the setup path" true
+            (String.starts_with ~prefix:"setup path " msg)
       | Ok s -> Alcotest.failf "accepted %S" s)
     [ "bad\000setup"; "a\tb.sh"; "a\nb.sh"; "a\xc2\x85b.sh"; "\xff.sh" ]
 

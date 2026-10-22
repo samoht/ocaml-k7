@@ -17,8 +17,7 @@ type t
 
 val parse : string -> (t, string) result
 (** [parse src] is the cram test of source [src], or [Error msg] if a command
-    line is not {!is_typeable}. Lines may end with ["\r\n"]. [parse] reads [src]
-    once. *)
+    line is not {!is_typeable}. Lines may end with ["\r\n"]. *)
 
 val is_typeable : string -> bool
 (** [is_typeable s] is [true] iff [s] is valid UTF-8 without a control

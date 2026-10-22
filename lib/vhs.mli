@@ -29,8 +29,8 @@
     [Ms 9_223_372_036_854], the range of Go's [time.Duration]. *)
 type duration = Ms of int
 
-(** The type for keys. A key without an argument is the VHS key of the same
-    name. Constructors may be added as VHS gains keys. *)
+(** The type for keys. A key without an argument is the VHS key of the same name
+    without the underscore. Constructors may be added as VHS gains keys. *)
 type key =
   | Enter
   | Tab
@@ -64,7 +64,7 @@ type wait =
           as a sourced script that sets [PS1].
 
           {b Warning.} It also holds while a command prints a line ending with
-          [>] and waits. Wait for such a command with {!Line} or
+          [>] and waits. Wait for such a command with {!constructor-Line} or
           {!constructor-Screen}. *)
   | Line of string
       (** The line under the cursor, without its trailing spaces, matches the
@@ -139,7 +139,7 @@ type setting =
       (** The height in pixels, at least twice the padding and the margin, plus
           the size of the window bar of a {!raw} [Set WindowBar], and even with
           an MP4 output (defaults to [600]). Its viewport, what is left after
-          them, is at most 10,000,000 pixels, as for {!Width}. *)
+          them, is at most 10,000,000 pixels, as for {!constructor-Width}. *)
   | Theme of string
       (** The name of a theme of VHS 0.12.1, as [vhs themes] lists them; a theme
           in JSON, which starts with [{], an object whose fields VHS reads as
@@ -153,7 +153,8 @@ type setting =
   | Framerate of int  (** A positive frame rate (defaults to [50]). *)
 
 type t
-(** The type for tapes VHS reads without error and without ignoring a line. *)
+(** The type for tapes VHS reads without error and without ignoring a line. VHS
+    can still fail as it records, see {{!checks}checks}. *)
 
 (** The type for errors. Constructors may be added, so a match on [error] ends
     with a case for the others. *)
@@ -161,7 +162,7 @@ type error =
   | Executable_not_found of string  (** No such executable on the [PATH]. *)
   | Failed of {
       vhs : string;
-      status : [ `Exited of int | `Signaled of int ];
+      status : Eio.Process.exit_status;
       output : string;
     }
       (** The executable [vhs] ran and did not exit with [0]; [output] is the
@@ -176,18 +177,18 @@ type error =
   | Timeout of { wait : string; last : string }
       (** The wait line [wait] of {!record} did not hold in time; [last] is the
           line or the screen it last read. Only {!record} returns it: {!render}
-          reports a wait that times out as {!Failed}, with the message of [vhs]
-          in [output]. *)
+          reports a wait that times out as {!constructor-Failed}, with the
+          message of [vhs] in [output]. *)
   | Invalid of string
       (** A tape VHS rejects, or one of whose lines it ignores, naming the first
           offending item, and why. *)
 
 val pp_error : error Fmt.t
-(** [pp_error] formats an error for humans: one line, followed for {!Failed} by
-    the last ten lines [vhs] printed, indented. Escape sequences and control
-    characters are removed from every string it prints, and so are format
-    characters (Unicode category [Cf]) such as U+200B other than the joiners
-    U+200C and U+200D; invalid UTF-8 is replaced by U+FFFD. *)
+(** [pp_error] formats an error for humans: one line, followed for
+    {!constructor-Failed} by the last ten lines [vhs] printed, indented. Escape
+    sequences and control characters are removed from every string it prints,
+    and so are format characters (Unicode category [Cf]) such as U+200B other
+    than the joiners U+200C and U+200D; invalid UTF-8 is replaced by U+FFFD. *)
 
 val tape :
   ?settings:setting list ->
@@ -295,12 +296,12 @@ val svg :
       but SVG, which it never reads, and {!record} writes one SVG image;
     - a string holds a control character, C1 controls included (the tabs and
       newlines of {!type'} aside), or, in typed text, invalid UTF-8;
-    - an output path or a {!Theme} holds all three quote characters (['"'],
-      ['\''] and ['`']), which no VHS string can quote; a {!type'} can hold
-      them, see {!to_string};
+    - an output path or a {!constructor-Theme} holds all three quote characters
+      (['"'], ['\''] and ['`']), which no VHS string can quote; a {!type'} can
+      hold them, see {!to_string};
     - a duration is out of range, or a wait timeout is [Ms 0];
-    - a {!Line} or {!constructor-Screen} pattern is not valid Go regular
-      expression syntax;
+    - a {!constructor-Line} or {!constructor-Screen} pattern is not valid Go
+      regular expression syntax;
     - a key or a setting breaks the condition its documentation states;
     - a {!raw} line is not exactly one command VHS's parser accepts, ends inside
       a string, a regular expression or a JSON value, or lacks the argument of
@@ -309,16 +310,16 @@ val svg :
       integer, a float or a regular expression in Go's syntax, or a positive
       integer for [Rows] and [Columns];
     - a {!raw} [Set Rows] or [Set Columns] sizes the frame in the direction that
-      {!Height} or {!Width} does, or asks for more rows or columns than 32 times
-      the browser's viewport has pixels: VHS measures the cells in the viewport
-      doubled up to five times, and fails with "could not fit" if the terminal
-      there is still smaller. Fewer can still not fit with a large font, which
-      [tape] does not check;
-    - the {!Width} or {!Height} of a GIF output is beyond 65535 pixels, of an
-      MP4 output beyond 16384 or of a WebM output beyond 65536, the sizes the
-      encoders of ffmpeg 9 take, or the frame of such an output has more pixels
-      than ffmpeg's image check takes, about 268 million: (8 width + 1024)
-      (height + 128) must be below 2{^ 31};
+      {!constructor-Height} or {!constructor-Width} does, or asks for more rows
+      or columns than 32 times the browser's viewport has pixels: VHS measures
+      the cells in the viewport doubled up to five times, and fails with "could
+      not fit" if the terminal there is still smaller. Fewer can still not fit
+      with a large font, which [tape] does not check;
+    - the {!constructor-Width} or {!constructor-Height} of a GIF output is
+      beyond 65535 pixels, of an MP4 output beyond 16384 or of a WebM output
+      beyond 65536, the sizes the encoders of ffmpeg 9 take, or the frame of
+      such an output has more pixels than ffmpeg's image check takes, about 268
+      million: (8 width + 1024) (height + 128) must be below 2{^ 31};
     - a {!raw} line is [Hide] or [Show] (use {!hidden}), [Set] for a setting of
       {!setting} other than [TypingSpeed] (use the setting), an [Output] that
       breaks the rules of [outputs] or ends with [.svg], or is [Require] or
@@ -368,11 +369,13 @@ val svg :
     {!record} plays the actions of {!action}, the raw [Type], key, [Ctrl],
     [Alt], [Shift], [Sleep], [Wait], [Copy], [Paste] ([Paste] types the last
     [Copy]), [Screenshot] and [Output] lines, [Source] lines, whose tape it
-    reads relative to the [cwd] of {!record} and refuses, as {!Invalid}, where
-    VHS does and on a control character other than a tab or a carriage return,
-    which {!val-tape} refuses in a {!raw} line, [Env], [Require], and every
-    [Set] but those below. It does not play, and is {!Unsupported} on:
-    - a {!shell} other than {!Bash}, {!Zsh} and {!Fish}, which start as in VHS;
+    reads relative to the [cwd] of {!record} and refuses, as
+    {!constructor-Invalid}, where VHS does and on a control character other than
+    a tab or a carriage return, which {!val-tape} refuses in a {!raw} line,
+    [Env], [Require], and every [Set] but those below. It does not play, and is
+    {!constructor-Unsupported} on:
+    - a {!shell} other than {!constructor-Bash}, {!constructor-Zsh} and
+      {!constructor-Fish}, which start as in VHS;
     - a colour of a JSON [Theme] other than [#RGB], [#RGBA], [#RRGGBB],
       [#RRGGBBAA], [rgb()] or [rgba()], such as a colour name, which xterm.js
       reads with the browser;
@@ -392,4 +395,4 @@ val svg :
     read relative to the [cwd] of {!record}, is embedded, stretched to the frame
     as ffmpeg stretches it. A size beyond 100000 pixels, a terminal beyond 2000
     cells a side, a [Set LetterSpacing] or [Set LineHeight] beyond 100000 and a
-    positive [Set PlaybackSpeed] below 0.001 are {!Unsupported}. *)
+    positive [Set PlaybackSpeed] below 0.001 are {!constructor-Unsupported}. *)

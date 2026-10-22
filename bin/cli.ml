@@ -10,9 +10,9 @@ let tape ~setup ~output ?wait_timeout_s ~name src =
   match
     (Cram.is_empty cram, List.find_opt (Fun.negate Cram.is_typeable) setup)
   with
-  | true, _ -> Fmt.error "%s: no command" name
+  | true, _ -> Fmt.error "%s: no command, a line that starts with \"  $ \"" name
   | false, Some path ->
-      Fmt.error "setup %S: holds invalid UTF-8 or a control character" path
+      Fmt.error "setup path %S: holds invalid UTF-8 or a control character" path
   | false, None ->
       let timeout =
         match wait_timeout_s with

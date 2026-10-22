@@ -74,6 +74,18 @@ Error
  (Vhs.Invalid "Output \"demo\": neither an extension nor a trailing slash")
 ```
 
+A setting or a command that `Vhs` has no value for is a raw tape line,
+which `Vhs.tape` checks as VHS's parser reads it. `Set WaitTimeout`, before
+the first action, gives every wait without its own timeout another limit:
+
+```ocaml
+# Vhs.tape ~outputs:[ "demo.gif" ]
+    Vhs.[ raw "Set WaitTimeout 30s"; type' "make\n"; wait Prompt ]
+  |> Result.map Vhs.to_string;;
+- : (string, Vhs.error) result =
+Ok "Output \"demo.gif\"\nSet WaitTimeout 30s\nType \"make\"\nEnter\nWait\n"
+```
+
 `Vhs.Prompt` relies on the prompt VHS gives each shell it starts, which ends
 with `>`, so it also holds while a command prints a line ending with `>`. A
 tape that changes the prompt, or runs such a command, should wait for
@@ -107,7 +119,8 @@ same arguments as `Vhs.render` and writes the outputs to the same paths. The tex
 what VHS reads after each command, without the extra screens VHS adds while it
 applies the settings. The image holds text, no script and no external
 resource, and animates with CSS alone, so it plays in an HTML `<img>` and in a
-README on GitHub. VHS cannot write `.svg`, so an `.svg` output is not in the
+README on GitHub. For a reader who prefers reduced motion, it shows its last
+screen, still. VHS cannot write `.svg`, so an `.svg` output is not in the
 tape that `vhs` reads:
 
 ```ocaml

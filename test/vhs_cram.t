@@ -51,7 +51,7 @@ So is a test without commands, and an output path VHS cannot read.
 
   $ printf 'Only prose.\n' > empty.t
   $ vhs-cram --output demo.gif empty.t
-  vhs-cram: empty.t: no command
+  vhs-cram: empty.t: no command, a line that starts with "  $ "
   [123]
 
   $ vhs-cram --output demo demo.t
