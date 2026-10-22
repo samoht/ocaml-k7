@@ -860,6 +860,11 @@ let last_lines = 10
 (* [one_line s] is [printable s] with its line breaks read as spaces. *)
 let one_line s = String.concat " " (String.split_on_char '\n' (printable s))
 
+(* What a wait last read, if anything. *)
+let pp_last ppf = function
+  | "" -> ()
+  | last -> Fmt.pf ppf "; last value was: %s" (one_line last)
+
 let pp_error ppf = function
   | Executable_not_found exe ->
       Fmt.pf ppf "executable not found: %s" (one_line exe)
@@ -879,15 +884,15 @@ let pp_error ppf = function
   | Unsupported why -> Fmt.string ppf (one_line why)
   | Timeout { wait; line; last } ->
       Fmt.pf ppf
-        "timed out waiting for line %d, %s; last value was: %s; give the wait \
-         a longer ~timeout or the tape a Set WaitTimeout"
-        line (one_line wait) (one_line last)
+        "timed out waiting for line %d, %s%a; give the wait a longer ~timeout \
+         or the tape a Set WaitTimeout"
+        line (one_line wait) pp_last last
   | Exited { status; wait; line; last } ->
       (match status with
       | `Exited n -> Fmt.pf ppf "the shell exited (status %d)" n
       | `Signaled n -> Fmt.pf ppf "the shell was killed by signal %d" n);
-      Fmt.pf ppf " while waiting for line %d, %s; last value was: %s" line
-        (one_line wait) (one_line last)
+      Fmt.pf ppf " while waiting for line %d, %s%a" line (one_line wait) pp_last
+        last
   | Invalid msg -> Fmt.string ppf (one_line msg)
 
 let fs_message path = function
