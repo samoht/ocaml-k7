@@ -122,6 +122,8 @@ let text_classes (c : Screen.cell) =
       (if has Dim c then "f" else "");
       (if has Italic c then "i" else "");
       (if deco = "" then "" else "x" ^ deco);
+      (* SGR 21 is a double underline in xterm.js. *)
+      (if has Double_underline c then "u2" else "");
     ]
 
 let decorated c = List.exists (String.starts_with ~prefix:"x") (text_classes c)
@@ -353,7 +355,8 @@ let add_style t b ~duration frames =
     ".b{font-weight:bold}.f{fill-opacity:.5}.i{font-style:italic}.xu{text-decoration:underline}.xs{text-decoration:line-through}.xo{text-decoration:overline}.xus{text-decoration:underline \
      line-through}.xuo{text-decoration:underline \
      overline}.xso{text-decoration:line-through \
-     overline}.xuso{text-decoration:underline line-through overline}";
+     overline}.xuso{text-decoration:underline line-through \
+     overline}.u2{text-decoration-style:double}";
   if t.blink then
     Buffer.add_string b
       ".k{animation:b 1.2s step-end infinite}@keyframes \
