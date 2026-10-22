@@ -1048,10 +1048,14 @@ let io_message ~cwd = function
       fs_message (Option.value (Eio.Path.native cwd) ~default:(snd cwd)) e
   | err -> Fmt.str "%a" Eio.Exn.pp_err err
 
-(* vhs uploads if [VHS_PUBLISH] is true, go-rod reads [rod], and an
-   inherited [PS1], [PROMPT] or [PROMPT_COMMAND] replaces the prompt that
-   [Prompt] waits for. *)
-let cleared = [ "VHS_PUBLISH"; "rod"; "PS1"; "PROMPT"; "PROMPT_COMMAND" ]
+(* vhs uploads if [VHS_PUBLISH] is true, go-rod reads [rod], an inherited
+   [PS1], [PROMPT] or [PROMPT_COMMAND] replaces the prompt that [Prompt]
+   waits for, and [COLUMNS] and [LINES] the size of the terminal. *)
+let cleared =
+  [
+    "VHS_PUBLISH"; "rod"; "PS1"; "PROMPT"; "PROMPT_COMMAND"; "COLUMNS"; "LINES";
+  ]
+
 let grace = 10.
 
 let environment ?(vars = []) proc =

@@ -91,7 +91,8 @@ let man =
        output beyond its last row scrolls its first rows away.";
     `P
       "The program is looked up in the $(b,PATH) it gets unless its name holds \
-       a slash. It gets the environment of $(cmd), with \
+       a slash. It gets the environment of $(cmd) without $(b,COLUMNS) and \
+       $(b,LINES), so that it reads the size of the terminal, with \
        $(b,TERM=xterm-256color), then the $(b,--env) variables. Its standard \
        input is the terminal, where nothing is typed, so a program that waits \
        for input waits until $(cmd) is interrupted.";

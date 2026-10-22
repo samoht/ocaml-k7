@@ -352,10 +352,11 @@ val record :
 
     The environment of the shell is, in this order, each variable replacing one
     of the same name before it:
-    - the environment of [proc] without five variables: [VHS_PUBLISH], which
+    - the environment of [proc] without seven variables: [VHS_PUBLISH], which
       would upload the recording; [rod], which configures the browser VHS
-      drives; and [PS1], [PROMPT] and [PROMPT_COMMAND], which would replace the
-      prompt {!constructor-Prompt} waits for;
+      drives; [PS1], [PROMPT] and [PROMPT_COMMAND], which would replace the
+      prompt {!constructor-Prompt} waits for; and [COLUMNS] and [LINES], which
+      would replace the size of the terminal;
     - [TERM=xterm-256color], as ttyd sets it under [vhs];
     - the variables of [env] (defaults to [[]]);
     - the prompt VHS gives the shell and the [Env] lines of [t].
