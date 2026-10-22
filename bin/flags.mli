@@ -29,7 +29,8 @@ val exits : Cmdliner.Cmd.Exit.info list
 (** {1:io Input and output} *)
 
 val load : Eio_unix.Stdenv.base -> string -> (string, string) result
-(** [load env path] is the contents of the file [path], or [Error msg]. *)
+(** [load env path] is the contents of the file [path], of at most 10 MiB, or
+    [Error msg]. *)
 
 val print_tape : Eio_unix.Stdenv.base -> K7.t -> (unit, string) result
 (** [print_tape env t] writes [K7.to_string t] on standard output. A reader that

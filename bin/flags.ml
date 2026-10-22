@@ -134,9 +134,15 @@ let exits =
       info internal_error ~doc:"on unexpected internal errors (bugs).";
     ]
 
+let max_load = 10 * 1024 * 1024
+
 let load env path =
-  match Eio.Path.(load (Eio.Stdenv.fs env / path)) with
-  | src -> Ok src
+  let read flow =
+    Eio.Buf_read.parse ~max_size:max_load Eio.Buf_read.take_all flow
+  in
+  match Eio.Path.(with_open_in (Eio.Stdenv.fs env / path)) read with
+  | Ok src -> Ok src
+  | Error (`Msg _) -> Fmt.error "%s: larger than 10 MiB" path
   | exception Eio.Io (Eio.Fs.E (Not_found _), _) ->
       Fmt.error "%s: no such file" path
   | exception Eio.Io (Eio.Fs.E (Permission_denied _), _) ->
