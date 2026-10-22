@@ -374,7 +374,7 @@ let sourced ~source line path =
     match source path with
     | Ok "" -> invalid "VHS refuses an empty tape"
     | Ok src -> src
-    | Error msg -> stop (Io msg)
+    | Error e -> stop e
   in
   List.filter_map
     (fun l ->
@@ -411,22 +411,29 @@ let base64 s =
   go 0;
   Buffer.contents b
 
-(* The image of [Set MarginFill], which ffmpeg reads; the image holds the
-   types a browser draws. *)
-let data_uri ~source line path =
-  let mime =
-    match String.lowercase_ascii (extension path) with
-    | ".png" -> "image/png"
-    | ".jpg" | ".jpeg" -> "image/jpeg"
-    | ".gif" -> "image/gif"
-    | ".webp" -> "image/webp"
-    | ".bmp" -> "image/bmp"
-    | ".svg" -> "image/svg+xml"
-    | _ -> unsupported line "a margin image a browser may not draw"
+(* The type of the image [data], by its signature, if a browser and ffmpeg
+   both read it. *)
+let image_type data =
+  let at i prefix =
+    String.length data >= i + String.length prefix
+    && String.sub data i (String.length prefix) = prefix
   in
+  if at 0 "\x89PNG\r\n\x1a\n" then Some "image/png"
+  else if at 0 "\xff\xd8\xff" then Some "image/jpeg"
+  else if at 0 "GIF87a" || at 0 "GIF89a" then Some "image/gif"
+  else if at 0 "RIFF" && at 8 "WEBP" then Some "image/webp"
+  else if at 0 "BM" then Some "image/bmp"
+  else None
+
+(* The image of [Set MarginFill], which ffmpeg reads, embedded. *)
+let data_uri ~source line path =
   match source path with
-  | Ok data -> "data:" ^ mime ^ ";base64," ^ base64 data
-  | Error msg -> stop (Io msg)
+  | Ok data -> (
+      match image_type data with
+      | Some mime -> "data:" ^ mime ^ ";base64," ^ base64 data
+      | None ->
+          stop (Invalid (line ^ ": not a PNG, JPEG, GIF, WebP or BMP image")))
+  | Error e -> stop e
 
 let rec read ~source ~at line t =
   match tokens line with
@@ -481,7 +488,8 @@ let rec read ~source ~at line t =
       in
       { t with actions = action :: t.actions }
 
-let of_lines ?(source = fun path -> Error (path ^ ": no file to read")) lines =
+let of_lines ?(source = fun path -> Error (Io (path ^ ": no file to read")))
+    lines =
   let config = default_config () in
   let empty =
     {

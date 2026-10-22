@@ -36,17 +36,17 @@ type t
 (** The type for tapes to play. *)
 
 val of_lines :
-  ?source:(string -> (string, string) result) ->
-  string list ->
-  (t, error) result
+  ?source:(string -> (string, error) result) -> string list -> (t, error) result
 (** [of_lines ~source lines] is the tape of [lines], each one a command that
     {!Tape_syntax.check} accepts, with the lines of the tape [source path] reads
-    in place of a [Source path] line, as VHS's parser inlines them; [source] is
-    [Error msg] if it cannot read [path] (defaults to always [Error]). It is
+    in place of a [Source path] line, as VHS's parser inlines them, and the
+    image of a [Set MarginFill path] line; [source] is [Error e] if it cannot
+    read [path] (defaults to always [Error (Io _)]). It is
     [Error (Unsupported _)] on a line this module cannot play, such as a
     [Screenshot] of a [.png] image, which VHS writes, and [Error (Invalid _)] on
     a [Source] VHS refuses or whose tape holds a control character other than a
-    tab or a carriage return. *)
+    tab or a carriage return, and on a [Set MarginFill] image without the
+    signature of a PNG, JPEG, GIF, WebP or BMP image. *)
 
 val text_output : t -> string option
 (** [text_output t] is the path of the text output of [t], its [Output] line

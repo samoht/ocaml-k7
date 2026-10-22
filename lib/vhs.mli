@@ -287,9 +287,9 @@ val record :
       or a [Screenshot] of a [.png] image, which {!render} writes, and on what
       the {{!native_details}native recorder} does not play, before it plays
       anything;
-    - [Error (Invalid _)] on a [Source] line it refuses, and on a [Screenshot]
-      of a sourced tape that has the path of an output or of another
-      [Screenshot];
+    - [Error (Invalid _)] on a [Source] line or a [Set MarginFill] image it
+      refuses, and on a [Screenshot] of a sourced tape that has the path of an
+      output or of another [Screenshot];
     - [Error (Timeout _)] if a wait does not hold in time;
     - [Error (Exited _)] as soon as the shell exits while a wait does not hold;
     - [Error (Executable_not_found _)] if the shell or the executable of a
@@ -403,9 +403,7 @@ val svg :
       {!constructor-Fish}, which start as in VHS;
     - a colour of a JSON [Theme] other than [#RGB], [#RGBA], [#RRGGBB],
       [#RRGGBBAA], [rgb()] or [rgba()], such as a colour name, which xterm.js
-      reads with the browser;
-    - [Set MarginFill] with an image other than PNG, JPEG, GIF, WebP, BMP or
-      SVG, by its extension.
+      reads with the browser.
 
     Its patterns match as Go's do, case folding, ASCII word boundaries and the
     Unicode classes of Go's tables included. After a line is submitted, by
@@ -422,6 +420,10 @@ val svg :
     blank, its description, its text alternative, is the text that screen shows,
     without concealed text. The image of a [Set MarginFill], read relative to
     the [cwd] of {!record}, is embedded, stretched to the frame as ffmpeg
-    stretches it. A size beyond 100000 pixels, a terminal beyond 2000 cells a
-    side, a [Set LetterSpacing] or [Set LineHeight] beyond 100000 and a positive
-    [Set PlaybackSpeed] below 0.001 are {!constructor-Unsupported}. *)
+    stretches it. It is a regular file, a symlink to one included, of at most 10
+    MiB, that starts with the signature of a PNG, JPEG, GIF, WebP or BMP image,
+    and the tape of a [Source] line a regular file of at most 10 MiB; anything
+    else, such as a FIFO, a directory or a text file, is {!constructor-Invalid}
+    before anything plays. A size beyond 100000 pixels, a terminal beyond 2000
+    cells a side, a [Set LetterSpacing] or [Set LineHeight] beyond 100000 and a
+    positive [Set PlaybackSpeed] below 0.001 are {!constructor-Unsupported}. *)

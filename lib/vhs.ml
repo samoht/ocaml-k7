@@ -1064,17 +1064,35 @@ let with_file dir path flags f =
       | x -> Ok x
       | exception Unix.Unix_error (e, _, _) -> error e)
 
-let load dir path =
-  with_file dir path [ O_RDONLY ] @@ fun fd ->
-  let b = Buffer.create 4096 and chunk = Bytes.create 65536 in
-  let rec go () =
-    match Unix.read fd chunk 0 (Bytes.length chunk) with
-    | 0 -> Buffer.contents b
-    | n ->
-        Buffer.add_subbytes b chunk 0 n;
+(* The largest file [record] reads: a sourced tape or a margin image. *)
+let max_load = 10 * 1024 * 1024
+
+(* [load dir path] reads a regular file, following symlinks, of at most
+   [max_load] bytes; opening it does not block, so a FIFO is refused rather
+   than waited on. *)
+let load dir path : (string, Native.error) result =
+  let too_large = Error (Native.Invalid (path ^ ": larger than 10 MiB")) in
+  let read fd =
+    let stat = Unix.fstat fd in
+    match stat.st_kind with
+    | S_REG when stat.st_size > max_load -> too_large
+    | S_REG ->
+        let b = Buffer.create 4096 and chunk = Bytes.create 65536 in
+        let rec go () =
+          if Buffer.length b > max_load then too_large
+          else
+            match Unix.read fd chunk 0 (Bytes.length chunk) with
+            | 0 -> Ok (Buffer.contents b)
+            | n ->
+                Buffer.add_subbytes b chunk 0 n;
+                go ()
+        in
         go ()
+    | _ -> Error (Native.Invalid (path ^ ": not a regular file"))
   in
-  go ()
+  match with_file dir path [ O_RDONLY; O_NONBLOCK ] read with
+  | Ok r -> r
+  | Error msg -> Error (Native.Io msg)
 
 let save dir path contents =
   with_file dir path [ O_WRONLY; O_CREAT; O_TRUNC ] @@ fun fd ->
