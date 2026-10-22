@@ -919,18 +919,25 @@ let is_executable file =
   | _ -> false
   | exception Unix.Unix_error _ -> false
 
-(* The child runs in [cwd], so a relative path stays relative. *)
+(* The child runs in [cwd], so a relative path stays relative. As execvp,
+   a file that cannot run is found when no other one can, so that exec
+   reports why. *)
 let resolve ~cwd env exe =
   let in_cwd p = if Filename.is_relative p then Filename.concat cwd p else p in
   if String.contains exe '/' then
     if Sys.file_exists (in_cwd exe) then Some exe else None
   else
     let path = Option.value (Eio.Process.Env.get_opt "PATH" env) ~default:"" in
-    List.find_map
-      (fun dir ->
-        let p = Filename.concat dir exe in
-        if dir <> "" && is_executable (in_cwd p) then Some p else None)
-      (String.split_on_char ':' path)
+    let candidates =
+      List.filter_map
+        (fun dir ->
+          let p = Filename.concat dir exe in
+          if dir <> "" && Sys.file_exists (in_cwd p) then Some p else None)
+        (String.split_on_char ':' path)
+    in
+    match List.find_opt (fun p -> is_executable (in_cwd p)) candidates with
+    | Some p -> Some p
+    | None -> List.nth_opt candidates 0
 
 let close_terminal (t : terminal) =
   Pty.close t.pty;
@@ -955,10 +962,49 @@ let stop_terminal clock (t : terminal) =
 (* Temporary, see [terminal]. *)
 external acquire_terminal : Unix.file_descr -> unit = "native_acquire_terminal"
 
+let lower e = String.uncapitalize_ascii (Unix.error_message e)
+
+(* What the child reports on the error pipe before it exits: [N] for a
+   program that is not there, [E] and a message for any other failure. *)
+let child_error ~cwd ~path ~prog = function
+  | Unix.Unix_error (ENOENT, "execve", _) -> "N"
+  | Unix.Unix_error (EACCES, "execve", _)
+    when try Sys.is_directory path with Sys_error _ -> false ->
+      Fmt.str "E%s: is a directory" prog
+  | Unix.Unix_error (e, "chdir", _) -> Fmt.str "E%s: %s" cwd (lower e)
+  | Unix.Unix_error (e, "execve", _) -> Fmt.str "E%s: %s" prog (lower e)
+  | Unix.Unix_error (e, f, _) -> Fmt.str "E%s: %s" f (lower e)
+  | e -> "E" ^ Printexc.to_string e
+
+let exec ~path argv env =
+  try Unix.execve path argv env
+  with Unix.Unix_error (ENOEXEC, _, _) ->
+    (* As execvp, a file without a #! line is a shell script. *)
+    let args = Array.sub argv 1 (Array.length argv - 1) in
+    Unix.execve "/bin/sh" (Array.append [| "/bin/sh"; path |] args) env
+
+let rec read_all fd b chunk =
+  match Unix.read fd chunk 0 (Bytes.length chunk) with
+  | 0 -> Buffer.contents b
+  | n ->
+      Buffer.add_subbytes b chunk 0 n;
+      read_all fd b chunk
+  | exception Unix.Unix_error (EINTR, _, _) -> read_all fd b chunk
+
 let open_terminal ~env ~cwd ~winsize ~path prog args =
+  let argv = Array.of_list (prog :: args)
+  and env = Eio.Process.Env.to_array env in
   let pty, slave = Pty.open_pty ~winsize () in
-  let argv = Array.of_list (prog :: args) in
-  let prog = path in
+  let close_terminal () =
+    Pty.close pty;
+    Pty.close slave
+  in
+  let report, reported =
+    try Unix.pipe ~cloexec:true ()
+    with e ->
+      close_terminal ();
+      raise e
+  in
   match Unix.fork () with
   | 0 -> (
       try
@@ -969,17 +1015,29 @@ let open_terminal ~env ~cwd ~winsize ~path prog args =
         if not (List.mem fd [ Unix.stdin; Unix.stdout; Unix.stderr ]) then
           Unix.close fd;
         Unix.chdir cwd;
-        let env = Eio.Process.Env.to_array env in
-        try Unix.execve prog argv env
-        with Unix.Unix_error (ENOEXEC, _, _) ->
-          (* As execvp, a file without a #! line is a shell script. *)
-          let args = Array.sub argv 1 (Array.length argv - 1) in
-          Unix.execve "/bin/sh" (Array.append [| "/bin/sh"; prog |] args) env
-      with Unix.Unix_error _ -> Unix._exit 127)
-  | pid -> { pty; slave; pid }
+        exec ~path argv env
+      with e ->
+        (try
+           let msg = child_error ~cwd ~path ~prog e in
+           ignore (Unix.write_substring reported msg 0 (String.length msg))
+         with _ -> ());
+        Unix._exit 127)
+  | pid ->
+      Unix.close reported;
+      let msg =
+        Fun.protect ~finally:(fun () -> Unix.close report) @@ fun () ->
+        read_all report (Buffer.create 64) (Bytes.create 256)
+      in
+      if msg = "" then { pty; slave; pid }
+      else (
+        close_terminal ();
+        (try ignore (Unix.waitpid [] pid) with Unix.Unix_error _ -> ());
+        match msg.[0] with
+        | 'N' -> stop (Executable_not_found prog)
+        | _ -> stop (Io (String.sub msg 1 (String.length msg - 1))))
   | exception e ->
-      Pty.close pty;
-      Pty.close slave;
+      List.iter Unix.close [ report; reported ];
+      close_terminal ();
       raise e
 
 (* VHS's shell.go. *)

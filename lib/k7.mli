@@ -414,8 +414,9 @@ val run :
       empty or holds [=], or a name or a value holds a NUL byte;
     - [Error (Unsupported _)] on what {!svg} refuses;
     - [Error (Executable_not_found _)] if the executable is not found;
-    - [Error (Io _)] if [cwd] is not a directory of the native file system, and
-      on any other I/O failure. *)
+    - [Error (Io _)] if [cwd] is not a directory of the native file system or
+      cannot be entered, if the executable cannot run, with the reason, and on
+      any other I/O failure. *)
 
 (** {1:checks Checks}
 
