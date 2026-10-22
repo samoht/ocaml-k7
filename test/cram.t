@@ -11,6 +11,17 @@ varies across cmdliner versions.
   $ k7 cram --setup missing.sh --output demo.gif demo.t 2> /dev/null
   [124]
 
+Numbers are plain decimal digits, as the messages say.
+
+  $ k7 cram --print --cols 0x50 --output demo.gif demo.t 2> /dev/null
+  [124]
+  $ k7 cram --print --wait-timeout 1_5 --output demo.gif demo.t 2> /dev/null
+  [124]
+  $ k7 cram --print --rows 0b1 --output demo.gif demo.t 2> /dev/null
+  [124]
+  $ k7 cram --print --font-size +16 --output demo.gif demo.t 2> /dev/null
+  [124]
+
 --print shows the tape instead of running vhs.
 
   $ k7 cram --print --output demo.gif demo.t
