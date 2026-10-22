@@ -233,6 +233,30 @@ val tape :
     the first offending item, if the tape breaks one of the {{!checks}checks}.
 *)
 
+val with_settings : setting list -> t -> (t, error) result
+(** [with_settings settings t] is [t] with [settings] after its own settings, in
+    place of those of the same constructors and of those that size the frame in
+    the same direction: {!constructor-Columns} replaces {!constructor-Width} and
+    {!constructor-Rows} replaces {!constructor-Height}, and the reverse. It is
+    [Error (Invalid _)] as {!val-tape} is. *)
+
+val with_outputs : string list -> t -> (t, error) result
+(** [with_outputs outputs t] is [t] that writes to [outputs] in place of the
+    [outputs] {!val-tape} gave it; its {!raw} [Output] lines stay. It is
+    [Error (Invalid _)] as {!val-tape} is. *)
+
+val of_string : string -> (t, error) result
+(** [of_string s] is the tape of the [.tape] source [s], one command per line, a
+    line ending with ["\n"] or ["\r\n"]: the [Output] lines before the first
+    action are its outputs, the [Set] lines before it that a {!setting} writes
+    are its settings, the lines between [Hide] and the next [Show], or the end,
+    are a {!hidden} action, a [Show] outside them is dropped, and every other
+    line is a {!raw} action. It is [Error (Invalid msg)] if a line is not one
+    VHS's parser accepts, with [msg] naming the line by its number from [1], or
+    if {!val-tape} refuses the tape. If [t] has no [.svg] output and no {!raw}
+    [Output] line, [Result.map to_string (of_string (to_string t))] is
+    [Ok (to_string t)]. *)
+
 val to_string : t -> string
 (** [to_string t] is [t] in the [.tape] syntax: the [Output] lines, but those of
     the [.svg] outputs, then the [Set] lines, then the actions. An action is one

@@ -181,6 +181,40 @@ let test_total s t n =
       ([], [ t ^ ".gif" ], List.map (fun a -> Vhs.hidden [ a ]) actions);
     ]
 
+(* [of_string] reads back what [to_string] prints, and a tape it reads
+   prints as a tape it reads the same. *)
+let check_reads t =
+  let printed = Vhs.to_string t in
+  match Vhs.of_string printed with
+  | Ok t' ->
+      let printed' = Vhs.to_string t' in
+      if printed' <> printed then failf "%S read back as %S" printed printed'
+  | Error e -> failf "%S not read back: %a" printed Vhs.pp_error e
+
+let test_of_string s t n =
+  (match Vhs.of_string s with Ok t -> check_reads t | Error _ -> ());
+  let c = Char.chr (abs n mod 256) in
+  let actions =
+    Vhs.
+      [
+        raw t;
+        type' s;
+        key (Ctrl c);
+        sleep (Ms n);
+        wait (Line s);
+        hidden [ raw s; type' t ];
+      ]
+  in
+  let settings =
+    Vhs.[ Font_size n; Font_family s; Columns n; Theme t; Typing_speed (Ms n) ]
+  in
+  List.iter
+    (fun (settings, actions) ->
+      match Vhs.tape ~settings ~outputs actions with
+      | Ok t -> check_reads t
+      | Error _ -> ())
+    [ (settings, actions); ([], actions); (settings, [ Vhs.type' s ]) ]
+
 (* A sleep accepts [0] to [max_ms], a wait timeout [1] to [max_ms], and both
    print the value. *)
 let test_durations n =
@@ -1278,6 +1312,13 @@ let decoding =
 let tapes =
   [
     test_case "tape is total" [ bytes; bytes; int ] test_total;
+    test_case "of_string reads to_string"
+      [
+        choose [ bytes; const "Output a.gif\nSet Width 300\nHide\nType x\n" ];
+        bytes;
+        int;
+      ]
+      test_of_string;
     test_case "JSON themes obey Go nesting limits" [ uint8 ] test_json_depth;
     test_case "JSON themes"
       [

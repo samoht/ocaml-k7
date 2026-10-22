@@ -431,6 +431,70 @@ let test_encoders () =
   refuses "too many pixels" ~outputs:[ "a.gif" ] [ Width 65534; Height 4000 ];
   accepts "text" ~outputs:[ "a.txt" ] [ Width 70000 ]
 
+(* A tape file reads as the values that print it, settings and hidden
+   actions included. *)
+let test_of_string () =
+  let read src = Result.map_error Native_test.invalid (Vhs.of_string src) in
+  (match
+     read
+       "Output demo.svg\r\n\
+        Output demo.txt\n\
+        Set FontSize 18\n\
+        Set Shell zsh\n\
+        Set TypingSpeed 0.5s\n\
+        Set WaitTimeout 3s\n\
+        # a comment\n\
+        Hide\n\
+        Type \"cd /tmp\"\n\
+        Enter\n\
+        Show\n\
+        Type \"ls\"\n\
+        Sleep 1s\n"
+   with
+  | Error e -> Alcotest.failf "rejected: %s" e
+  | Ok t ->
+      expect "printed"
+        "Output \"demo.txt\"\n\
+         Set FontSize 18\n\
+         Set Shell \"zsh\"\n\
+         Set TypingSpeed 500ms\n\
+         Set WaitTimeout 3s\n\
+         # a comment\n\
+         Hide\n\
+         Type \"cd /tmp\"\n\
+         Enter\n\
+         Show\n\
+         Type \"ls\"\n\
+         Sleep 1s\n"
+        (Vhs.to_string t));
+  (* Settings and outputs given later replace the tape's. *)
+  (match
+     Result.bind
+       (Vhs.of_string "Output a.gif\nSet Width 900\nSet FontSize 18\nType x\n")
+       (fun t ->
+         Result.bind
+           (Vhs.with_settings Vhs.[ Columns 100; Font_size 12 ] t)
+           (Vhs.with_outputs [ "b.txt" ]))
+   with
+  | Ok t ->
+      expect "replaced"
+        "Output \"b.txt\"\nSet Columns 100\nSet FontSize 12\nType x\n"
+        (Vhs.to_string t)
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+  (* A setting after the first action is a raw line, which VHS ignores. *)
+  Alcotest.(check (result string string))
+    "late setting"
+    (Error {|raw line "Set FontSize 10": VHS ignores it after the first action|})
+    (Result.map Vhs.to_string (read "Output a.gif\nType x\nSet FontSize 10\n"));
+  Alcotest.(check (result string string))
+    "line number" (Error {|line 2: "Type \"x": unterminated string|})
+    (Result.map Vhs.to_string (read "Output a.gif\nType \"x\n"));
+  Alcotest.(check (result string string))
+    "unknown shell"
+    (Error {|line 1: "Set Shell \"tcsh\"": not a shell VHS starts|})
+    (Result.map Vhs.to_string
+       (read "Set Shell \"tcsh\"\nOutput a.gif\nType x\n"))
+
 let suite =
   ( "vhs",
     List.map
@@ -454,4 +518,5 @@ let suite =
         ("outputs", test_outputs);
         ("keys", test_keys);
         ("waits", test_waits);
+        ("of_string", test_of_string);
       ] )

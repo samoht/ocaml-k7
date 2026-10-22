@@ -804,6 +804,132 @@ let to_string t =
 
 let pp ppf t = Fmt.string ppf (to_string t)
 
+(* Reading *)
+
+let shells = [ Bash; Zsh; Fish; Powershell; Pwsh; Cmd; Nushell; Osh; Xonsh ]
+
+(* The setting of the line [Set name arg], if a constructor writes it. *)
+let setting_of_line line name arg =
+  let int f =
+    match Tape_syntax.atoi arg with
+    | Some n
+      when Int64.compare n (Int64.of_int max_int) <= 0
+           && Int64.compare n (Int64.of_int min_int) >= 0 ->
+        Ok (Some (f (Int64.to_int n)))
+    | _ -> Fmt.error "%a: out of range" Quote.pp line
+  in
+  match name with
+  | "Shell" -> (
+      match List.find_opt (fun sh -> shell_name sh = arg) shells with
+      | Some sh -> Ok (Some (Shell sh))
+      | None -> Fmt.error "%a: not a shell VHS starts" Quote.pp line)
+  | "FontSize" -> int (fun n -> Font_size n)
+  | "FontFamily" -> Ok (Some (Font_family arg))
+  | "Width" -> int (fun n -> Width n)
+  | "Height" -> int (fun n -> Height n)
+  | "Columns" -> int (fun n -> Columns n)
+  | "Rows" -> int (fun n -> Rows n)
+  | "Theme" -> Ok (Some (Theme arg))
+  | "Padding" -> int (fun n -> Padding n)
+  | "Framerate" -> int (fun n -> Framerate n)
+  | "TypingSpeed" -> (
+      (* A duration in whole milliseconds, seconds without a unit. *)
+      let d =
+        match Tape_syntax.tokens line with
+        | [ _; _; Num n; Keyword (("ms" | "s" | "m") as u) ] -> Some (n ^ u)
+        | [ _; _; Num n ] -> Some (n ^ "s")
+        | _ -> None
+      in
+      match Option.bind d Tape_syntax.duration with
+      | Some ns when Int64.rem ns 1_000_000L = 0L ->
+          Ok (Some (Typing_speed (Ms (Int64.to_int (Int64.div ns 1_000_000L)))))
+      | _ -> Ok None)
+  | _ -> Ok None
+
+(* [of_string] reads the settings, while no action has started, with their
+   constructors, the [Output] lines before them as outputs, [Hide] and
+   [Show] as {!hidden}, and every other line as a raw line. *)
+let of_string src =
+  let lines =
+    List.map
+      (fun l ->
+        if String.ends_with ~suffix:"\r" l then
+          String.sub l 0 (String.length l - 1)
+        else l)
+      (String.split_on_char '\n' src)
+  in
+  let settings = ref [] and outputs = ref [] and actions = ref [] in
+  let hidden = ref None in
+  let add a =
+    match !hidden with
+    | Some h -> hidden := Some (a :: h)
+    | None -> actions := a :: !actions
+  in
+  let show () =
+    Option.iter (fun h -> actions := Hidden (List.rev h) :: !actions) !hidden;
+    hidden := None
+  in
+  let rec go n ~started = function
+    | [] -> Ok ()
+    | line :: rest -> (
+        let next ~started = go (n + 1) ~started rest in
+        match Tape_syntax.check line with
+        | Error e -> Fmt.error "line %d: %a: %s" n Quote.pp line e
+        | Ok (Output p) when not started ->
+            outputs := p :: !outputs;
+            next ~started
+        | Ok (Set (name, arg)) when not started -> (
+            match setting_of_line line name arg with
+            | Error e -> Fmt.error "line %d: %s" n e
+            | Ok (Some s) ->
+                settings := s :: !settings;
+                next ~started
+            | Ok None ->
+                add (Raw line);
+                next ~started)
+        | Ok Hide ->
+            if !hidden = None then hidden := Some [];
+            next ~started:true
+        | Ok Show ->
+            show ();
+            next ~started
+        | Ok (Blank | Set _ | Require | Output _) ->
+            add (Raw line);
+            next ~started
+        | Ok (Screenshot _ | Other) ->
+            add (Raw line);
+            next ~started:true)
+  in
+  match go 1 ~started:false lines with
+  | Error msg -> Error (Invalid msg)
+  | Ok () ->
+      show ();
+      (* A trailing newline ends the last line rather than adding one. *)
+      let actions =
+        match !actions with Raw "" :: rest -> rest | actions -> actions
+      in
+      tape ~settings:(List.rev !settings) ~outputs:(List.rev !outputs)
+        (List.rev actions)
+
+(* The settings [s] replaces: those of its constructor, and those that size
+   the frame in its direction. *)
+let replaces s s' =
+  match (s, s') with
+  | (Width _ | Columns _), (Width _ | Columns _)
+  | (Height _ | Rows _), (Height _ | Rows _) ->
+      true
+  | _ -> fst (setting_line s) = fst (setting_line s')
+
+let with_settings settings t =
+  let kept =
+    List.filter
+      (fun s' -> not (List.exists (fun s -> replaces s s') settings))
+      t.settings
+  in
+  tape ~settings:(kept @ settings) ~outputs:t.outputs t.actions
+
+let with_outputs outputs t = tape ~settings:t.settings ~outputs t.actions
+
 (* Running *)
 
 (* [utf_8 s] is [s] with each invalid byte replaced by U+FFFD, and without

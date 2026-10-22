@@ -13,6 +13,10 @@
 - `Vhs.run` records a program on a pseudo-terminal, with no shell and
   nothing typed, and returns the animated SVG image of its own screens,
   timed as they arrived, with how the program exited.
+- `Vhs.of_string` reads a tape in the `.tape` syntax, its settings as
+  `Vhs.setting` values and `Hide`/`Show` as `Vhs.hidden`, and
+  `Vhs.with_settings` and `Vhs.with_outputs` replace a tape's settings and
+  outputs.
 - The native recorder plays bash, zsh and fish as VHS starts them, VHS's
   window bar, named and JSON themes, margin colours and images, `Screenshot`
   of an `.svg` path (a still SVG image), `Source` and the `.txt`, `.ascii`
