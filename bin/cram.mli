@@ -24,6 +24,12 @@ val is_typeable : string -> bool
     character: a C0 control, DEL or a C1 control, which a terminal reads as an
     escape sequence. *)
 
+val quote : string -> string
+(** [quote s] is [s] between double quotes for a message: valid UTF-8 as it is,
+    a double quote and a backslash escaped with a backslash, a tab, a newline
+    and a carriage return as [\t], [\n] and [\r], another C0 control and DEL as
+    [\xNN], a C1 control as [\u{NN}], and an invalid byte as U+FFFD. *)
+
 val is_empty : t -> bool
 (** [is_empty t] is [true] iff [t] has no command. *)
 

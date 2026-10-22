@@ -12,11 +12,36 @@ let is_typeable s =
   || (not (String.exists (fun c -> c = '\t' || c = '\n') s))
      && Result.is_ok (Vhs.tape ~outputs:[ "x.gif" ] [ Vhs.type' s ])
 
+let quote s =
+  let b = Buffer.create (String.length s + 2) in
+  Buffer.add_char b '"';
+  let rec go i =
+    if i < String.length s then (
+      let d = String.get_utf_8_uchar s i in
+      let u = Uchar.utf_decode_uchar d in
+      (match Uchar.to_int u with
+      | 0x22 -> Buffer.add_string b {|\"|}
+      | 0x5c -> Buffer.add_string b {|\\|}
+      | 0x09 -> Buffer.add_string b {|\t|}
+      | 0x0a -> Buffer.add_string b {|\n|}
+      | 0x0d -> Buffer.add_string b {|\r|}
+      | c when c < 0x20 || c = 0x7f ->
+          Fmt.kstr (Buffer.add_string b) {|\x%02x|} c
+      | c when c >= 0x80 && c <= 0x9f ->
+          Fmt.kstr (Buffer.add_string b) {|\u{%X}|} c
+      (* An invalid byte decodes as U+FFFD. *)
+      | _ -> Buffer.add_utf_8_uchar b u);
+      go (i + Uchar.utf_decode_length d))
+  in
+  go 0;
+  Buffer.add_char b '"';
+  Buffer.contents b
+
 let check_line n line =
   if not (String.is_valid_utf_8 line) then
-    Fmt.error "line %d: %S is not valid UTF-8" n line
+    Fmt.error "line %d: %s is not valid UTF-8" n (quote line)
   else if not (is_typeable line) then
-    Fmt.error "line %d: %S holds a control character" n line
+    Fmt.error "line %d: %s holds a control character" n (quote line)
   else Ok line
 
 (* [parse] scans [src] once, line by line, without splitting it. As in
