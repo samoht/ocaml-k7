@@ -49,7 +49,7 @@ $ k7 tape hello.tape
 ```
 
 Each subcommand takes `--cols`, `--rows`, `--font-size`, `--theme` and
-`--env VAR=VALUE`. k7 writes `.svg` outputs and the text outputs (`.txt`,
+`--env VAR=VALUE`, and `k7 cram` and `k7 tape` take `--wait-timeout`. k7 writes `.svg` outputs and the text outputs (`.txt`,
 `.ascii` and `.test`) itself, and `k7 cram` and `k7 tape` run `vhs` for the
 others. `k7 cram` and `k7 tape` call `K7.play`, and `k7 run` calls `K7.run`.
 `k7 COMMAND --help` gives the details.

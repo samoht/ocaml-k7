@@ -36,7 +36,7 @@ Sleep 1000ms
     (Result.get_ok (tape "  $ true\n"));
   Alcotest.(check bool)
     "wait timeout" true
-    (contains ~sub:"\nSet WaitTimeout 60s\n"
+    (contains ~sub:"\nSet WaitTimeout 60000ms\n"
        (Result.get_ok (tape ~wait_timeout_s:60 "  $ true\n")));
   let error name expected src ~setup ~output =
     Alcotest.(check (result string string))
@@ -388,10 +388,10 @@ let record_cram ~native ?(setup = []) env path src =
                Font_size 12;
                Framerate 5;
                Typing_speed (Ms 5);
+               Wait_timeout (Ms 3000);
              ]
          ~outputs:[ output ]
-         ((K7.raw "Set WaitTimeout 3s" :: Cram.actions ~setup cram)
-         @ [ K7.sleep (Ms 2000) ]))
+         (Cram.actions ~setup cram @ [ K7.sleep (Ms 2000) ]))
   in
   (match
      Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 40. (fun () ->

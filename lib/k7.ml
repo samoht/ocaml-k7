@@ -66,6 +66,7 @@ type setting =
   | Padding of int
   | Typing_speed of duration
   | Framerate of int
+  | Wait_timeout of duration
 
 type error =
   | Executable_not_found of string
@@ -281,6 +282,7 @@ let constructors =
     ("Theme", "Theme");
     ("Padding", "Padding");
     ("Framerate", "Framerate");
+    ("WaitTimeout", "Wait_timeout");
   ]
 
 (* VHS applies [Set], but [Set Shell], and [Require] only before the first
@@ -403,6 +405,7 @@ let check_setting = function
   | Font_family f -> check_quotable "Set FontFamily" f
   | Theme t -> check_theme t
   | Typing_speed (Ms n) -> check_ms "Set TypingSpeed " n
+  | Wait_timeout (Ms n) -> check_ms "Set WaitTimeout " n
   | Font_size _ | Framerate _ | Padding _ | Width _ | Height _ | Columns _
   | Rows _ ->
       Ok ()
@@ -757,6 +760,7 @@ let setting_line = function
   | Padding n -> ("Padding", Int.to_string n)
   | Typing_speed (Ms n) -> ("TypingSpeed", Int.to_string n ^ "ms")
   | Framerate n -> ("Framerate", Int.to_string n)
+  | Wait_timeout (Ms n) -> ("WaitTimeout", Int.to_string n ^ "ms")
 
 let add_setting b s =
   let name, value = setting_line s in
@@ -792,6 +796,18 @@ let setting_of_line line name arg =
         Ok (Some (f (Int64.to_int n)))
     | _ -> Fmt.error "%a: out of range" Quote.pp line
   in
+  let ms () =
+    let d =
+      match Tape_syntax.tokens line with
+      | [ _; _; Num n; Keyword (("ms" | "s" | "m") as u) ] -> Some (n ^ u)
+      | [ _; _; Num n ] -> Some (n ^ "s")
+      | _ -> None
+    in
+    match Option.bind d Tape_syntax.duration with
+    | Some ns when Int64.rem ns 1_000_000L = 0L ->
+        Some (Int64.to_int (Int64.div ns 1_000_000L))
+    | _ -> None
+  in
   match name with
   | "Shell" -> (
       match List.find_opt (fun sh -> shell_name sh = arg) shells with
@@ -807,16 +823,14 @@ let setting_of_line line name arg =
   | "Padding" -> int (fun n -> Padding n)
   | "Framerate" -> int (fun n -> Framerate n)
   | "TypingSpeed" -> (
-      let d =
-        match Tape_syntax.tokens line with
-        | [ _; _; Num n; Keyword (("ms" | "s" | "m") as u) ] -> Some (n ^ u)
-        | [ _; _; Num n ] -> Some (n ^ "s")
-        | _ -> None
-      in
-      match Option.bind d Tape_syntax.duration with
-      | Some ns when Int64.rem ns 1_000_000L = 0L ->
-          Ok (Some (Typing_speed (Ms (Int64.to_int (Int64.div ns 1_000_000L)))))
-      | _ -> Ok None)
+      match ms () with
+      | Some n -> Ok (Some (Typing_speed (Ms n)))
+      | None -> Ok None)
+  | "WaitTimeout" -> (
+      match ms () with
+      | Some n -> Ok (Some (Wait_timeout (Ms n)))
+      | None -> Fmt.error "%a: not a whole number of milliseconds" Quote.pp line
+      )
   | _ -> Ok None
 
 let lines src =
@@ -1028,7 +1042,7 @@ let pp_error ppf = function
   | Timeout { wait; line; last } ->
       Fmt.pf ppf
         "timed out waiting for line %d, %s%a; give the wait a longer ~timeout \
-         or the tape a Set WaitTimeout"
+         or the tape a longer Wait_timeout"
         line (one_line wait) pp_last last
   | Exited { status; wait; line; last } ->
       (match status with

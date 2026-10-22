@@ -33,12 +33,12 @@ let tape ~setup ?(settings = []) ?(env = []) ~output ?wait_timeout_s ~name src =
         Quote.pp path
   | false, None ->
       let timeout =
-        match wait_timeout_s with
-        | None -> []
-        | Some s -> [ Fmt.kstr K7.raw "Set WaitTimeout %ds" s ]
+        Option.map (fun s -> K7.Wait_timeout (Ms (s * 1000))) wait_timeout_s
       in
-      K7.tape ~settings:(Shell Bash :: settings) ~outputs:[ output ]
-        (timeout @ Cram.actions ~env ~setup cram)
+      K7.tape
+        ~settings:((K7.Shell Bash :: settings) @ Option.to_list timeout)
+        ~outputs:[ output ]
+        (Cram.actions ~env ~setup cram)
       |> Result.map_error (fun e -> Fmt.str "%a" Flags.pp_error e)
 
 let shown = Flags.shown

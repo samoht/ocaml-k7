@@ -95,7 +95,7 @@ let test_timeout () =
       check_contains "names the line" ~sub:(Fmt.str "line %d," line)
         (Fmt.str "%a" K7.pp_error e);
       check_contains "how to wait longer"
-        ~sub:"~timeout or the tape a Set WaitTimeout"
+        ~sub:"~timeout or the tape a longer Wait_timeout"
         (Fmt.str "%a" K7.pp_error e)
   | Ok _ -> Alcotest.fail "no timeout"
   | Error e -> Alcotest.failf "%a" K7.pp_error e
@@ -134,20 +134,14 @@ let test_timeout_precedence () =
     let s = Int64.to_float (Mtime.to_uint64_ns (Eio.Time.Mono.now clock)) in
     if s /. 1e9 >= within then Alcotest.failf "timed out after %gs" (s /. 1e9)
   in
+  let tape timeout actions =
+    Result.get_ok (K7.with_settings [ Wait_timeout timeout ] (tape actions))
+  in
   times_out ~within:15.
-    (tape
-       K7.
-         [
-           raw "Set WaitTimeout 60s";
-           type' "echo hi\n";
-           wait ~timeout:(Ms 300) (Screen "never");
-         ]);
+    (tape (Ms 60_000)
+       K7.[ type' "echo hi\n"; wait ~timeout:(Ms 300) (Screen "never") ]);
   times_out ~within:15.
-    (tape
-       K7.
-         [
-           raw "Set WaitTimeout 300ms"; type' "echo hi\n"; wait (Screen "never");
-         ])
+    (tape (Ms 300) K7.[ type' "echo hi\n"; wait (Screen "never") ])
 
 let test_hidden () =
   with_dir @@ fun env cwd ->

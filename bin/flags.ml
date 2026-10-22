@@ -96,8 +96,9 @@ let seconds s =
 
 let wait_timeout =
   let doc =
-    "Fail the recording when a command has not given the prompt back after \
-     $(docv) seconds (defaults to VHS's 15)."
+    "Fail the recording when a wait without a timeout of its own has not held \
+     after $(docv) seconds (defaults to VHS's 15). $(b,k7 cram) waits for the \
+     prompt after each command."
   in
   Arg.(
     value
@@ -200,7 +201,8 @@ let pp_error ppf = function
   | K7.Timeout { wait; line; last } ->
       Fmt.pf ppf
         "timed out waiting for line %d, %s%s; give the wait a longer timeout, \
-         as in Wait@30s, or the tape a Set WaitTimeout"
+         as in Wait@30s, or the tape a longer Set WaitTimeout or \
+         --wait-timeout"
         line (shown wait)
         (if last = "" then "" else "; last value was: " ^ shown last)
   | K7.Unsupported _ as e ->

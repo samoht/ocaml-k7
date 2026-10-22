@@ -97,8 +97,8 @@ val sleep : duration -> action
 
 val wait : ?timeout:duration -> wait -> action
 (** [wait ~timeout w] pauses until [w] holds and fails the recording if it does
-    not hold within [timeout]. Without [timeout], the wait takes the duration of
-    a {!raw} [Set WaitTimeout] if the tape has one, and 15 seconds otherwise. *)
+    not hold within [timeout]. Without [timeout], the wait takes the
+    {!constructor-Wait_timeout} of the tape. *)
 
 val hidden : action list -> action
 (** [hidden actions] runs [actions] without recording them. A [hidden] inside
@@ -218,6 +218,9 @@ type setting =
   | Typing_speed of duration
       (** The pause after each typed character (defaults to [Ms 50]). *)
   | Framerate of int  (** A positive frame rate (defaults to [50]). *)
+  | Wait_timeout of duration
+      (** How long a {!val-wait} without a timeout waits (defaults to 15
+          seconds). *)
 
 type t
 (** The type for tapes VHS reads without error and without ignoring a line, but
@@ -268,7 +271,8 @@ val of_string : string -> (t, error) result
     lines between [Hide] and the next [Show], or the end, are a {!hidden}
     action, and a [Show] outside them is dropped. Every other line is a {!raw}
     action. It is [Error (Invalid msg)] if a line is not one VHS's parser
-    accepts, with [msg] naming the line by its number from [1], or if
+    accepts, or is a [Set WaitTimeout] that is not a whole number of
+    milliseconds, with [msg] naming the line by its number from [1], or if
     {!val-tape} refuses the tape. If a tape [x] has no {!raw} [Output] line,
     [Result.map to_string (of_string (to_string x))] is [Ok (to_string x)]. *)
 
@@ -398,12 +402,12 @@ val svg :
     (defaults to [[]]) that receives each string of [output] at its time, as
     {!record} draws it. The strings are raw terminal output, so a line ends with
     ["\r\n"]: ["a\nb"] moves down without returning to the first column. [svg]
-    starts no shell and types nothing, so {!constructor-Shell} and
-    {!constructor-Typing_speed} have no effect. It is [Error (Invalid _)] if a
-    setting is one {!val-tape} refuses, or if a time is out of the range of a
-    {!duration} or before the one ahead of it. It is [Error (Unsupported _)] on
-    the {!constructor-Theme} colours and the sizes that the
-    {{!native_details}native recorder} refuses. *)
+    starts no shell and types nothing, so {!constructor-Shell},
+    {!constructor-Typing_speed} and {!constructor-Wait_timeout} have no effect.
+    It is [Error (Invalid _)] if a setting is one {!val-tape} refuses, or if a
+    time is out of the range of a {!duration} or before the one ahead of it. It
+    is [Error (Unsupported _)] on the {!constructor-Theme} colours and the sizes
+    that the {{!native_details}native recorder} refuses. *)
 
 val run :
   ?settings:setting list ->
@@ -464,7 +468,7 @@ val run :
     - an output path or a {!constructor-Theme} holds all three quote characters
       (['"'], ['\''] and ['`']), which no VHS string can quote; a {!type'} can
       hold them, see {!to_string};
-    - a duration is out of range, or a wait timeout is [Ms 0];
+    - a duration is out of range, or the timeout of a {!val-wait} is [Ms 0];
     - a {!constructor-Line} or {!constructor-Screen} pattern is not valid Go
       regular expression syntax;
     - a key or a setting breaks the condition its documentation states;

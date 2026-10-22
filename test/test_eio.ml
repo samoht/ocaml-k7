@@ -269,7 +269,7 @@ let test_pp_error_names () =
     (pp (Io "dir\nx\027[0m: no such file or directory"));
   expect "format characters"
     "timed out waiting for line 3, Wait+Line /x/; last value was: > ab; give \
-     the wait a longer ~timeout or the tape a Set WaitTimeout"
+     the wait a longer ~timeout or the tape a longer Wait_timeout"
     (pp
        (Timeout
           {

@@ -65,7 +65,8 @@ let man =
     `P
       "$(cmd) reads the tape $(i,TAPE) and records it. Its $(b,Set) lines \
        before the first action are its settings, which $(b,--cols), \
-       $(b,--rows), $(b,--font-size) and $(b,--theme) replace.";
+       $(b,--rows), $(b,--font-size), $(b,--theme) and $(b,--wait-timeout) \
+       replace.";
     `P
       "When every output is an $(b,.svg) image or a text output ($(b,.txt), \
        $(b,.ascii) or $(b,.test)), $(cmd) plays the tape itself, in bash, zsh \
@@ -85,12 +86,17 @@ let man =
 
 let cmd =
   let doc = "play a VHS tape, itself or with vhs" in
-  let run print vhs settings env outputs input =
+  let run print vhs settings env wait_timeout outputs input =
+    let settings =
+      settings
+      @ Option.to_list
+          (Option.map (fun s -> K7.Wait_timeout (Ms (s * 1000))) wait_timeout)
+    in
     Eio_main.run @@ fun stdenv ->
     run stdenv ~print ~vhs ~settings ~env ~outputs input
   in
   Cmd.make
     (Cmd.info "tape" ~doc ~man ~exits:Flags.exits)
     Term.(
-      const run $ Flags.print $ Flags.vhs $ Flags.settings $ Flags.env $ outputs
-      $ input)
+      const run $ Flags.print $ Flags.vhs $ Flags.settings $ Flags.env
+      $ Flags.wait_timeout $ outputs $ input)

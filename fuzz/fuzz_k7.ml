@@ -173,6 +173,7 @@ let test_total s t n =
         Padding n;
         Typing_speed (Ms n);
         Framerate n;
+        Wait_timeout (Ms n);
       ]
   in
   List.iter
@@ -212,7 +213,15 @@ let test_of_string s t n =
       ]
   in
   let settings =
-    K7.[ Font_size n; Font_family s; Columns n; Theme t; Typing_speed (Ms n) ]
+    K7.
+      [
+        Font_size n;
+        Font_family s;
+        Columns n;
+        Theme t;
+        Typing_speed (Ms n);
+        Wait_timeout (Ms n);
+      ]
   in
   List.iter
     (fun (settings, actions) ->
@@ -854,29 +863,30 @@ let test_cli_wait_timeout seconds =
   if valid then
     check
       (List.mem
-         (Fmt.str "Set WaitTimeout %ds" seconds)
+         (Fmt.str "Set WaitTimeout %dms" (seconds * 1000))
          (String.split_on_char '\n' output))
   else check_refused seconds output
 
-let record_cram ?(setup = []) ?(prefix = []) env path src =
+let record_cram ?(setup = []) ?(settings = []) env path src =
   let output = path "order.txt" in
   let cram = Result.get_ok (K7_cli.Cram.parse src) in
   let t =
     Result.get_ok
       (K7.tape
          ~settings:
-           K7.
-             [
-               Shell Bash;
-               Width 480;
-               Height 240;
-               Padding 0;
-               Font_size 12;
-               Framerate 5;
-               Typing_speed (Ms 5);
-             ]
+           (K7.
+              [
+                Shell Bash;
+                Width 480;
+                Height 240;
+                Padding 0;
+                Font_size 12;
+                Framerate 5;
+                Typing_speed (Ms 5);
+              ]
+           @ settings)
          ~outputs:[ output ]
-         (prefix @ K7_cli.Cram.actions ~setup cram @ [ K7.sleep (Ms 3500) ]))
+         (K7_cli.Cram.actions ~setup cram @ [ K7.sleep (Ms 3500) ]))
   in
   let result =
     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 40. (fun () ->
@@ -921,7 +931,7 @@ let test_setup_prompt_hook n =
   save env script (Fmt.str "PROMPT_COMMAND='PS1=custom-%d'\n" (n land 255));
   let screen =
     record_cram ~setup:[ script ]
-      ~prefix:[ K7.raw "Set WaitTimeout 3s" ]
+      ~settings:[ K7.Wait_timeout (Ms 3000) ]
       env path "  $ echo READY\n"
   in
   if not (String.split_on_char '\n' screen |> List.mem "READY") then

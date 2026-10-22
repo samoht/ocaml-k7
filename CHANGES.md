@@ -47,6 +47,9 @@
 - `K7.Columns` and `K7.Rows` size the terminal in cells, as VHS's
   `Set Columns` and `Set Rows` do, in place of `K7.Width` and
   `K7.Height`.
+- `K7.Wait_timeout` sets how long a wait without a timeout of its own
+  waits, as VHS's `Set WaitTimeout` does; `--wait-timeout` sets it for
+  `k7 cram` and `k7 tape`.
 - `K7.tape` refuses a JSON theme that Go or jsont does not read, more
   rows or columns than VHS can measure, a frame larger than the encoder of
   a GIF, MP4 or WebM output takes, and a screenshot with the path of an

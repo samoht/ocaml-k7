@@ -176,7 +176,8 @@ let test_settings () =
      Set Width 10\n\
      Set Height 10\n\
      Set TypingSpeed 20ms\n\
-     Set Framerate 24\n"
+     Set Framerate 24\n\
+     Set WaitTimeout 3000ms\n"
     (body
        ~settings:
          [
@@ -187,6 +188,7 @@ let test_settings () =
            Height 10;
            Typing_speed (Ms 20);
            Framerate 24;
+           Wait_timeout (Ms 3000);
          ]
        []);
   error "small width" "Set Width 100: below twice the default padding (60)"
@@ -244,7 +246,12 @@ let test_settings () =
   error "negative rows" "Set Rows -1: not positive" ~settings:[ Rows (-1) ] [];
   error "raw columns"
     {|raw line "Set Columns 80": use the setting Columns instead|}
-    [ raw "Set Columns 80" ]
+    [ raw "Set Columns 80" ];
+  error "raw wait timeout"
+    {|raw line "Set WaitTimeout 3s": use the setting Wait_timeout instead|}
+    [ raw "Set WaitTimeout 3s" ];
+  error "negative wait timeout" "Set WaitTimeout -1ms: negative duration"
+    ~settings:[ Wait_timeout (Ms (-1)) ] []
 
 (* VHS fails with "no frames" on a recording without a visible action. *)
 let test_frames () =
@@ -441,7 +448,7 @@ let test_of_string () =
          Set FontSize 18\n\
          Set Shell \"zsh\"\n\
          Set TypingSpeed 500ms\n\
-         Set WaitTimeout 3s\n\
+         Set WaitTimeout 3000ms\n\
          # a comment\n\
          Hide\n\
          Type \"cd /tmp\"\n\
@@ -452,19 +459,29 @@ let test_of_string () =
         (K7.to_string t));
   (match
      Result.bind
-       (K7.of_string "Output a.gif\nSet Width 900\nSet FontSize 18\nType x\n")
-       (fun t ->
+       (K7.of_string
+          "Output a.gif\n\
+           Set Width 900\n\
+           Set WaitTimeout 2m\n\
+           Set FontSize 18\n\
+           Type x\n") (fun t ->
          Result.bind
-           (K7.with_settings K7.[ Columns 100; Font_size 12 ] t)
+           (K7.with_settings
+              K7.[ Columns 100; Font_size 12; Wait_timeout (Ms 5) ]
+              t)
            (K7.with_outputs [ "b.txt" ]))
    with
   | Ok t ->
       Alcotest.(check (list string)) "outputs" [ "b.txt" ] (K7.outputs t);
       Alcotest.(check bool)
         "settings" true
-        (K7.settings t = K7.[ Columns 100; Font_size 12 ]);
+        (K7.settings t = K7.[ Columns 100; Font_size 12; Wait_timeout (Ms 5) ]);
       expect "replaced"
-        "Output \"b.txt\"\nSet Columns 100\nSet FontSize 12\nType x\n"
+        "Output \"b.txt\"\n\
+         Set Columns 100\n\
+         Set FontSize 12\n\
+         Set WaitTimeout 5ms\n\
+         Type x\n"
         (K7.to_string t)
   | Error e -> Alcotest.failf "%a" K7.pp_error e);
   (* VHS ignores a setting after the first action. *)
@@ -472,6 +489,11 @@ let test_of_string () =
     "late setting"
     (Error {|raw line "Set FontSize 10": VHS ignores it after the first action|})
     (Result.map K7.to_string (read "Output a.gif\nType x\nSet FontSize 10\n"));
+  Alcotest.(check (result string string))
+    "sub-millisecond wait timeout"
+    (Error
+       {|line 1: "Set WaitTimeout 1.5ms": not a whole number of milliseconds|})
+    (Result.map K7.to_string (read "Set WaitTimeout 1.5ms\nType x\n"));
   Alcotest.(check (result string string))
     "line number" (Error {|line 2: "Type \"x": unterminated string|})
     (Result.map K7.to_string (read "Output a.gif\nType \"x\n"));
