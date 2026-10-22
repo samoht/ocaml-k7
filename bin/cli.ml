@@ -216,7 +216,10 @@ let wait_timeout_s =
     & info [ "wait-timeout" ] ~docv:"SECONDS" ~doc)
 
 let print =
-  let doc = "Print the tape on standard output instead of running $(b,vhs)." in
+  let doc =
+    "Print the tape on standard output instead of running $(b,vhs). An \
+     $(b,.svg) output, which VHS cannot write, has no $(b,Output) line."
+  in
   Arg.(value & flag & info [ "print" ] ~doc)
 
 let input =

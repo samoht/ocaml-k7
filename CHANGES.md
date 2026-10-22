@@ -3,19 +3,22 @@
 - Initial version.
 - `Vhs.record` records a tape without VHS, as an animated SVG image drawn
   with CSS only, with the contract of `Vhs.render`: each writes the outputs
-  of the tape relative to its directory, absolute and `..` paths included,
-  and refuses, before it plays anything, an output only the other writes.
+  and screenshots at the paths the tape names, relative to its directory,
+  absolute and `..` paths included, creates their missing directories as
+  VHS does, and refuses, before it plays anything, an output or a
+  screenshot only the other writes, or one whose directory it cannot write.
   `Vhs.svg` draws the image of timed output, with the settings `Vhs.tape`
-  checks. `vhs-cram`
-  records an `.svg` output this way, waiting for the same prompt mark as
-  with VHS.
+  checks. `vhs-cram` records an `.svg` output and the text outputs this
+  way, waiting for the same prompt mark as with VHS.
 - The native recorder plays bash, zsh and fish as VHS starts them, VHS's
   window bar, named and JSON themes, margin colours and images, `Screenshot`
-  (a still SVG image at an `.svg` path), `Source` and the `.txt`, `.ascii` and `.test`
-  outputs, byte for byte as VHS writes them but for the screens VHS reads
-  before it sizes the terminal. Its wait patterns match as Go's do, with
-  Unicode case folding and ASCII word boundaries, and its waits read the
-  lines VHS reads.
+  of an `.svg` path (a still SVG image), `Source` and the `.txt`, `.ascii`
+  and `.test` outputs, byte for byte as VHS writes them but for the screens
+  VHS reads before it sizes the terminal. Its wait patterns match as Go's
+  do, with Unicode case folding and ASCII word boundaries, and its waits
+  read the lines VHS reads, never the prompt a command was typed at. A wait
+  that times out is `Vhs.Timeout`, naming its line, and a shell that exits
+  while a wait waits is `Vhs.Exited`, at once.
 - The native terminal is matrix's emulator, read as VHS's xterm.js reads
   bytes where it departs from xterm: each screen has its own scroll region
   and tab stops, a restore returns to the line of the buffer and leaves the
@@ -23,8 +26,9 @@
   the right margin keeps the wrap pending, the cursor reports count the
   column beyond the last, and `CSI S` keeps no scrollback.
 - `Vhs.tape` refuses a JSON theme that Go or jsont does not read, more
-  rows or columns than VHS can measure, and a frame larger than the
-  encoder of a GIF, MP4 or WebM output takes.
+  rows or columns than VHS can measure, a frame larger than the encoder of
+  a GIF, MP4 or WebM output takes, and a screenshot with the path of an
+  output or of another screenshot.
 - `vhs-cram` keeps typed non-ASCII text without a UTF-8 locale.
 - The library needs OCaml 5.4, for matrix's pseudo-terminals and terminal
   emulator, and matrix 0.1.0. The emulator is a private copy of matrix's

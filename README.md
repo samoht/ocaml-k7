@@ -17,7 +17,7 @@ commands with the output each one must print, which dune checks) into a
 recording of that test. The library records a tape itself as an animated SVG
 image, which needs no other program; a GIF or a video still needs `vhs`.
 
-![A cram test recorded by vhs-cram as an animated SVG image](doc/demo.svg)
+![A terminal where four commands run: echo prints "Recorded without a browser"; printf prints "bold green" in bold green, "blue" in blue and "inverse" in reverse video; printf prints wide Chinese characters, an e with a combining accent and a thumbs-up emoji; and echo $((6 * 7)) prints 42](doc/demo.svg)
 
 The recording above is [doc/demo.t](doc/demo.t), recorded natively with
 `dune exec -- vhs-cram --output doc/demo.svg doc/demo.t`.
@@ -28,8 +28,8 @@ The recording above is [doc/demo.t](doc/demo.t), recorded natively with
 opam install vhs
 ```
 
-To make GIFs, you also need [VHS](https://github.com/charmbracelet/vhs#installation)
-itself.
+To make GIFs, you also need
+[VHS](https://github.com/charmbracelet/vhs#installation) itself.
 
 ## Usage
 
@@ -111,47 +111,11 @@ let main () = Eio_main.run @@ fun env -> make_gif env (Result.get_ok tape)
 
 ## Recording without VHS
 
-`Vhs.record` plays the tape in bash, zsh or fish on a pseudo-terminal, reads
-what the shell prints with a terminal emulator that follows xterm, and writes
-the screens to the `.svg` output of the tape as an animated SVG image, and its
-text to a `.txt`, `.ascii` or `.test` output in VHS's format. It takes the
-same arguments as `Vhs.render` and writes the outputs to the same paths. The text holds
-what VHS reads after each command, without the extra screens VHS adds while it
-applies the settings. The image holds text, no script and no external
-resource, and animates with CSS alone, so it plays in an HTML `<img>` and in a
-README on GitHub. For a reader who prefers reduced motion, it shows its last
-screen, still. VHS cannot write `.svg`, so an `.svg` output is not in the
-tape that `vhs` reads:
-
-```ocaml
-# Vhs.tape ~outputs:[ "demo.svg" ] [ Vhs.type' "ls\n" ] |> Result.map Vhs.to_string;;
-- : (string, Vhs.error) result = Ok "Type \"ls\"\nEnter\n"
-```
-
-```ocaml
-let make_svg env tape =
-  let clock = Eio.Stdenv.mono_clock env and cwd = Eio.Stdenv.cwd env in
-  match Vhs.record ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd tape with
-  | Ok () -> ()
-  | Error e -> Fmt.epr "%a@." Vhs.pp_error e
-```
-
-The terminal has the size VHS gives it, and the image uses the colours of the
-tape's theme, named or in JSON, and VHS's window bar and margin. Wait patterns
-match as Go's do. Time follows the tape: typing and sleeping take the time the
-tape says, whatever the machine does around them, so the same output, in the
-same frames, gives the same image; how long a command takes to print can move
-its output to other frames. A `Screenshot` of an `.svg` path writes a still
-SVG image there, where VHS takes a `.png` path, and `Source` plays the lines
-of another tape. A few things need VHS, such as the other shells or
-a colour name in a JSON theme; `Vhs.record` names them in its error.
-`Vhs.svg` draws the image of output given with its times, without running
-anything.
-
-`Vhs.render` writes every output but `.svg`, and `Vhs.record` only `.svg`
-and the text outputs. Each one refuses an output only the other writes,
-before it plays anything, and names the function that writes it. A GIF and
-an SVG image of the same actions are two tapes:
+`Vhs.render` writes `.gif`, `.mp4` and `.webm` outputs and PNG frames, and
+`Vhs.record` writes `.svg` outputs; both write the text outputs, `.txt`,
+`.ascii` and `.test`. Each one refuses an output only the other writes,
+before it plays anything, and names the function that writes it, so a GIF
+and an SVG image of the same actions are two tapes:
 
 ```ocaml
 let make_both env ~settings actions =
@@ -164,6 +128,47 @@ let make_both env ~settings actions =
   Vhs.record ~clock ~proc ~cwd svg
 ```
 
+`Vhs.record` plays the tape in bash, zsh or fish on a pseudo-terminal, reads
+what the shell prints with a terminal emulator that follows xterm, and
+writes the screens to the `.svg` output of the tape as an animated SVG
+image, and its text to a `.txt`, `.ascii` or `.test` output in VHS's format.
+It takes the same arguments as `Vhs.render` but `~vhs`, and writes the
+outputs to the same paths. The text holds what VHS reads after each
+command, without the extra screens VHS adds while it applies the settings.
+The image holds text, no script and no external resource, and animates with
+CSS alone, so it plays in an HTML `<img>` and in a README on GitHub. For a
+reader who prefers reduced motion, it shows its last screen, still.
+
+```ocaml
+let make_svg env tape =
+  let clock = Eio.Stdenv.mono_clock env and cwd = Eio.Stdenv.cwd env in
+  match Vhs.record ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd tape with
+  | Ok () -> ()
+  | Error e -> Fmt.epr "%a@." Vhs.pp_error e
+```
+
+The terminal has the size VHS gives it, and the image uses the colours of
+the tape's theme, named or in JSON, and VHS's window bar and margin. Wait
+patterns match as Go's do. Time follows the tape: typing and sleeping take
+the time the tape says, whatever the machine does around them, so the same
+output, in the same frames, gives the same image; how long a command takes
+to print can move its output to other frames. A `Screenshot` of an `.svg`
+path writes a still SVG image there, where VHS takes a `.png` path, and
+`Source` plays the lines of another tape. A few things need VHS, such as
+the other shells or a colour name in a JSON theme; `Vhs.record` names them
+in its error.
+
+`Vhs.svg` draws the same image from output given with its times, such as
+bytes a test captured, with no tape, no shell and no file written; it
+returns the image:
+
+```ocaml
+let image =
+  Vhs.svg
+    ~settings:Vhs.[ Width 600; Height 200 ]
+    Vhs.[ (Ms 0, "$ ls\r\n"); (Ms 500, "a.txt  b.txt\r\n") ]
+```
+
 ## Recording a cram test
 
 A cram test is a `.t` file, in the format of Mercurial's test runner that
@@ -172,7 +177,8 @@ line starting with `  $ ` is a shell command, and the lines below it are the
 output it must print. The `vhs-cram` command types each command into a bash
 terminal and waits for the prompt to come back before the next one, so the
 recording shows each command with its output. `--print` shows the tape
-instead of running `vhs`:
+instead of running `vhs`; an `.svg` output, which VHS cannot write, has no
+`Output` line there:
 
 ```sh
 $ printf '  $ echo hello\n  hello\n' > hello.t

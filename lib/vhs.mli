@@ -107,6 +107,56 @@ val raw : string -> action
     colour, and what ffmpeg makes of a [Set PlaybackSpeed] or [Set LoopOffset]
     value. *)
 
+(** {1:errors Errors} *)
+
+(** The type for errors. Constructors may be added, so a match on [error] ends
+    with a case for the others. *)
+type error =
+  | Executable_not_found of string  (** No such executable on the [PATH]. *)
+  | Failed of {
+      vhs : string;
+      status : Eio.Process.exit_status;
+      output : string;
+    }
+      (** The executable [vhs] ran and did not exit with [0]; [output] is the
+          end of what it printed, at most 64 KiB, such as the wait that timed
+          out. *)
+  | Io of string  (** Any other I/O failure. *)
+  | Unsupported of string
+      (** An output, a setting or a command that the function cannot play or
+          write, named, and why. *)
+  | Timeout of { wait : string; line : int; last : string }
+      (** The wait of {!record} on line [line] of {!to_string}[ t], counted from
+          1, did not hold in time; [wait] is that line, such as [Wait+Line /re/]
+          or [Wait@2000ms], or for a wait of a sourced tape the line of that
+          tape, and [last] is the line or the screen it last read. Only
+          {!record} returns it: {!render} reports a wait that times out as
+          {!constructor-Failed}, with the message of [vhs] in [output]. *)
+  | Exited of {
+      status : Eio.Process.exit_status;
+      wait : string;
+      line : int;
+      last : string;
+    }
+      (** The shell of {!record} exited with [status] while the wait [wait] on
+          line [line], as for {!constructor-Timeout}, did not hold, which it
+          then never does: {!record} fails at once rather than when the wait
+          times out. *)
+  | Invalid of string
+      (** A tape, a setting or a time that VHS rejects or partly ignores, or
+          that {!record} or {!svg} refuses as their documentation states, naming
+          the first offending item, and why. *)
+
+val pp_error : error Fmt.t
+(** [pp_error] formats an error for humans: one line, followed for
+    {!constructor-Failed} by the last ten lines [vhs] printed that are not
+    blank, trimmed and indented. Escape sequences and control characters are
+    removed from every string it prints, and so are the format characters
+    (Unicode category [Cf]) other than the joiners U+200C and U+200D, the
+    prepended concatenation marks, such as U+0605, and the tag characters of a
+    subdivision flag, such as Scotland's, which show; invalid UTF-8 is replaced
+    by U+FFFD. *)
+
 (** {1:tapes Tapes} *)
 
 (** The type for the shells VHS can start. Constructors may be added as VHS
@@ -159,54 +209,6 @@ type t
     for a {!raw} [Screenshot] of an [.svg] image, which only {!record} takes.
     VHS can still fail as it records, see {{!checks}checks}. *)
 
-(** The type for errors. Constructors may be added, so a match on [error] ends
-    with a case for the others. *)
-type error =
-  | Executable_not_found of string  (** No such executable on the [PATH]. *)
-  | Failed of {
-      vhs : string;
-      status : Eio.Process.exit_status;
-      output : string;
-    }
-      (** The executable [vhs] ran and did not exit with [0]; [output] is the
-          end of what it printed, at most 64 KiB, such as the wait that timed
-          out. *)
-  | Io of string  (** Any other I/O failure. *)
-  | Unsupported of string
-      (** An output, a setting or a command that the function cannot play or
-          write, named, and why: an output that only the other of {!render} and
-          {!record} writes, or what the {{!native_details}native recorder} does
-          not play. *)
-  | Timeout of { wait : string; line : int; last : string }
-      (** The wait of {!record} on line [line] of {!to_string}[ t], counted from
-          1, did not hold in time; [wait] is that line, such as [Wait+Line /re/]
-          or [Wait@2000ms], or for a wait of a sourced tape the line of that
-          tape, and [last] is the line or the screen it last read. Only
-          {!record} returns it: {!render} reports a wait that times out as
-          {!constructor-Failed}, with the message of [vhs] in [output]. *)
-  | Exited of {
-      status : Eio.Process.exit_status;
-      wait : string;
-      line : int;
-      last : string;
-    }
-      (** The shell of {!record} exited with [status] while the wait [wait] on
-          line [line], as for {!constructor-Timeout}, did not hold, which it
-          then never does: {!record} fails at once rather than when the wait
-          times out. *)
-  | Invalid of string
-      (** A tape VHS rejects, or one of whose lines it ignores, naming the first
-          offending item, and why. *)
-
-val pp_error : error Fmt.t
-(** [pp_error] formats an error for humans: one line, followed for
-    {!constructor-Failed} by the last ten lines [vhs] printed, indented. Escape
-    sequences and control characters are removed from every string it prints,
-    and so are the format characters (Unicode category [Cf]) other than the
-    joiners U+200C and U+200D, the prepended concatenation marks, such as
-    U+0605, and the tag characters of a subdivision flag, such as Scotland's,
-    which show; invalid UTF-8 is replaced by U+FFFD. *)
-
 val tape :
   ?settings:setting list ->
   outputs:string list ->
@@ -217,11 +219,10 @@ val tape :
     [outputs], in the format of its extension: [.gif], [.mp4], [.webm], [.txt],
     [.ascii] or [.test] for the screen as text, a directory of PNG frames for
     [.png] or a trailing slash, and [.svg] for the animated SVG image that
-    {!record} writes and VHS cannot. {!render} writes all but the [.svg] outputs
-    and {!record} only the [.svg] and text outputs, so a recording to both a GIF
-    and an SVG image takes a tape for each. It is [Error (Invalid msg)], with
-    [msg] naming the first offending item, if the tape breaks one of the
-    {{!checks}checks}. *)
+    {!record} writes and VHS cannot. {{!running}Running tapes} says which
+    function writes which output. It is [Error (Invalid msg)], with [msg] naming
+    the first offending item, if the tape breaks one of the {{!checks}checks}.
+*)
 
 val to_string : t -> string
 (** [to_string t] is [t] in the [.tape] syntax: the [Output] lines, but those of
@@ -235,19 +236,33 @@ val pp : t Fmt.t
 (** {1:running Running tapes}
 
     Two engines play a tape, with one contract. {!render} runs [vhs], which
-    records a GIF, a video or PNG frames with a browser and [ffmpeg]. {!record}
-    plays the tape itself in bash, zsh or fish on a pseudo-terminal and draws
-    the screens it shows as an animated SVG image; it needs no [vhs], browser or
-    [ffmpeg]. Each one writes the outputs of the tape, relative to its [cwd] and
-    anywhere else an absolute or [..] path leads, and refuses, as
-    {!constructor-Unsupported} and before it plays anything, an output or a
-    [Screenshot] that only the other one writes. Both write the text outputs,
-    and the screenshots at their paths: {!render} of [.png] images, {!record} of
-    [.svg] images. Each one creates the missing directories of an output, as VHS
-    does, but not those of PNG frames or of a screenshot, and reports as
-    {!constructor-Io}, before it plays anything, an output whose directory it
-    cannot write in or create. {!svg} draws the image of output that is already
-    there, with no tape and no shell. *)
+    records with a browser and [ffmpeg]. {!record} plays the tape itself in
+    bash, zsh or fish on a pseudo-terminal and draws the screens it shows; it
+    needs no [vhs], browser or [ffmpeg].
+
+    {!render} writes [.gif], [.mp4] and [.webm] outputs and PNG frames,
+    {!record} writes [.svg] outputs, and both write [.txt], [.ascii] and [.test]
+    outputs. A [Screenshot] is a [.png] image for {!render} and an [.svg] image
+    for {!record}. Each one refuses, as {!constructor-Unsupported} and before it
+    plays anything, an output or a [Screenshot] that only the other one writes,
+    so a GIF and an SVG image of the same actions take a tape each.
+
+    Each one writes at the paths the tape names, relative to its [cwd] and
+    anywhere else an absolute or [..] path leads. It creates the missing
+    directories of an output, as VHS does, but not those of PNG frames or of a
+    screenshot, and reports as {!constructor-Io}, before it plays anything, an
+    output whose directory it cannot write in or create.
+
+    {!svg} draws the image {!record} would from output given with its times,
+    such as bytes a test captured, with no tape, no shell and no file written:
+    it returns the image.
+
+    {[
+    let image =
+      Vhs.svg
+        ~settings:Vhs.[ Width 600; Height 200 ]
+        Vhs.[ (Ms 0, "$ ls\r\n"); (Ms 500, "a.txt  b.txt\r\n") ]
+    ]} *)
 
 val render :
   ?vhs:string ->
@@ -258,13 +273,19 @@ val render :
   (unit, error) result
 (** [render ~vhs ~clock ~proc ~cwd t] runs the executable [vhs] (defaults to
     ["vhs"]) as [vhs -q] in the directory [cwd], with the tape [t] on its
-    standard input, so that it writes the outputs of [t]. It is
-    [Error (Unsupported _)] if [t] has an [.svg] output or a {!raw} [Screenshot]
-    of an [.svg] image, which {!record} writes. [vhs] gets the environment of
-    [proc] without five variables: [VHS_PUBLISH], which would upload the
-    recording; [rod], which configures the browser VHS drives; and [PS1],
-    [PROMPT] and [PROMPT_COMMAND], which would replace the prompt
-    {!constructor-Prompt} waits for. What [vhs] prints is kept for
+    standard input, so that it writes the outputs of [t]. It is:
+    - [Error (Unsupported _)] on an [.svg] output or a {!raw} [Screenshot] of an
+      [.svg] image, which {!record} writes, before it runs anything;
+    - [Error (Io _)] if the directory of an output cannot be written, before it
+      runs anything, and on any other I/O failure;
+    - [Error (Executable_not_found _)] if [vhs] is not on the [PATH];
+    - [Error (Failed _)] if [vhs] exits with another status than [0], a wait
+      that times out included.
+
+    [vhs] gets the environment of [proc] without five variables: [VHS_PUBLISH],
+    which would upload the recording; [rod], which configures the browser VHS
+    drives; and [PS1], [PROMPT] and [PROMPT_COMMAND], which would replace the
+    prompt {!constructor-Prompt} waits for. What [vhs] prints is kept for
     {!constructor-Failed} and dropped on success. If the calling fiber is
     cancelled, [render] sends [vhs] [SIGTERM], which makes it stop the terminal
     and the browser it started, and waits for it to exit. If [vhs] still runs
@@ -278,9 +299,9 @@ val record :
   t ->
   (unit, error) result
 (** [record ~clock ~proc ~cwd t] plays [t] in its shell in the directory [cwd],
-    with the environment {!render} gives [vhs], and writes the outputs of [t] as
-    {!render} does: the SVG image of what the terminal showed to the [.svg]
-    output, the {{!native_details}text output} to the [.txt], [.ascii] or
+    with the environment {!render} gives [vhs], and writes the outputs of [t] at
+    the paths {!render} would: the SVG image of what the terminal showed to the
+    [.svg] output, the {{!native_details}text output} to the [.txt], [.ascii] or
     [.test] output and the {{!native_details}screenshots}. The waits of [t] time
     out by [clock]. When the recording ends or fails, or the calling fiber is
     cancelled, [record] sends the shell [SIGTERM], hangs up its terminal, sends
@@ -297,19 +318,20 @@ val record :
     - [Error (Exited _)] as soon as the shell exits while a wait does not hold;
     - [Error (Executable_not_found _)] if the shell or the executable of a
       [Require] line is not on the [PATH];
-    - [Error (Io _)] if [cwd] is not a directory of the native file system, and
-      on any other I/O failure, such as an output it cannot write. *)
+    - [Error (Io _)] if [cwd] is not a directory of the native file system, or
+      if the directory of an output cannot be written, before it plays anything,
+      and on any other I/O failure. *)
 
 val svg :
   ?settings:setting list -> (duration * string) list -> (string, error) result
 (** [svg ~settings output] is the SVG image of a terminal with [settings]
     (defaults to [[]]) that receives each string of [output] at its time, as
-    {!record} draws it. [svg] starts no shell, so it ignores
-    {!constructor-Shell}. It is [Error (Invalid _)] if a setting is one
-    {!val-tape} refuses, or if a time is out of the range of a {!duration} or
-    before the one ahead of it, and [Error (Unsupported _)] on what the
-    {{!native_details}native recorder} refuses: the {!constructor-Theme} colours
-    and the sizes listed there. *)
+    {!record} draws it. [svg] starts no shell and types nothing, so
+    {!constructor-Shell} and {!constructor-Typing_speed} have no effect. It is
+    [Error (Invalid _)] if a setting is one {!val-tape} refuses, or if a time is
+    out of the range of a {!duration} or before the one ahead of it, and
+    [Error (Unsupported _)] on what the {{!native_details}native recorder}
+    refuses: the {!constructor-Theme} colours and the sizes listed there. *)
 
 (** {1:checks Checks}
 
@@ -429,4 +451,5 @@ val svg :
     else, such as a FIFO, a directory or a text file, is {!constructor-Invalid}
     before anything plays. A size beyond 100000 pixels, a terminal beyond 2000
     cells a side, a [Set LetterSpacing] or [Set LineHeight] beyond 100000 and a
-    positive [Set PlaybackSpeed] below 0.001 are {!constructor-Unsupported}. *)
+    [Set PlaybackSpeed] beyond 100000, or positive and below 0.001, are
+    {!constructor-Unsupported}. *)
