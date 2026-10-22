@@ -473,9 +473,9 @@ let test_of_string () =
    with
   | Ok t ->
       Alcotest.(check (list string)) "outputs" [ "b.txt" ] (K7.outputs t);
-      Alcotest.(check bool)
-        "settings" true
-        (K7.settings t = K7.[ Columns 100; Font_size 12; Wait_timeout (Ms 5) ]);
+      (match K7.settings t with
+      | [ Columns 100; Font_size 12; Wait_timeout (Ms 5) ] -> ()
+      | _ -> Alcotest.fail "settings");
       expect "replaced"
         "Output \"b.txt\"\n\
          Set Columns 100\n\

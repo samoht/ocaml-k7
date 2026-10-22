@@ -1506,22 +1506,22 @@ let command_line = function
   | "" -> ""
   | show -> "\027[38;2;90;86;224m$ \027[0m" ^ show ^ "\r\n"
 
-let run ?(settings = []) ?(env = []) ?show ?(delay = Ms 500) ?stop ~clock ~proc
-    ~cwd argv =
+let command_line_of ?show ~delay:(Ms delay) argv =
   let* () = if argv = [] then Error (Invalid "no command to run") else Ok () in
-  let (Ms delay) = delay in
   let* () =
     Result.map_error (fun msg -> Invalid msg) (check_ms "delay " delay)
   in
-  let* () = check_env env in
   let show =
     Option.value show ~default:(String.concat " " (List.map shell_word argv))
   in
-  let* () =
-    if has_control show then
-      err_invalid "show %a: holds a control character" Quote.pp show
-    else Ok ()
-  in
+  if has_control show then
+    err_invalid "show %a: holds a control character" Quote.pp show
+  else Ok (command_line show, if show = "" then 0 else delay)
+
+let run ?(settings = []) ?(env = []) ?show ?(delay = Ms 500) ?stop ~clock ~proc
+    ~cwd argv =
+  let* line, delay = command_line_of ?show ~delay argv in
+  let* () = check_env env in
   let* tape = terminal settings in
   let* dir =
     Option.to_result ~none:(Io "the directory is not a native path")
@@ -1529,6 +1529,4 @@ let run ?(settings = []) ?(env = []) ?show ?(delay = Ms 500) ?stop ~clock ~proc
   in
   Result.map_error native_error
     (Native.run ?interrupt:stop ~clock ~env:(environment proc) ~vars:env
-       ~cwd:dir ~line:(command_line show)
-       ~delay:(if show = "" then 0 else delay)
-       tape argv)
+       ~cwd:dir ~line ~delay tape argv)
