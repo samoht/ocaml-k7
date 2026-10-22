@@ -412,14 +412,45 @@ let add_bar t b bar =
         circle ~cx:(centre ~gap ~r ~space i) ~cy:(cy r gap) ~r fill)
       [ {|fill="#ff4f4d"|}; {|fill="#febb00"|}; {|fill="#00cc1d"|} ]
 
-(* The text alternative: the text of the last screen, without its blank
+(* The format characters, which do not show, but the joiners, which shape
+   the characters around them. *)
+let is_format =
+  let ranges =
+    match Unicode.find "Cf" with Some (ranges, false) -> ranges | _ -> []
+  in
+  fun u ->
+    u <> 0x200c && u <> 0x200d
+    && List.exists (fun (lo, hi) -> lo <= u && u <= hi) ranges
+
+(* The text a row shows: a concealed cell is blank, and a format character
+   is left out. *)
+let shown_text row =
+  let b = Buffer.create 256 in
+  Array.iter
+    (fun (c : Screen.cell) ->
+      if has Hidden c then Buffer.add_string b (String.make c.width ' ')
+      else
+        let rec go i =
+          if i < String.length c.text then (
+            let d = String.get_utf_8_uchar c.text i in
+            let n = Uchar.utf_decode_length d in
+            if not (is_format (Uchar.to_int (Uchar.utf_decode_uchar d))) then
+              Buffer.add_substring b c.text i n;
+            go (i + n))
+        in
+        go 0)
+    (Screen.cells row);
+  let s = Buffer.contents b in
+  let rec stop n = if n > 0 && s.[n - 1] = ' ' then stop (n - 1) else n in
+  String.sub s 0 (stop (String.length s))
+
+(* The text alternative: the text the last screen shows, without its blank
    last rows. *)
 let add_desc b screen =
-  let text = Screen.text screen in
-  let rec stop n = if n > 0 && text.[n - 1] = '\n' then stop (n - 1) else n in
+  let lines = Array.to_list (Array.map shown_text (Screen.rows screen)) in
+  let rec drop_blank = function "" :: rest -> drop_blank rest | l -> l in
   Buffer.add_string b "<desc>";
-  String.sub text 0 (stop (String.length text))
-  |> String.split_on_char '\n'
+  List.rev (drop_blank (List.rev lines))
   |> List.iteri (fun i line ->
       if i > 0 then Buffer.add_char b '\n';
       add_escaped b line);

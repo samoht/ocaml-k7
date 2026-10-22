@@ -319,12 +319,13 @@ val render :
     animation, and [Set WindowBar] and [Set WindowBarSize] draw VHS's window
     bar. For a reader who prefers reduced motion, the image shows its last
     screen, still, and the cursor does not blink. The image's title is "Terminal
-    recording" and its description, its text alternative, is the text of its
-    last screen. The image of a [Set MarginFill], read relative to [cwd], is
-    embedded, stretched to the frame as ffmpeg stretches it. A size beyond
-    100000 pixels, a terminal beyond 2000 cells a side, a [Set LetterSpacing] or
-    [Set LineHeight] beyond 100000 and a positive [Set PlaybackSpeed] below
-    0.001 are {!Unsupported}. *)
+    recording" and its description, its text alternative, is the text its last
+    screen shows, without concealed text and without format characters, such as
+    a zero-width space, but the joiners. The image of a [Set MarginFill], read
+    relative to [cwd], is embedded, stretched to the frame as ffmpeg stretches
+    it. A size beyond 100000 pixels, a terminal beyond 2000 cells a side, a
+    [Set LetterSpacing] or [Set LineHeight] beyond 100000 and a positive
+    [Set PlaybackSpeed] below 0.001 are {!Unsupported}. *)
 
 val record :
   clock:_ Eio.Time.Mono.t ->
