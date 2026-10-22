@@ -263,7 +263,7 @@ let test_frames () =
   frames "raw" (Ok "Output \"demo.gif\"\nEnv A \"b\"\n") [ raw {|Env A "b"|} ]
 
 let test_outputs () =
-  error "no output" "no output" ~outputs:[] [];
+  expect "no output" last (str ~outputs:[] [ K7.sleep (Ms 100) ]);
   error "no extension"
     {|Output "demo": neither an extension nor a trailing slash|}
     ~outputs:[ "demo" ] [];

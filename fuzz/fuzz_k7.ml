@@ -1468,10 +1468,8 @@ let test_replace_outputs n =
   let original = get (K7.tape ~outputs:[ "old.gif" ] [ K7.raw raw; last ]) in
   let replaced = get (K7.with_outputs [ "new.svg" ] original) in
   check_eq ~pp:pp_string (raw ^ "\nSleep 100ms\n") (K7.to_string replaced);
-  match K7.with_outputs [] original with
-  | Error (Invalid _) -> ()
-  | Error e -> failf "%a" K7.pp_error e
-  | Ok _ -> fail "with_outputs accepted the empty outputs that tape refuses"
+  let none = get (K7.with_outputs [] original) in
+  check_eq ~pp:pp_string (raw ^ "\nSleep 100ms\n") (K7.to_string none)
 
 let bounds =
   [

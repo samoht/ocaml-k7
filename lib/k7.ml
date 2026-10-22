@@ -571,9 +571,7 @@ let check_mp4 settings paths =
     odd (last "Height" (function Height n -> Some n | _ -> None))
   else Ok ()
 
-let check_outputs = function
-  | [] -> Fmt.error "no output"
-  | outputs -> iter_result check_output outputs
+let check_outputs outputs = iter_result check_output outputs
 
 let check_records actions =
   if List.exists records actions then Ok ()
@@ -840,38 +838,47 @@ let of_string src =
     Option.iter (fun h -> actions := Hidden (List.rev h) :: !actions) !hidden;
     hidden := None
   in
-  let rec go n ~started = function
+  let is_env line =
+    match Tape_syntax.tokens line with Keyword "Env" :: _ -> true | _ -> false
+  in
+  (* [started] ends the settings, as in VHS; [printed], the outputs. *)
+  let rec go n ~started ~printed = function
     | [] -> Ok ()
     | line :: rest -> (
-        let next ~started = go (n + 1) ~started rest in
+        let next ?(printed = printed) ~started () =
+          go (n + 1) ~started ~printed rest
+        in
         match Tape_syntax.check line with
         | Error e -> Fmt.error "line %d: %a: %s" n Quote.pp line e
-        | Ok (Output p) when not started ->
+        | Ok (Output p) when not printed ->
             outputs := p :: !outputs;
-            next ~started
+            next ~started ()
         | Ok (Set (name, arg)) when not started -> (
             match setting_of_line line name arg with
             | Error e -> Fmt.error "line %d: %s" n e
             | Ok (Some s) ->
                 settings := s :: !settings;
-                next ~started
+                next ~started ()
             | Ok None ->
                 add (Raw line);
-                next ~started)
+                next ~started ())
         | Ok Hide ->
             if !hidden = None then hidden := Some [];
-            next ~started:true
+            next ~started:true ~printed:true ()
         | Ok Show ->
             show ();
-            next ~started
+            next ~started ()
         | Ok (Blank | Set _ | Require | Output _) ->
             add (Raw line);
-            next ~started
+            next ~started ()
+        | Ok Other when is_env line ->
+            add (Raw line);
+            next ~started:true ()
         | Ok (Screenshot _ | Other) ->
             add (Raw line);
-            next ~started:true)
+            next ~started:true ~printed:true ())
   in
-  match go 1 ~started:false (lines src) with
+  match go 1 ~started:false ~printed:false (lines src) with
   | Error msg -> Error (Invalid msg)
   | Ok () ->
       show ();
@@ -1165,8 +1172,15 @@ let mkdirs dir path =
 (* VHS creates the directories of its outputs, but not those of PNG frames
    or screenshots. *)
 let creates path = kind path <> "frames"
+let all_outputs t = t.outputs @ raw_outputs t.actions
+
+let check_has_output t =
+  if all_outputs t = [] then
+    Error (Invalid "no output: the tape names no file to write")
+  else Ok ()
 
 let render ?(vhs = "vhs") ~clock ~proc ~cwd t =
+  let* () = check_has_output t in
   let* () = refuse ~by:"by vhs" ~other:"record" [ "SVG" ] t in
   let* () =
     match
@@ -1250,6 +1264,7 @@ let save dir path contents =
   go 0
 
 let record ~clock ~proc ~cwd t =
+  let* () = check_has_output t in
   let* () =
     refuse ~by:"natively" ~other:"render" [ "GIF"; "MP4"; "WebM"; "frames" ] t
   in

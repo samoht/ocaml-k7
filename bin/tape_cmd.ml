@@ -18,7 +18,11 @@ let set_env env =
 
 let record stdenv ~print ~vhs ~settings ~env ~outputs input =
   let* src = Flags.load stdenv input in
-  let error e = Fmt.str "%s: %a" input K7.pp_error e in
+  let error = function
+    | K7.Invalid msg when String.starts_with ~prefix:"no output" msg ->
+        Fmt.str "%s: %s; give it an Output line or -o FILE" input msg
+    | e -> Fmt.str "%s: %a" input K7.pp_error e
+  in
   let* t = Result.map_error error (K7.of_string src) in
   let* t =
     if settings = [] then Ok t

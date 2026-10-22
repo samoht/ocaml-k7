@@ -250,13 +250,14 @@ val with_outputs : string list -> t -> (t, error) result
 val of_string : string -> (t, error) result
 (** [of_string s] is the tape of the [.tape] source [s], one command per line,
     each line ending with ["\n"] or ["\r\n"]. The [Output] lines before the
-    first action are its outputs, and the [Set] lines before it that a
-    {!setting} writes are its settings. The lines between [Hide] and the next
-    [Show], or the end, are a {!hidden} action, and a [Show] outside them is
-    dropped. Every other line is a {!raw} action. It is [Error (Invalid msg)] if
-    a line is not one VHS's parser accepts, with [msg] naming the line by its
-    number from [1], or if {!val-tape} refuses the tape. If a tape [x] has no
-    [.svg] output and no {!raw} [Output] line,
+    first action other than [Env], [Set] and [Require] are its outputs, and the
+    [Set] lines before the first action that a {!setting} writes are its
+    settings; a tape may have no output, which {!with_outputs} gives it. The
+    lines between [Hide] and the next [Show], or the end, are a {!hidden}
+    action, and a [Show] outside them is dropped. Every other line is a {!raw}
+    action. It is [Error (Invalid msg)] if a line is not one VHS's parser
+    accepts, with [msg] naming the line by its number from [1], or if
+    {!val-tape} refuses the tape. If a tape [x] has no {!raw} [Output] line,
     [Result.map to_string (of_string (to_string x))] is [Ok (to_string x)]. *)
 
 val to_string : t -> string
@@ -281,7 +282,9 @@ val pp : t Fmt.t
     outputs. A [Screenshot] is a [.png] image for {!render} and an [.svg] image
     for {!record}. Each one refuses, as {!constructor-Unsupported} and before it
     plays anything, an output or a [Screenshot] that only the other one writes,
-    so a GIF and an SVG image of the same actions take a tape each.
+    so a GIF and an SVG image of the same actions take a tape each. Each one is
+    [Error (Invalid _)] on a tape without an output, such as one {!of_string}
+    read from a source without an [Output] line.
 
     Each one writes at the paths the tape names, relative to its [cwd] and
     anywhere else an absolute or [..] path leads. It creates the missing
@@ -422,8 +425,8 @@ val run :
 
     [tape ~settings ~outputs actions] is [Error (Invalid msg)], with [msg]
     naming the first offending item, if:
-    - [outputs] is empty, or one has another extension, none and no trailing
-      slash, or starts with [-], which ffmpeg reads as an option;
+    - an output has another extension, none and no trailing slash, or starts
+      with [-], which ffmpeg reads as an option;
     - two outputs, {!raw} [Output] lines included, are of the same kind (GIF,
       MP4, WebM, text, PNG frames or SVG). VHS writes only the last of each kind
       but SVG, which it never reads, and {!record} writes one SVG image;
