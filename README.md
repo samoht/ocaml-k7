@@ -80,8 +80,9 @@ tape that changes the prompt, or runs such a command, should wait for
 something else, with a regular expression on the line under the cursor
 (`Vhs.Line`) or on the screen (`Vhs.Screen`).
 
-`Vhs.render` runs `vhs` on the tape in a given directory, and returns an error
-when `vhs` is not installed or fails. It runs processes with
+`Vhs.render` runs `vhs` on the tape in a given directory, which writes the
+outputs of the tape there, and returns an error when `vhs` is not installed
+or fails. It runs processes with
 [Eio](https://github.com/ocaml-multicore/eio), so it takes the clock, the
 process manager and the directory from the environment `Eio_main.run` gives
 the program:
@@ -101,7 +102,8 @@ let main () = Eio_main.run @@ fun env -> make_gif env (Result.get_ok tape)
 `Vhs.record` plays the tape in bash, zsh or fish on a pseudo-terminal, reads
 what the shell prints with a terminal emulator that follows xterm, and writes
 the screens to the `.svg` output of the tape as an animated SVG image, and its
-text to a `.txt`, `.ascii` or `.test` output in VHS's format. The text holds
+text to a `.txt`, `.ascii` or `.test` output in VHS's format. It takes the
+same arguments as `Vhs.render` and writes the outputs to the same paths. The text holds
 what VHS reads after each command, without the extra screens VHS adds while it
 applies the settings. The image holds text, no script and no external
 resource, and animates with CSS alone, so it plays in an HTML `<img>` and in a
@@ -117,7 +119,7 @@ tape that `vhs` reads:
 let make_svg env tape =
   let clock = Eio.Stdenv.mono_clock env and cwd = Eio.Stdenv.cwd env in
   match Vhs.record ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd tape with
-  | Ok _svg -> ()
+  | Ok () -> ()
   | Error e -> Fmt.epr "%a@." Vhs.pp_error e
 ```
 
@@ -131,18 +133,20 @@ a colour name in a JSON theme; `Vhs.record` names them in its error.
 `Vhs.svg` draws the image of output given with its times, without running
 anything.
 
-`Vhs.render` writes all the outputs of a tape but its `.svg` ones, and
-`Vhs.record` only those and its text output, so a tape with a `.gif` and a
-`.svg` output takes both calls, with `Vhs.record` second if they share a text
-output:
+`Vhs.render` writes every output but `.svg`, and `Vhs.record` only `.svg`
+and the text outputs. Each one refuses an output only the other writes,
+before it plays anything, and names the function that writes it. A GIF and
+an SVG image of the same actions are two tapes:
 
 ```ocaml
-let make_both env tape =
+let make_both env ~settings actions =
   let clock = Eio.Stdenv.mono_clock env and cwd = Eio.Stdenv.cwd env in
   let proc = Eio.Stdenv.process_mgr env in
-  match Vhs.render ~clock ~proc ~cwd tape with
-  | Error e -> Error e
-  | Ok () -> Result.map ignore (Vhs.record ~clock ~proc ~cwd tape)
+  let ( let* ) = Result.bind in
+  let* gif = Vhs.tape ~settings ~outputs:[ "demo.gif" ] actions in
+  let* svg = Vhs.tape ~settings ~outputs:[ "demo.svg" ] actions in
+  let* () = Vhs.render ~clock ~proc ~cwd gif in
+  Vhs.record ~clock ~proc ~cwd svg
 ```
 
 ## Recording a cram test

@@ -48,12 +48,16 @@ let with_dir f =
       ignore (Sys.command ("rm -rf " ^ Filename.quote tmp)))
   @@ fun () -> f env Eio.Path.(Eio.Stdenv.fs env / tmp)
 
-let record env cwd t =
+let play env cwd t =
   Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 60. @@ fun () ->
   Vhs.record
     ~clock:(Eio.Stdenv.mono_clock env)
     ~proc:(Eio.Stdenv.process_mgr env)
     ~cwd t
+
+let record ?(image = "demo.svg") env cwd t =
+  (try Eio.Path.unlink Eio.Path.(cwd / image) with Eio.Io _ -> ());
+  Result.map (fun () -> Eio.Path.load Eio.Path.(cwd / image)) (play env cwd t)
 
 let tape actions =
   match

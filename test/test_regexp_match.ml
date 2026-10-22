@@ -147,7 +147,7 @@ let test_vhs_oracle () =
     | Error e -> Alcotest.failf "%a" Vhs.pp_error e
   in
   let both t =
-    (Vhs.render ?vhs:oracle ~clock ~proc ~cwd t, Native_test.record env cwd t)
+    (Vhs.render ?vhs:oracle ~clock ~proc ~cwd t, Native_test.play env cwd t)
   in
   let holds =
     List.map

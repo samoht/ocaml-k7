@@ -85,9 +85,7 @@ let record env ~print ~vhs ~setup ?wait_timeout_s ~output input =
     and proc = Eio.Stdenv.process_mgr env
     and cwd = Eio.Stdenv.cwd env in
     (if Filename.extension output = ".svg" then
-       (* [vhs] writes absolute paths too. *)
-       let cwd = Eio.Path.(Eio.Stdenv.fs env / ".") in
-       Result.map ignore (Vhs.record ~clock ~proc ~cwd tape)
+       Vhs.record ~clock ~proc ~cwd tape
      else Vhs.render ~vhs ~clock ~proc ~cwd tape)
     |> Result.map_error (render_error ~setup ~name:input src)
 

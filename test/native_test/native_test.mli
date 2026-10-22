@@ -45,12 +45,21 @@ val with_dir : (Eio_unix.Stdenv.base -> Eio.Fs.dir_ty Eio.Path.t -> 'a) -> 'a
 (** [with_dir f] is [f env dir] in a fresh temporary directory [dir], which it
     removes afterwards. *)
 
+val play :
+  Eio_unix.Stdenv.base ->
+  Eio.Fs.dir_ty Eio.Path.t ->
+  Vhs.t ->
+  (unit, Vhs.error) result
+(** [play env cwd t] is {!Vhs.record} of [t] in [cwd], within a minute. *)
+
 val record :
+  ?image:string ->
   Eio_unix.Stdenv.base ->
   Eio.Fs.dir_ty Eio.Path.t ->
   Vhs.t ->
   (string, Vhs.error) result
-(** [record env cwd t] is {!Vhs.record} of [t] in [cwd], within a minute. *)
+(** [record ~image env cwd t] is {!play} of [t], then the image it wrote to
+    [image] (defaults to ["demo.svg"]), relative to [cwd]. *)
 
 val tape : Vhs.action list -> Vhs.t
 (** [tape actions] is the tape of [actions] with {!settings}, typing every 5ms,

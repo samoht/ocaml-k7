@@ -2,8 +2,11 @@
 
 - Initial version.
 - `Vhs.record` records a tape without VHS, as an animated SVG image drawn
-  with CSS only, and writes it to the tape's `.svg` output; `Vhs.svg` draws
-  the image of timed output, with the settings `Vhs.tape` checks. `vhs-cram`
+  with CSS only, with the contract of `Vhs.render`: each writes the outputs
+  of the tape relative to its directory, absolute and `..` paths included,
+  and refuses, before it plays anything, an output only the other writes.
+  `Vhs.svg` draws the image of timed output, with the settings `Vhs.tape`
+  checks. `vhs-cram`
   records an `.svg` output this way, waiting for the same prompt mark as
   with VHS.
 - The native recorder plays bash, zsh and fish as VHS starts them, VHS's

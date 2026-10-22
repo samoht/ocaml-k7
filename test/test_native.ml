@@ -507,6 +507,80 @@ let test_screenshot () =
         [ screen [ "> true"; ">" ] ]
         (frames (still "hidden.svg"))
 
+(* [record] writes outputs where [render] has [vhs] write them: relative to
+   [cwd], or anywhere an absolute or [..] path leads, even when [cwd] is a
+   capability that does not reach there. *)
+let test_output_paths () =
+  with_dir @@ fun env top ->
+  Eio.Path.mkdir ~perm:0o755 Eio.Path.(top / "sub");
+  let top_dir = Option.get (Eio.Path.native top) in
+  Eio.Path.save ~create:(`Or_truncate 0o644)
+    Eio.Path.(top / "inc.tape")
+    "Type \"echo sourced\"\nEnter\nWait\n";
+  Eio.Switch.run @@ fun sw ->
+  let cwd = Eio.Path.open_dir ~sw Eio.Path.(top / "sub") in
+  let t =
+    match
+      Vhs.tape
+        ~settings:(Vhs.Typing_speed (Ms 5) :: settings)
+        ~outputs:[ "../up.svg"; Filename.concat top_dir "abs.txt" ]
+        Vhs.[ raw {|Source "../inc.tape"|}; sleep (Ms 100) ]
+    with
+    | Ok t -> t
+    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  in
+  (match play env (cwd :> Eio.Fs.dir_ty Eio.Path.t) t with
+  | Ok () -> ()
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+  Alcotest.(check string)
+    "image"
+    (screen [ "> echo sourced"; "sourced"; ">" ])
+    (last (frames (Eio.Path.load Eio.Path.(top / "up.svg"))));
+  check_contains "text" ~sub:"sourced"
+    (Eio.Path.load Eio.Path.(top / "abs.txt"))
+
+(* [record] refuses an output that only [render] writes before it plays
+   anything. *)
+let test_render_outputs () =
+  with_dir @@ fun env cwd ->
+  let played = Eio.Path.(cwd / "played") in
+  List.iter
+    (fun (outputs, raws, expected) ->
+      let t =
+        match
+          Vhs.tape ~settings ~outputs
+            (List.map Vhs.raw raws @ Vhs.[ type' "touch played\n"; wait Prompt ])
+        with
+        | Ok t -> t
+        | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+      in
+      (match play env cwd t with
+      | Error (Unsupported _ as e) ->
+          Alcotest.(check string)
+            "names the output and render" expected
+            (Fmt.str "%a" Vhs.pp_error e)
+      | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+      | Ok () -> Alcotest.failf "%s recorded natively" (List.hd outputs));
+      Alcotest.(check bool) "nothing played" false (Eio.Path.is_file played))
+    [
+      ( [ "demo.svg"; "demo.gif" ],
+        [],
+        {|not recorded natively: Output "demo.gif": a GIF, which Vhs.render records|}
+      );
+      ( [ "demo.mp4" ],
+        [],
+        {|not recorded natively: Output "demo.mp4": an MP4 video, which Vhs.render records|}
+      );
+      ( [ "frames/" ],
+        [],
+        {|not recorded natively: Output "frames/": PNG frames, which Vhs.render records|}
+      );
+      ( [ "demo.svg" ],
+        [ {|Output "demo.webm"|} ],
+        {|not recorded natively: Output "demo.webm": a WebM video, which Vhs.render records|}
+      );
+    ]
+
 (* A Source line plays the lines of its tape but their outputs, and is
    refused where VHS refuses it. *)
 let test_source () =
@@ -588,27 +662,31 @@ let after_settings tape txt =
 (* [same_text env cwd t] records [t] with VHS and natively and checks
    that the native text output is VHS's, byte for byte, but for the screens
    VHS reads before it sizes the terminal. It is the native image. *)
-let same_text env cwd t =
+let same_text env cwd (vhs_tape, native_tape) =
   let clock = Eio.Stdenv.mono_clock env and proc = Eio.Stdenv.process_mgr env in
-  (match Vhs.render ?vhs:oracle ~clock ~proc ~cwd t with
+  (match Vhs.render ?vhs:oracle ~clock ~proc ~cwd vhs_tape with
   | Ok () -> ()
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
   let vhs = Eio.Path.load Eio.Path.(cwd / "oracle.txt") in
-  match record env cwd t with
+  match record ~image:"oracle.svg" env cwd native_tape with
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e
   | Ok s ->
       let native = Eio.Path.load Eio.Path.(cwd / "oracle.txt") in
-      Alcotest.(check string) "text output" (after_settings t vhs) native;
+      Alcotest.(check string) "text output" (after_settings vhs_tape vhs) native;
       (native, s)
 
+(* [oracle_tape ~settings actions] are the tapes of [actions] for {!Vhs.render},
+   to [oracle.txt], and for {!Vhs.record}, also to [oracle.svg]. *)
 let oracle_tape ?(settings = []) actions =
-  match
-    Vhs.tape ~settings
-      ~outputs:[ "oracle.txt"; "oracle.svg" ]
-      (Vhs.raw "Set Columns 60" :: Vhs.raw "Set Rows 12" :: actions)
-  with
-  | Ok t -> t
-  | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  let tape outputs =
+    match
+      Vhs.tape ~settings ~outputs
+        (Vhs.raw "Set Columns 60" :: Vhs.raw "Set Rows 12" :: actions)
+    with
+    | Ok t -> t
+    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  in
+  (tape [ "oracle.txt" ], tape [ "oracle.txt"; "oracle.svg" ])
 
 (* For a 60 x 12 terminal, with colours, a wide character, a combining mark,
    a trailing no-break space and scrolling. *)
@@ -733,11 +811,11 @@ let test_terminal_state () =
         Vhs.render ~vhs
           ~clock:(Eio.Stdenv.mono_clock env)
           ~proc:(Eio.Stdenv.process_mgr env)
-          ~cwd t
+          ~cwd (fst t)
       with
       | Error e -> Alcotest.failf "%a" Vhs.pp_error e
       | Ok () -> Alcotest.(check string) "VHS oracle" expected (text ())));
-  match record env cwd t with
+  match record ~image:"oracle.svg" env cwd (snd t) with
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e
   | Ok s -> (
       match Svg_check.frames ~cell_width ~cell_height ~rows:12 s with
@@ -775,11 +853,11 @@ let check_payload ?vhs ?text payload image =
         Vhs.render ~vhs:exe
           ~clock:(Eio.Stdenv.mono_clock env)
           ~proc:(Eio.Stdenv.process_mgr env)
-          ~cwd t
+          ~cwd (fst t)
       with
       | Error e -> Alcotest.failf "%a" Vhs.pp_error e
       | Ok () -> Alcotest.(check string) "VHS oracle" (lines vhs) (output ())));
-  match record env cwd t with
+  match record ~image:"oracle.svg" env cwd (snd t) with
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e
   | Ok svg -> (
       match Svg_check.frames ~cell_width ~cell_height ~rows:12 svg with
@@ -917,6 +995,8 @@ let suite =
          ("replies", test_replies);
          ("screenshot", test_screenshot);
          ("source", test_source);
+         ("output paths", test_output_paths);
+         ("render outputs", test_render_outputs);
          ("keys", test_keys);
          ("unsupported", test_unsupported);
          ("bounds", test_bounds);

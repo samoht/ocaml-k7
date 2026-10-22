@@ -309,10 +309,9 @@ let oracle = Sys.getenv_opt "VHS_ORACLE"
    of [oracle]. *)
 let play ~native env t =
   let clock = Eio.Stdenv.mono_clock env and proc = Eio.Stdenv.process_mgr env in
-  if native then
-    let cwd = Eio.Path.(Eio.Stdenv.fs env / ".") in
-    Result.map ignore (Vhs.record ~clock ~proc ~cwd t)
-  else Vhs.render ?vhs:oracle ~clock ~proc ~cwd:(Eio.Stdenv.cwd env) t
+  let cwd = Eio.Stdenv.cwd env in
+  if native then Vhs.record ~clock ~proc ~cwd t
+  else Vhs.render ?vhs:oracle ~clock ~proc ~cwd t
 
 let test_output_order ~native () =
   with_files [] @@ fun env path ->

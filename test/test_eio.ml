@@ -294,6 +294,28 @@ let test_spawn_errors () =
       (Executable_format_error "vhs", "vhs: not an executable");
     ]
 
+(* [render] refuses an [.svg] output, which [record] writes, before it runs
+   anything. *)
+let test_svg_refused () =
+  Eio_mock.Backend.run @@ fun () ->
+  Eio.Switch.run @@ fun sw ->
+  let proc = manager ~sw (fun _ _ -> Alcotest.fail "vhs ran") in
+  List.iter
+    (fun outputs ->
+      let t =
+        match Vhs.tape ~outputs [ Vhs.sleep (Ms 100) ] with
+        | Ok t -> t
+        | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+      in
+      match Vhs.render ~clock:(clock ()) ~proc ~cwd t with
+      | Error (Unsupported _ as e) ->
+          expect "names the output and record"
+            {|not recorded by vhs: Output "demo.svg": an SVG image, which Vhs.record records|}
+            (Fmt.str "%a" Vhs.pp_error e)
+      | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+      | Ok () -> Alcotest.fail "an SVG output rendered")
+    [ [ "demo.svg" ]; [ "demo.gif"; "demo.svg" ]; [ "demo.svg"; "demo.txt" ] ]
+
 (* Cancelling render sends vhs SIGTERM, which it cleans up after, and waits
    for it to exit. *)
 let test_cancel () =
@@ -411,6 +433,7 @@ let suite =
         ("error controls", test_pp_error_controls);
         ("error names", test_pp_error_names);
         ("spawn errors", test_spawn_errors);
+        ("SVG output refused", test_svg_refused);
         ("cancel", test_cancel);
         ("cancel a vhs ignoring SIGTERM", test_cancel_kill);
         ("publish environment", test_publish_environment);

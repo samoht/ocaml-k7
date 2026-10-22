@@ -836,7 +836,7 @@ let pp_error ppf = function
       List.iter (Fmt.pf ppf "@\n  %s")
         (List.drop (max 0 (List.length lines - last_lines)) lines)
   | Io msg -> Fmt.string ppf (one_line msg)
-  | Unsupported why -> Fmt.pf ppf "not recorded natively: %s" (one_line why)
+  | Unsupported why -> Fmt.string ppf (one_line why)
   | Timeout { wait; last } ->
       Fmt.pf ppf "%s timed out; last value was: %s" (one_line wait)
         (one_line last)
@@ -951,14 +951,38 @@ let render_vhs ~vhs ~clock ~proc ~cwd t =
   | Error (Eio.Io (err, _)) -> Error (Io (io_message ~cwd err))
   | Error e -> raise e
 
+(* [refuse ~by ~other kinds t] is [Error (Unsupported _)] on the first output
+   of [t], raw [Output] lines included, of one of [kinds], which [other]
+   writes. *)
+let refuse ~by ~other kinds t =
+  match
+    List.find_opt
+      (fun p -> List.mem (kind p) kinds)
+      (t.outputs @ raw_outputs t.actions)
+  with
+  | None -> Ok ()
+  | Some p ->
+      let what =
+        match kind p with
+        | "frames" -> "PNG frames"
+        | "SVG" -> "an SVG image"
+        | "MP4" -> "an MP4 video"
+        | "WebM" -> "a WebM video"
+        | k -> "a " ^ k
+      in
+      Error
+        (Unsupported
+           (Fmt.str "not recorded %s: Output %S: %s, which Vhs.%s records" by p
+              what other))
+
 let render ?(vhs = "vhs") ~clock ~proc ~cwd t =
-  if List.for_all is_svg t.outputs && raw_outputs t.actions = [] then Ok ()
-  else render_vhs ~vhs ~clock ~proc ~cwd t
+  let* () = refuse ~by:"by vhs" ~other:"record" [ "SVG" ] t in
+  render_vhs ~vhs ~clock ~proc ~cwd t
 
 (* Recording natively *)
 
 let native_error : Native.error -> error = function
-  | Unsupported why -> Unsupported why
+  | Unsupported why -> Unsupported ("not recorded natively: " ^ why)
   | Timeout { wait; last } -> Timeout { wait; last }
   | Executable_not_found exe -> Executable_not_found exe
   | Io msg -> Io msg
@@ -967,38 +991,68 @@ let native_error : Native.error -> error = function
 let native ?source lines =
   Result.map_error native_error (Native.of_lines ?source lines)
 
-let record ~clock ~proc ~cwd t =
-  let source path =
-    match Eio.Path.(load (cwd / path)) with
-    | src -> Ok src
-    | exception Eio.Io (Eio.Fs.E e, _) -> Error (fs_message path e)
-    | exception Eio.Io (err, _) ->
-        Error (path ^ ": " ^ Fmt.to_to_string Eio.Exn.pp_err err)
+(* [record] reads and writes its files as [vhs] does under [render]:
+   relative to the native directory [dir], wherever the path leads, not only
+   below the [cwd] capability. *)
+let with_file dir path flags f =
+  let file =
+    if Filename.is_relative path then Filename.concat dir path else path
   in
-  let* tape = native ~source (String.split_on_char '\n' (to_string t)) in
+  let error e =
+    Error (path ^ ": " ^ String.uncapitalize_ascii (Unix.error_message e))
+  in
+  match Unix.openfile file (O_CLOEXEC :: flags) 0o644 with
+  | exception Unix.Unix_error (e, _, _) -> error e
+  | fd -> (
+      match Fun.protect ~finally:(fun () -> Unix.close fd) (fun () -> f fd) with
+      | x -> Ok x
+      | exception Unix.Unix_error (e, _, _) -> error e)
+
+let load dir path =
+  with_file dir path [ O_RDONLY ] @@ fun fd ->
+  let b = Buffer.create 4096 and chunk = Bytes.create 65536 in
+  let rec go () =
+    match Unix.read fd chunk 0 (Bytes.length chunk) with
+    | 0 -> Buffer.contents b
+    | n ->
+        Buffer.add_subbytes b chunk 0 n;
+        go ()
+  in
+  go ()
+
+let save dir path contents =
+  with_file dir path [ O_WRONLY; O_CREAT; O_TRUNC ] @@ fun fd ->
+  let rec go off =
+    if off < String.length contents then
+      go
+        (off
+        + Unix.write_substring fd contents off (String.length contents - off))
+  in
+  go 0
+
+let record ~clock ~proc ~cwd t =
+  let* () =
+    refuse ~by:"natively" ~other:"render" [ "GIF"; "MP4"; "WebM"; "frames" ] t
+  in
   let* dir =
     Option.to_result ~none:(Io "the directory is not a native path")
       (Eio.Path.native cwd)
+  in
+  let* tape =
+    native ~source:(load dir) (String.split_on_char '\n' (to_string t))
   in
   let* { svg; text; stills } =
     Result.map_error native_error
       (Native.play ~clock ~env:(environment proc) ~cwd:dir tape)
   in
   let save contents path =
-    match
-      Eio.Path.save ~create:(`Or_truncate 0o644) Eio.Path.(cwd / path) contents
-    with
-    | () -> Ok ()
-    | exception Eio.Io (Eio.Fs.E e, _) -> Error (Io (fs_message path e))
-    | exception Eio.Io (err, _) ->
-        Error (Io (path ^ ": " ^ Fmt.to_to_string Eio.Exn.pp_err err))
+    Result.map_error (fun msg -> Io msg) (save dir path contents)
   in
   let* () = iter_result (save svg) (List.filter is_svg t.outputs) in
   let* () =
     iter_result (save text) (Option.to_list (Native.text_output tape))
   in
-  let* () = iter_result (fun (path, s) -> save s path) stills in
-  Ok svg
+  iter_result (fun (path, s) -> save s path) stills
 
 let check_times output =
   let rec go prev = function

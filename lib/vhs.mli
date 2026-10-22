@@ -12,9 +12,8 @@
 
     [Vhs] builds the actions as values, {{!checks}checks} them once when
     {!val-tape} assembles a tape, prints tapes in the [.tape] syntax and
-    {{!running}runs} [vhs] on them. It also {{!native}records} a tape itself, as
-    an animated SVG image, without [vhs]. Only {!render} and {!record} perform
-    I/O.
+    {{!running}runs} them, with [vhs] or, for an animated SVG image, without it.
+    Only {!render} and {!record} perform I/O.
 
     {[
     let demo =
@@ -170,8 +169,10 @@ type error =
           out. *)
   | Io of string  (** Any other I/O failure. *)
   | Unsupported of string
-      (** A setting or a command that {!record} cannot play, named, and why:
-          {!render} plays it. *)
+      (** An output, a setting or a command that the function cannot play or
+          write, named, and why: an output that only the other of {!render} and
+          {!record} writes, or what the {{!native_details}native recorder} does
+          not play. *)
   | Timeout of { wait : string; last : string }
       (** The wait line [wait] of {!record} did not hold in time; [last] is the
           line or the screen it last read. Only {!record} returns it: {!render}
@@ -197,8 +198,10 @@ val tape :
     [outputs], in the format of its extension: [.gif], [.mp4], [.webm], [.txt],
     [.ascii] or [.test] for the screen as text, a directory of PNG frames for
     [.png] or a trailing slash, and [.svg] for the animated SVG image that
-    {!record} writes and VHS cannot. It is [Error (Invalid msg)], with [msg]
-    naming the first offending item, if the tape breaks one of the
+    {!record} writes and VHS cannot. {!render} writes all but the [.svg] outputs
+    and {!record} only the [.svg] and text outputs, so a recording to both a GIF
+    and an SVG image takes a tape for each. It is [Error (Invalid msg)], with
+    [msg] naming the first offending item, if the tape breaks one of the
     {{!checks}checks}. *)
 
 val to_string : t -> string
@@ -210,7 +213,18 @@ val to_string : t -> string
 val pp : t Fmt.t
 (** [pp ppf t] is [Fmt.string ppf (to_string t)]. *)
 
-(** {1:running Running vhs} *)
+(** {1:running Running tapes}
+
+    Two engines play a tape, with one contract. {!render} runs [vhs], which
+    records a GIF, a video or PNG frames with a browser and [ffmpeg]. {!record}
+    plays the tape itself in bash, zsh or fish on a pseudo-terminal and draws
+    the screens it shows as an animated SVG image; it needs no [vhs], browser or
+    [ffmpeg]. Each one writes the outputs of the tape, relative to its [cwd] and
+    anywhere else an absolute or [..] path leads, and refuses, as
+    {!constructor-Unsupported} and before it plays anything, an output that only
+    the other one writes. Both write the text outputs and the screenshots.
+    {!svg} draws the image of output that is already there, with no tape and no
+    shell. *)
 
 val render :
   ?vhs:string ->
@@ -219,61 +233,55 @@ val render :
   cwd:_ Eio.Path.t ->
   t ->
   (unit, error) result
-(** [render ~vhs ~clock ~proc ~cwd t] runs [vhs -q] (defaults to ["vhs"]) in the
-    directory [cwd] with the tape [t] on its standard input, so the outputs of
-    [t] are relative to [cwd]. [vhs] gets the environment of [proc] without five
-    variables: [VHS_PUBLISH], which would upload the recording; [rod], which
-    configures the browser VHS drives; and [PS1], [PROMPT] and [PROMPT_COMMAND],
-    which would replace the prompt {!Prompt} waits for. What [vhs] prints is
-    kept for {!Failed} and dropped on success. [render] writes neither the
-    [.svg] outputs of [t] nor anything else if they are its only outputs. If the
-    calling fiber is cancelled, [render] sends [vhs] [SIGTERM], which makes it
-    stop the terminal and the browser it started, and waits for it to exit. If
-    [vhs] still runs ten seconds later by [clock], [render] sends it [SIGKILL],
-    which can leave the terminal and the browser running, and waits for it to
-    exit. *)
-
-(** {1:native Recording natively}
-
-    {!record} plays a tape in bash, zsh or fish on a pseudo-terminal, reads what
-    the shell prints with a terminal emulator and draws the screens it shows as
-    an animated SVG image. It needs no [vhs], browser or [ffmpeg]. The image
-    holds text, no script and no external resource, and animates with CSS only,
-    so it plays in an HTML [<img>]. The {{!native_details}details} of what it
-    plays and draws are at the end. *)
+(** [render ~vhs ~clock ~proc ~cwd t] runs the executable [vhs] (defaults to
+    ["vhs"]) as [vhs -q] in the directory [cwd], with the tape [t] on its
+    standard input, so that it writes the outputs of [t]. It is
+    [Error (Unsupported _)] if [t] has an [.svg] output, which {!record} writes.
+    [vhs] gets the environment of [proc] without five variables: [VHS_PUBLISH],
+    which would upload the recording; [rod], which configures the browser VHS
+    drives; and [PS1], [PROMPT] and [PROMPT_COMMAND], which would replace the
+    prompt {!constructor-Prompt} waits for. What [vhs] prints is kept for
+    {!constructor-Failed} and dropped on success. If the calling fiber is
+    cancelled, [render] sends [vhs] [SIGTERM], which makes it stop the terminal
+    and the browser it started, and waits for it to exit. If [vhs] still runs
+    ten seconds later by [clock], [render] sends it [SIGKILL], which can leave
+    the terminal and the browser running, and waits for it to exit. *)
 
 val record :
   clock:_ Eio.Time.Mono.t ->
   proc:_ Eio.Process.mgr ->
   cwd:_ Eio.Path.t ->
   t ->
-  (string, error) result
+  (unit, error) result
 (** [record ~clock ~proc ~cwd t] plays [t] in its shell in the directory [cwd],
-    with the environment {!render} gives [vhs], and is the SVG image of what it
-    showed. [record] also writes the image to the [.svg] output of [t] and the
-    {{!native_details}text output} to the [.txt], [.ascii] or [.test] output of
-    [t] and the {{!native_details}screenshots} of [t], relative to [cwd], and
-    writes no other output. The waits of [t] time out by [clock]. When the
-    recording ends or fails, or the calling fiber is cancelled, [record] sends
-    the shell [SIGTERM], hangs up its terminal, sends it [SIGKILL] if it still
-    runs a second later by [clock], and waits for it to exit. It is:
-    - [Error (Unsupported _)] on what the {{!native_details}native recorder}
-      does not play;
+    with the environment {!render} gives [vhs], and writes the outputs of [t] as
+    {!render} does: the SVG image of what the terminal showed to the [.svg]
+    output, the {{!native_details}text output} to the [.txt], [.ascii] or
+    [.test] output and the {{!native_details}screenshots}. The waits of [t] time
+    out by [clock]. When the recording ends or fails, or the calling fiber is
+    cancelled, [record] sends the shell [SIGTERM], hangs up its terminal, sends
+    it [SIGKILL] if it still runs a second later by [clock], and waits for it to
+    exit. It is:
+    - [Error (Unsupported _)] on a [.gif], [.mp4], [.webm] or PNG frames output,
+      which {!render} writes, and on what the {{!native_details}native recorder}
+      does not play, before it plays anything;
     - [Error (Invalid _)] on a [Source] line it refuses;
     - [Error (Timeout _)] if a wait does not hold in time;
     - [Error (Executable_not_found _)] if the shell or the executable of a
       [Require] line is not on the [PATH];
-    - [Error (Io _)] on any other I/O failure, such as an output it cannot
-      write. *)
+    - [Error (Io _)] if [cwd] is not a directory of the native file system, and
+      on any other I/O failure, such as an output it cannot write. *)
 
 val svg :
   ?settings:setting list -> (duration * string) list -> (string, error) result
 (** [svg ~settings output] is the SVG image of a terminal with [settings]
-    (defaults to [[]]) that receives each string of [output] at its time. [svg]
-    starts no shell, so it ignores {!Shell}. It is [Error (Invalid _)] if a
-    setting is one {!val-tape} refuses, or if a time is out of the range of a
-    {!duration} or before the one ahead of it, and [Error (Unsupported _)] on
-    the {!Theme} colours and the sizes {!record} refuses. *)
+    (defaults to [[]]) that receives each string of [output] at its time, as
+    {!record} draws it. [svg] starts no shell, so it ignores
+    {!constructor-Shell}. It is [Error (Invalid _)] if a setting is one
+    {!val-tape} refuses, or if a time is out of the range of a {!duration} or
+    before the one ahead of it, and [Error (Unsupported _)] on what the
+    {{!native_details}native recorder} refuses: the {!constructor-Theme} colours
+    and the sizes listed there. *)
 
 (** {1:checks Checks}
 
