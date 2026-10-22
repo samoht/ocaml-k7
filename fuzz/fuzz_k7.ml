@@ -1443,8 +1443,29 @@ let with_processes =
       test_no_publication;
   ]
 
+let test_replace_dimensions n =
+  let get = function Ok t -> t | Error e -> failf "%a" K7.pp_error e in
+  let columns = 1 + (n mod 80) and rows = 1 + (n mod 24) in
+  let original =
+    get
+      (K7.tape
+         ~settings:K7.[ Width 800; Height 400 ]
+         ~outputs:[ "old.gif" ] [ last ])
+  in
+  let cells =
+    get (K7.with_settings K7.[ Columns columns; Rows rows ] original)
+  in
+  check_eq ~pp:pp_string
+    (Fmt.str "Output \"old.gif\"\nSet Columns %d\nSet Rows %d\nSleep 100ms\n"
+       columns rows)
+    (K7.to_string cells);
+  let pixels = get (K7.with_settings K7.[ Width 800; Height 400 ] cells) in
+  check_eq ~pp:pp_string (K7.to_string original) (K7.to_string pixels)
+
 let bounds =
   [
+    test_case "cell and pixel dimensions replace each other" [ uint8 ]
+      test_replace_dimensions;
     test_case "raw margin fits the frame"
       [ choose [ int; const max_int; const (max_int - 59); const 240 ] ]
       test_raw_margin_bound;
