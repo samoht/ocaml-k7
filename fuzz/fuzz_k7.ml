@@ -1533,6 +1533,54 @@ let test_vhs_path n =
   | Ok () -> ()
   | Error e -> failf "executable %s on supplied PATH: %a" name K7.pp_error e
 
+let test_check_preflight_parity n =
+  with_dir @@ fun env path ->
+  let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "out.svg")) in
+  let engine, outputs, vars, actions =
+    match n mod 6 with
+    | 0 -> (K7.Native, [ path "out.gif" ], [], [])
+    | 1 -> (K7.Vhs, [ path "out.svg" ], [], [])
+    | 2 ->
+        let invalid =
+          List.nth
+            [ ("", "v"); ("A=B", "v"); ("A\000B", "v"); ("A", "v\000") ]
+            (n / 6 mod 4)
+        in
+        (K7.Native, [ path "out.svg" ], [ invalid ], [])
+    | 3 -> (K7.Native, [ path "out.svg" ], [], [ K7.raw "Source missing.tape" ])
+    | 4 ->
+        ( K7.Native,
+          [ path "out.svg" ],
+          [],
+          [ K7.raw "Set MarginFill missing.png" ] )
+    | _ ->
+        ( K7.Native,
+          [ path "out.txt" ],
+          [],
+          [ K7.raw "Screenshot absent/shot.svg" ] )
+  in
+  let t =
+    Result.get_ok
+      (K7.tape ~outputs (actions @ K7.[ type' "touch played\n"; wait Prompt ]))
+  in
+  let entries () = List.sort compare (Eio.Path.read_dir cwd) in
+  let before = entries () in
+  let error = function
+    | Ok () -> fail "invalid recording passed preflight"
+    | Error e -> Fmt.str "%a" K7.pp_error e
+  in
+  let checked = error (K7.check ~engine ~env:vars ~cwd t) in
+  check (before = entries ());
+  let recorded =
+    error
+      (K7.record ~engine ~env:vars
+         ~clock:(Eio.Stdenv.mono_clock env)
+         ~proc:(Eio.Stdenv.process_mgr env)
+         ~cwd t)
+  in
+  check_eq ~pp:Fmt.Dump.string checked recorded;
+  check (before = entries ())
+
 let with_processes =
   [
     test_case "check rejects directory destinations for outputs and screenshots"
@@ -1541,6 +1589,8 @@ let with_processes =
       test_record_term;
     test_case "vhs is found on the supplied environment PATH" [ uint8 ]
       test_vhs_path;
+    test_case "check and record agree on preflight errors without side effects"
+      [ uint8 ] test_check_preflight_parity;
     test_case "native output paths and positive frame-rate boundaries" [ uint8 ]
       test_native_paths;
     test_case "mixed outputs are refused before playing or writing" [ uint8 ]
