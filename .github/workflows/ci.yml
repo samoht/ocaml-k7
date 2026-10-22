@@ -108,5 +108,9 @@ jobs:
 
       - run: opam repo add samoht https://tangled.org/gazagnaire.org/opam-overlay.git
       - run: opam install . --deps-only --with-test
-      - run: opam install merlint
-      - run: opam exec -- merlint --build
+      # The overlay can fail to build merlint; that skips the lint, not k7.
+      - id: merlint
+        continue-on-error: true
+        run: opam install merlint
+      - if: steps.merlint.outcome == 'success'
+        run: opam exec -- merlint --build
