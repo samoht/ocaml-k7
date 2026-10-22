@@ -400,12 +400,25 @@ let test_prepend_no_wrap_boundaries () =
   Alcotest.(check string)
     "same text with automatic wrapping disabled" whole split
 
+(* U+2764 is narrow in xterm's Unicode 11 width table. A plain text heart
+   in the last column fits before the following character wraps. *)
+let test_text_emoji_width () =
+  let b = Buffer.create 4 in
+  Buffer.add_utf_8_uchar b (Uchar.of_int 0x2764);
+  let heart = Buffer.contents b in
+  let prefix = String.make 45 'a' in
+  Alcotest.(check string)
+    "a text heart occupies the final cell"
+    (screen [ prefix ^ heart; "X" ])
+    (last (frames (svg [ (Ms 0, prefix ^ heart ^ "X") ])))
+
 let suite =
   ( "screen",
     List.map
       (fun (name, fn) -> Alcotest.test_case name `Quick fn)
       [
         ("wide glyphs", test_wide);
+        ("text heart at the right margin", test_text_emoji_width);
         ( "Arabic prepend with wrapping disabled",
           test_prepend_no_wrap_boundaries );
         ( "Arabic prepend survives a PTY read boundary",
