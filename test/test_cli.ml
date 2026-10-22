@@ -547,6 +547,19 @@ let test_run_exec_failure () =
   Alcotest.(check int) "recording failure has documented exit code" 123 code;
   Alcotest.(check bool) "exec error is explained" true (String.trim error <> "")
 
+(* [k7 tape -o] gives its output to a tape that names none, as [vhs -o]
+   does. *)
+let test_tape_output_option () =
+  with_files [ ("t.tape", 0o644, "Type \"echo hi\"\nEnter\nSleep 1s\n") ]
+  @@ fun env path ->
+  let code, error =
+    captured path @@ fun () ->
+    Tape_cmd.run env ~print:true ~vhs:"vhs" ~settings:[] ~env:[]
+      ~outputs:[ path "out.txt" ]
+      (path "t.tape")
+  in
+  Alcotest.(check (pair int string)) "printed" (0, "") (code, error)
+
 let suite =
   ( "cli",
     List.map
@@ -561,6 +574,7 @@ let suite =
          ("timeout message", test_timeout_message);
          ("native text outputs", test_native_text);
          ("shell exit message", test_exit_message);
+         ("tape -o without Output", test_tape_output_option);
          ("command line", test_command);
        ]
       @ readiness ~native:true
