@@ -36,6 +36,25 @@ let test_record () =
            ])
         (last (frames s))
 
+(* A prompt wait must observe the prompt after the submitted command, even
+   when typing has no delay. The leading sleep gives the tape real frames. *)
+let test_zero_speed_prompt () =
+  with_dir @@ fun env cwd ->
+  let t =
+    match
+      Vhs.tape ~settings:(Typing_speed (Ms 0) :: settings)
+        ~outputs:[ "demo.txt" ]
+        Vhs.[ sleep (Ms 100); type' "echo READY\n"; wait Prompt ]
+    with
+    | Ok t -> t
+    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  in
+  (match play env cwd t with
+  | Ok () -> ()
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+  check_contains "completed command before the prompt wait returns"
+    ~sub:"\nREADY\n>" (last_screen (Eio.Path.load Eio.Path.(cwd / "demo.txt")))
+
 let test_timeout () =
   with_dir @@ fun env cwd ->
   let t =
@@ -978,6 +997,7 @@ let suite =
       (fun (name, fn) -> Alcotest.test_case name `Quick fn)
       ([
          ("record", test_record);
+         ("zero-speed prompt wait", test_zero_speed_prompt);
          ("timeout", test_timeout);
          ("timeout precedence", test_timeout_precedence);
          ("hidden", test_hidden);
