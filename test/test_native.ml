@@ -1214,6 +1214,31 @@ let test_record_sigpipe () =
         "a normal pipeline has no broken-pipe diagnostic" false
         (contains ~sub:"Broken pipe" image)
 
+let test_run_exec_errors () =
+  with_dir @@ fun env cwd ->
+  Eio.Path.save ~create:(`Or_truncate 0o644)
+    Eio.Path.(cwd / "not-executable")
+    "#!/bin/sh\nprintf SHOULD_NOT_RUN\n";
+  let outcomes =
+    List.map
+      (fun (cwd, argv) ->
+        match run env cwd argv with
+        | Error (K7.Io _) -> "Io"
+        | Error e -> Fmt.str "%a" K7.pp_error e
+        | Ok (_, status) -> (
+            match status with
+            | `Exited n -> Fmt.str "exit %d" n
+            | `Signaled n -> Fmt.str "signal %d" n))
+      [
+        (cwd, [ "./not-executable" ]);
+        (cwd, [ "." ]);
+        (cwd, [ "/bin/echo"; "a\000b" ]);
+        (Eio.Path.(cwd / "missing-directory"), [ "/usr/bin/true" ]);
+      ]
+  in
+  Alcotest.(check (list string))
+    "exec and chdir failures are I/O errors" [ "Io"; "Io"; "Io"; "Io" ] outcomes
+
 let test_run_errors () =
   with_dir @@ fun env cwd ->
   let error name ?vars argv check =
@@ -1394,6 +1419,7 @@ let suite =
          ("run searches the overridden PATH", test_run_path_override);
          ("run restores SIGPIPE", test_run_sigpipe);
          ("record restores SIGPIPE", test_record_sigpipe);
+         ("run reports exec failures as I/O errors", test_run_exec_errors);
          ("run errors", test_run_errors);
          ("run a killed program", test_run_signal);
          ("run shows the command line", test_run_command_line);
