@@ -1,0 +1,50 @@
+(** Terminal SGR state tracker.
+
+    Tracks the terminal's active rendering state (colors, attributes, hyperlink)
+    and emits escape codes only when the requested style differs. Designed for
+    hot render loops processing thousands of cells per frame.
+
+    {!update} is zero-allocation: it writes directly to a {!Writer.t} using
+    low-level primitives. No closures, lists, or intermediate strings are
+    created. *)
+
+(** {1:state State} *)
+
+type t
+(** The type for mutable SGR state trackers. Not thread-safe. *)
+
+type color_depth = [ `Ansi16 | `Ansi256 | `Truecolor ]
+(** The type for terminal color emission depth. *)
+
+(** {1:lifecycle Lifecycle} *)
+
+val create : unit -> t
+(** [create ()] is a new state tracker. The initial state is "unknown",
+    guaranteeing that the first {!update} emits a full reset and style
+    application. *)
+
+val reset : t -> unit
+(** [reset s] invalidates [s], forcing the next {!update} to emit a full reset
+    sequence. Use after external modifications to the output stream (e.g.
+    subprocesses) or non-contiguous cursor jumps. *)
+
+val set_color_depth : t -> color_depth -> unit
+(** [set_color_depth s d] sets the terminal color depth used by subsequent
+    {!update} calls. Changing [d] invalidates [s] so the next update emits a
+    complete style for the new depth. *)
+
+(** {1:operations Operations} *)
+
+val update :
+  t -> Writer.t -> fg:Color.t -> bg:Color.t -> attrs:int -> link:string -> unit
+(** [update s w ~fg ~bg ~attrs ~link] synchronizes the terminal with the
+    requested style. Emits escape codes to [w] and updates [s] only if the style
+    changed. Hyperlink changes are emitted first (OSC 8), then SGR codes if any
+    component changed.
+
+    [attrs] is a bitmask compatible with {!Attr.pack}. [link] is the hyperlink
+    URL or [""] for none. *)
+
+val close_link : t -> Writer.t -> unit
+(** [close_link s w] closes any open hyperlink. Safe to call when no link is
+    open. *)

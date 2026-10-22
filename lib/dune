@@ -56,3 +56,8 @@
  (package vhs)
  (files vhs.mli)
  (libraries vhs))
+
+; matrix_backport is a verbatim copy of upstream code: dune builds it
+; without warnings, and formatting and linting leave it alone.
+
+(vendored_dirs matrix_backport)

@@ -1,0 +1,955 @@
+let max_escape_length = 256
+let max_osc_length = 8192
+
+type control =
+  | CUU of int
+  | CUD of int
+  | CUF of int
+  | CUB of int
+  | CNL of int
+  | CPL of int
+  | CHA of int
+  | VPA of int
+  | VPR of int
+  | CUP of int * int
+  | CHT of int
+  | CBT of int
+  | HTS
+  | TBC of int
+  | ED of int
+  | EL of int
+  | DECSED of int
+  | DECSEL of int
+  | DECSCA of int
+  | ECH of int
+  | IL of int
+  | DL of int
+  | DCH of int
+  | ICH of int
+  | DECALN
+  | SL of int
+  | SR of int
+  | DECIC of int
+  | DECDC of int
+  | DECSTBM of int * int
+  | SU of int
+  | SD of int
+  | REP of int
+  | OSC of int * string
+  | DCS of string
+  | APC of string
+  | PM of string
+  | SOS of string
+  | Hyperlink of ((string * string) list * string) option
+  | Reset
+  | DA
+  | DA2
+  | DSR of int
+  | DECXCPR
+  | DECSC
+  | DECSTR
+  | DECRC
+  | SCS of int * char
+  | LS of int
+  | RI
+  | IND
+  | NEL
+  | SM of int list
+  | RM of int list
+  | DECSET of int list
+  | DECRST of int list
+  | Unknown of string
+
+type sgr_attr =
+  [ `Reset
+  | `Bold
+  | `Dim
+  | `Italic
+  | `Underline
+  | `Double_underline
+  | `Blink
+  | `Inverse
+  | `Hidden
+  | `Strikethrough
+  | `Overline
+  | `Framed
+  | `Encircled
+  | `No_bold
+  | `No_dim
+  | `No_italic
+  | `No_underline
+  | `No_blink
+  | `No_inverse
+  | `No_hidden
+  | `No_strikethrough
+  | `No_overline
+  | `No_framed
+  | `No_encircled
+  | `Fg of Color.t
+  | `Bg of Color.t ]
+
+type token = Text of string | SGR of sgr_attr list | Control of control
+
+let is_final_byte c =
+  let code = Char.code c in
+  code >= 0x40 && code <= 0x7e
+
+(* Parse SGR parameters - tail-recursive, no refs. Bit [i] of [colon_mask]
+   marks parameter [i] as a colon sub-parameter of the parameter before it. *)
+let parse_sgr_params params colon_mask len =
+  let is_sub i = i < len && (colon_mask lsr i) land 1 <> 0 in
+  let rec skip_subs i = if is_sub i then skip_subs (i + 1) else i in
+  let rec loop i acc =
+    if i >= len then List.rev acc
+    else
+      (* [next] skips this parameter's colon sub-parameters so unrecognized
+         sub-parameterized forms degrade instead of being misread. *)
+      let next = skip_subs (i + 1) in
+      let param = params.(i) in
+      match param with
+      | 0 -> loop next (`Reset :: acc)
+      | 1 -> loop next (`Bold :: acc)
+      | 2 -> loop next (`Dim :: acc)
+      | 3 -> loop next (`Italic :: acc)
+      | 4 when is_sub (i + 1) ->
+          (* Underline style sub-parameter: 4:0 none, 4:2 double; curly,
+             dotted and dashed degrade to plain underline. *)
+          let attr =
+            match params.(i + 1) with
+            | 0 -> `No_underline
+            | 2 -> `Double_underline
+            | _ -> `Underline
+          in
+          loop next (attr :: acc)
+      | 4 -> loop next (`Underline :: acc)
+      | 21 -> loop next (`Double_underline :: acc)
+      | 5 -> loop next (`Blink :: acc)
+      | 7 -> loop next (`Inverse :: acc)
+      | 8 -> loop next (`Hidden :: acc)
+      | 9 -> loop next (`Strikethrough :: acc)
+      | 53 -> loop next (`Overline :: acc)
+      | 51 -> loop next (`Framed :: acc)
+      | 52 -> loop next (`Encircled :: acc)
+      | 22 -> loop next (`No_dim :: `No_bold :: acc)
+      | 23 -> loop next (`No_italic :: acc)
+      | 24 -> loop next (`No_underline :: acc)
+      | 25 -> loop next (`No_blink :: acc)
+      | 27 -> loop next (`No_inverse :: acc)
+      | 28 -> loop next (`No_hidden :: acc)
+      | 29 -> loop next (`No_strikethrough :: acc)
+      | 54 -> loop next (`No_encircled :: `No_framed :: acc)
+      | 55 -> loop next (`No_overline :: acc)
+      | 39 -> loop next (`Fg Color.default :: acc)
+      | 49 -> loop next (`Bg Color.default :: acc)
+      | n when 30 <= n && n <= 37 ->
+          loop next (`Fg (Color.of_palette_index (n - 30)) :: acc)
+      | n when 90 <= n && n <= 97 ->
+          loop next (`Fg (Color.of_palette_index (n - 90 + 8)) :: acc)
+      | n when 40 <= n && n <= 47 ->
+          loop next (`Bg (Color.of_palette_index (n - 40)) :: acc)
+      | n when 100 <= n && n <= 107 ->
+          loop next (`Bg (Color.of_palette_index (n - 100 + 8)) :: acc)
+      | (38 | 48) when is_sub (i + 1) -> (
+          (* Colon color forms: 38:5:idx, 38:2:r:g:b and the ISO 8613-6
+             colorspace-id form 38:2::r:g:b (likewise for 48). *)
+          let nsubs = next - (i + 1) in
+          let color =
+            match params.(i + 1) with
+            | 5 when nsubs >= 2 -> Some (Color.of_palette_index params.(i + 2))
+            | 2 when nsubs = 4 ->
+                Some (Color.of_rgb params.(i + 2) params.(i + 3) params.(i + 4))
+            | 2 when nsubs >= 5 ->
+                Some (Color.of_rgb params.(i + 3) params.(i + 4) params.(i + 5))
+            | _ -> None
+          in
+          match color with
+          | Some c -> loop next ((if param = 38 then `Fg c else `Bg c) :: acc)
+          | None -> loop next acc)
+      | 38 when i + 2 < len && params.(i + 1) = 5 ->
+          let idx = params.(i + 2) in
+          loop (i + 3) (`Fg (Color.of_palette_index idx) :: acc)
+      | 38 when i + 4 < len && params.(i + 1) = 2 ->
+          let r = params.(i + 2) in
+          let g = params.(i + 3) in
+          let b = params.(i + 4) in
+          loop (i + 5) (`Fg (Color.of_rgb r g b) :: acc)
+      | 48 when i + 2 < len && params.(i + 1) = 5 ->
+          let idx = params.(i + 2) in
+          loop (i + 3) (`Bg (Color.of_palette_index idx) :: acc)
+      | 48 when i + 4 < len && params.(i + 1) = 2 ->
+          let r = params.(i + 2) in
+          let g = params.(i + 3) in
+          let b = params.(i + 4) in
+          loop (i + 5) (`Bg (Color.of_rgb r g b) :: acc)
+      | _ -> loop next acc
+  in
+  loop 0 []
+
+(* Maximum CSI parameters supported. 32 covers even complex SGR sequences. *)
+let max_csi_params = 32
+let csi_param_missing = -1
+
+(* Parse CSI body into parameters. Returns [(count, colon_mask)] where bit [i]
+   of [colon_mask] is set iff parameter [i] followed a ':' separator, i.e. it
+   is a sub-parameter of the parameter before it (ECMA-48 5.4.2). *)
+let parse_csi_params body body_len params max_params =
+  let rec parse i current saw_digit count colon_mask =
+    if i >= body_len then (
+      if count < max_params then
+        params.(count) <- (if saw_digit then current else csi_param_missing);
+      (min (count + 1) max_params, colon_mask))
+    else
+      match body.[i] with
+      | ';' ->
+          if count < max_params then
+            params.(count) <- (if saw_digit then current else csi_param_missing);
+          parse (i + 1) 0 false (count + 1) colon_mask
+      | ':' ->
+          if count < max_params then
+            params.(count) <- (if saw_digit then current else csi_param_missing);
+          let colon_mask =
+            if count + 1 < max_params then colon_mask lor (1 lsl (count + 1))
+            else colon_mask
+          in
+          parse (i + 1) 0 false (count + 1) colon_mask
+      | '0' .. '9' as c ->
+          parse (i + 1)
+            ((current * 10) + Char.code c - 48)
+            true count colon_mask
+      | _ -> parse (i + 1) current saw_digit count colon_mask
+  in
+  if body_len > 0 then parse 0 0 false 0 0 else (0, 0)
+
+let parse_plain_csi ~params body final : token option =
+  let body_len = String.length body in
+  let param_count, colon_mask =
+    parse_csi_params body body_len params max_csi_params
+  in
+  let get n default =
+    if n < param_count then
+      let value = params.(n) in
+      if value = csi_param_missing then default else value
+    else default
+  in
+  let sgr_param n =
+    if n < param_count then
+      let value = params.(n) in
+      if value = csi_param_missing then 0 else value
+    else 0
+  in
+  match final with
+  | 'A' -> Some (Control (CUU (get 0 1)))
+  | 'B' -> Some (Control (CUD (get 0 1)))
+  | 'e' -> Some (Control (VPR (get 0 1)))
+  | 'C' -> Some (Control (CUF (get 0 1)))
+  | 'a' -> Some (Control (CUF (get 0 1)))
+  | 'D' -> Some (Control (CUB (get 0 1)))
+  | 'E' -> Some (Control (CNL (get 0 1)))
+  | 'F' -> Some (Control (CPL (get 0 1)))
+  | 'G' -> Some (Control (CHA (get 0 1)))
+  | '`' -> Some (Control (CHA (get 0 1)))
+  | 'd' -> Some (Control (VPA (get 0 1)))
+  | 'H' | 'f' -> Some (Control (CUP (get 0 1, get 1 1)))
+  | 'I' -> Some (Control (CHT (get 0 1)))
+  | 'Z' -> Some (Control (CBT (get 0 1)))
+  | 'g' -> Some (Control (TBC (get 0 0)))
+  | 'J' -> Some (Control (ED (get 0 0)))
+  | 'K' -> Some (Control (EL (get 0 0)))
+  | 'X' -> Some (Control (ECH (get 0 1)))
+  | 'L' -> Some (Control (IL (get 0 1)))
+  | 'M' -> Some (Control (DL (get 0 1)))
+  | 'P' -> Some (Control (DCH (get 0 1)))
+  | '@' -> Some (Control (ICH (get 0 1)))
+  | 'r' -> Some (Control (DECSTBM (get 0 1, get 1 0)))
+  | 'S' -> Some (Control (SU (get 0 1)))
+  | 'T' -> Some (Control (SD (get 0 1)))
+  | 'b' -> Some (Control (REP (get 0 1)))
+  | 'm' ->
+      let attrs =
+        if param_count = 0 then [ `Reset ]
+        else begin
+          for i = 0 to param_count - 1 do
+            params.(i) <- sgr_param i
+          done;
+          parse_sgr_params params colon_mask param_count
+        end
+      in
+      Some (SGR attrs)
+  | 'c' when get 0 0 = 0 -> Some (Control DA)
+  | 'n' -> Some (Control (DSR (get 0 0)))
+  | 's' -> Some (Control DECSC) (* CSI s - save cursor position *)
+  | 'u' -> Some (Control DECRC) (* CSI u - restore cursor position *)
+  | ('h' | 'l') when body_len > 0 -> (
+      (* SM/RM ([CSI Pm h/l]) and DECSET/DECRST ([CSI ? Pm h/l]). *)
+      let rec collect i acc =
+        if i < 0 then acc
+        else
+          let v = params.(i) in
+          let acc = if v = csi_param_missing then acc else v :: acc in
+          collect (i - 1) acc
+      in
+      let modes () = collect (param_count - 1) [] in
+      let set = final = 'h' in
+      match body.[0] with
+      | '?' ->
+          Some (Control (if set then DECSET (modes ()) else DECRST (modes ())))
+      | '0' .. '9' | ';' ->
+          Some (Control (if set then SM (modes ()) else RM (modes ())))
+      | _ -> Some (Control (Unknown (Printf.sprintf "CSI[%s%c" body final))))
+  | _ -> Some (Control (Unknown (Printf.sprintf "CSI[%s%c" body final)))
+
+(* A CSI body is an optional private prefix (0x3C-0x3F), parameter bytes
+   (0x30-0x3B) and intermediate bytes (0x20-0x2F), in that order (ECMA-48
+   5.4). Returns the prefix ('\000' if none) and the intermediates, or [None]
+   for a malformed body. *)
+let csi_form body =
+  let len = String.length body in
+  let rec skip lo hi i =
+    if i < len && body.[i] >= lo && body.[i] <= hi then skip lo hi (i + 1)
+    else i
+  in
+  let start = if len > 0 && body.[0] >= '<' && body.[0] <= '?' then 1 else 0 in
+  let params_end = skip '0' ';' start in
+  if skip ' ' '/' params_end < len then None
+  else
+    let prefix = if start = 1 then body.[0] else '\000' in
+    if params_end = len then Some (prefix, "")
+    else Some (prefix, String.sub body params_end (len - params_end))
+
+(* The first parameter of [body]: 0 when missing. *)
+let csi_param ~params body =
+  let count, _ =
+    parse_csi_params body (String.length body) params max_csi_params
+  in
+  if count > 0 && params.(0) <> csi_param_missing then params.(0) else 0
+
+(* The first parameter of [body] as a count: 1 when missing or 0. *)
+let csi_count ~params body =
+  let count, _ =
+    parse_csi_params body (String.length body) params max_csi_params
+  in
+  if count > 0 then max 1 params.(0) else 1
+
+(* The final byte names a function only together with the prefix and the
+   intermediates; xterm ignores the combinations it does not implement. *)
+let parse_csi ~params body final : token option =
+  match csi_form body with
+  | Some ('>', "") when final = 'c' && (body = ">" || body = ">0") ->
+      Some (Control DA2)
+  | Some ('?', "") when final = 'n' && body = "?6" -> Some (Control DECXCPR)
+  | Some ('\000', "") -> parse_plain_csi ~params body final
+  | Some ('\000', "!") when final = 'p' -> Some (Control DECSTR)
+  | Some ('?', "") when final = 'h' || final = 'l' ->
+      parse_plain_csi ~params body final
+  | Some ('?', "") when final = 'J' ->
+      Some (Control (DECSED (csi_param ~params body)))
+  | Some ('?', "") when final = 'K' ->
+      Some (Control (DECSEL (csi_param ~params body)))
+  | Some ('\000', "\"") when final = 'q' ->
+      Some (Control (DECSCA (csi_param ~params body)))
+  | Some ('\000', " ") when final = '@' ->
+      Some (Control (SL (csi_count ~params body)))
+  | Some ('\000', " ") when final = 'A' ->
+      Some (Control (SR (csi_count ~params body)))
+  | Some ('\000', "'") when final = '}' ->
+      Some (Control (DECIC (csi_count ~params body)))
+  | Some ('\000', "'") when final = '~' ->
+      Some (Control (DECDC (csi_count ~params body)))
+  | _ -> Some (Control (Unknown (Printf.sprintf "CSI[%s%c" body final)))
+
+(* Parse OSC 8 hyperlink parameters and URL *)
+let parse_hyperlink data =
+  let len = String.length data in
+  (* Find first semicolon *)
+  let rec find_semi i =
+    if i >= len then -1 else if data.[i] = ';' then i else find_semi (i + 1)
+  in
+  match find_semi 0 with
+  | -1 -> None
+  | semi1 ->
+      let params_str = String.sub data 0 semi1 in
+      let link = String.sub data (semi1 + 1) (len - semi1 - 1) in
+      if params_str = "" && link = "" then Some (Hyperlink None)
+      else if params_str = "" then Some (Hyperlink (Some ([], link)))
+      else
+        (* Parse key=value pairs from params *)
+        let rec parse_kv i acc =
+          if i >= String.length params_str then List.rev acc
+          else
+            (* Find next colon or end *)
+            let rec find_delim j =
+              if j >= String.length params_str then j
+              else if params_str.[j] = ':' then j
+              else find_delim (j + 1)
+            in
+            let next_colon = find_delim i in
+            let segment = String.sub params_str i (next_colon - i) in
+            (* Find = in segment *)
+            let rec find_eq k =
+              if k >= String.length segment then -1
+              else if segment.[k] = '=' then k
+              else find_eq (k + 1)
+            in
+            let acc' =
+              match find_eq 0 with
+              | -1 -> acc
+              | eq_pos ->
+                  let key = String.sub segment 0 eq_pos in
+                  let value =
+                    String.sub segment (eq_pos + 1)
+                      (String.length segment - eq_pos - 1)
+                  in
+                  (key, value) :: acc
+            in
+            parse_kv (next_colon + 1) acc'
+        in
+        let kv_pairs = parse_kv 0 [] in
+        Some (Hyperlink (Some (kv_pairs, link)))
+
+let parse_osc body : token =
+  match String.index_opt body ';' with
+  | None -> Control (Unknown ("OSC " ^ body))
+  | Some semi -> (
+      let code_str = String.sub body 0 semi in
+      let data = String.sub body (semi + 1) (String.length body - semi - 1) in
+      match int_of_string_opt code_str with
+      | Some 8 -> (
+          match parse_hyperlink data with
+          | Some c -> Control c
+          | None -> Control (Unknown ("OSC8 " ^ data)))
+      | Some code -> Control (OSC (code, data))
+      | None -> Control (Unknown ("OSC " ^ body)))
+
+type string_control = Dcs | Apc | Pm | Sos
+
+type state =
+  | Normal
+  | Escape
+  | Escape_charset
+  | Csi
+  | Csi_utf8 of int
+  | Escape_intermediate
+  | Osc
+  | Osc_escape
+  | Osc_c1
+  | String_control of string_control
+  | String_control_escape of string_control
+  | String_control_c1 of string_control
+
+let control_of_string_control kind body =
+  match kind with
+  | Dcs -> DCS body
+  | Apc -> APC body
+  | Pm -> PM body
+  | Sos -> SOS body
+
+type t = {
+  (* Pending bytes buffer - for incomplete escape sequences at chunk
+     boundaries *)
+  mutable pending_buf : bytes;
+  mutable pending_len : int;
+  (* State machine *)
+  mutable state : state;
+  (* Escape sequence accumulators *)
+  csi_buf : Buffer.t;
+  osc_buf : Buffer.t;
+  string_control_buf : Buffer.t;
+  (* Decoded text accumulator *)
+  text_buf : Buffer.t;
+  (* UTF-8 incomplete sequence buffer (max 3 bytes needed) *)
+  utf8_buf : bytes;
+  mutable utf8_len : int;
+  (* Pre-allocated CSI params array to avoid allocation per CSI sequence *)
+  csi_params : int array;
+}
+
+let create () =
+  {
+    pending_buf = Bytes.create 256;
+    pending_len = 0;
+    state = Normal;
+    csi_buf = Buffer.create 32;
+    osc_buf = Buffer.create 64;
+    string_control_buf = Buffer.create 64;
+    text_buf = Buffer.create 128;
+    utf8_buf = Bytes.create 4;
+    utf8_len = 0;
+    csi_params = Array.make max_csi_params 0;
+  }
+
+let reset p =
+  p.pending_len <- 0;
+  p.state <- Normal;
+  Buffer.clear p.csi_buf;
+  Buffer.clear p.osc_buf;
+  Buffer.clear p.string_control_buf;
+  Buffer.clear p.text_buf;
+  p.utf8_len <- 0
+
+let[@inline] utf8_sequence_len b =
+  if b < 0x80 then 1
+  else if b >= 0xC2 && b <= 0xDF then 2
+  else if b >= 0xE0 && b <= 0xEF then 3
+  else if b >= 0xF0 && b <= 0xF4 then 4
+  else 0
+
+let[@inline] is_utf8_continuation b = b land 0xC0 = 0x80
+
+(* The second byte of the UTF-8 encoding of a C1 control, after 0xC2. *)
+let[@inline] is_c1 c = c >= '\x80' && c <= '\x9f'
+
+let[@inline] emit_utf8_decode buf bytes off =
+  let d = Bytes.get_utf_8_uchar bytes off in
+  if Uchar.utf_decode_is_valid d then (
+    Buffer.add_utf_8_uchar buf (Uchar.utf_decode_uchar d);
+    true)
+  else (
+    Buffer.add_utf_8_uchar buf Uchar.rep;
+    false)
+
+(* Decode UTF-8 bytes to text_buf. Handles chunk boundaries for streaming
+   input: feeding a stream whole or split at any byte boundary must produce
+   identical output. The whole-chunk scan is the reference behavior — an
+   invalid lead advances one byte and every orphan byte gets its own U+FFFD —
+   so the buffered paths below reproduce exactly that. *)
+let decode_utf8 p src off len =
+  if len <= 0 then ()
+  else begin
+    let buf = p.text_buf in
+    let end_pos = off + len in
+    let i = ref off in
+    (* Complete any pending incomplete sequence from the previous chunk. Only
+       continuation bytes may extend it; anything else invalidates it. *)
+    if p.utf8_len > 0 then begin
+      let lead = Bytes.get_uint8 p.utf8_buf 0 in
+      let expected = utf8_sequence_len lead in
+      let valid = ref true in
+      while
+        !valid && p.utf8_len < expected && !i < end_pos
+        && is_utf8_continuation (Bytes.get_uint8 src !i)
+      do
+        Bytes.set p.utf8_buf p.utf8_len (Bytes.get src !i);
+        p.utf8_len <- p.utf8_len + 1;
+        incr i
+      done;
+      if p.utf8_len < expected && !i < end_pos then valid := false;
+      if !valid && p.utf8_len = expected then begin
+        let d = Bytes.get_utf_8_uchar p.utf8_buf 0 in
+        if Uchar.utf_decode_is_valid d then
+          Buffer.add_utf_8_uchar buf (Uchar.utf_decode_uchar d)
+        else
+          (* Completed to an invalid scalar (overlong, surrogate): a
+             whole-chunk scan replaces the lead and then each orphan
+             continuation individually — one U+FFFD per byte. *)
+          for _k = 1 to p.utf8_len do
+            Buffer.add_utf_8_uchar buf Uchar.rep
+          done;
+        p.utf8_len <- 0
+      end
+      else if not !valid then begin
+        (* Invalidated by a non-continuation byte: replace every buffered
+           byte (continuations can never start a new sequence) and rescan
+           from the current byte. *)
+        for _k = 1 to p.utf8_len do
+          Buffer.add_utf_8_uchar buf Uchar.rep
+        done;
+        p.utf8_len <- 0
+      end
+      (* else: still incomplete and the chunk is exhausted; keep buffering. *)
+    end;
+    (* Process remaining bytes. Only decode after proving the complete
+       sequence is inside the caller's logical slice. *)
+    while !i < end_pos do
+      let b = Bytes.get_uint8 src !i in
+      let expected = utf8_sequence_len b in
+      if expected = 0 then begin
+        Buffer.add_utf_8_uchar buf Uchar.rep;
+        incr i
+      end
+      else if !i + expected > end_pos then begin
+        (* The sequence would cross the slice end. Buffer it only when every
+           byte after the lead is a continuation; otherwise it is already
+           invalid — replace the lead and resume at the next byte, exactly as
+           the whole-chunk scan would. *)
+        let valid_prefix = ref true in
+        let j = ref (!i + 1) in
+        while !valid_prefix && !j < end_pos do
+          if is_utf8_continuation (Bytes.get_uint8 src !j) then incr j
+          else valid_prefix := false
+        done;
+        if !valid_prefix then begin
+          let available = end_pos - !i in
+          Bytes.blit src !i p.utf8_buf 0 available;
+          p.utf8_len <- available;
+          i := end_pos
+        end
+        else begin
+          Buffer.add_utf_8_uchar buf Uchar.rep;
+          incr i
+        end
+      end
+      else
+        begin if emit_utf8_decode buf src !i then i := !i + expected else incr i
+        end
+    done
+  end
+
+(* Flush incomplete UTF-8 at EOF - emit replacement for incomplete sequence *)
+let flush_utf8 p =
+  if p.utf8_len > 0 then begin
+    Buffer.add_utf_8_uchar p.text_buf Uchar.rep;
+    p.utf8_len <- 0
+  end
+
+(* Emit text token if buffer non-empty - callback version *)
+let[@inline] emit_text_cb p emit =
+  if Buffer.length p.text_buf > 0 then (
+    emit (Text (Buffer.contents p.text_buf));
+    Buffer.clear p.text_buf)
+
+(* Main parsing loop - callback-based, zero list allocation *)
+let feed p src ~off ~len emit =
+  let eof = len = 0 in
+  (* Determine effective input: pending bytes + new input *)
+  let input, input_off, input_len =
+    if p.pending_len = 0 then (src, off, len)
+    else
+      (* Append new data to pending buffer *)
+      let total = p.pending_len + len in
+      if total > Bytes.length p.pending_buf then (
+        let new_size = max total (Bytes.length p.pending_buf * 2) in
+        let new_buf = Bytes.create new_size in
+        Bytes.blit p.pending_buf 0 new_buf 0 p.pending_len;
+        p.pending_buf <- new_buf);
+      Bytes.blit src off p.pending_buf p.pending_len len;
+      p.pending_len <- p.pending_len + len;
+      (p.pending_buf, 0, p.pending_len)
+  in
+  (* A C1 control is ESC followed by its code minus 0x40: the Escape state
+     reads that byte in place of the second byte of its UTF-8 encoding. *)
+  let c1_at = ref (-1) and c1_final = ref '\000' in
+  let rec c1 pos =
+    c1_at := pos;
+    c1_final := Char.chr (Char.code (Bytes.get input (input_off + pos)) - 0x40);
+    p.state <- Escape;
+    loop pos
+  and loop pos =
+    if pos >= input_len then pos
+    else
+      match p.state with
+      | Normal
+        when p.utf8_len = 1
+             && Bytes.get p.utf8_buf 0 = '\xc2'
+             && is_c1 (Bytes.get input (input_off + pos)) ->
+          (* A C1 control split across feeds. *)
+          p.utf8_len <- 0;
+          c1 pos
+      | Normal ->
+          (* Scan for ESC, accumulating text *)
+          let rec scan_text start i =
+            if i >= input_len then (
+              (* Decode text from start to i *)
+              if i > start then
+                decode_utf8 p input (input_off + start) (i - start);
+              i)
+            else
+              let c = Bytes.get input (input_off + i) in
+              if c = '\x1b' then (
+                (* Decode text up to ESC *)
+                if i > start then
+                  decode_utf8 p input (input_off + start) (i - start);
+                flush_utf8 p;
+                emit_text_cb p emit;
+                p.state <- Escape;
+                loop (i + 1))
+              else if
+                c = '\xc2'
+                && i + 1 < input_len
+                && is_c1 (Bytes.get input (input_off + i + 1))
+              then (
+                if i > start then
+                  decode_utf8 p input (input_off + start) (i - start);
+                flush_utf8 p;
+                emit_text_cb p emit;
+                c1 (i + 1))
+              else scan_text start (i + 1)
+          in
+          scan_text pos pos
+      | Escape -> (
+          let c =
+            if pos = !c1_at then !c1_final else Bytes.get input (input_off + pos)
+          in
+          match c with
+          | '[' ->
+              Buffer.clear p.csi_buf;
+              p.state <- Csi;
+              loop (pos + 1)
+          | ']' ->
+              Buffer.clear p.osc_buf;
+              p.state <- Osc;
+              loop (pos + 1)
+          | 'P' ->
+              Buffer.clear p.string_control_buf;
+              p.state <- String_control Dcs;
+              loop (pos + 1)
+          | '_' ->
+              Buffer.clear p.string_control_buf;
+              p.state <- String_control Apc;
+              loop (pos + 1)
+          | '^' ->
+              Buffer.clear p.string_control_buf;
+              p.state <- String_control Pm;
+              loop (pos + 1)
+          | 'X' ->
+              Buffer.clear p.string_control_buf;
+              p.state <- String_control Sos;
+              loop (pos + 1)
+          | 'c' ->
+              p.state <- Normal;
+              emit (Control Reset);
+              loop (pos + 1)
+          | 'D' ->
+              p.state <- Normal;
+              emit (Control IND);
+              loop (pos + 1)
+          | 'E' ->
+              p.state <- Normal;
+              emit (Control NEL);
+              loop (pos + 1)
+          | '7' ->
+              p.state <- Normal;
+              emit (Control DECSC);
+              loop (pos + 1)
+          | '8' ->
+              p.state <- Normal;
+              emit (Control DECRC);
+              loop (pos + 1)
+          | 'H' ->
+              p.state <- Normal;
+              emit (Control HTS);
+              loop (pos + 1)
+          | 'M' ->
+              p.state <- Normal;
+              emit (Control RI);
+              loop (pos + 1)
+          | 'n' | 'o' ->
+              p.state <- Normal;
+              emit (Control (LS (if c = 'n' then 2 else 3)));
+              loop (pos + 1)
+          | '%' | '(' | ')' | '*' | '+' ->
+              (* Character set selection: the next byte picks the charset. A
+                 dedicated state survives feed boundaries — rewinding to the
+                 ESC is unsound once it lives in a previous chunk. *)
+              Buffer.clear p.csi_buf;
+              Buffer.add_char p.csi_buf c;
+              p.state <- Escape_charset;
+              loop (pos + 1)
+          | ' ' .. '/' ->
+              Buffer.clear p.csi_buf;
+              Buffer.add_char p.csi_buf c;
+              p.state <- Escape_intermediate;
+              loop (pos + 1)
+          | '0' .. '~' ->
+              p.state <- Normal;
+              emit (Control (Unknown (Printf.sprintf "ESC%c" c)));
+              loop (pos + 1)
+          | _ ->
+              (* Not an escape sequence: emit ESC as text and reprocess the
+                 byte. *)
+              Buffer.add_char p.text_buf '\x1b';
+              p.state <- Normal;
+              loop (if pos = !c1_at then pos + 1 else pos))
+      | Escape_charset ->
+          (* The final byte of a designation, after the intermediate in
+             [csi_buf]; ESC % selects a coding system, left to the client. *)
+          p.state <- Normal;
+          let c = Bytes.get input (input_off + pos) in
+          (match String.index_opt "()*+" (Buffer.nth p.csi_buf 0) with
+          | Some g -> emit (Control (SCS (g, c)))
+          | None -> emit (Control (Unknown (Printf.sprintf "ESC%%%c" c))));
+          loop (pos + 1)
+      | Csi ->
+          let c = Bytes.get input (input_off + pos) in
+          if Buffer.length p.csi_buf >= max_escape_length then (
+            (* Overflow - emit unknown and reset *)
+            p.state <- Normal;
+            Buffer.clear p.csi_buf;
+            emit (Control (Unknown "CSI_TOO_LONG"));
+            loop (pos + 1))
+          else if is_final_byte c then (
+            let body = Buffer.contents p.csi_buf in
+            let tok =
+              match parse_csi ~params:p.csi_params body c with
+              | Some t -> t
+              | None -> Control (Unknown "")
+            in
+            p.state <- Normal;
+            emit tok;
+            loop (pos + 1))
+          else if c = '\x1b' then (
+            p.state <- Escape;
+            loop (pos + 1))
+          else if c = '\x18' || c = '\x1a' then (
+            (* CAN and SUB cancel the sequence. *)
+            p.state <- Normal;
+            loop (pos + 1))
+          else if c < ' ' then (
+            (* Other C0 controls run without ending the sequence. *)
+            emit (Text (String.make 1 c));
+            loop (pos + 1))
+          else if c = '\x7f' then loop (pos + 1)
+          else if c >= '\x80' then (
+            (* A non-ASCII character ends the sequence and is dropped, as in
+               xterm.js, which decodes UTF-8 first. *)
+            Buffer.clear p.csi_buf;
+            p.state <-
+              (if c >= '\xf0' then Csi_utf8 3
+               else if c >= '\xe0' then Csi_utf8 2
+               else if c >= '\xc0' then Csi_utf8 1
+               else Normal);
+            loop (pos + 1))
+          else (
+            Buffer.add_char p.csi_buf c;
+            loop (pos + 1))
+      | Csi_utf8 n ->
+          let c = Bytes.get input (input_off + pos) in
+          if c >= '\x80' && c < '\xc0' then (
+            p.state <- (if n > 1 then Csi_utf8 (n - 1) else Normal);
+            loop (pos + 1))
+          else (
+            p.state <- Normal;
+            loop pos)
+      | Escape_intermediate -> (
+          let c = Bytes.get input (input_off + pos) in
+          match c with
+          | ' ' .. '/' ->
+              if Buffer.length p.csi_buf < max_escape_length then
+                Buffer.add_char p.csi_buf c;
+              loop (pos + 1)
+          | '8' when Buffer.contents p.csi_buf = "#" ->
+              p.state <- Normal;
+              emit (Control DECALN);
+              loop (pos + 1)
+          | '0' .. '~' ->
+              p.state <- Normal;
+              emit
+                (Control
+                   (Unknown
+                      (Printf.sprintf "ESC%s%c" (Buffer.contents p.csi_buf) c)));
+              loop (pos + 1)
+          | _ ->
+              p.state <- Normal;
+              loop pos)
+      | Osc ->
+          let c = Bytes.get input (input_off + pos) in
+          if c = '\x07' then (
+            (* BEL terminates OSC *)
+            let body = Buffer.contents p.osc_buf in
+            let tok = parse_osc body in
+            p.state <- Normal;
+            emit tok;
+            loop (pos + 1))
+          else if c = '\x1b' then (
+            (* Potential ST terminator *)
+            p.state <- Osc_escape;
+            loop (pos + 1))
+          else if c = '\xc2' then (
+            p.state <- Osc_c1;
+            loop (pos + 1))
+          else if Buffer.length p.osc_buf >= max_osc_length then (
+            (* Overflow - emit unknown and reset *)
+            p.state <- Normal;
+            Buffer.clear p.osc_buf;
+            emit (Control (Unknown "OSC_TOO_LONG"));
+            loop (pos + 1))
+          else (
+            Buffer.add_char p.osc_buf c;
+            loop (pos + 1))
+      | Osc_escape ->
+          (* ESC ends the string, and starts a sequence unless it is ST. *)
+          let c = Bytes.get input (input_off + pos) in
+          emit (parse_osc (Buffer.contents p.osc_buf));
+          if c = '\\' then (
+            p.state <- Normal;
+            loop (pos + 1))
+          else (
+            p.state <- Escape;
+            loop pos)
+      | Osc_c1 ->
+          if Bytes.get input (input_off + pos) = '\x9c' then (
+            (* ST as a C1 control *)
+            let tok = parse_osc (Buffer.contents p.osc_buf) in
+            p.state <- Normal;
+            emit tok;
+            loop (pos + 1))
+          else (
+            Buffer.add_char p.osc_buf '\xc2';
+            p.state <- Osc;
+            loop pos)
+      | String_control kind ->
+          let c = Bytes.get input (input_off + pos) in
+          if c = '\x1b' then (
+            p.state <- String_control_escape kind;
+            loop (pos + 1))
+          else if c = '\xc2' then (
+            p.state <- String_control_c1 kind;
+            loop (pos + 1))
+          else if Buffer.length p.string_control_buf >= max_osc_length then (
+            p.state <- Normal;
+            Buffer.clear p.string_control_buf;
+            emit (Control (Unknown "STRING_CONTROL_TOO_LONG"));
+            loop (pos + 1))
+          else (
+            Buffer.add_char p.string_control_buf c;
+            loop (pos + 1))
+      | String_control_escape kind ->
+          let c = Bytes.get input (input_off + pos) in
+          let body = Buffer.contents p.string_control_buf in
+          emit (Control (control_of_string_control kind body));
+          if c = '\\' then (
+            p.state <- Normal;
+            loop (pos + 1))
+          else (
+            p.state <- Escape;
+            loop pos)
+      | String_control_c1 kind ->
+          if Bytes.get input (input_off + pos) = '\x9c' then (
+            let body = Buffer.contents p.string_control_buf in
+            p.state <- Normal;
+            emit (Control (control_of_string_control kind body));
+            loop (pos + 1))
+          else (
+            Buffer.add_char p.string_control_buf '\xc2';
+            p.state <- String_control kind;
+            loop pos)
+  in
+  let consumed = loop 0 in
+  (* Handle remaining bytes *)
+  let remaining = input_len - consumed in
+  if remaining > 0 then (
+    (* Copy remaining to pending buffer *)
+    if input == p.pending_buf then (
+      if
+        (* Already using pending_buf - shift remaining bytes down if consumed >
+           0 *)
+        consumed > 0
+      then Bytes.blit p.pending_buf consumed p.pending_buf 0 remaining)
+    else (
+      (* New input - copy to pending buffer *)
+      if remaining > Bytes.length p.pending_buf then
+        p.pending_buf <- Bytes.create (max remaining 256);
+      Bytes.blit input (input_off + consumed) p.pending_buf 0 remaining);
+    p.pending_len <- remaining)
+  else p.pending_len <- 0;
+  (* Flush incomplete UTF-8 on EOF *)
+  if eof then flush_utf8 p;
+  emit_text_cb p emit
+
+let parse s =
+  let p = create () in
+  let acc = ref [] in
+  let collect tok = acc := tok :: !acc in
+  feed p (Bytes.unsafe_of_string s) ~off:0 ~len:(String.length s) collect;
+  (* Flush with EOF *)
+  feed p Bytes.empty ~off:0 ~len:0 collect;
+  List.rev !acc

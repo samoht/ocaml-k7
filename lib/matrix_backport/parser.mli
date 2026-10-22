@@ -1,0 +1,153 @@
+(** Streaming ANSI escape sequence parser.
+
+    Converts byte streams into high-level {!token}s representing ANSI escape
+    sequences, SGR attributes, and plain text. The parser handles partial input:
+    incomplete escape sequences and UTF-8 multi-byte characters at chunk
+    boundaries are buffered until the next {!feed} call.
+
+    Parsing never raises on malformed input. Unrecognized sequences become
+    {!Unknown} controls and invalid UTF-8 is replaced with U+FFFD. Maximum
+    sequence lengths ([max_escape_length] for CSI, [max_osc_length] for OSC and
+    other string controls) prevent unbounded buffering. *)
+
+(** {1:tokens Tokens} *)
+
+(** The type for control sequences other than SGR. *)
+type control =
+  | CUU of int  (** Cursor Up by [n] lines. *)
+  | CUD of int  (** Cursor Down by [n] lines. *)
+  | CUF of int  (** Cursor Forward by [n] columns (also HPR). *)
+  | CUB of int  (** Cursor Backward by [n] columns. *)
+  | CNL of int  (** Cursor Next Line (down [n], column 1). *)
+  | CPL of int  (** Cursor Previous Line (up [n], column 1). *)
+  | CHA of int  (** Cursor Horizontal Absolute to column [n] (also HPA). *)
+  | VPA of int  (** Vertical Position Absolute to row [n]. *)
+  | VPR of int
+      (** Vertical Position Relative: down [n] rows, ignoring the margins. *)
+  | CUP of int * int  (** Cursor Position to [(row, col)]. *)
+  | CHT of int  (** Cursor forward [n] tab stops. *)
+  | CBT of int  (** Cursor backward [n] tab stops. *)
+  | HTS  (** Set a tab stop at the cursor column ([ESC H]). *)
+  | TBC of int
+      (** Tab Clear: [0] the stop at the cursor column, [3] every stop. *)
+  | ED of int  (** Erase in Display. *)
+  | EL of int  (** Erase in Line. *)
+  | DECSED of int
+      (** Selective Erase in Display ([CSI ? Ps J]): {!ED} sparing the
+          characters {!DECSCA} protects. *)
+  | DECSEL of int
+      (** Selective Erase in Line ([CSI ? Ps K]): {!EL} sparing the characters
+          {!DECSCA} protects. *)
+  | DECSCA of int
+      (** Select Character Protection Attribute ([CSI Ps '"' q]): [1] protects
+          the characters written next from {!DECSED} and {!DECSEL}, [0] and [2]
+          do not. *)
+  | ECH of int  (** Erase [n] Characters from the cursor. *)
+  | IL of int  (** Insert [n] blank Lines. *)
+  | DL of int  (** Delete [n] Lines. *)
+  | DCH of int  (** Delete [n] Characters. *)
+  | ICH of int  (** Insert [n] blank Characters. *)
+  | DECALN  (** Screen alignment test: fill the screen with [E] ([ESC # 8]). *)
+  | SL of int  (** Scroll Left by [n] columns ([CSI n SP @]). *)
+  | SR of int  (** Scroll Right by [n] columns ([CSI n SP A]). *)
+  | DECIC of int  (** Insert [n] blank columns at the cursor ([CSI n ' }]). *)
+  | DECDC of int  (** Delete [n] columns at the cursor ([CSI n ' ~]). *)
+  | DECSTBM of int * int
+      (** Set top and bottom scrolling margins ([CSI top ; bottom r]). *)
+  | SU of int  (** Scroll Up by [n] lines. *)
+  | SD of int  (** Scroll Down by [n] lines. *)
+  | REP of int  (** Repeat the preceding graphic character [n] times. *)
+  | OSC of int * string  (** Generic OSC with code and payload. *)
+  | DCS of string  (** Device Control String payload. *)
+  | APC of string  (** Application Program Command payload. *)
+  | PM of string  (** Privacy Message payload. *)
+  | SOS of string  (** Start Of String payload. *)
+  | Hyperlink of ((string * string) list * string) option
+      (** OSC 8 hyperlink. [None] closes the current hyperlink.
+          [Some (params, url)] opens one, where [params] are key=value pairs
+          from the parameter string. *)
+  | Reset  (** RIS — reset to initial state ([ESC c]). *)
+  | DA  (** Primary device attributes query ([CSI c]). *)
+  | DA2  (** Secondary device attributes query ([CSI > c]). *)
+  | DSR of int  (** Device status report query ([CSI Ps n]). *)
+  | DECXCPR  (** Extended cursor position report query ([CSI ? 6 n]). *)
+  | DECSC  (** Save cursor position ([ESC 7]). *)
+  | DECSTR  (** Soft terminal reset ([CSI ! p]). *)
+  | DECRC  (** Restore cursor position ([ESC 8]). *)
+  | SCS of int * char
+      (** [SCS (g, c)] designates the 94-character set with final byte [c] as
+          G[g] ([ESC ( c] for G0 to [ESC + c] for G3). *)
+  | LS of int
+      (** [LS g] invokes G[g] into GL: LS2 ([ESC n]) and LS3 ([ESC o]). SO and
+          SI, which invoke G1 and G0, are C0 controls left in {!Text}. *)
+  | RI  (** Reverse index ([ESC M]). *)
+  | IND  (** Index ([ESC D]): down one line, scrolling at the bottom margin. *)
+  | NEL  (** Next line ([ESC E]): {!IND} then carriage return. *)
+  | SM of int list  (** Set Mode ([CSI Pm h]). *)
+  | RM of int list  (** Reset Mode ([CSI Pm l]). *)
+  | DECSET of int list  (** DEC private mode set ([CSI ? Pm h]). *)
+  | DECRST of int list  (** DEC private mode reset ([CSI ? Pm l]). *)
+  | Unknown of string  (** Unrecognized sequence, preserved as raw bytes. *)
+
+type sgr_attr =
+  [ `Reset
+  | `Bold
+  | `Dim
+  | `Italic
+  | `Underline
+  | `Double_underline
+  | `Blink
+  | `Inverse
+  | `Hidden
+  | `Strikethrough
+  | `Overline
+  | `Framed
+  | `Encircled
+  | `No_bold
+  | `No_dim
+  | `No_italic
+  | `No_underline
+  | `No_blink
+  | `No_inverse
+  | `No_hidden
+  | `No_strikethrough
+  | `No_overline
+  | `No_framed
+  | `No_encircled
+  | `Fg of Color.t
+  | `Bg of Color.t ]
+(** The type for SGR (Select Graphic Rendition) attributes. Represents
+    individual style changes from a single SGR sequence. A sequence like
+    [ESC \[ 1 ; 31 m] produces [[`Bold; `Fg Red]]. *)
+
+(** The type for parsed tokens. *)
+type token =
+  | Text of string
+      (** Plain UTF-8 text between escape sequences. Always contains complete
+          characters. *)
+  | SGR of sgr_attr list
+      (** SGR command. An empty list is equivalent to [[`Reset]]. *)
+  | Control of control  (** Non-SGR control sequence. *)
+
+(** {1:parsers Parsers} *)
+
+type t
+(** The type for parsers. Mutable and not thread-safe. *)
+
+val create : unit -> t
+(** [create ()] is a fresh parser in the default state. *)
+
+val reset : t -> unit
+(** [reset p] clears internal buffers and returns [p] to the default state.
+    Discards buffered partial sequences. *)
+
+(** {1:feeding Feeding} *)
+
+val feed : t -> bytes -> off:int -> len:int -> (token -> unit) -> unit
+(** [feed p buf ~off ~len f] processes [len] bytes from [buf] starting at [off],
+    calling [f] for each complete token. Incomplete sequences are buffered until
+    the next call. *)
+
+val parse : string -> token list
+(** [parse s] parses a complete string into tokens. Creates a temporary parser.
+    Not suitable for streaming; use {!feed}. *)

@@ -1,0 +1,23 @@
+; A temporary verbatim copy of matrix's terminal core (matrix.ansi,
+; matrix.text, matrix.grid and matrix.vte) at invariant-hq/mosaic
+; (samoht/mosaic) 90a3f220. It exists because matrix 0.1.0 lacks those
+; fixes, and it is deleted when vhs moves to matrix 0.2.0 (the next branch).
+; Do not edit it: fix upstream instead. See README.md.
+;
+; The four upstream libraries are one wrapped library here, so that none of
+; its modules clashes with matrix 0.1.0's Ansi, Grid, Glyph or Vte in a
+; program that links both.
+
+(library
+ (name matrix_backport)
+ (package vhs)
+ (libraries bigarray)
+ (private_modules
+  segment
+  grapheme_tracker
+  grapheme_store
+  grid_data
+  packed_cell
+  unicode
+  unicode_data
+  uuseg_grapheme_cluster))
