@@ -606,7 +606,7 @@ let test_cram_dir () =
   let shown ?dir () =
     let code =
       Cram_cmd.run env ~print:false ~vhs:"vhs" ~setup:[] ?dir
-        ~output:(path "pwd.txt") (path "pwd.t")
+        ~settings:[ Columns 1000 ] ~output:(path "pwd.txt") (path "pwd.t")
     in
     Alcotest.(check int) "exit code" 0 code;
     let text = In_channel.with_open_bin (path "pwd.txt") In_channel.input_all in
