@@ -1257,6 +1257,57 @@ let test_run_inherited_fd n =
   | Ok (image, `Exited 0) -> check (not (contains ~sub:"FD_LEAKED" image))
   | Ok _ -> fail "descriptor probe did not exit successfully"
 
+let test_run_cancel_descendant cancelled =
+  with_dir @@ fun env path ->
+  let cwd =
+    Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "child.pid"))
+  in
+  let child = "trap '' HUP TERM; echo $$ > child.pid; exec sleep 30" in
+  let clock = Eio.Stdenv.clock env in
+  let ready () =
+    try String.trim (Eio.Path.load Eio.Path.(cwd / "child.pid")) <> ""
+    with Eio.Io _ -> false
+  in
+  let play () =
+    `Ran
+      (K7.run
+         ~clock:(Eio.Stdenv.mono_clock env)
+         ~proc:(Eio.Stdenv.process_mgr env)
+         ~cwd
+         [
+           "/bin/sh";
+           "-c";
+           ("trap '' HUP TERM; /bin/sh -c " ^ Filename.quote child
+          ^ " & while [ ! -s child.pid ]; do sleep 0.01; done; "
+           ^ if cancelled then "wait" else "exit 0");
+         ])
+  in
+  let result =
+    Eio.Time.with_timeout_exn clock 10. @@ fun () ->
+    if not cancelled then play ()
+    else
+      Eio.Fiber.first play (fun () ->
+          while not (ready ()) do
+            Eio.Time.sleep clock 0.001
+          done;
+          `Cancelled)
+  in
+  let pid =
+    int_of_string (String.trim (Eio.Path.load Eio.Path.(cwd / "child.pid")))
+  in
+  let alive =
+    try
+      Unix.kill pid 0;
+      true
+    with Unix.Unix_error (ESRCH, _, _) -> false
+  in
+  (if alive then try Unix.kill pid Sys.sigkill with Unix.Unix_error _ -> ());
+  (match result with
+  | `Cancelled when cancelled -> ()
+  | `Ran (Ok (_, `Exited 0)) when not cancelled -> ()
+  | _ -> fail "run did not finish as expected");
+  if alive then fail "run left its descendant alive"
+
 let with_processes =
   [
     test_case "run searches the overridden PATH" [ uint8 ]
@@ -1267,6 +1318,8 @@ let with_processes =
       test_run_exec_error;
     test_case "run children cannot read the recorder's private descriptors"
       [ uint8 ] test_run_inherited_fd;
+    test_case "completed or cancelled run leaves no resistant descendant"
+      [ bool ] test_run_cancel_descendant;
     test_case "a program's screen is the image of its bytes" [ bytes ]
       test_run_screen;
     test_case "native output paths and positive frame-rate boundaries" [ uint8 ]
