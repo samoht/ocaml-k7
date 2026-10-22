@@ -39,9 +39,9 @@ let tape ~setup ?(settings = []) ?(env = []) ~output ?wait_timeout_s ~name src =
       in
       K7.tape ~settings:(Shell Bash :: settings) ~outputs:[ output ]
         (timeout @ Cram.actions ~env ~setup cram)
-      |> Result.map_error (fun e -> Fmt.str "%a" K7.pp_error e)
+      |> Result.map_error (fun e -> Fmt.str "%a" Flags.pp_error e)
 
-let shown s = Fmt.str "%a" K7.pp_error (Io s)
+let shown = Flags.shown
 let last_value = function "" -> "" | last -> "; last value was: " ^ shown last
 
 (* A cram tape waits after its setup, then after each command. *)
@@ -116,7 +116,7 @@ let render_error ~setup ~wait ~name ~tape src e =
         name (seconds_of wait)
         (last_value (Option.get (vhs_timeout output)))
         longer
-  | None, _, _ -> Fmt.str "%s: %a" name K7.pp_error e
+  | None, _, _ -> Fmt.str "%s: %a" name Flags.pp_error e
 
 let absolute path =
   if Filename.is_relative path then Filename.concat (Sys.getcwd ()) path

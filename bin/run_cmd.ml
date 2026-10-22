@@ -25,7 +25,7 @@ let record ?show ?stop stdenv ~settings ~env ~output argv =
       ~clock:(Eio.Stdenv.mono_clock stdenv)
       ~proc:(Eio.Stdenv.process_mgr stdenv)
       ~cwd:(Eio.Stdenv.cwd stdenv) argv
-    |> Result.map_error (Fmt.to_to_string K7.pp_error)
+    |> Result.map_error (Fmt.to_to_string Flags.pp_error)
   in
   match
     Eio.Path.(save ~create:(`Or_truncate 0o644) (Eio.Stdenv.fs stdenv / output))

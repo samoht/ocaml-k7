@@ -35,6 +35,15 @@ val print_tape : Eio_unix.Stdenv.base -> K7.t -> (unit, string) result
 (** [print_tape env t] writes [K7.to_string t] on standard output. A reader that
     closes the pipe early is not an error. *)
 
+val shown : string -> string
+(** [shown s] is [s] as {!K7.pp_error} prints a string: on one line, without
+    escape sequences or control characters. *)
+
+val pp_error : K7.error Fmt.t
+(** [pp_error] is {!K7.pp_error} with the words of the command line: a wait that
+    times out suggests [Wait@30s] or [Set WaitTimeout], and an output names [k7]
+    or [vhs] rather than the function that writes it. *)
+
 val interruptible : (unit Eio.Promise.t -> 'a) -> 'a * Sys.signal option
 (** [interruptible f] is [f stop] and the signal, [SIGINT] or [SIGTERM], that
     interrupted it, if any. [stop] resolves on the first of them that [k7] gets
