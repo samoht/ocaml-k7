@@ -241,9 +241,14 @@ let test_cursor_wide_right () =
    one. *)
 let test_double_underline () =
   let s = svg [ (Ms 0, "\027[21md\027[0m \027[4ms\027[0m") ] in
-  check_contains "double" ~sub:{|<tspan x="0" class="xu u2">d</tspan>|} s;
-  check_contains "single" ~sub:{|<tspan x="28" class="xu">s</tspan>|} s;
-  check_contains "style" ~sub:".u2{text-decoration-style:double}" s
+  (* Two lines, as rectangles in the text's colour, under a cell of 14
+     pixels whose baseline is at 22. *)
+  check_contains "double"
+    ~sub:
+      {|<rect x="0" y="24" width="14" height="1" class="d"/><rect x="0" y="26" width="14" height="1" class="d"/>|}
+    s;
+  check_contains "no single line" ~sub:{|<tspan x="0">d</tspan>|} s;
+  check_contains "single" ~sub:{|<tspan x="28" class="xu">s</tspan>|} s
 
 (* Reverse video paints a wide glyph's two cells with its foreground, as
    xterm.js does, not its right half with the default foreground. *)

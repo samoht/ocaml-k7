@@ -112,7 +112,8 @@ let add_backgrounds t b ~from cells =
 (* The classes of a text run other than its colour. *)
 let text_classes (c : Screen.cell) =
   let deco =
-    (if has Underline c || has Double_underline c then "u" else "")
+    (* A double underline is drawn apart, see [add_double_underlines]. *)
+    (if has Underline c && not (has Double_underline c) then "u" else "")
     ^ (if has Strikethrough c then "s" else "")
     ^ if has Overline c then "o" else ""
   in
@@ -122,11 +123,11 @@ let text_classes (c : Screen.cell) =
       (if has Dim c then "f" else "");
       (if has Italic c then "i" else "");
       (if deco = "" then "" else "x" ^ deco);
-      (* SGR 21 is a double underline in xterm.js. *)
-      (if has Double_underline c then "u2" else "");
     ]
 
-let decorated c = List.exists (String.starts_with ~prefix:"x") (text_classes c)
+let decorated c =
+  has Double_underline c
+  || List.exists (String.starts_with ~prefix:"x") (text_classes c)
 
 let shows (c : Screen.cell) =
   c.width > 0 && (not (has Hidden c)) && (c.text <> " " || decorated c)
@@ -192,10 +193,47 @@ let add_texts t b ~from cells =
   in
   go from None []
 
+(* SGR 21, a double underline in xterm.js, is two lines under the text in
+   its colour, drawn as rectangles: WebKit ignores text-decoration-style on
+   SVG text. *)
+let add_double_underlines t b ~from cells =
+  let n = Array.length cells in
+  let double x = has Double_underline cells.(x) && shows cells.(x) in
+  let thickness = max 1 (t.font_size / 16) in
+  let rec go x =
+    if x < n then (
+      if not (double x) then go (x + 1)
+      else
+        let p = fst (paints cells.(x)) in
+        (* The second cell of a wide glyph goes with the first. *)
+        let rec stop y =
+          if
+            y < n
+            && (cells.(y).width = 0 || (double y && fst (paints cells.(y)) = p))
+          then stop (y + 1)
+          else y
+        in
+        let y = stop (x + 1) in
+        List.iter
+          (fun k ->
+            Fmt.kstr (Buffer.add_string b)
+              "<rect x=\"%d\" y=\"%d\" width=\"%d\" height=\"%d\""
+              (x * t.cell_width)
+              (t.baseline + (k * thickness))
+              ((y - x) * t.cell_width)
+              thickness;
+            add_paint b ~text:false p;
+            Buffer.add_string b "/>")
+          [ 2; 4 ];
+        go y)
+  in
+  go from
+
 let row_markup t ?(from = 0) row =
   let cells = Screen.cells row in
   let b = Buffer.create 256 in
   add_backgrounds t b ~from cells;
+  add_double_underlines t b ~from cells;
   let texts = Buffer.create 256 in
   add_texts t texts ~from cells;
   if Buffer.length texts > 0 then (
@@ -355,8 +393,7 @@ let add_style t b ~duration frames =
     ".b{font-weight:bold}.f{fill-opacity:.5}.i{font-style:italic}.xu{text-decoration:underline}.xs{text-decoration:line-through}.xo{text-decoration:overline}.xus{text-decoration:underline \
      line-through}.xuo{text-decoration:underline \
      overline}.xso{text-decoration:line-through \
-     overline}.xuso{text-decoration:underline line-through \
-     overline}.u2{text-decoration-style:double}";
+     overline}.xuso{text-decoration:underline line-through overline}";
   if t.blink then
     Buffer.add_string b
       ".k{animation:b 1.2s step-end infinite}@keyframes \
