@@ -174,6 +174,21 @@ with the program's exit code once the image is written.
   $ k7 run -o run.svg 2> /dev/null
   [124]
 
+The image shows the command line first, shell-quoted where needed, then
+the program's output. --show replaces the line and --show "" hides it.
+
+  $ k7 run -o cmd.svg --cols 40 --rows 3 -- printf '%s\n' 'hello world'
+  $ grep -o '<desc id="d">.*' cmd.svg
+  <desc id="d">$ printf '%s\n' 'hello world'
+  $ grep -o '^[^<]*</desc>' cmd.svg
+  hello world</desc>
+  $ k7 run -o show.svg --cols 40 --rows 3 --show 'dune exec -- ./main.exe' -- printf 'hi\n'
+  $ grep -o '<desc id="d">.*' show.svg
+  <desc id="d">$ dune exec -- ./main.exe
+  $ k7 run -o hide.svg --cols 40 --rows 3 --show '' -- printf 'hi\n'
+  $ grep -o '<desc id="d">[^<]*</desc>' hide.svg
+  <desc id="d">hi</desc>
+
 k7 tape reads a tape in VHS's syntax; the command line replaces its
 settings and outputs.
 

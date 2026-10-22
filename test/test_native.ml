@@ -1132,13 +1132,15 @@ let test_run_program () =
       check_contains "red" ~sub:{|class="p1">red|} s;
       let shown = frames s in
       let n = List.length shown in
-      let red = screen [ "red" ] and both = screen [ "red"; "done" ] in
+      let red = screen [ "$ ./demo.sh"; "red" ]
+      and both = screen [ "$ ./demo.sh"; "red"; "done" ] in
       Alcotest.(check (list string))
         "last frames" [ red; both ]
         (List.filteri (fun i _ -> i >= n - 2) shown);
       List.iteri
         (fun i f ->
-          if i < n - 2 && f <> screen [] then Alcotest.failf "frame %d: %S" i f)
+          if i < n - 2 && f <> screen [ "$ ./demo.sh" ] then
+            Alcotest.failf "frame %d: %S" i f)
         shown;
       let duration, starts = times s in
       let last = List.nth starts (List.length starts - 1) in
@@ -1158,22 +1160,22 @@ let test_run_fast () =
       Alcotest.(check bool) "status" true (status = `Exited 0);
       Alcotest.(check string)
         "image"
-        (screen [ "one"; "two"; "three" ])
+        (screen [ "$ cat out"; "one"; "two"; "three" ])
         (last (frames s))
 
-let check_run ?vars name argv status lines =
+let check_run ?vars name argv ~shown status lines =
   with_dir @@ fun env cwd ->
   match run ?vars env cwd argv with
   | Error e -> Alcotest.failf "%s: %a" name K7.pp_error e
   | Ok (s, got) ->
       Alcotest.(check bool) (name ^ ": status") true (got = status);
-      Alcotest.(check string) name (screen lines) (last (frames s))
+      Alcotest.(check string) name (screen (shown :: lines)) (last (frames s))
 
 let test_run_env () =
   check_run "environment"
     ~vars:[ ("VHS_TEST", "caf\xc3\xa9 au lait") ]
-    [ "sh"; "-c"; {|printf '%s|%s' "$VHS_TEST" "$TERM"|} ]
-    (`Exited 0)
+    [ "sh"; "-c"; {|printf %s "$VHS_TEST|$TERM"|} ]
+    ~shown:{|$ sh -c 'printf %s "$VHS_TEST|$TERM"'|} (`Exited 0)
     [ "caf\xc3\xa9 au lait|xterm-256color" ]
 
 let test_run_errors () =
@@ -1205,10 +1207,52 @@ let test_run_errors () =
   | Error e -> Alcotest.failf "width and columns: %a" K7.pp_error e
   | Ok _ -> Alcotest.fail "width and columns: ran"
 
+let size svg =
+  let key = {|viewBox="|} in
+  let rec find i =
+    if i + String.length key > String.length svg then Alcotest.fail "no viewBox"
+    else if String.sub svg i (String.length key) = key then
+      let j = i + String.length key in
+      String.sub svg j (String.index_from svg j '"' - j)
+    else find (i + 1)
+  in
+  find 0
+
+let test_run_command_line () =
+  with_dir @@ fun env cwd ->
+  let shown = {|$ printf '%s\n' 'hello world'|} in
+  match run env cwd [ "printf"; {|%s\n|}; "hello world" ] with
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+  | Ok (s, _) ->
+      let first = List.hd (frames s) in
+      if not (String.starts_with ~prefix:shown first) then
+        Alcotest.failf "first frame: %S" first;
+      Alcotest.(check string)
+        "last frame"
+        (screen [ shown; "hello world" ])
+        (last (frames s));
+      check_contains "prompt" ~sub:{|fill="#5a56e0">$</tspan>|} s;
+      check_contains "command"
+        ~sub:{|<tspan x="28 42 56 70 84 98">printf</tspan>|} s
+
+let test_run_rows () =
+  with_dir @@ fun env cwd ->
+  let n = Native_test.rows - 2 in
+  match run env cwd [ "seq"; string_of_int n ] with
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+  | Ok (s, _) ->
+      Alcotest.(check string)
+        "last frame"
+        (screen
+           (Fmt.str "$ seq %d" n :: List.init n (fun i -> Int.to_string (i + 1))))
+        (last (frames s));
+      Alcotest.(check string) "size" (size (svg [])) (size s)
+
 let test_run_signal () =
   check_run "killed"
     [ "sh"; "-c"; "echo bye; kill -TERM $$" ]
-    (`Signaled Sys.sigterm) [ "bye" ]
+    ~shown:{|$ sh -c 'echo bye; kill -TERM $$'|} (`Signaled Sys.sigterm)
+    [ "bye" ]
 
 let test_run_cancel () =
   with_dir @@ fun env cwd ->
@@ -1285,6 +1329,8 @@ let suite =
          ("run environment", test_run_env);
          ("run errors", test_run_errors);
          ("run a killed program", test_run_signal);
+         ("run shows the command line", test_run_command_line);
+         ("run keeps the rows", test_run_rows);
          ("run cancelled", test_run_cancel);
        ]
       @ known_differences
