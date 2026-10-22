@@ -157,6 +157,24 @@ let test_concealed_description () =
   let s = svg [ (Ms 0, "\027[8msecret\027[?25l") ] in
   check_contains "blank text alternative" ~sub:"<desc></desc>" s
 
+(* The zero-width characters of vhs-cram's prompt mark do not reach the text
+   alternative; a joiner and a combining mark, which shape what shows, do. *)
+let test_zero_width_description () =
+  let s =
+    svg
+      [
+        ( Ms 0,
+          "> \xe2\x80\x8b\xe2\x81\xa0\xe2\x80\x8b\r\n\
+           a\xe2\x80\x8bb\xe2\x81\xa0c e\xcc\x81 \
+           \xf0\x9f\x91\xa9\xe2\x80\x8d\xf0\x9f\x92\xbb" );
+      ]
+  in
+  check_contains "marks left out"
+    ~sub:
+      "<desc>&gt;\n\
+       abc e\xcc\x81 \xf0\x9f\x91\xa9\xe2\x80\x8d\xf0\x9f\x92\xbb</desc>"
+    s
+
 let suite =
   ( "svg",
     List.map
@@ -167,6 +185,7 @@ let suite =
         ("keyframes", test_keyframes);
         ("accessible", test_accessible);
         ("concealed text alternative", test_concealed_description);
+        ("zero-width text alternative", test_zero_width_description);
         ("one frame", test_one_frame);
         ("settings", test_settings);
         ("huge sizes", test_huge);
