@@ -161,7 +161,7 @@ let check_wait timeout w =
       Fmt.error "%s %S: holds a control character" (wait_name w) re
   | Line re | Screen re ->
       Regexp_syntax.check re
-      |> Result.map_error (Fmt.str "%s %S: %s" (wait_name w) re)
+      |> Result.map_error (fun e -> Fmt.str "%s %S: %s" (wait_name w) re e)
 
 (* VHS hands an unknown extension to ffmpeg as a GIF, and ffmpeg then picks
    the format from the extension and fails. *)
@@ -1052,10 +1052,10 @@ let dir_problem ~create dir path =
       match Unix.access d [ W_OK; X_OK ] with
       | () -> None
       | exception Unix.Unix_error _ ->
-          Some (Fmt.str "%s: cannot write in %s" path (shown d)))
-  | _ -> Some (Fmt.str "%s: %s is not a directory" path (shown d))
+          Fmt.kstr Option.some "%s: cannot write in %s" path (shown d))
+  | _ -> Fmt.kstr Option.some "%s: %s is not a directory" path (shown d)
   | exception Unix.Unix_error _ ->
-      Some (Fmt.str "%s: no directory %s" path (shown d))
+      Fmt.kstr Option.some "%s: no directory %s" path (shown d)
 
 (* [check_dirs cwd paths] is [Error (Io _)] on the first of [paths], each
    with whether its directories can be created, that cannot be written. *)

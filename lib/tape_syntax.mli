@@ -23,14 +23,14 @@ type command =
 
 val check : string -> (command, string) result
 (** [check line] is the command of [line], or [Error msg] if VHS's parser
-    reports an error on it, but for a [Screenshot] of an [.svg] image, which VHS
-    refuses and the native recorder writes, if it holds more than one command,
-    or if it ends before a string, a regular expression, a JSON value or an
-    argument it starts. It is also [Error msg] on what VHS only finds when it
-    runs the command: a duration Go's [time.ParseDuration] rejects, the value of
-    an integer or float setting Go's [strconv.Atoi] or [strconv.ParseFloat]
-    rejects, and a [Rows] or [Columns] value that is not positive. [line] holds
-    no newline. A [Source] line's tape is not read. *)
+    reports an error on it, but for a {!constructor-Screenshot} of an [.svg]
+    image, which VHS refuses and the native recorder writes, if it holds more
+    than one command, or if it ends before a string, a regular expression, a
+    JSON value or an argument it starts. It is also [Error msg] on what VHS only
+    finds when it runs the command: a duration Go's [time.ParseDuration]
+    rejects, the value of an integer or float setting Go's [strconv.Atoi] or
+    [strconv.ParseFloat] rejects, and a [Rows] or [Columns] value that is not
+    positive. [line] holds no newline. A [Source] line's tape is not read. *)
 
 val has_control : ?except:string -> string -> bool
 (** [has_control ~except s] is [true] iff [s] holds a C0 control other than

@@ -16,7 +16,7 @@ let contains ~sub s =
 
 let tape ?(setup = []) ?(output = "demo.gif") ?wait_timeout_s src =
   Cli.tape ~setup ~output ?wait_timeout_s ~name:"input.t" src
-  |> Result.map (Fmt.str "%a" Vhs.pp)
+  |> Result.map Vhs.to_string
 
 let test_tape () =
   expect "tape"

@@ -6,7 +6,9 @@
 let ( let* ) = Result.bind
 
 let tape ~setup ~output ?wait_timeout_s ~name src =
-  let* cram = Cram.parse src |> Result.map_error (Fmt.str "%s: %s" name) in
+  let* cram =
+    Cram.parse src |> Result.map_error (fun e -> Fmt.str "%s: %s" name e)
+  in
   match
     (Cram.is_empty cram, List.find_opt (Fun.negate Cram.is_typeable) setup)
   with
@@ -22,7 +24,7 @@ let tape ~setup ~output ?wait_timeout_s ~name src =
       in
       Vhs.tape ~settings:[ Shell Bash ] ~outputs:[ output ]
         (timeout @ Cram.actions ~setup cram)
-      |> Result.map_error (Fmt.str "%a" Vhs.pp_error)
+      |> Result.map_error (fun e -> Fmt.str "%a" Vhs.pp_error e)
 
 let load_error name = function
   | Eio.Fs.E (Not_found _) -> Fmt.str "%s: no such file" name

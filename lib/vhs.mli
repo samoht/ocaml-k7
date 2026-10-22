@@ -126,12 +126,13 @@ type error =
       (** An output, a setting or a command that the function cannot play or
           write, named, and why. *)
   | Timeout of { wait : string; line : int; last : string }
-      (** The wait of {!record} on line [line] of {!to_string}[ t], counted from
-          1, did not hold in time; [wait] is that line, such as [Wait+Line /re/]
-          or [Wait@2000ms], or for a wait of a sourced tape the line of that
-          tape, and [last] is the line or the screen it last read. Only
-          {!record} returns it: {!render} reports a wait that times out as
-          {!constructor-Failed}, with the message of [vhs] in [output]. *)
+      (** The wait of {!record} on line [line], counted from 1, of the tape as
+          {!to_string} prints it did not hold in time; [wait] is that line, such
+          as [Wait+Line /re/] or [Wait@2000ms], or for a wait of a sourced tape
+          the line of that tape, and [last] is the line or the screen it last
+          read. Only {!record} returns it: {!render} reports a wait that times
+          out as {!constructor-Failed}, with the message of [vhs] in [output].
+      *)
   | Exited of {
       status : Eio.Process.exit_status;
       wait : string;
