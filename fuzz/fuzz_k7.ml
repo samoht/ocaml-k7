@@ -1178,8 +1178,28 @@ let test_run_screen bytes =
   | Ok (_, _), Ok _ -> fail "cat did not exit with 0"
   | Error e, _ | _, Error e -> failf "%a" K7.pp_error e
 
+let test_run_path_override n =
+  with_dir @@ fun env path ->
+  let name = Fmt.str "k7-path-only-%d" n in
+  save env (path name) "#!/bin/sh\nprintf PATH_OVERRIDE_WORKED\n";
+  Unix.chmod (path name) 0o755;
+  let dir = Filename.dirname (path name) in
+  match
+    K7.run
+      ~env:[ ("PATH", dir) ]
+      ~clock:(Eio.Stdenv.mono_clock env)
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd:Eio.Path.(Eio.Stdenv.fs env / dir)
+      [ name ]
+  with
+  | Ok (image, `Exited 0) when contains ~sub:"PATH_OVERRIDE_WORKED" image -> ()
+  | Ok _ -> fail "the executable in the overridden PATH did not run"
+  | Error e -> failf "%a" K7.pp_error e
+
 let with_processes =
   [
+    test_case "run searches the overridden PATH" [ uint8 ]
+      test_run_path_override;
     test_case "a program's screen is the image of its bytes" [ bytes ]
       test_run_screen;
     test_case "native output paths and positive frame-rate boundaries" [ uint8 ]
