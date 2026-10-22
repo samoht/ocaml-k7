@@ -387,16 +387,20 @@ val svg :
       SVG, by its extension.
 
     Its patterns match as Go's do, case folding, ASCII word boundaries and the
-    Unicode classes of Go's tables included. [Set CursorBlink],
-    [Set BorderRadius], [Set PlaybackSpeed] and [Set LoopOffset] change the
-    animation, and [Set WindowBar] and [Set WindowBarSize] draw VHS's window
-    bar. For a reader who prefers reduced motion, the image shows its last
-    screen, still, and the cursor does not blink. The image leaves out the
-    invisible format characters, as {!pp_error} does. Its title is "Terminal
-    recording" and, unless its last screen is blank, its description, its text
-    alternative, is the text that screen shows, without concealed text. The
-    image of a [Set MarginFill], read relative to the [cwd] of {!record}, is
-    embedded, stretched to the frame as ffmpeg stretches it. A size beyond
-    100000 pixels, a terminal beyond 2000 cells a side, a [Set LetterSpacing] or
-    [Set LineHeight] beyond 100000 and a positive [Set PlaybackSpeed] below
-    0.001 are {!constructor-Unsupported}. *)
+    Unicode classes of Go's tables included. After a line is submitted, by
+    {!constructor-Enter} or the newline of a {!type'}, a {!constructor-Prompt}
+    or {!constructor-Line} wait holds only once the terminal has started another
+    line, or changed the line so that it does not hold, so it never holds on the
+    prompt the command was typed at, however fast it is typed.
+    [Set CursorBlink], [Set BorderRadius], [Set PlaybackSpeed] and
+    [Set LoopOffset] change the animation, and [Set WindowBar] and
+    [Set WindowBarSize] draw VHS's window bar. For a reader who prefers reduced
+    motion, the image shows its last screen, still, and the cursor does not
+    blink. The image leaves out the invisible format characters, as {!pp_error}
+    does. Its title is "Terminal recording" and, unless its last screen is
+    blank, its description, its text alternative, is the text that screen shows,
+    without concealed text. The image of a [Set MarginFill], read relative to
+    the [cwd] of {!record}, is embedded, stretched to the frame as ffmpeg
+    stretches it. A size beyond 100000 pixels, a terminal beyond 2000 cells a
+    side, a [Set LetterSpacing] or [Set LineHeight] beyond 100000 and a positive
+    [Set PlaybackSpeed] below 0.001 are {!constructor-Unsupported}. *)

@@ -640,6 +640,9 @@ type state = {
   mutable dumps : bool;  (** Whether a command adds its screen to [text]. *)
   mutable still : string option;  (** The screenshot of the next frame. *)
   mutable stills : (string * Screen.t) list;
+  mutable submitted : int option;
+      (** The cursor's row when a line was submitted, until the terminal starts
+          another line. *)
 }
 
 let now st = Eio.Time.Mono.now st.clock
@@ -688,12 +691,26 @@ let send st s =
   in
   go 0
 
+let is_line_feed c = c = '\n' || c = '\x0b' || c = '\x0c'
+
+(* A submitted line is over once the cursor leaves its row or a line feed,
+   which can scroll the row away, arrives. *)
+let settle st output =
+  match st.submitted with
+  | Some row
+    when Screen.cursor_row st.term <> row || String.exists is_line_feed output
+    ->
+      st.submitted <- None
+  | _ -> ()
+
 (* The terminal answers the queries it reads. *)
 let rec reader st buf =
   match Pty.read st.pty buf 0 (Bytes.length buf) with
   | 0 -> Eio.Fiber.await_cancel ()
   | n ->
-      Screen.feed st.term (Bytes.sub_string buf 0 n);
+      let output = Bytes.sub_string buf 0 n in
+      Screen.feed st.term output;
+      settle st output;
       send st (Screen.take_replies st.term);
       refresh st;
       reader st buf
@@ -702,12 +719,15 @@ let rec reader st buf =
       reader st buf
   | exception Unix.Unix_error _ -> Eio.Fiber.await_cancel ()
 
-(* Typing scrolls the screen back down. *)
+(* Typing scrolls the screen back down. A carriage return or a line feed
+   submits the line under the cursor. *)
 let write st s =
   if st.offset > 0 then (
     st.offset <- 0;
     st.shown <- st.live;
     record st);
+  if String.exists (fun c -> c = '\r' || c = '\n') s then
+    st.submitted <- Some (Screen.cursor_row st.term);
   send st s
 
 (* [step st ms] runs an action the tape gives [ms] milliseconds. *)
@@ -775,7 +795,18 @@ let wait st c ~line ~scope ~timeout ~pattern =
   let timeout = Option.value timeout ~default:c.wait_timeout in
   st.started <- now st;
   st.cap <- None;
-  let holds () = Regexp_match.matches re (wait_text st scope) in
+  (* The line under the cursor holds only once the terminal has started
+     another line since the last one was submitted, or has changed it so
+     that it no longer holds: the prompt a command was typed at is not the
+     one that follows it. *)
+  let holds () =
+    let h = Regexp_match.matches re (wait_text st scope) in
+    match (scope, st.submitted) with
+    | Line, Some _ ->
+        if not h then st.submitted <- None;
+        false
+    | _ -> h
+  in
   let rec loop () =
     if not (holds ()) then (
       Eio.Condition.await_no_mutex st.changed;
@@ -943,6 +974,7 @@ let state t ~clock pty =
     dumps = t.dumps;
     still = None;
     stills = [];
+    submitted = None;
   }
 
 let recording t st =
