@@ -297,11 +297,14 @@ let add_cursor t b screen (r, c) =
     "<use href=\"#%s\" class=\"k\" x=\"%d\" y=\"%d\"/>"
     (if cell.width = 2 then "w" else "c")
     (c * t.cell_width) (r * t.cell_height);
-  if cell.width > 0 && cell.text <> " " && not (has Hidden cell) then (
+  (* The glyph under the cursor leaves out format characters, as its row
+     does. *)
+  let text = Unicode.strip_format cell.text in
+  if cell.width > 0 && text <> "" && text <> " " && not (has Hidden cell) then (
     Fmt.kstr (Buffer.add_string b) "<text class=\"ka k\" x=\"%d\" y=\"%d\">"
       (c * t.cell_width)
       ((r * t.cell_height) + t.baseline);
-    add_escaped b cell.text;
+    add_escaped b text;
     Buffer.add_string b "</text>")
 
 (* [shown] holds, for each row, the row the previous screen showed there and
