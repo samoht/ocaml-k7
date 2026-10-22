@@ -347,7 +347,7 @@ val svg :
     Time is the tape's: a typed character, a key and a sleep last what the tape
     says, a wait lasts what the program makes it last, and output shows at the
     time it arrives within the action that runs, rounded down to a frame of
-    {!Framerate}. A tape whose program prints the same bytes within the same
+    {!constructor-Framerate}, which lasts at least a millisecond. A tape whose program prints the same bytes within the same
     frames gives the same image, byte for byte; the time a command takes to
     print, including how the machine schedules it, changes the frames its output
     lands in.

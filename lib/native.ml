@@ -207,7 +207,12 @@ let set line c name args =
         match rest with Keyword (("ms" | "s") as u) :: _ -> u | _ -> "s"
       in
       { c with typing_speed = ms line (n ^ u) }
-  | "Framerate", _ -> { c with framerate = max 1 (int_value line (value ())) }
+  | "Framerate", _ -> (
+      (* A rate only sets the frame length, of at least a millisecond. *)
+      match int_of_string_opt (value ()) with
+      | Some n when n >= 0 -> { c with framerate = max 1 n }
+      | Some _ -> unsupported line "%s is negative" (value ())
+      | None -> unsupported line "%s is not an integer" (value ()))
   | "PlaybackSpeed", _ ->
       let s = float_value line (value ()) in
       if s > 0. && s < min_speed then
