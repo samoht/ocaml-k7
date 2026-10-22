@@ -601,6 +601,41 @@ let test_cancel_reaps delay =
   in
   if alive then failf "cancelled render left process %d alive" pid
 
+(* A tape whose shell writes its pid and that of a nested shell, which
+   loops, then waits for what never shows. *)
+let nested_shells =
+  lazy
+    (Result.get_ok
+       (Vhs.tape ~settings:[ Typing_speed (Ms 1) ] ~outputs:[ "image.svg" ]
+          Vhs.
+            [
+              type'
+                "echo $$ > shell.pid; bash --norc --noprofile -c 'echo $$ > \
+                 child.pid; while :; do sleep 0.1; done'\n";
+              wait ~timeout:(Ms 10000) (Line "NEVER_READY");
+            ]))
+
+(* Fails if the shells of [nested_shells] are alive, after killing them. *)
+let check_reaped cwd =
+  let pids =
+    List.map
+      (fun name ->
+        Eio.Path.load Eio.Path.(cwd / name) |> String.trim |> int_of_string)
+      [ "shell.pid"; "child.pid" ]
+  in
+  let alive pid =
+    try
+      Unix.kill pid 0;
+      true
+    with Unix.Unix_error (Unix.ESRCH, _, _) -> false
+  in
+  let left = List.filter alive pids in
+  List.iter
+    (fun pid -> try Unix.kill pid Sys.sigkill with Unix.Unix_error _ -> ())
+    left;
+  if left <> [] then
+    failf "recording left shells alive: %a" Fmt.(Dump.list int) left
+
 (* Losing a recording's switch also stops a command's nested shell. *)
 let test_record_reaps delay callback_raises =
   with_dir @@ fun env path ->
@@ -608,17 +643,7 @@ let test_record_reaps delay callback_raises =
   let cwd =
     Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "shell.pid"))
   in
-  let tape =
-    Result.get_ok
-      (Vhs.tape ~settings:[ Typing_speed (Ms 1) ] ~outputs:[ "image.svg" ]
-         Vhs.
-           [
-             type'
-               "echo $$ > shell.pid; bash --norc --noprofile -c 'echo $$ > \
-                child.pid; while :; do sleep 0.1; done'\n";
-             wait ~timeout:(Ms 10000) (Line "NEVER_READY");
-           ])
-  in
+  let tape = Lazy.force nested_shells in
   let ready () =
     Sys.file_exists (path "child.pid")
     && String.trim (Eio.Path.load Eio.Path.(cwd / "child.pid")) <> ""
@@ -648,25 +673,7 @@ let test_record_reaps delay callback_raises =
   | `Cancelled -> ()
   | `Recorded (Ok _) -> fail "recording ended before cancellation"
   | `Recorded (Error e) -> failf "%a" Vhs.pp_error e);
-  let pids =
-    List.map
-      (fun name ->
-        Eio.Path.load Eio.Path.(cwd / name) |> String.trim |> int_of_string)
-      [ "shell.pid"; "child.pid" ]
-  in
-  let alive pid =
-    try
-      Unix.kill pid 0;
-      true
-    with Unix.Unix_error (Unix.ESRCH, _, _) -> false
-  in
-  let left = List.filter alive pids in
-  (* Even a failing cleanup property must not leave its test processes. *)
-  List.iter
-    (fun pid -> try Unix.kill pid Sys.sigkill with Unix.Unix_error _ -> ())
-    left;
-  if left <> [] then
-    failf "recording left shells alive: %a" Fmt.(Dump.list int) left
+  check_reaped cwd
 
 let test_exit_codes n =
   with_dir @@ fun env path ->
@@ -725,34 +732,61 @@ let contains ~sub s =
   in
   go 0
 
-(* Command-line seconds must fit Go's duration and be strictly positive. *)
-let test_cli_wait_timeout seconds =
-  with_dir @@ fun env path ->
-  save env (path "input.t") "  $ true\n";
+(* The exit status of vhs-cram on [args] and what it printed. cmdliner
+   styles its messages unless [TERM] is [dumb]. *)
+let run_cli env args =
   let cli =
     Option.value ~default:"vhs-cram" (Sys.getenv_opt "VHS_CRAM_TEST_EXE")
   in
   let output = Buffer.create 256 in
   let sink = Eio.Flow.buffer_sink output in
   let proc = Eio.Stdenv.process_mgr env in
-  (* cmdliner styles its messages unless [TERM] is [dumb]. *)
   let env =
     Eio.Process.environment proc
     |> Eio.Process.Env.override [ ("TERM", Some "dumb") ]
   in
   let status =
     Eio.Switch.run @@ fun sw ->
-    Eio.Process.spawn ~sw ~env ~stdout:sink ~stderr:sink proc
+    Eio.Process.spawn ~sw ~env ~stdout:sink ~stderr:sink proc (cli :: args)
+    |> Eio.Process.await
+  in
+  (status, Buffer.contents output)
+
+(* [output] says why vhs-cram refused [--wait-timeout=seconds]. *)
+let check_refused seconds output =
+  check (List.mem (string_of_int seconds) (String.split_on_char '"' output));
+  (* cmdliner wraps the message. *)
+  let words =
+    String.split_on_char '\n' output
+    |> List.concat_map (String.split_on_char ' ')
+    |> List.filter (( <> ) "")
+    |> String.concat " "
+  in
+  check
+    (contains
+       ~sub:
+         (if seconds > 0 then
+            "is too large: a wait lasts at most 9223372036 seconds"
+          else "is not a positive number of seconds")
+       words);
+  check
+    (List.exists
+       (String.starts_with ~prefix:"vhs-cram: option '--wait-timeout':")
+       (String.split_on_char '\n' output))
+
+(* Command-line seconds must fit Go's duration and be strictly positive. *)
+let test_cli_wait_timeout seconds =
+  with_dir @@ fun env path ->
+  save env (path "input.t") "  $ true\n";
+  let status, output =
+    run_cli env
       [
-        cli;
         "--print";
         "--output=demo.svg";
         "--wait-timeout=" ^ string_of_int seconds;
         path "input.t";
       ]
-    |> Eio.Process.await
   in
-  let output = Buffer.contents output in
   let valid = seconds > 0 && seconds <= 9_223_372_036 in
   let expected = if valid then 0 else 124 in
   (match status with
@@ -765,26 +799,7 @@ let test_cli_wait_timeout seconds =
       (List.mem
          (Fmt.str "Set WaitTimeout %ds" seconds)
          (String.split_on_char '\n' output))
-  else (
-    check (List.mem (string_of_int seconds) (String.split_on_char '"' output));
-    (* cmdliner wraps the message. *)
-    let words =
-      String.split_on_char '\n' output
-      |> List.concat_map (String.split_on_char ' ')
-      |> List.filter (( <> ) "")
-      |> String.concat " "
-    in
-    check
-      (contains
-         ~sub:
-           (if seconds > 0 then
-              "is too large: a wait lasts at most 9223372036 seconds"
-            else "is not a positive number of seconds")
-         words);
-    check
-      (List.exists
-         (String.starts_with ~prefix:"vhs-cram: option '--wait-timeout':")
-         (String.split_on_char '\n' output)))
+  else check_refused seconds output
 
 let record_cram ?(setup = []) ?(prefix = []) env path src =
   let output = path "order.txt" in

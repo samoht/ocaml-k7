@@ -410,6 +410,18 @@ let test_time_bounds first second =
   | Error (Invalid _) -> check (not valid)
   | Error e -> failf "%a" Vhs.pp_error e
 
+let theme =
+  choose
+    [
+      bytes;
+      const "Dracula";
+      const "TokyoNight";
+      const "{}";
+      const {|{"foreground":"#abcd","background":"#1230","cursor":"#ff000080"}|};
+      const {|{"red":"rgb(1,2,3)","cursorAccent":"rgba(0,0,0,0.5)"}|};
+      const {|{"name":"<>&\u0000","red":null,"extra":[1,{}]}|};
+    ]
+
 let suite =
   ( "svg",
     [
@@ -421,21 +433,7 @@ let suite =
             [ int; const 0; const 9_223_372_036_854; const 9_223_372_036_855 ];
         ]
         test_time_bounds;
-      test_case "arbitrary output and themes produce XML"
-        [
-          bytes;
-          choose
-            [
-              bytes;
-              const "Dracula";
-              const "TokyoNight";
-              const "{}";
-              const
-                {|{"foreground":"#abcd","background":"#1230","cursor":"#ff000080"}|};
-              const {|{"red":"rgb(1,2,3)","cursorAccent":"rgba(0,0,0,0.5)"}|};
-              const {|{"name":"<>&\u0000","red":null,"extra":[1,{}]}|};
-            ];
-        ]
+      test_case "arbitrary output and themes produce XML" [ bytes; theme ]
         test_theme_xml;
       test_case "text alternatives respect SGR conceal" [ uint8 ]
         test_concealed_description;
