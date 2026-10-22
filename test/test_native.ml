@@ -1453,6 +1453,30 @@ let test_record_env_names () =
           Alcotest.failf "%s: raised %s" line (Printexc.to_string e))
     [ {|Env "A=B" "x"|}; {|Env "" "x"|} ]
 
+(* Two recordings at once: the second program holds no terminal but its
+   own, so the first terminal is not kept open by it. *)
+let test_run_concurrent_terminals () =
+  with_dir @@ fun env cwd ->
+  script cwd "ttys.sh"
+    "#!/bin/bash\n\
+     for f in /dev/fd/*; do n=${f##*/}; if [ \"$n\" -gt 2 ] && [ -t \"$n\" ]; \
+     then printf 'LEAK%s ' \"$n\"; fi; done\n\
+     printf DONE\n";
+  let clock = Eio.Stdenv.clock env in
+  let _, second =
+    Eio.Fiber.pair
+      (fun () -> run env cwd [ "sleep"; "2" ])
+      (fun () ->
+        Eio.Time.sleep clock 0.5;
+        run env cwd [ "./ttys.sh" ])
+  in
+  match second with
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+  | Ok (image, _) ->
+      Alcotest.(check string)
+        "no other terminal reaches the program" (screen [ "DONE" ])
+        (last (frames image))
+
 let suite =
   ( "native",
     List.map
@@ -1511,6 +1535,7 @@ let suite =
          ( "run cancellation reaps resistant descendants",
            test_run_cancel_descendant );
          ("record refuses Env names", test_record_env_names);
+         ("concurrent runs keep their terminals", test_run_concurrent_terminals);
        ]
       @ known_differences
       @
