@@ -233,6 +233,17 @@ let test_inverse_wide () =
     "no default-foreground half" 0
     (count ~sub:{|height="29" class="d"/>|} s)
 
+(* Tag characters are format characters that pick a subdivision flag: the
+   image text and its description keep them, or Scotland's flag shows as a
+   plain black flag. *)
+let test_tag_flag () =
+  let flag =
+    "\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}"
+  in
+  let s = svg [ (Ms 0, flag) ] in
+  check_contains "description" ~sub:("<desc>" ^ flag ^ "</desc>") s;
+  check_contains "image text" ~sub:(">" ^ flag ^ "</tspan>") s
+
 let suite =
   ( "svg",
     List.map
@@ -240,6 +251,7 @@ let suite =
       [
         ("hostile text", test_hostile);
         ("inverse wide glyph", test_inverse_wide);
+        ("subdivision flag", test_tag_flag);
         ("cursor format characters", test_cursor_format);
         ("positive frame rate above the pixel limit", test_framerate_limit);
         ("row dedup", test_dedup);
