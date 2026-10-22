@@ -1402,6 +1402,39 @@ let test_run_cancel () =
       Alcotest.failf "process %d left alive" pid
   | exception Unix.Unix_error (ESRCH, _, _) -> ()
 
+let test_run_cancel_descendant () =
+  with_dir @@ fun env cwd ->
+  let clock = Eio.Stdenv.clock env in
+  script cwd "parent.sh"
+    "#!/bin/sh\n\
+     trap '' HUP TERM\n\
+     /bin/sh -c 'trap \"\" HUP TERM; echo $$ > child.pid; exec sleep 30' &\n\
+     wait\n";
+  let pid_file = Eio.Path.(cwd / "child.pid") in
+  let ready () =
+    try String.trim (Eio.Path.load pid_file) <> "" with Eio.Io _ -> false
+  in
+  let result =
+    Eio.Time.with_timeout_exn clock 10. @@ fun () ->
+    Eio.Fiber.first
+      (fun () -> `Ran (run env cwd [ "./parent.sh" ]))
+      (fun () ->
+        while not (ready ()) do
+          Eio.Time.sleep clock 0.001
+        done;
+        `Cancelled)
+  in
+  let pid = int_of_string (String.trim (Eio.Path.load pid_file)) in
+  let alive =
+    try
+      Unix.kill pid 0;
+      true
+    with Unix.Unix_error (ESRCH, _, _) -> false
+  in
+  (if alive then try Unix.kill pid Sys.sigkill with Unix.Unix_error _ -> ());
+  Alcotest.(check bool) "recording was cancelled" true (result = `Cancelled);
+  Alcotest.(check bool) "cancelled recording leaves no descendant" false alive
+
 let suite =
   ( "native",
     List.map
@@ -1457,6 +1490,8 @@ let suite =
          ("run keeps the rows", test_run_rows);
          ("run shows another line", test_run_show);
          ("run cancelled", test_run_cancel);
+         ( "run cancellation reaps resistant descendants",
+           test_run_cancel_descendant );
        ]
       @ known_differences
       @
