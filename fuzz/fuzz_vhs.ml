@@ -718,6 +718,48 @@ let test_exit_codes n =
   eval 0 [ "--help=plain" ];
   eval 124 [ "--unknown-adversarial-flag" ]
 
+(* Command-line seconds must fit Go's duration and be strictly positive. *)
+let test_cli_wait_timeout seconds =
+  with_dir @@ fun env path ->
+  save env (path "input.t") "  $ true\n";
+  let cli =
+    Option.value ~default:"vhs-cram" (Sys.getenv_opt "VHS_CRAM_TEST_EXE")
+  in
+  let output = Buffer.create 256 in
+  let sink = Eio.Flow.buffer_sink output in
+  let status =
+    Eio.Switch.run @@ fun sw ->
+    Eio.Process.spawn ~sw ~stdout:sink ~stderr:sink
+      (Eio.Stdenv.process_mgr env)
+      [
+        cli;
+        "--print";
+        "--output=demo.svg";
+        "--wait-timeout=" ^ string_of_int seconds;
+        path "input.t";
+      ]
+    |> Eio.Process.await
+  in
+  let output = Buffer.contents output in
+  let valid = seconds > 0 && seconds <= 9_223_372_036 in
+  let expected = if valid then 0 else 124 in
+  (match status with
+  | `Exited code when code = expected -> ()
+  | status ->
+      failf "timeout %d: expected %d, got %a: %s" seconds expected
+        Eio.Process.pp_status status output);
+  if valid then
+    check
+      (List.mem
+         (Fmt.str "Set WaitTimeout %ds" seconds)
+         (String.split_on_char '\n' output))
+  else (
+    check (List.mem (string_of_int seconds) (String.split_on_char '"' output));
+    check
+      (List.exists
+         (String.starts_with ~prefix:"vhs-cram: option '--wait-timeout':")
+         (String.split_on_char '\n' output)))
+
 let record_cram ?(setup = []) ?(prefix = []) env path src =
   let output = path "order.txt" in
   let cram = Result.get_ok (Vhs_cram.Cram.parse src) in
@@ -819,6 +861,19 @@ let with_vhs =
 (* Properties that run stand-ins for vhs and vhs-cram. *)
 let with_processes =
   [
+    test_case "CLI wait timeout bounds and diagnostics"
+      [
+        choose
+          [
+            int;
+            const 0;
+            const (-1);
+            const 1;
+            const 9_223_372_036;
+            const 9_223_372_037;
+          ];
+      ]
+      test_cli_wait_timeout;
     test_case "record cancellation and callback exceptions reap shells"
       [ int8; bool ] test_record_reaps;
     test_case "recording environment isolation" [ int ]
