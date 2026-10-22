@@ -142,6 +142,12 @@ An .svg output is recorded without vhs, with the same prompt and mark.
   $ grep -c '<svg xmlns' demo.svg
   1
 
+A GIF needs vhs, and k7 says where to get it.
+
+  $ k7 cram --vhs ./missing-vhs --output demo.gif demo.t
+  k7: demo.t: executable not found: ./missing-vhs; a GIF or a video needs Charm's VHS, see https://github.com/charmbracelet/vhs#installation, and an .svg output does not
+  [123]
+
 The terminal's size, font and theme are settings of the tape, and each
 --env variable an Env line of its hidden setup.
 
