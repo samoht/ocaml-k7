@@ -117,8 +117,8 @@ let exits =
         ~doc:
           "also when k7 itself fails, such as when the program cannot start or \
            the image cannot be written, after printing $(b,k7:) and the reason \
-           on standard error. A program can exit with 123 too; only k7's own \
-           errors print that line.";
+           on standard error. A program can exit with 123, 124 or 125 too; \
+           only k7's own errors print that line.";
       info 130 ~doc:"also when $(cmd) is interrupted by SIGINT.";
       info 143 ~doc:"also when $(cmd) is interrupted by SIGTERM.";
       info cli_error ~doc:"on command line parsing errors.";

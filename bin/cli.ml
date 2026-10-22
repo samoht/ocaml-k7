@@ -41,7 +41,7 @@ let exits =
         ~doc:
           "when a subcommand fails, after printing $(b,k7:) and the reason on \
            standard error. $(b,k7 rec) exits with the code of its program \
-           otherwise, which can be 123 too.";
+           otherwise, which can be 123, 124 or 125 too.";
       info 130 ~doc:"when interrupted by SIGINT.";
       info 143 ~doc:"when interrupted by SIGTERM.";
       info cli_error ~doc:"on command line parsing errors.";
