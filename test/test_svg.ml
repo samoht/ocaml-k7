@@ -133,6 +133,11 @@ let test_setting_errors () =
       | Ok _ -> ())
     [ Font_family "Mono\nSpace"; Font_family "\"'`"; Theme "{\n}" ]
 
+(* A screen reader must not receive text concealed on the last screen. *)
+let test_concealed_description () =
+  let s = svg [ (Ms 0, "\027[8msecret\027[?25l") ] in
+  check_contains "blank text alternative" ~sub:"<desc></desc>" s
+
 let suite =
   ( "svg",
     List.map
@@ -142,6 +147,7 @@ let suite =
         ("row dedup", test_dedup);
         ("keyframes", test_keyframes);
         ("accessible", test_accessible);
+        ("concealed text alternative", test_concealed_description);
         ("one frame", test_one_frame);
         ("settings", test_settings);
         ("huge sizes", test_huge);
