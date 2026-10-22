@@ -5,28 +5,34 @@
 
 let ( let* ) = Result.bind
 
-(* As K7.record, k7 rec creates the missing directories of its output, but
-   before it runs the program, so that it fails before anything runs. *)
-let check_output stdenv output =
-  let dir = Eio.Path.(Eio.Stdenv.fs stdenv / Filename.dirname output) in
+let check_output output =
   if Filename.extension output <> ".svg" then
     Fmt.error "%a: not .svg, the animated SVG image k7 rec writes" Quote.pp
       output
-  else
-    match Eio.Path.mkdirs ~exists_ok:true ~perm:0o755 dir with
-    | () -> Ok ()
-    | exception Eio.Io (Eio.Fs.E (Already_exists _ | Not_found _), _) ->
-        Fmt.error "%a: %a is not a directory" Quote.pp output Quote.pp
-          (Filename.dirname output)
-    | exception Eio.Io (err, _) ->
-        Fmt.error "%a: %a" Quote.pp output Eio.Exn.pp_err err
+  else Ok ()
+
+(* As K7.record, once the image is ready, so that the program does not see
+   the directories. *)
+let save stdenv output svg =
+  let file = Eio.Path.(Eio.Stdenv.fs stdenv / output) in
+  match
+    Option.iter
+      (fun (dir, _) -> Eio.Path.mkdirs ~exists_ok:true ~perm:0o755 dir)
+      (Eio.Path.split file);
+    Eio.Path.save ~create:(`Or_truncate 0o644) file svg
+  with
+  | () -> Ok ()
+  | exception Eio.Io (Eio.Fs.E (Already_exists _ | Not_found _), _) ->
+      Fmt.error "%a: %a is not a directory" Quote.pp output Quote.pp
+        (Filename.dirname output)
+  | exception Eio.Io (err, _) -> Fmt.error "%s: %a" output Eio.Exn.pp_err err
 
 let exit_code = function
   | `Exited n -> n
   | `Signaled s -> 128 + Sys.signal_to_int s
 
 let record ?show ?delay ?stop stdenv ~settings ~env ~output argv =
-  let* () = check_output stdenv output in
+  let* () = check_output output in
   let* svg, status =
     K7.run ~settings ~env ?show ?delay ?stop
       ~clock:(Eio.Stdenv.mono_clock stdenv)
@@ -34,12 +40,8 @@ let record ?show ?delay ?stop stdenv ~settings ~env ~output argv =
       ~cwd:(Eio.Stdenv.cwd stdenv) argv
     |> Result.map_error (Fmt.to_to_string Flags.pp_error)
   in
-  match
-    Eio.Path.(save ~create:(`Or_truncate 0o644) (Eio.Stdenv.fs stdenv / output))
-      svg
-  with
-  | () -> Ok status
-  | exception Eio.Io (err, _) -> Fmt.error "%s: %a" output Eio.Exn.pp_err err
+  let* () = save stdenv output svg in
+  Ok status
 
 let run ?show ?delay stdenv ~settings ~env ~output argv =
   Flags.interruptible (fun stop ->
