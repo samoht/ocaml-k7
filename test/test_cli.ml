@@ -682,6 +682,18 @@ let test_interrupt () =
     (contains ~sub:"CRAM_2"
        (In_channel.with_open_bin (path "cram.svg") In_channel.input_all))
 
+let test_dry_run_directory_output () =
+  with_files [ ("input.tape", 0o644, "Sleep 100ms\n") ] @@ fun env path ->
+  Unix.mkdir (path "occupied.svg") 0o755;
+  let status, error =
+    captured path @@ fun () ->
+    Play_cmd.run env ~dry_run:true ~print:false ~vhs:"vhs" ~settings:[] ~env:[]
+      ~outputs:[ path "occupied.svg" ]
+      ~setup:[] ~dir:None ~wait_timeout:None (path "input.tape")
+  in
+  Alcotest.(check int) "dry-run rejects a directory destination" 123 status;
+  Native_test.check_contains "names the destination" ~sub:"occupied.svg" error
+
 let suite =
   ( "cli",
     List.map
@@ -702,6 +714,7 @@ let suite =
          ("cram runs in a temporary directory", test_cram_dir);
          ("interrupted recordings", test_interrupt);
          ("command line", test_command);
+         ("dry-run rejects directory outputs", test_dry_run_directory_output);
        ]
       @ readiness ~native:true
       @ if Option.is_some oracle then readiness ~native:false else []) )
