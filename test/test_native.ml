@@ -1469,6 +1469,26 @@ let test_record_env_names () =
       | Ok () -> Alcotest.failf "%s: recorded" line)
     [ {|Env "A=B" "x"|}; {|Env "" "x"|} ]
 
+let test_record_env () =
+  with_dir @@ fun env cwd ->
+  let t =
+    tape
+      K7.
+        [
+          type' "echo \"$GREETING\"\n";
+          wait ~timeout:(Ms 10_000) (Screen "(?m)^bonjour$");
+        ]
+  in
+  match
+    K7.record ~engine:Native
+      ~env:[ ("GREETING", "bonjour") ]
+      ~clock:(Eio.Stdenv.mono_clock env)
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd t
+  with
+  | Ok () -> ()
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+
 let test_run_concurrent_terminals () =
   with_dir @@ fun env cwd ->
   script cwd "ttys.sh"
@@ -1549,6 +1569,7 @@ let suite =
          ( "run cancellation reaps resistant descendants",
            test_run_cancel_descendant );
          ("record refuses Env names", test_record_env_names);
+         ("record environment", test_record_env);
          ("concurrent runs keep their terminals", test_run_concurrent_terminals);
        ]
       @ known_differences

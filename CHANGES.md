@@ -19,6 +19,8 @@
   nothing typed, and returns the animated SVG image of its screens below
   its command line, timed as they arrived, with how the program exited.
   `?show` (`--show`) replaces the command line, or hides it.
+- `K7.run` and `K7.record` take `?env`, variables for the environment of
+  the program or the shell, which `--env` sets for each subcommand.
 - `K7.run` and `K7.record` take `?stop`, which ends
   a recording and keeps what it recorded; `k7 cram`, `k7 run` and
   `k7 tape` resolve it on SIGINT or SIGTERM, then exit 130 or 143.

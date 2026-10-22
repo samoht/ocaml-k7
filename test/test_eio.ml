@@ -428,8 +428,8 @@ let test_publish_environment () =
       "recording cannot silently publish" false
       (Array.mem "VHS_PUBLISH=true" effective);
     Alcotest.(check (list string))
-      "only the variables that change the recording are cleared"
-      [ "PATH=/bin"; "TERM=dumb"; "VHS_NO_SANDBOX=1" ]
+      "only the variables that change the recording are cleared, then env"
+      [ "GREETING=hi"; "PATH=/bin"; "TERM=xterm"; "VHS_NO_SANDBOX=1" ]
       (List.sort compare (Array.to_list effective))
   in
   let proc =
@@ -442,8 +442,16 @@ let test_publish_environment () =
           on_signal = (fun _ -> ());
         })
   in
-  match K7.record ~engine:Vhs ~clock:(clock ()) ~proc ~cwd (tape []) with
+  let env = [ ("GREETING", "hi"); ("TERM", "xterm") ] in
+  (match K7.record ~engine:Vhs ~env ~clock:(clock ()) ~proc ~cwd (tape []) with
   | Ok () -> ()
+  | Error e -> Alcotest.failf "%a" K7.pp_error e);
+  match
+    K7.record ~env:[ ("A=B", "x") ] ~clock:(clock ()) ~proc ~cwd (tape [])
+  with
+  | Error (Invalid msg) ->
+      expect "invalid name" {|env "A=B=x": a name with =|} msg
+  | Ok () -> Alcotest.fail "recorded"
   | Error e -> Alcotest.failf "%a" K7.pp_error e
 
 let suite =

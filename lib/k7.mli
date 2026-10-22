@@ -333,21 +333,26 @@ type engine =
 val record :
   ?engine:engine ->
   ?vhs:string ->
+  ?env:(string * string) list ->
   ?stop:unit Eio.Promise.t ->
   clock:_ Eio.Time.Mono.t ->
   proc:_ Eio.Process.mgr ->
   cwd:_ Eio.Path.t ->
   t ->
   (unit, error) result
-(** [record ~engine ~vhs ~stop ~clock ~proc ~cwd t] writes the outputs of [t]
-    with [engine], which defaults to {!constructor-Vhs} if [t] has an output or
-    a [Screenshot] that only {!constructor-Vhs} writes, and to
-    {!constructor-Native} otherwise, which needs no [vhs].
+(** [record ~engine ~vhs ~env ~stop ~clock ~proc ~cwd t] writes the outputs of
+    [t] with [engine], which defaults to {!constructor-Vhs} if [t] has an output
+    or a [Screenshot] that only {!constructor-Vhs} writes, and to
+    {!constructor-Native} otherwise, which needs no [vhs]. It is
+    [Error (Invalid _)], before it runs anything, if a name of [env] is empty or
+    holds [=], or a name or a value holds a NUL byte.
 
     The shell, or [vhs], gets the environment of [proc] without five variables:
     [VHS_PUBLISH], which would upload the recording; [rod], which configures the
     browser VHS drives; and [PS1], [PROMPT] and [PROMPT_COMMAND], which would
-    replace the prompt {!constructor-Prompt} waits for.
+    replace the prompt {!constructor-Prompt} waits for. The variables of [env]
+    (defaults to [[]]) follow, then the prompt VHS gives the shell and the [Env]
+    lines of [t].
 
     With {!constructor-Vhs}, [record] runs the executable [vhs] (defaults to
     ["vhs"]) as [vhs -q] in the directory [cwd], with the tape [t] on its
@@ -427,9 +432,9 @@ val run :
     where needed), and the program's output starts on the next line; an empty
     [show] shows no line. The first element of [argv] is the executable, looked
     up in the [PATH] the program gets unless it holds a slash, and relative to
-    [cwd] if it does. The program gets the environment {!record} gives the
-    shell, with [TERM=xterm-256color], then the variables of [env] (defaults to
-    [[]]).
+    [cwd] if it does. The program gets the environment of [proc] without the
+    five variables {!record} removes, with [TERM=xterm-256color], then the
+    variables of [env] (defaults to [[]]).
 
     A program that exits with another status than [0], or is killed, still gives
     its image: the status says how it exited. [run] returns once the program has

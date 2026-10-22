@@ -4,25 +4,10 @@
   ---------------------------------------------------------------------------*)
 
 let ( let* ) = Result.bind
-let has_all_quotes s = List.for_all (String.contains s) [ '"'; '\''; '`' ]
 
-let check_env (k, v) =
-  let binding = k ^ "=" ^ v in
-  if not (Cram.is_typeable k && Cram.is_typeable v) then
-    Fmt.error "--env %a: holds invalid UTF-8 or a control character" Quote.pp
-      binding
-  else if has_all_quotes k || has_all_quotes v then
-    Fmt.error "--env %a: holds all three quote characters" Quote.pp binding
-  else Ok ()
-
-let tape ~setup ?(settings = []) ?(env = []) ~output ?wait_timeout_s ~name src =
+let tape ~setup ?(settings = []) ~output ?wait_timeout_s ~name src =
   let* cram =
     Cram.parse src |> Result.map_error (fun e -> Fmt.str "%s: %s" name e)
-  in
-  let* () =
-    List.fold_left
-      (fun acc b -> Result.bind acc (fun () -> check_env b))
-      (Ok ()) env
   in
   match
     (Cram.is_empty cram, List.find_opt (Fun.negate Cram.is_typeable) setup)
@@ -37,8 +22,7 @@ let tape ~setup ?(settings = []) ?(env = []) ~output ?wait_timeout_s ~name src =
       in
       K7.tape
         ~settings:((K7.Shell Bash :: settings) @ Option.to_list timeout)
-        ~outputs:[ output ]
-        (Cram.actions ~env ~setup cram)
+        ~outputs:[ output ] (Cram.actions ~setup cram)
       |> Result.map_error (fun e -> Fmt.str "%a" Flags.pp_error e)
 
 let shown = Flags.shown
@@ -141,7 +125,7 @@ let record ?stop env ~print ~vhs ~setup ?dir ?settings ?env:vars ?wait_timeout_s
     ~output input =
   let* src = Flags.load env input in
   let tape ~setup ~output =
-    tape ~setup ?settings ?env:vars ~output ?wait_timeout_s ~name:input src
+    tape ~setup ?settings ~output ?wait_timeout_s ~name:input src
   in
   let* given = tape ~setup ~output in
   if print then Flags.print_tape env given
@@ -157,7 +141,7 @@ let record ?stop env ~print ~vhs ~setup ?dir ?settings ?env:vars ?wait_timeout_s
       | e -> e
     in
     in_dir env dir @@ fun cwd ->
-    K7.record ?stop ~vhs:run_vhs
+    K7.record ?stop ~vhs:run_vhs ?env:vars
       ~clock:(Eio.Stdenv.mono_clock env)
       ~proc:(Eio.Stdenv.process_mgr env)
       ~cwd tape
@@ -223,9 +207,6 @@ let man =
        command. In a native recording, a wait that times out names the command \
        whose prompt did not come back, and a shell that exits ends the \
        recording at once.";
-    `P
-      "Each $(b,--env) variable is set with an $(b,Env) line of the tape, \
-       before bash starts.";
     `P
       "On SIGINT or SIGTERM, $(cmd) types no more commands, writes what it \
        recorded so far, and exits 130 or 143.";

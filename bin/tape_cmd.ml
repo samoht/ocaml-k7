@@ -5,17 +5,6 @@
 
 let ( let* ) = Result.bind
 
-(* As VHS's [Env]: the shell inherits the recorder's environment. *)
-let set_env env =
-  List.fold_left
-    (fun acc (k, v) ->
-      let* () = acc in
-      match Unix.putenv k v with
-      | () -> Ok ()
-      | exception (Unix.Unix_error _ | Invalid_argument _) ->
-          Fmt.error "--env %a: not a variable to set" Quote.pp (k ^ "=" ^ v))
-    (Ok ()) env
-
 let record ?stop stdenv ~print ~vhs ~settings ~env ~outputs input =
   let* src = Flags.load stdenv input in
   let error = function
@@ -34,8 +23,7 @@ let record ?stop stdenv ~print ~vhs ~settings ~env ~outputs input =
   in
   if print then Flags.print_tape stdenv t
   else
-    let* () = set_env env in
-    K7.record ?stop ~vhs
+    K7.record ?stop ~vhs ~env
       ~clock:(Eio.Stdenv.mono_clock stdenv)
       ~proc:(Eio.Stdenv.process_mgr stdenv)
       ~cwd:(Eio.Stdenv.cwd stdenv) t
@@ -73,10 +61,6 @@ let man =
        or fish on a pseudo-terminal. Otherwise $(b,vhs), which needs \
        $(b,ttyd), $(b,ffmpeg) and a browser, records it. A tape cannot ask for \
        both an $(b,.svg) image and an output only $(b,vhs) writes.";
-    `P
-      "Each $(b,--env) variable is set in the environment of $(cmd), which the \
-       shell inherits, as an $(b,Env) line does; $(b,--print) leaves it out of \
-       the tape.";
     `S Manpage.s_examples;
     `Pre
       "$(cmd) demo.tape\n\

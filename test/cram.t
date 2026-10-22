@@ -154,10 +154,10 @@ A GIF needs vhs, and k7 says where to get it.
   k7: demo.t: executable not found: ./missing-vhs; a GIF or a video needs Charm's VHS, see https://github.com/charmbracelet/vhs#installation, and an .svg output does not
   [123]
 
-The terminal's size, font and theme are settings of the tape, and each
---env variable an Env line of its hidden setup.
+The terminal's size, font and theme are settings of the tape. The --env
+variables are in the environment of the shell, not in the tape.
 
-  $ k7 cram --print --cols 100 --rows 20 --font-size 16 --theme Dracula --env 'GREETING=bonjour à tous' --output demo.gif demo.t | head -n 8
+  $ k7 cram --print --cols 100 --rows 20 --font-size 16 --theme Dracula --env 'GREETING=bonjour à tous' --output demo.gif demo.t | head -n 7
   Output "demo.gif"
   Set Shell "bash"
   Set Columns 100
@@ -165,18 +165,15 @@ The terminal's size, font and theme are settings of the tape, and each
   Set FontSize 16
   Set Theme "Dracula"
   Hide
-  Env "GREETING" "bonjour à tous"
-  $ k7 cram --print --env 'A=B"C'"'"'D`' --output demo.gif demo.t
-  k7: --env "A=B\"C'D`": holds all three quote characters
-  [123]
   $ k7 cram --print --env NOVALUE --output demo.gif demo.t 2> /dev/null
   [124]
 
-A native recording has the columns asked for and the variables set.
+A native recording has the columns asked for and the variables set,
+whatever quotes they hold.
 
   $ printf '  $ echo "$GREETING"; printf "%%099d|\\n" 0\n' > env.t
-  $ k7 cram --cols 100 --env GREETING=bonjour --output env.txt env.t
-  $ grep -c '^bonjour$' env.txt
+  $ k7 cram --cols 100 --env GREETING='"bonjour'"'"'`' --output env.txt env.t
+  $ grep -c '^"bonjour'"'"'`$' env.txt
   3
   $ grep -c '^0*|$' env.txt
   3

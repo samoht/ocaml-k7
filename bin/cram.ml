@@ -92,14 +92,7 @@ let init mark =
       var;
     ]
 
-let string s =
-  let q =
-    Option.value ~default:'"'
-      (List.find_opt (fun q -> not (String.contains s q)) [ '"'; '\''; '`' ])
-  in
-  Fmt.str "%c%s%c" q s q
-
-let prepare ~env mark setup =
+let prepare mark setup =
   let line =
     List.map
       (fun s ->
@@ -110,14 +103,11 @@ let prepare ~env mark setup =
     @ [ Fmt.str {|eval "$%s"|} var; "clear" ]
   in
   K7.hidden
-    (List.map
-       (fun (k, v) -> Fmt.kstr K7.raw "Env %s %s" (string k) (string v))
-       env
-    @ [
-        Fmt.kstr K7.raw "Env %s `%s`" var (init mark);
-        K7.type' (String.concat "; " line ^ "\n");
-        ready mark;
-      ])
+    [
+      Fmt.kstr K7.raw "Env %s `%s`" var (init mark);
+      K7.type' (String.concat "; " line ^ "\n");
+      ready mark;
+    ]
 
 let typed mark lines =
   let text = String.concat "\n" lines ^ "\n" in
@@ -129,9 +119,9 @@ let typed mark lines =
        (String.split_on_char '\t' text))
   @ [ ready mark; K7.sleep (Ms 1000) ]
 
-let actions ?(env = []) ~setup t =
+let actions ~setup t =
   let mark = mark ~setup t in
-  prepare ~env mark setup :: List.concat_map (typed mark) t
+  prepare mark setup :: List.concat_map (typed mark) t
 
 let find sub s ~from =
   let n = String.length sub in

@@ -1073,14 +1073,28 @@ let io_message ~cwd = function
 let cleared = [ "VHS_PUBLISH"; "rod"; "PS1"; "PROMPT"; "PROMPT_COMMAND" ]
 let grace = 10.
 
-let environment proc =
+let environment ?(vars = []) proc =
   Eio.Process.environment proc
   |> Eio.Process.Env.override (List.map (fun v -> (v, None)) cleared)
+  |> Eio.Process.Env.override (List.map (fun (k, v) -> (k, Some v)) vars)
 
-let run_vhs ~vhs ~clock ~proc ~cwd ~cancelled ~sink tape =
+let check_env env =
+  let bad (k, v) =
+    match Tape_syntax.env_name_problem k with
+    | Some why -> Some why
+    | None when String.contains v '\000' -> Some "a NUL byte"
+    | None -> None
+  in
+  match
+    List.find_map (fun kv -> Option.map (fun why -> (kv, why)) (bad kv)) env
+  with
+  | None -> Ok ()
+  | Some ((k, v), why) -> err_invalid "env %a: %s" Quote.pp (k ^ "=" ^ v) why
+
+let run_vhs ~vhs ~vars ~clock ~proc ~cwd ~cancelled ~sink tape =
   Eio.Switch.run @@ fun sw ->
   let stdin, feed = Eio.Process.pipe ~sw proc in
-  let env = environment proc in
+  let env = environment ~vars proc in
   let child =
     Eio.Process.spawn ~sw proc ~env
       ~cwd:(cwd :> Eio.Fs.dir_ty Eio.Path.t)
@@ -1119,7 +1133,7 @@ module Tail = struct
     if n <= kept then Buffer.contents b else Buffer.sub b (n - kept) kept
 end
 
-let render_vhs ?stop ~vhs ~clock ~proc ~cwd t =
+let render_vhs ?stop ~vhs ~vars ~clock ~proc ~cwd t =
   let output = Buffer.create 256 in
   let sink = Eio.Resource.T (output, Eio.Flow.Pi.sink (module Tail)) in
   let tape = to_string t in
@@ -1129,7 +1143,7 @@ let render_vhs ?stop ~vhs ~clock ~proc ~cwd t =
   let supervise () =
     Eio.Cancel.protect @@ fun () ->
     Eio.Promise.resolve finish
-      (match run_vhs ~vhs ~clock ~proc ~cwd ~cancelled ~sink tape with
+      (match run_vhs ~vhs ~vars ~clock ~proc ~cwd ~cancelled ~sink tape with
       | status -> Ok status
       | exception (Eio.Io _ as e) -> Error e)
   in
@@ -1243,7 +1257,7 @@ let check_has_output t =
     Error (Invalid "no output: the tape names no file to write")
   else Ok ()
 
-let record_vhs ?stop ~vhs ~clock ~proc ~cwd t =
+let record_vhs ?stop ~vhs ~vars ~clock ~proc ~cwd t =
   let* () = check_has_output t in
   let* () = refuse ~by:"by vhs" ~other:"Native" [ "SVG" ] t in
   let* () =
@@ -1264,7 +1278,7 @@ let record_vhs ?stop ~vhs ~clock ~proc ~cwd t =
       (List.map (fun p -> (creates p, p)) (t.outputs @ raw_outputs t.actions)
       @ List.map (fun p -> (false, p)) (raw_screenshots t.actions))
   in
-  render_vhs ?stop ~vhs ~clock ~proc ~cwd t
+  render_vhs ?stop ~vhs ~vars ~clock ~proc ~cwd t
 
 (* The [n]th line of [to_string t] is the [k]th of its text there, and so
    in the source of [of_string]: an action's lines keep their text and order. *)
@@ -1348,7 +1362,7 @@ let save dir path contents =
   in
   go 0
 
-let record_native ?stop ~clock ~proc ~cwd t =
+let record_native ?stop ~vars ~clock ~proc ~cwd t =
   let* () = check_has_output t in
   let* () =
     refuse ~by:"natively" ~other:"Vhs" [ "GIF"; "MP4"; "WebM"; "frames" ] t
@@ -1377,7 +1391,8 @@ let record_native ?stop ~clock ~proc ~cwd t =
   let* { svg; text; stills } =
     Result.map_error
       (native_error ~verb:"recorded" ~tape:t)
-      (Native.play ?interrupt:stop ~clock ~env:(environment proc) ~cwd:dir tape)
+      (Native.play ?interrupt:stop ~clock ~env:(environment ~vars proc) ~cwd:dir
+         tape)
   in
   let save ?(create = false) contents path =
     match if create then mkdirs dir path with
@@ -1400,15 +1415,16 @@ let needs_vhs t =
 
 type engine = Native | Vhs
 
-let record ?engine ?(vhs = "vhs") ?stop ~clock ~proc ~cwd t =
+let record ?engine ?(vhs = "vhs") ?(env = []) ?stop ~clock ~proc ~cwd t =
+  let* () = check_env env in
   let engine =
     match engine with
     | Some e -> e
     | None -> if needs_vhs t then Vhs else Native
   in
   match engine with
-  | Vhs -> record_vhs ?stop ~vhs ~clock ~proc ~cwd t
-  | Native -> record_native ?stop ~clock ~proc ~cwd t
+  | Vhs -> record_vhs ?stop ~vhs ~vars:env ~clock ~proc ~cwd t
+  | Native -> record_native ?stop ~vars:env ~clock ~proc ~cwd t
 
 let check_times output =
   let rec go prev = function
@@ -1436,19 +1452,6 @@ let svg ?(settings = []) output =
   let* tape = terminal settings in
   let* () = check_times output in
   Ok (Native.replay tape (List.map (fun (Ms ms, s) -> (ms, s)) output))
-
-let check_env env =
-  let bad (k, v) =
-    match Tape_syntax.env_name_problem k with
-    | Some why -> Some why
-    | None when String.contains v '\000' -> Some "a NUL byte"
-    | None -> None
-  in
-  match
-    List.find_map (fun kv -> Option.map (fun why -> (kv, why)) (bad kv)) env
-  with
-  | None -> Ok ()
-  | Some ((k, v), why) -> err_invalid "env %a: %s" Quote.pp (k ^ "=" ^ v) why
 
 let is_c1 s i =
   s.[i] = '\xc2'

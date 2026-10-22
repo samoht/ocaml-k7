@@ -31,22 +31,19 @@ val command : t -> int -> string option
 (** [command t n] is the first line of command [n] of [t], counted from [1], if
     there is one. *)
 
-val actions :
-  ?env:(string * string) list -> setup:string list -> t -> K7.action list
-(** [actions ~env ~setup t] sets each variable of [env] (defaults to [[]]) in
-    the shell's environment with VHS's [Env], each name and value {!is_typeable}
-    and without all three quote characters, sources the shell scripts [setup] in
-    order, appends to bash's [PROMPT_COMMAND], after the hooks [setup] installs,
-    a command that sets [PS1] to the VHS prompt followed by a mark, and clears
-    the screen, all {!K7.hidden}; then it types each command of [t], a tab after
-    readline's quoted-insert ([Ctrl+V]), so that it does not complete, waits
-    until the line under the cursor ends with the mark, and pauses one second.
-    The mark is sixteen zero-width characters, U+200B and U+2060, spelling a
-    digest of [setup] and [t]. It does not show in a GIF or a video, so the
-    recording shows the VHS prompt, but it tells the prompt from a line the
-    command prints, even one that ends with [>] and a zero-width space or with
-    the prompt of another recording: each command's output is complete before
-    the next command is typed. A text output of VHS holds the mark after each
+val actions : setup:string list -> t -> K7.action list
+(** [actions ~setup t] sources the shell scripts [setup] in order, appends to
+    bash's [PROMPT_COMMAND], after the hooks [setup] installs, a command that
+    sets [PS1] to the VHS prompt followed by a mark, and clears the screen, all
+    {!K7.hidden}; then it types each command of [t], a tab after readline's
+    quoted-insert ([Ctrl+V]), so that it does not complete, waits until the line
+    under the cursor ends with the mark, and pauses one second. The mark is
+    sixteen zero-width characters, U+200B and U+2060, spelling a digest of
+    [setup] and [t]. It does not show in a GIF or a video, so the recording
+    shows the VHS prompt, but it tells the prompt from a line the command
+    prints, even one that ends with [>] and a zero-width space or with the
+    prompt of another recording: each command's output is complete before the
+    next command is typed. A text output of VHS holds the mark after each
     prompt. A hook that rewrites [PS1] runs before the appended command, so the
     prompt survives it; a command that replaces [PROMPT_COMMAND] makes the next
     wait time out. The appended command also sets [PS2] to bash's [> ] followed
