@@ -1640,6 +1640,19 @@ let test_cli_successful_dry_run_is_pure n =
        (Array.to_list (Sys.readdir (Filename.dirname (path name))))
     = before)
 
+let test_check_valid_is_pure n =
+  with_dir @@ fun env path ->
+  let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "unused")) in
+  let output = Fmt.str "absent-%d/nested/out.svg" n in
+  let t =
+    Result.get_ok
+      (K7.tape ~outputs:[ output ] K7.[ type' "touch played\n"; wait Prompt ])
+  in
+  (match K7.check ~env:[ ("TERM", "vt100") ] ~cwd t with
+  | Ok () -> ()
+  | Error e -> failf "%a" K7.pp_error e);
+  check (Eio.Path.read_dir cwd = [])
+
 let with_processes =
   [
     test_case "CLI dry-run and recording refuse the same preflight failures"
@@ -1654,6 +1667,8 @@ let with_processes =
       test_vhs_path;
     test_case "check and record agree on preflight errors without side effects"
       [ uint8 ] test_check_preflight_parity;
+    test_case "successful check creates no directory and runs no tape" [ uint8 ]
+      test_check_valid_is_pure;
     test_case "native output paths and positive frame-rate boundaries" [ uint8 ]
       test_native_paths;
     test_case "mixed outputs are refused before playing or writing" [ uint8 ]
