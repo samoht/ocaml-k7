@@ -1246,6 +1246,7 @@ let test_run_signal_disposition n =
 let test_run_exec_error n =
   with_dir @@ fun env path ->
   save env (path "not-executable") "#!/bin/sh\nexit 0\n";
+  Unix.chmod (path "not-executable") 0o644;
   let argv =
     List.nth
       [ [ "./not-executable" ]; [ "." ]; [ "/bin/echo"; "a\000b" ] ]
