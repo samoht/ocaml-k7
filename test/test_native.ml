@@ -1074,9 +1074,9 @@ let known_differences =
   |> List.map (fun (name, payload, vhs, image, text) ->
       (name, fun () -> check_payload ~vhs ?text payload image))
 
-let run ?vars env cwd argv =
+let run ?vars ?show env cwd argv =
   Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 60. @@ fun () ->
-  K7.run ~settings ?env:vars
+  K7.run ~settings ?env:vars ?show
     ~clock:(Eio.Stdenv.mono_clock env)
     ~proc:(Eio.Stdenv.process_mgr env)
     ~cwd argv
@@ -1248,6 +1248,34 @@ let test_run_rows () =
         (last (frames s));
       Alcotest.(check string) "size" (size (svg [])) (size s)
 
+let test_run_show () =
+  with_dir @@ fun env cwd ->
+  let image ?show argv =
+    match run ?show env cwd argv with
+    | Ok (s, _) -> last (frames s)
+    | Error e -> Alcotest.failf "%a" K7.pp_error e
+  in
+  Alcotest.(check string)
+    "show"
+    (screen [ "$ dune exec -- ./main.exe"; "hi" ])
+    (image ~show:"dune exec -- ./main.exe" [ "echo"; "hi" ]);
+  Alcotest.(check string)
+    "hidden" (screen [ "hi" ])
+    (image ~show:"" [ "echo"; "hi" ]);
+  Alcotest.(check string)
+    "quoted"
+    (screen
+       [
+         {|$ printf '%s|' '' 'it'\''s' $'a\nb' |} ^ "caf\xc3\xa9";
+         "|it's|a";
+         "b|caf\xc3\xa9|";
+       ])
+    (image [ "printf"; "%s|"; ""; "it's"; "a\nb"; "caf\xc3\xa9" ]);
+  match run ~show:"a\027[2Jb" env cwd [ "true" ] with
+  | Error (Invalid _) -> ()
+  | Error e -> Alcotest.failf "control: %a" K7.pp_error e
+  | Ok _ -> Alcotest.fail "control: ran"
+
 let test_run_signal () =
   check_run "killed"
     [ "sh"; "-c"; "echo bye; kill -TERM $$" ]
@@ -1331,6 +1359,7 @@ let suite =
          ("run a killed program", test_run_signal);
          ("run shows the command line", test_run_command_line);
          ("run keeps the rows", test_run_rows);
+         ("run shows another line", test_run_show);
          ("run cancelled", test_run_cancel);
        ]
       @ known_differences

@@ -18,10 +18,10 @@ let exit_code = function
   | `Exited n -> n
   | `Signaled s -> 128 + Sys.signal_to_int s
 
-let record stdenv ~settings ~env ~output argv =
+let record ?show stdenv ~settings ~env ~output argv =
   let* () = check_output output in
   let* svg, status =
-    K7.run ~settings ~env
+    K7.run ~settings ~env ?show
       ~clock:(Eio.Stdenv.mono_clock stdenv)
       ~proc:(Eio.Stdenv.process_mgr stdenv)
       ~cwd:(Eio.Stdenv.cwd stdenv) argv
@@ -34,8 +34,8 @@ let record stdenv ~settings ~env ~output argv =
   | () -> Ok status
   | exception Eio.Io (err, _) -> Fmt.error "%s: %a" output Eio.Exn.pp_err err
 
-let run stdenv ~settings ~env ~output argv =
-  match record stdenv ~settings ~env ~output argv with
+let run ?show stdenv ~settings ~env ~output argv =
+  match record ?show stdenv ~settings ~env ~output argv with
   | Ok status -> exit_code status
   | Error msg -> Flags.fail stdenv msg
 
@@ -45,6 +45,13 @@ let output =
   let doc = "Write the animated SVG image to $(docv), which ends with .svg." in
   Arg.(
     required & opt (some string) None & info [ "o"; "output" ] ~docv:"FILE" ~doc)
+
+let show =
+  let doc =
+    "Show $(docv) after the $(b,\\$) of the image's first line instead of \
+     $(i,COMMAND); an empty $(docv) shows no line."
+  in
+  Arg.(value & opt (some string) None & info [ "show" ] ~docv:"TEXT" ~doc)
 
 let command =
   let doc = "The program to record, then its arguments, after $(b,--)." in
@@ -58,8 +65,9 @@ let man =
        nothing typed, and writes what the terminal showed as an animated SVG \
        image, which plays in an HTML $(i,img) element. Each screen shows at \
        the time it arrived since the program started, and the last one holds \
-       for a second after the program exits. The image shows only the \
-       program's own output.";
+       for a second after the program exits. The first line of the image shows \
+       $(b,\\$) and $(i,COMMAND), each argument shell-quoted where needed, and \
+       the program's output starts on the next line.";
     `P
       "The program is looked up in $(b,PATH) unless its name holds a slash. It \
        gets the environment of $(tname), with $(b,TERM=xterm-256color), then \
@@ -89,9 +97,9 @@ let exits =
 
 let cmd =
   let doc = "record a program" in
-  let run settings env output argv =
-    Eio_main.run @@ fun stdenv -> run stdenv ~settings ~env ~output argv
+  let run settings env show output argv =
+    Eio_main.run @@ fun stdenv -> run ?show stdenv ~settings ~env ~output argv
   in
   Cmd.make
     (Cmd.info "run" ~doc ~man ~exits)
-    Term.(const run $ Flags.settings $ Flags.env $ output $ command)
+    Term.(const run $ Flags.settings $ Flags.env $ show $ output $ command)

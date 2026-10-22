@@ -1101,7 +1101,7 @@ let play ~clock ~env ~cwd t =
 
 let hold = 1000
 
-let run ~clock ~env ~vars ~cwd t argv =
+let run ~clock ~env ~vars ~cwd ~line t argv =
   let clock = (clock :> Eio.Time.Mono.ty Eio.Resource.t) in
   match
     let prog, args =
@@ -1116,6 +1116,8 @@ let run ~clock ~env ~vars ~cwd t argv =
     st.hidden <- false;
     st.cap <- None;
     st.started <- now st;
+    Screen.feed st.term line;
+    refresh st;
     record st;
     reader st (Bytes.create 65536);
     let end_ms = stamp st + hold in

@@ -1165,7 +1165,7 @@ let test_run_screen bytes =
   in
   let crlf = String.concat "\r\n" (String.split_on_char '\n' text) in
   match
-    ( K7.run ~settings
+    ( K7.run ~settings ~show:""
         ~clock:(Eio.Stdenv.mono_clock env)
         ~proc:(Eio.Stdenv.process_mgr env)
         ~cwd:Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "out"))

@@ -1336,13 +1336,65 @@ let check_env env =
   | None -> Ok ()
   | Some ((k, v), why) -> err_invalid "env %a: %s" Quote.pp (k ^ "=" ^ v) why
 
-let run ?(settings = []) ?(env = []) ~clock ~proc ~cwd argv =
+let is_c1 s i =
+  s.[i] = '\xc2'
+  && i + 1 < String.length s
+  && Char.code s.[i + 1] < 0xa0
+  && Char.code s.[i + 1] >= 0x80
+
+let ansi_c_quote s =
+  let b = Buffer.create (String.length s + 3) in
+  Buffer.add_string b "$'";
+  String.iteri
+    (fun i c ->
+      match c with
+      | '\'' | '\\' ->
+          Buffer.add_char b '\\';
+          Buffer.add_char b c
+      | '\n' -> Buffer.add_string b {|\n|}
+      | '\t' -> Buffer.add_string b {|\t|}
+      | c
+        when Char.code c < 0x20
+             || c = '\x7f' || is_c1 s i
+             || (i > 0 && is_c1 s (i - 1)) ->
+          Buffer.add_string b {|\x|};
+          Buffer.add_char b "0123456789ABCDEF".[Char.code c lsr 4];
+          Buffer.add_char b "0123456789ABCDEF".[Char.code c land 15]
+      | c -> Buffer.add_char b c)
+    s;
+  Buffer.add_char b '\'';
+  Buffer.contents b
+
+let shell_word s =
+  let safe c =
+    Char.Ascii.is_alphanum c
+    || String.contains "_@%+=:,./-" c
+    || Char.code c >= 0x80
+  in
+  if has_control s then ansi_c_quote s
+  else if s <> "" && String.for_all safe s then s
+  else "'" ^ String.concat {|'\''|} (String.split_on_char '\'' s) ^ "'"
+
+let command_line = function
+  | "" -> ""
+  | show -> "\027[38;2;90;86;224m$ \027[0m" ^ show ^ "\r\n"
+
+let run ?(settings = []) ?(env = []) ?show ~clock ~proc ~cwd argv =
   let* () = if argv = [] then Error (Invalid "no command to run") else Ok () in
   let* () = check_env env in
+  let show =
+    Option.value show ~default:(String.concat " " (List.map shell_word argv))
+  in
+  let* () =
+    if has_control show then
+      err_invalid "show %a: holds a control character" Quote.pp show
+    else Ok ()
+  in
   let* tape = terminal settings in
   let* dir =
     Option.to_result ~none:(Io "the directory is not a native path")
       (Eio.Path.native cwd)
   in
   Result.map_error native_error
-    (Native.run ~clock ~env:(environment proc) ~vars:env ~cwd:dir tape argv)
+    (Native.run ~clock ~env:(environment proc) ~vars:env ~cwd:dir
+       ~line:(command_line show) tape argv)

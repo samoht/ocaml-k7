@@ -14,8 +14,9 @@
   `vhs` for the other outputs. `--cols`, `--rows`, `--font-size`,
   `--theme` and `--env` set the terminal of each.
 - `K7.run` records a program on a pseudo-terminal, with no shell and
-  nothing typed, and returns the animated SVG image of its own screens,
-  timed as they arrived, with how the program exited.
+  nothing typed, and returns the animated SVG image of its screens below
+  its command line, timed as they arrived, with how the program exited.
+  `?show` (`--show`) replaces the command line, or hides it.
 - `K7.of_string` reads a tape in the `.tape` syntax, its settings as
   `K7.setting` values and `Hide`/`Show` as `K7.hidden`, and
   `K7.with_settings` and `K7.with_outputs` replace a tape's settings and
