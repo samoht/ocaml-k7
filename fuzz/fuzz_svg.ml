@@ -445,10 +445,59 @@ let theme =
       const {|{"name":"<>&\u0000","red":null,"extra":[1,{}]}|};
     ]
 
+(* xterm's Unicode 11 tables give these text-presentation symbols one cell,
+   and either variation selector zero. Fragmenting PTY output changes neither
+   their width nor the row on which a following character lands. *)
+let test_narrow_symbols n selector split_at =
+  let symbols = [| 0x2600; 0x263a; 0x2665; 0x2708; 0x2764 |] in
+  let b = Buffer.create 8 in
+  Buffer.add_utf_8_uchar b (Uchar.of_int symbols.(n mod Array.length symbols));
+  (match selector mod 3 with
+  | 1 -> Buffer.add_utf_8_uchar b (Uchar.of_int 0xfe0e)
+  | 2 -> Buffer.add_utf_8_uchar b (Uchar.of_int 0xfe0f)
+  | _ -> ());
+  let glyph = Buffer.contents b in
+  let prefix_len = cols - 1 - (n mod 3) in
+  let prefix = String.make prefix_len 'a' in
+  let output = prefix ^ glyph ^ "X" in
+  let cut = split_at mod (String.length output + 1) in
+  let chunks =
+    [
+      String.sub output 0 cut; String.sub output cut (String.length output - cut);
+    ]
+  in
+  let lines, cursor =
+    if prefix_len = cols - 1 then ([ prefix ^ glyph; "X" ], (1, 1))
+    else ([ output ], (0, prefix_len + 2))
+  in
+  let expected =
+    String.concat "\n"
+      (lines @ List.init (rows - List.length lines) (fun _ -> ""))
+  in
+  let term = Vte.create ~width_method:`Wcwidth ~rows ~cols () in
+  List.iter (Vte.feed_string term) chunks;
+  let image =
+    match
+      Vhs.svg ~settings (List.mapi (fun i s -> (Vhs.Ms (20 * i), s)) chunks)
+    with
+    | Error e -> failf "%a" Vhs.pp_error e
+    | Ok svg -> (
+        match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows svg with
+        | Error e -> failf "%s" e
+        | Ok frames -> List.nth frames (List.length frames - 1))
+  in
+  check_eq
+    ~pp:Fmt.(Dump.pair string string)
+    (expected, expected)
+    (Matrix_grid.to_text (Vte.grid term), image);
+  check_eq ~pp:Fmt.(Dump.pair int int) cursor (Vte.cursor_pos term)
+
 let suite =
   ( "svg",
     [
       test_case "frames" [ list chunk ] test_frames;
+      test_case "text symbols keep xterm cell widths across PTY splits"
+        [ uint8; uint8; uint8 ] test_narrow_symbols;
       test_case "positive SVG frame rates are not pixel sizes"
         [
           choose
