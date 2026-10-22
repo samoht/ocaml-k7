@@ -476,6 +476,31 @@ let test_of_string () =
     (Result.map K7.to_string
        (read "Set Shell \"tcsh\"\nOutput a.gif\nType x\n"))
 
+(* A tape that names no output still reads, so that [with_outputs], as
+   [k7 tape -o] does, can give it one; the printed form of a tape with an
+   [.svg] output is such a tape. An [Output] line after an [Env] line, which
+   VHS reads, is an output too. *)
+let test_of_string_outputs () =
+  let pp_error = Fmt.to_to_string K7.pp_error in
+  let read ?(outputs = [ "a.txt" ]) src =
+    Result.bind (K7.of_string src) (K7.with_outputs outputs)
+    |> Result.map K7.to_string |> Result.map_error pp_error
+  in
+  Alcotest.(check (result string string))
+    "no Output line" (Ok "Output \"a.txt\"\nType \"hi\"\nSleep 1s\n")
+    (read "Type \"hi\"\nSleep 1s\n");
+  (match K7.tape ~outputs:[ "a.svg" ] K7.[ type' "hi"; sleep (Ms 1000) ] with
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+  | Ok t -> (
+      match read ~outputs:[ "a.svg" ] (K7.to_string t) with
+      | Ok _ -> ()
+      | Error e -> Alcotest.failf "printed SVG tape: %s" e));
+  match
+    K7.of_string "Env FOO \"bar\"\nOutput a.txt\nType \"hi\"\nSleep 1s\n"
+  with
+  | Ok _ -> ()
+  | Error e -> Alcotest.failf "Output after Env: %a" K7.pp_error e
+
 let suite =
   ( "k7",
     List.map
@@ -500,4 +525,5 @@ let suite =
         ("keys", test_keys);
         ("waits", test_waits);
         ("of_string", test_of_string);
+        ("of_string without outputs", test_of_string_outputs);
       ] )
