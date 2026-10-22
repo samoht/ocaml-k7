@@ -240,6 +240,10 @@ after `exit 3`, ends a native recording at once, with its status.
   (N to N): Operation not permitted` as it starts a command. The command
   still runs, but the line shows on the screen and can make a wait on the
   screen fail. It is rare, and its cause is not known yet.
+- Emoji take the cells xterm.js, which VHS uses, gives them: each regional
+  indicator of a flag takes a cell, a family joined with U+200D shows as
+  its separate emoji, and an emoji made wide by U+FE0F can overlap the cell
+  after it.
 - `Vhs.render` reports a wait that times out as `Vhs.Failed`, with VHS's
   message in its output, where `Vhs.record` returns `Vhs.Timeout`.
 - A JSON theme is read with [jsont](https://erratique.ch/software/jsont),
