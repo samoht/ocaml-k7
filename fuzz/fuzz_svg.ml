@@ -328,10 +328,22 @@ let test_scroll_region_boundaries n =
   check_eq ~pp:pp_string expected (Matrix_grid.to_text (Vte.grid term));
   check_output_rows output lines
 
+(* Unlike a tape, direct SVG settings have not been validated yet. *)
+let test_setting_errors value =
+  List.iter
+    (fun setting ->
+      match Vhs.svg ~settings:[ setting ] [ (Ms 0, "hello") ] with
+      | Ok _ | Error (Vhs.Invalid _ | Unsupported _) -> ()
+      | Error e -> failf "%a" Vhs.pp_error e)
+    Vhs.[ Font_family value; Theme value ]
+
 let suite =
   ( "svg",
     [
       test_case "frames" [ list chunk ] test_frames;
+      test_case "direct SVG settings return results"
+        [ choose [ bytes; const "Mono\nSpace"; const "\"'`"; const "{\n}" ] ]
+        test_setting_errors;
       test_case "scroll regions preserve header and footer" [ uint8 ]
         test_scroll_region_boundaries;
       test_case "Unicode Prepend survives delivery boundaries" [ uint8 ]
