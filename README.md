@@ -191,8 +191,9 @@ Wait+Line /\x{200B}\x{200B}\x{200B}\x{2060}\x{2060}\x{200B}\x{200B}\x{200B}\x{20
 Sleep 1000ms
 ```
 
-An output ending in `.svg` is recorded by `vhs-cram` itself, with
-`Vhs.record`, and the others by `vhs`:
+An output ending in `.svg`, `.txt`, `.ascii` or `.test` is recorded by
+`vhs-cram` itself, with `Vhs.record` and no browser, and the others by
+`vhs`. Extensions are lower case, as VHS reads them:
 
 ```
 $ vhs-cram --output hello.svg hello.t

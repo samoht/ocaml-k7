@@ -178,10 +178,14 @@ let output_problem path =
     Some "starts with -, which ffmpeg reads as an option"
   else if String.ends_with ~suffix:"/" path then None
   else
+    let known = "not .gif, .mp4, .webm, .txt, .ascii, .test, .png or .svg" in
     match Tape_syntax.extension path with
     | "" -> Some Tape_syntax.no_extension
     | e when List.mem e extensions -> None
-    | _ -> Some "not .gif, .mp4, .webm, .txt, .ascii, .test, .png or .svg"
+    (* VHS reads an extension as it is, and so does this module. *)
+    | e when List.mem (String.lowercase_ascii e) extensions ->
+        Some (known ^ "; extensions are lower case")
+    | _ -> Some known
 
 let check_output path =
   Option.fold ~none:(Ok ())

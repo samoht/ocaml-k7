@@ -130,6 +130,9 @@ let render_error ~setup ~wait ~name ~tape src e =
         longer
   | None, _, _ -> Fmt.str "%s: %a" name Vhs.pp_error e
 
+(* The outputs [Vhs.record] writes, with no browser. *)
+let native = [ ".svg"; ".txt"; ".ascii"; ".test" ]
+
 let record env ~print ~vhs ~setup ?wait_timeout_s ~output input =
   let* src =
     match Eio.Path.(load (Eio.Stdenv.fs env / input)) with
@@ -147,7 +150,7 @@ let record env ~print ~vhs ~setup ?wait_timeout_s ~output input =
     let clock = Eio.Stdenv.mono_clock env
     and proc = Eio.Stdenv.process_mgr env
     and cwd = Eio.Stdenv.cwd env in
-    (if Filename.extension output = ".svg" then
+    (if List.mem (Filename.extension output) native then
        Vhs.record ~clock ~proc ~cwd tape
      else Vhs.render ~vhs ~clock ~proc ~cwd tape)
     |> Result.map_error
@@ -182,9 +185,10 @@ let seconds s =
 
 let output =
   let doc =
-    "Write the recording to $(docv), in the format of its extension: an \
-     animated SVG image for $(b,.svg), which $(tname) records itself, and what \
-     VHS writes for the others."
+    "Write the recording to $(docv), in the format of its extension, in lower \
+     case: an animated SVG image for $(b,.svg), and the text VHS writes for \
+     $(b,.txt), $(b,.ascii) and $(b,.test), which $(tname) records itself, and \
+     what VHS writes for the others."
   in
   Arg.(
     required & opt (some string) None & info [ "o"; "output" ] ~docv:"FILE" ~doc)
@@ -228,10 +232,11 @@ let man =
        records the session. Expected output and exit codes are ignored; other \
        settings are the VHS defaults.";
     `P
-      "An $(b,.svg) output is recorded without $(b,vhs): $(tname) runs bash on \
-       a pseudo-terminal itself and draws its screens as an animated SVG \
-       image, which plays in an HTML $(i,img) element. The other outputs are \
-       recorded by $(b,vhs), which needs $(b,ttyd), $(b,ffmpeg) and a browser.";
+      "An $(b,.svg) output and the text outputs are recorded without $(b,vhs): \
+       $(tname) runs bash on a pseudo-terminal itself and draws its screens as \
+       an animated SVG image, which plays in an HTML $(i,img) element, or \
+       writes their text as VHS does. The other outputs are recorded by \
+       $(b,vhs), which needs $(b,ttyd), $(b,ffmpeg) and a browser.";
     `P
       "Before the first command, and after the setup scripts, $(tname) makes \
        the last command of $(b,PROMPT_COMMAND) set $(b,PS1) to the VHS prompt \
