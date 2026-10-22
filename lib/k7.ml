@@ -1398,7 +1398,7 @@ let record_native ?stop ~vars ~clock ~proc ~cwd t =
   let* { svg; text; stills } =
     Result.map_error
       (native_error ~verb:"recorded" ~tape:t)
-      (Native.play ?interrupt:stop ~clock ~env:(environment ~vars proc) ~cwd:dir
+      (Native.play ?interrupt:stop ~clock ~env:(environment proc) ~vars ~cwd:dir
          tape)
   in
   let save ?(create = false) contents path =

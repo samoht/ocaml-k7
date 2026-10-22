@@ -1118,11 +1118,11 @@ let start ~env ~vars ~cwd t ~requires prog args =
   | exception Unix.Unix_error (e, f, _) ->
       Fmt.kstr (fun msg -> stop (Io msg)) "%s: %s" f (Unix.error_message e)
 
-let spawn ~env ~cwd t =
+let spawn ~env ~vars ~cwd t =
   let prog = t.config.shell in
-  let vars, args = shell prog in
+  let prompt, args = shell prog in
   start ~env
-    ~vars:(vars @ [ term ] @ t.env)
+    ~vars:((term :: vars) @ prompt @ t.env)
     ~cwd t ~requires:t.requires prog args
 
 (* The prompt arrives before the first action, as in VHS. *)
@@ -1193,10 +1193,10 @@ let until interrupt f =
   | None -> f ()
   | Some p -> Eio.Fiber.first f (fun () -> Eio.Promise.await p)
 
-let play ?interrupt ~clock ~env ~cwd t =
+let play ?interrupt ~clock ~env ~vars ~cwd t =
   let clock = (clock :> Eio.Time.Mono.ty Eio.Resource.t) in
   match
-    with_terminal ~clock t (spawn ~env ~cwd t) @@ fun st ->
+    with_terminal ~clock t (spawn ~env ~vars ~cwd t) @@ fun st ->
     Eio.Fiber.first
       (fun () ->
         reader st (Bytes.create 65536);

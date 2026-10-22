@@ -348,12 +348,18 @@ val record :
     [Error (Invalid _)], before it runs anything, if a name of [env] is empty or
     holds [=], or a name or a value holds a NUL byte.
 
-    The shell, or [vhs], gets the environment of [proc] without five variables:
-    [VHS_PUBLISH], which would upload the recording; [rod], which configures the
-    browser VHS drives; and [PS1], [PROMPT] and [PROMPT_COMMAND], which would
-    replace the prompt {!constructor-Prompt} waits for. The variables of [env]
-    (defaults to [[]]) follow, then the prompt VHS gives the shell and the [Env]
-    lines of [t].
+    The environment of the shell is, in this order, each variable replacing one
+    of the same name before it:
+    - the environment of [proc] without five variables: [VHS_PUBLISH], which
+      would upload the recording; [rod], which configures the browser VHS
+      drives; and [PS1], [PROMPT] and [PROMPT_COMMAND], which would replace the
+      prompt {!constructor-Prompt} waits for;
+    - [TERM=xterm-256color], as ttyd sets it under [vhs];
+    - the variables of [env] (defaults to [[]]);
+    - the prompt VHS gives the shell and the [Env] lines of [t].
+
+    With {!constructor-Vhs}, [vhs] gets the first and the third, and gives the
+    shell the others itself, so ttyd's [TERM] replaces one of [env].
 
     With {!constructor-Vhs}, [record] runs the executable [vhs] (defaults to
     ["vhs"]) as [vhs -q] in the directory [cwd], with the tape [t] on its
@@ -450,9 +456,8 @@ val run :
     [Ms 500]), as if typed, and the program's output shows that much later. The
     first element of [argv] is the executable, looked up in the [PATH] the
     program gets unless it holds a slash, and relative to [cwd] if it does. The
-    program gets the environment of [proc] without the five variables {!record}
-    removes, with [TERM=xterm-256color], then the variables of [env] (defaults
-    to [[]]).
+    program gets the environment {!record} gives a shell up to the variables of
+    [env] (defaults to [[]]), without the prompt and the [Env] lines.
 
     A program that exits with another status than [0], or is killed, still gives
     its image: the status says how it exited. [run] returns once the program has

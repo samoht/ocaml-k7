@@ -67,18 +67,20 @@ val play :
   ?interrupt:unit Eio.Promise.t ->
   clock:_ Eio.Time.Mono.t ->
   env:Eio.Process.Env.t ->
+  vars:(string * string) list ->
   cwd:string ->
   t ->
   (recording, error) result
-(** [play ~interrupt ~clock ~env ~cwd t] runs [t] in its shell in the directory
-    [cwd] and is what it recorded, until the last action or until [interrupt]
-    resolves. The text of {!text_output} is in VHS's format: the first lines of
-    the buffer, as many as the screen has rows, after each command that runs
-    while recording, from the first action or from the [Output] line that names
-    it, each screen followed by a line of 80 U+2500 characters. A [Screenshot]
-    of [shot.svg] is a still SVG image of the next frame it records, without the
-    cursor blinking. The shell gets [env] with the prompt VHS gives it,
-    [TERM=xterm-256color] and the [Env] lines of [t]. *)
+(** [play ~interrupt ~clock ~env ~vars ~cwd t] runs [t] in its shell in the
+    directory [cwd] and is what it recorded, until the last action or until
+    [interrupt] resolves. The text of {!text_output} is in VHS's format: the
+    first lines of the buffer, as many as the screen has rows, after each
+    command that runs while recording, from the first action or from the
+    [Output] line that names it, each screen followed by a line of 80 U+2500
+    characters. A [Screenshot] of [shot.svg] is a still SVG image of the next
+    frame it records, without the cursor blinking. The shell gets [env] with
+    [TERM=xterm-256color], then [vars], the prompt VHS gives it and the [Env]
+    lines of [t]. *)
 
 val replay : t -> (int * string) list -> string
 (** [replay t output] is the SVG image of a terminal with the settings of [t]
