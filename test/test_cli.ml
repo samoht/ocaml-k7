@@ -720,6 +720,18 @@ let test_output_option_replaces_late_output () =
     "the replaced Output line is not written" false
     (Sys.file_exists (path "late.txt"))
 
+(* k7 play and K7.record create the missing directories of an output, as VHS
+   does; k7 rec takes the same -o. *)
+let test_rec_creates_output_directory () =
+  with_files [ ("err", 0o644, "") ] @@ fun env path ->
+  let output = path "new/dir/echo.svg" in
+  let code, error =
+    captured path @@ fun () ->
+    Rec_cmd.run env ~settings:[] ~env:[] ~output [ "/bin/echo"; "hi" ]
+  in
+  Alcotest.(check (pair int string)) "recorded" (0, "") (code, error);
+  Alcotest.(check bool) "image written" true (Sys.file_exists output)
+
 let suite =
   ( "cli",
     List.map
@@ -743,6 +755,7 @@ let suite =
          ("dry-run rejects directory outputs", test_dry_run_directory_output);
          ( "-o replaces a late Output line",
            test_output_option_replaces_late_output );
+         ("rec creates the output directory", test_rec_creates_output_directory);
        ]
       @ readiness ~native:true
       @ if Option.is_some oracle then readiness ~native:false else []) )
