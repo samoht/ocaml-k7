@@ -1050,9 +1050,9 @@ let bounds =
   ]
 
 (* Properties of the tapes [tape] makes. *)
-let tapes =
+(* The library's UTF-8 readers against the stdlib's decoding. *)
+let decoding =
   [
-    test_case "tape is total" [ bytes; bytes; int ] test_total;
     test_case "control characters as the stdlib decodes them"
       [ bytes; choose [ const ""; const "\t\n"; const "\t\r" ] ]
       test_control_decoding;
@@ -1065,6 +1065,11 @@ let tapes =
           ];
       ]
       test_trim_end_decoding;
+  ]
+
+let tapes =
+  [
+    test_case "tape is total" [ bytes; bytes; int ] test_total;
     test_case "JSON themes"
       [
         choose
@@ -1106,4 +1111,4 @@ let tapes =
 let suite =
   ( "vhs",
     (if Option.is_some oracle then with_vhs else [])
-    @ with_processes @ bounds @ tapes )
+    @ with_processes @ bounds @ decoding @ tapes )

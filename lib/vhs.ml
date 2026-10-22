@@ -87,6 +87,7 @@ type t = {
 (* Checking *)
 
 let ( let* ) = Result.bind
+let err_unsupported fmt = Fmt.kstr (fun s -> Error (Unsupported s)) fmt
 
 let rec iter_result f = function
   | [] -> Ok ()
@@ -770,8 +771,7 @@ let utf_8 s =
 let printable s =
   let n = String.length s in
   let b = Buffer.create n in
-  (* [c1 i] is the C1 control encoded at [i], as its ESC final byte, and the
-     index after it. *)
+  (* The C1 control at [i], as its ESC final byte, and the index after it. *)
   let c1 i =
     let d = String.get_utf_8_uchar s i in
     match Uchar.to_int (Uchar.utf_decode_uchar d) with
@@ -974,10 +974,8 @@ let refuse ~by ~other kinds t =
         | "WebM" -> "a WebM video"
         | k -> "a " ^ k
       in
-      Error
-        (Unsupported
-           (Fmt.str "not recorded %s: Output %S: %s, which Vhs.%s records" by p
-              what other))
+      err_unsupported "not recorded %s: Output %S: %s, which Vhs.%s records" by
+        p what other
 
 let render ?(vhs = "vhs") ~clock ~proc ~cwd t =
   let* () = refuse ~by:"by vhs" ~other:"record" [ "SVG" ] t in
