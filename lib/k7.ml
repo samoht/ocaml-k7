@@ -1204,7 +1204,11 @@ let refuse ~by ~other kinds t =
 let in_dir dir path =
   if Filename.is_relative path then Filename.concat dir path else path
 
-let dir_problem ~create dir path =
+(* VHS creates the directories of its outputs, but not those of PNG frames
+   or screenshots; PNG frames are written in a directory. *)
+let dir_problem dir (dest, path) =
+  let frames = dest = `Output && kind path = "frames" in
+  let create = dest = `Output && not frames in
   let file = in_dir dir path in
   let shown d =
     let k = String.length file - String.length path in
@@ -1218,23 +1222,25 @@ let dir_problem ~create dir path =
   in
   let parent = Filename.dirname file in
   let d = if create then nearest parent else parent in
-  match Unix.stat d with
-  | { st_kind = S_DIR; _ } -> (
-      match Unix.access d [ W_OK; X_OK ] with
-      | () -> None
+  match Unix.stat file with
+  | { st_kind = S_DIR; _ } when not frames ->
+      Fmt.kstr Option.some "%s: is a directory" path
+  | _ | (exception Unix.Unix_error _) -> (
+      match Unix.stat d with
+      | { st_kind = S_DIR; _ } -> (
+          match Unix.access d [ W_OK; X_OK ] with
+          | () -> None
+          | exception Unix.Unix_error _ ->
+              Fmt.kstr Option.some "%s: cannot write in %s" path (shown d))
+      | _ -> Fmt.kstr Option.some "%s: %s is not a directory" path (shown d)
       | exception Unix.Unix_error _ ->
-          Fmt.kstr Option.some "%s: cannot write in %s" path (shown d))
-  | _ -> Fmt.kstr Option.some "%s: %s is not a directory" path (shown d)
-  | exception Unix.Unix_error _ ->
-      Fmt.kstr Option.some "%s: no directory %s" path (shown d)
+          Fmt.kstr Option.some "%s: no directory %s" path (shown d))
 
 let check_dirs cwd paths =
   match Eio.Path.native cwd with
   | None | (exception Failure _) -> Ok ()
   | Some dir -> (
-      match
-        List.find_map (fun (create, p) -> dir_problem ~create dir p) paths
-      with
+      match List.find_map (dir_problem dir) paths with
       | None -> Ok ()
       | Some msg -> Error (Io msg))
 
@@ -1247,9 +1253,6 @@ let mkdirs dir path =
   in
   go (Filename.dirname file)
 
-(* VHS creates the directories of its outputs, but not those of PNG frames
-   or screenshots. *)
-let creates path = kind path <> "frames"
 let all_outputs t = t.outputs @ raw_outputs t.actions
 
 let check_has_output t =
@@ -1275,8 +1278,8 @@ let prepare_vhs ~cwd t =
   in
   let* () =
     check_dirs cwd
-      (List.map (fun p -> (creates p, p)) (t.outputs @ raw_outputs t.actions)
-      @ List.map (fun p -> (false, p)) (raw_screenshots t.actions))
+      (List.map (fun p -> (`Output, p)) (t.outputs @ raw_outputs t.actions)
+      @ List.map (fun p -> (`Screenshot, p)) (raw_screenshots t.actions))
   in
   Ok ()
 
@@ -1385,8 +1388,8 @@ let prepare_native ~cwd t =
   and texts = Option.to_list (Native.text_output tape) in
   let* () =
     check_dirs cwd
-      (List.map (fun p -> (true, p)) (svgs @ texts)
-      @ List.map (fun p -> (false, p)) (Native.stills tape))
+      (List.map (fun p -> (`Output, p)) (svgs @ texts)
+      @ List.map (fun p -> (`Screenshot, p)) (Native.stills tape))
   in
   Ok (dir, tape, svgs, texts)
 

@@ -311,7 +311,8 @@ val pp : t Fmt.t
     anywhere else an absolute or [..] path leads. It creates the missing
     directories of an output, as VHS does, but not those of PNG frames or of a
     screenshot. Before it plays anything, it reports as {!constructor-Io} an
-    output whose directory it cannot write in or create.
+    output or a screenshot that is a directory, but PNG frames, and an output
+    whose directory it cannot write in or create.
 
     {!svg} draws the image the {!constructor-Native} engine would from output
     given with its times, such as bytes a test captured, with no tape, no shell
