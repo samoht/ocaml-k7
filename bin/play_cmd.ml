@@ -21,12 +21,12 @@ let cram_only ~setup ~dir ~wait_timeout =
       (Option.is_some wait_timeout, "--wait-timeout");
     ]
 
-let run stdenv ~print ~vhs ~settings ~env ~outputs ~setup ~dir ~wait_timeout
-    input =
+let run stdenv ~dry_run ~print ~vhs ~settings ~env ~outputs ~setup ~dir
+    ~wait_timeout input =
   match kind input with
   | Error msg -> Flags.fail stdenv msg
   | Ok Cram ->
-      Play_cram.run stdenv ~print ~vhs ~setup ?dir ~settings ~env
+      Play_cram.run stdenv ~dry_run ~print ~vhs ~setup ?dir ~settings ~env
         ?wait_timeout_s:wait_timeout ~outputs input
   | Ok Tape -> (
       match cram_only ~setup ~dir ~wait_timeout with
@@ -34,7 +34,9 @@ let run stdenv ~print ~vhs ~settings ~env ~outputs ~setup ~dir ~wait_timeout
           Flags.fail stdenv
             (Fmt.str "%s: %s applies to a cram test (.t), not to a tape" input
                flag)
-      | None -> Play_tape.run stdenv ~print ~vhs ~settings ~env ~outputs input)
+      | None ->
+          Play_tape.run stdenv ~dry_run ~print ~vhs ~settings ~env ~outputs
+            input)
 
 open Cmdliner
 
@@ -46,6 +48,14 @@ let outputs =
      $(b,.test), and $(b,vhs) records the others."
   in
   Arg.(value & opt_all string [] & info [ "o"; "output" ] ~docv:"FILE" ~doc)
+
+let dry_run =
+  let doc =
+    "Check $(i,FILE), the options and the outputs as a recording would, \
+     without recording or printing anything, and without starting a shell or \
+     $(b,vhs)."
+  in
+  Arg.(value & flag & info [ "dry-run" ] ~doc)
 
 let setup =
   let doc =
@@ -83,6 +93,10 @@ let man =
        does. Otherwise $(b,vhs), which needs $(b,ttyd), $(b,ffmpeg) and a \
        browser, records it. A file cannot ask for both an $(b,.svg) image and \
        an output only $(b,vhs) writes.";
+    `P
+      "$(b,--dry-run) checks $(i,FILE) as $(b,vhs validate) does, and also \
+       that the chosen recorder writes the outputs, with the other options \
+       applied, in directories it can write in; it exits 0 when they pass.";
     `P
       "On SIGINT or SIGTERM, $(cmd) plays no more actions, writes what it \
        recorded so far, and exits 130 or 143.";
@@ -127,13 +141,13 @@ let man =
 
 let cmd =
   let doc = "play a tape or a cram test and record it" in
-  let run print vhs settings env outputs setup dir wait_timeout input =
+  let run dry_run print vhs settings env outputs setup dir wait_timeout input =
     Eio_main.run @@ fun stdenv ->
-    run stdenv ~print ~vhs ~settings ~env ~outputs ~setup ~dir ~wait_timeout
-      input
+    run stdenv ~dry_run ~print ~vhs ~settings ~env ~outputs ~setup ~dir
+      ~wait_timeout input
   in
   Cmd.make
     (Cmd.info "play" ~doc ~man ~exits:Flags.exits)
     Term.(
-      const run $ Flags.print $ Flags.vhs $ Flags.settings $ Flags.env $ outputs
-      $ setup $ dir $ Flags.wait_timeout $ input)
+      const run $ dry_run $ Flags.print $ Flags.vhs $ Flags.settings $ Flags.env
+      $ outputs $ setup $ dir $ Flags.wait_timeout $ input)

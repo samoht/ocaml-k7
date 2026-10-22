@@ -23,6 +23,7 @@ val tape :
 
 val run :
   Eio_unix.Stdenv.base ->
+  dry_run:bool ->
   print:bool ->
   vhs:string ->
   setup:string list ->
@@ -33,13 +34,15 @@ val run :
   outputs:string list ->
   string ->
   int
-(** [run stdenv ~print ~vhs ~setup ~dir ~settings ~env ~wait_timeout_s ~outputs
-     input] records the cram test in the file [input] with {!K7.record}, which
-    runs the executable [vhs] only for the outputs [vhs] writes, or prints its
-    tape on standard output if [print] is [true], with the {!tape} of [setup],
-    [settings], [wait_timeout_s] and [outputs], and the variables [env]. The
-    commands run in [dir], or in a new temporary directory that [run] removes
-    afterwards; relative paths of [setup], [outputs] and [vhs] are read from the
-    current directory. It is the exit code: [0] on success, also when the reader
-    of the printed tape closes the pipe early, and [123] after printing an error
-    on standard error, if standard error can be written. *)
+(** [run stdenv ~dry_run ~print ~vhs ~setup ~dir ~settings ~env ~wait_timeout_s
+     ~outputs input] records the cram test in the file [input] with
+    {!K7.record}, which runs the executable [vhs] only for the outputs [vhs]
+    writes, or prints its tape on standard output if [print] is [true], or only
+    {!K7.check}s it, in [dir] or the current directory, if [dry_run] is [true],
+    with the {!tape} of [setup], [settings], [wait_timeout_s] and [outputs], and
+    the variables [env]. The commands run in [dir], or in a new temporary
+    directory that [run] removes afterwards; relative paths of [setup],
+    [outputs] and [vhs] are read from the current directory. It is the exit
+    code: [0] on success, also when the reader of the printed tape closes the
+    pipe early, and [123] after printing an error on standard error, if standard
+    error can be written. *)

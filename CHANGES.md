@@ -27,6 +27,8 @@
 - `K7.run` and `K7.record` take `?stop`, which ends a recording and keeps
   what it recorded; `k7 play` and `k7 rec` resolve it on SIGINT or
   SIGTERM, then exit 130 or 143.
+- `k7 play --dry-run` checks a tape or a cram test, with the options and
+  outputs given, without recording it.
 - `k7 play` runs the commands of a cram test in a new empty temporary
   directory, as dune does, or in the directory of `--dir`.
 - `K7.of_string` reads a tape in the `.tape` syntax, its settings as

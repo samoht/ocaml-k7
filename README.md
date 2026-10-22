@@ -34,6 +34,8 @@ $ k7 play --output hello.svg hello.t
 ```
 
 A tape is in VHS's `.tape` syntax, and `-o` replaces its `Output` lines.
+`--dry-run` checks a tape or a cram test, with the options, as a
+recording would, without recording it.
 
 ```sh
 $ printf 'Output hello.svg\nType "echo hello"\nEnter\nSleep 1s\n' > hello.tape

@@ -253,3 +253,33 @@ settings and outputs.
   $ k7 play bad.tape
   k7: bad.tape: line 2: "Type \"x": unterminated string
   [123]
+
+k7 play --dry-run checks a tape or a cram test, its options and its
+outputs as a recording would, without recording anything.
+
+  $ printf 'Output dry.svg\nType "touch played"\nEnter\n' > dry.tape
+  $ k7 play --dry-run dry.tape
+  $ k7 play --dry-run --dir . dry.tape
+  k7: dry.tape: --dir applies to a cram test (.t), not to a tape
+  [123]
+  $ k7 play --dry-run bad.tape
+  k7: bad.tape: line 2: "Type \"x": unterminated string
+  [123]
+  $ k7 play --dry-run -o dry.svg -o dry.gif dry.tape
+  k7: dry.tape: not recorded by vhs: Output "dry.svg": an SVG image, which the Native engine records
+  [123]
+  $ k7 play --dry-run -o none/frames/ dry.tape
+  k7: dry.tape: none/frames/: no directory none
+  [123]
+  $ printf 'Type "x"\n' > outless.tape
+  $ k7 play --dry-run outless.tape
+  k7: outless.tape: no output: the tape names no file to write; give it an Output line or -o FILE
+  [123]
+  $ k7 play --dry-run -o outless.txt outless.tape
+  $ printf '  $ touch played\n' > dry.t
+  $ k7 play --dry-run -o dry.svg dry.t
+  $ k7 play --dry-run dry.t
+  k7: dry.t: no output; give it -o FILE
+  [123]
+  $ test -e dry.svg || test -e outless.txt || test -e played || echo nothing written
+  nothing written
