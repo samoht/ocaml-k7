@@ -381,10 +381,26 @@ let test_theme_xml output theme =
           | Ok _ -> ()
           | Error e -> failf "not well-formed XML: %s" e))
 
+(* Timestamps are ordered durations, including equal adjacent times. *)
+let test_time_bounds first second =
+  let max_ms = 9_223_372_036_854 in
+  let valid = first >= 0 && first <= second && second <= max_ms in
+  match Vhs.svg ~settings [ (Ms first, "a"); (Ms second, "b") ] with
+  | Ok _ -> check valid
+  | Error (Invalid _) -> check (not valid)
+  | Error e -> failf "%a" Vhs.pp_error e
+
 let suite =
   ( "svg",
     [
       test_case "frames" [ list chunk ] test_frames;
+      test_case "SVG times obey duration bounds and ordering"
+        [
+          choose [ int; const (-1); const 0; const 9_223_372_036_854 ];
+          choose
+            [ int; const 0; const 9_223_372_036_854; const 9_223_372_036_855 ];
+        ]
+        test_time_bounds;
       test_case "arbitrary output and themes produce XML"
         [
           bytes;
