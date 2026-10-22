@@ -12,12 +12,16 @@
 
 (package
  (name vhs)
- (synopsis "Generate and run Charmbracelet VHS terminal tapes")
+ (synopsis
+  "Generate and run VHS terminal tapes, or record them as SVG without VHS")
  (tags (command-line-utilities format eio))
  (description
   "Build VHS terminal recordings as OCaml values, check them against VHS's \
    own parser rules before VHS runs, print them as .tape files and run vhs \
-   on them. The vhs-cram command records a cram test.")
+   on them to record a GIF or a video. A native recorder plays a tape in \
+   bash, zsh or fish on a pseudo-terminal and draws an SVG image animated \
+   with CSS alone, with no vhs, browser or ffmpeg. The vhs-cram command \
+   records a cram test either way.")
  (depends
   (ocaml (>= 5.4))
   (eio (>= 1.6))
