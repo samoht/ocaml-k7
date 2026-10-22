@@ -521,6 +521,28 @@ let test_cursor_format n =
       check (contains ~sub:"<desc>ab</desc>" image);
       check (not (contains ~sub:mark image))
 
+(* The documented Cf exceptions shape visible text, so every SVG text
+   path and every human-readable error must retain them. *)
+let test_visible_format n =
+  let allowed =
+    [| 0x200c; 0x200d; 0x0600; 0x0601; 0x0602; 0x0603; 0x0604; 0x0605;
+       0x06dd; 0x070f; 0x0890; 0x0891; 0x08e2; 0x110bd; 0x110cd |]
+  in
+  let b = Buffer.create 8 in
+  Buffer.add_utf_8_uchar b (Uchar.of_int allowed.(n mod Array.length allowed));
+  let mark = Buffer.contents b in
+  check_eq ~pp:pp_string ("a" ^ mark ^ "b")
+    (Fmt.str "%a" Vhs.pp_error (Io ("a" ^ mark ^ "b")));
+  match Vhs.svg ~settings [ (Ms 0, "a" ^ mark ^ "b\r") ] with
+  | Error e -> failf "%a" Vhs.pp_error e
+  | Ok image ->
+      check (contains ~sub:("<desc>a" ^ mark ^ "b</desc>") image);
+      check (contains ~sub:(">a" ^ mark ^ "</tspan>") image);
+      check
+        (contains
+           ~sub:("<text class=\"ka k\" x=\"0\" y=\"10\">a" ^ mark ^ "</text>")
+           image)
+
 (* The emulator's terminal state across reads, through the SVG image. *)
 let terminal =
   [
@@ -559,6 +581,8 @@ let suite =
   ( "svg",
     [
       test_case "frames" [ list chunk ] test_frames;
+      test_case "format exceptions survive errors and all SVG text paths"
+        [ uint8 ] test_visible_format;
       test_case "cursor redraw leaves invisible format characters out"
         [ uint8 ] test_cursor_format;
       test_case "text symbols keep xterm cell widths across PTY splits"
