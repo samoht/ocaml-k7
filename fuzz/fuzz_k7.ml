@@ -1309,6 +1309,36 @@ let test_run_inherited_fd n =
   | Ok (image, `Exited 0) -> check (not (contains ~sub:"FD_LEAKED" image))
   | Ok _ -> fail "descriptor probe did not exit successfully"
 
+let test_run_fd_cleanup n cancelled =
+  with_dir @@ fun env _ ->
+  let clock = Eio.Stdenv.clock env in
+  let record () =
+    let argv =
+      if cancelled then [ "/bin/sh"; "-c"; "read value" ]
+      else [ "/usr/bin/true" ]
+    in
+    let play () =
+      match
+        K7.run
+          ~clock:(Eio.Stdenv.mono_clock env)
+          ~proc:(Eio.Stdenv.process_mgr env)
+          ~cwd:(Eio.Stdenv.cwd env) argv
+      with
+      | Ok (_, `Exited 0) -> ()
+      | Ok _ -> fail "true did not exit successfully"
+      | Error e -> failf "%a" K7.pp_error e
+    in
+    if cancelled then Eio.Fiber.first play (fun () -> Eio.Time.sleep clock 0.02)
+    else play ()
+  in
+  record ();
+  let count () = Array.length (Sys.readdir "/dev/fd") in
+  let before = count () in
+  for _ = 0 to n mod 4 do
+    record ()
+  done;
+  check_eq ~pp:pp_int before (count ())
+
 let test_run_cancel_descendant cancelled =
   with_dir @@ fun env path ->
   let cwd =
@@ -1374,6 +1404,8 @@ let with_processes =
       [ uint8; bool ] test_run_cli_status;
     test_case "run children cannot read the recorder's private descriptors"
       [ uint8 ] test_run_inherited_fd;
+    test_case "run closes its descriptors after completion or cancellation"
+      [ uint8; bool ] test_run_fd_cleanup;
     test_case "completed or cancelled run leaves no resistant descendant"
       [ bool ] test_run_cancel_descendant;
     test_case "a program's screen is the image of its bytes" [ bytes ]
