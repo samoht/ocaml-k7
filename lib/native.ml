@@ -988,15 +988,14 @@ let lower e = String.uncapitalize_ascii (Unix.error_message e)
 
 (* What the child reports on the error pipe before it exits: [N] for a
    program that is not there, [E] and a message for any other failure. *)
-let child_error ~cwd ~path ~prog = function
-  | Unix.Unix_error (ENOENT, "execve", _) -> "N"
-  | Unix.Unix_error (EACCES, "execve", _)
-    when try Sys.is_directory path with Sys_error _ -> false ->
+let child_error ~cwd ~path ~prog e f =
+  match (e, f) with
+  | Unix.ENOENT, "execve" -> "N"
+  | EACCES, "execve" when try Sys.is_directory path with Sys_error _ -> false ->
       Fmt.str "E%s: is a directory" prog
-  | Unix.Unix_error (e, "chdir", _) -> Fmt.str "E%s: %s" cwd (lower e)
-  | Unix.Unix_error (e, "execve", _) -> Fmt.str "E%s: %s" prog (lower e)
-  | Unix.Unix_error (e, f, _) -> Fmt.str "E%s: %s" f (lower e)
-  | e -> "E" ^ Printexc.to_string e
+  | e, "chdir" -> Fmt.str "E%s: %s" cwd (lower e)
+  | e, "execve" -> Fmt.str "E%s: %s" prog (lower e)
+  | e, f -> Fmt.str "E%s: %s" f (lower e)
 
 let exec ~path argv env =
   try Unix.execve path argv env
@@ -1031,21 +1030,30 @@ let open_terminal ~env ~cwd ~winsize ~path prog args =
       raise e
   in
   match Unix.fork () with
-  | 0 -> (
-      try
-        let fd = Pty.file_descr slave in
-        acquire_terminal fd;
-        List.iter (Unix.dup2 fd) [ Unix.stdin; Unix.stdout; Unix.stderr ];
-        close_from_3 reported;
-        default_signals ();
-        Unix.chdir cwd;
-        exec ~path argv env
-      with e ->
-        (try
-           let msg = child_error ~cwd ~path ~prog e in
-           ignore (Unix.write_substring reported msg 0 (String.length msg))
-         with _ -> ());
-        Unix._exit 127)
+  | 0 ->
+      let sent = ref false in
+      let send msg =
+        sent := true;
+        try ignore (Unix.write_substring reported msg 0 (String.length msg))
+        with Unix.Unix_error _ -> ()
+      in
+      (* Whatever is raised, the child exits rather than return into k7. *)
+      Fun.protect
+        ~finally:(fun () ->
+          if not !sent then send "Ethe child failed before exec";
+          Unix._exit 127)
+        (fun () ->
+          (try
+             let fd = Pty.file_descr slave in
+             acquire_terminal fd;
+             List.iter (Unix.dup2 fd) [ Unix.stdin; Unix.stdout; Unix.stderr ];
+             close_from_3 reported;
+             default_signals ();
+             Unix.chdir cwd;
+             exec ~path argv env
+           with Unix.Unix_error (e, f, _) ->
+             send (child_error ~cwd ~path ~prog e f));
+          Unix._exit 127)
   | pid ->
       Unix.close reported;
       let msg =
