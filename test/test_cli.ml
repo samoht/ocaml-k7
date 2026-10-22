@@ -514,7 +514,17 @@ let test_tape_timeout () =
       tape
   in
   Alcotest.(check int) "exit code" 123 code;
-  check_message msg ~has:[ "line 4"; "Wait@1s /never/" ] ~lacks:[ "line 3" ]
+  check_message msg
+    ~has:[ "line 4"; "Wait@1s /never/"; "Set WaitTimeout" ]
+    ~lacks:[ "line 3"; "~timeout" ];
+  let code, msg =
+    captured path @@ fun () ->
+    Tape_cmd.run env ~print:false ~vhs:"vhs" ~settings:[] ~env:[]
+      ~outputs:[ path "a.svg"; path "b.gif" ]
+      tape
+  in
+  Alcotest.(check int) "mixed outputs" 123 code;
+  check_message msg ~has:[ "a.svg"; "k7" ] ~lacks:[ "K7."; "~" ]
 
 let test_exit_message () =
   with_files [] @@ fun env path ->
