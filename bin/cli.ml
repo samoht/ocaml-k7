@@ -101,9 +101,18 @@ let run env ~print ~vhs ~setup ?wait_timeout ~output input =
 
 open Cmdliner
 
+(* The seconds of Go's longest duration. *)
+let max_seconds = 9_223_372_036
+
 let seconds s =
+  let too_large () =
+    Fmt.error "%S is too large: a wait lasts at most %d seconds" s max_seconds
+  in
   match int_of_string_opt s with
-  | Some n when n > 0 && n <= 9_223_372_036 -> Ok n
+  | Some n when n > 0 && n <= max_seconds -> Ok n
+  | Some n when n > 0 -> too_large ()
+  (* A number of digits [int_of_string] cannot read is beyond [max_int]. *)
+  | None when s <> "" && String.for_all Char.Ascii.is_digit s -> too_large ()
   | _ -> Fmt.error "%S is not a positive number of seconds" s
 
 let output =
