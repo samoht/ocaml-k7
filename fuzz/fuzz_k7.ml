@@ -1702,6 +1702,18 @@ let with_processes =
       test_no_publication;
   ]
 
+let test_accessors_roundtrip n =
+  let timeout = K7.Ms (List.nth [ 0; 1; 15_000; max_ms ] (n mod 4)) in
+  let settings = K7.[ Columns (1 + n); Rows 6; Wait_timeout timeout ] in
+  let outputs = [ Fmt.str "out-%d.txt" n ] in
+  let t = Result.get_ok (K7.tape ~settings ~outputs [ last ]) in
+  let parsed = Result.get_ok (K7.of_string (K7.to_string t)) in
+  check (K7.settings t = settings);
+  check (K7.outputs t = outputs);
+  check (K7.settings parsed = settings);
+  check (K7.outputs parsed = outputs);
+  check_eq ~pp:Fmt.Dump.string (K7.to_string t) (K7.to_string parsed)
+
 let test_replace_dimensions n =
   let get = function Ok t -> t | Error e -> failf "%a" K7.pp_error e in
   let columns = 1 + (n mod 80) and rows = 1 + (n mod 24) in
@@ -1732,6 +1744,8 @@ let test_replace_outputs n =
 
 let bounds =
   [
+    test_case "settings and outputs roundtrip including zero Wait_timeout"
+      [ uint8 ] test_accessors_roundtrip;
     test_case "cell and pixel dimensions replace each other" [ uint8 ]
       test_replace_dimensions;
     test_case "replacing outputs retains raw Output lines" [ uint8 ]
