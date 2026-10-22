@@ -239,6 +239,14 @@ val tape :
     [msg] naming the first offending item, if the tape breaks one of the
     {{!checks}checks}. *)
 
+val settings : t -> setting list
+(** [settings t] are the settings of [t], as {!val-tape}, {!of_string} or
+    {!with_settings} gave them. *)
+
+val outputs : t -> string list
+(** [outputs t] are the outputs of [t], as {!val-tape}, {!of_string} or
+    {!with_outputs} gave them, without its {!raw} [Output] lines. *)
+
 val with_settings : setting list -> t -> (t, error) result
 (** [with_settings settings t] is [t] with [settings] after its own settings, in
     place of those of the same constructors and of those that size the frame in

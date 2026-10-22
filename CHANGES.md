@@ -27,7 +27,7 @@
 - `K7.of_string` reads a tape in the `.tape` syntax, its settings as
   `K7.setting` values and `Hide`/`Show` as `K7.hidden`, and
   `K7.with_settings` and `K7.with_outputs` replace a tape's settings and
-  outputs. A tape may have no output until it plays, so a tape without an
+  outputs, which `K7.settings` and `K7.outputs` return. A tape may have no output until it plays, so a tape without an
   `Output` line reads, and `k7 tape -o` gives it one.
 - The native recorder plays bash, zsh and fish as VHS starts them, VHS's
   window bar, named and JSON themes, margin colours and images, `Screenshot`

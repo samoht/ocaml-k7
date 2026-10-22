@@ -917,6 +917,9 @@ let replaces s s' =
       true
   | _ -> fst (setting_line s) = fst (setting_line s')
 
+let settings t = t.settings
+let outputs t = t.outputs
+
 let with_settings settings t =
   let kept =
     List.filter

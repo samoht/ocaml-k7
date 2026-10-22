@@ -252,7 +252,8 @@ let test_frames () =
   let frames name expected actions =
     Alcotest.(check (result string string))
       name expected
-      (K7.tape ~outputs actions |> Result.map K7.to_string
+      (K7.tape ~outputs:[ "demo.gif" ] actions
+      |> Result.map K7.to_string
       |> Result.map_error Native_test.invalid)
   in
   let none = Error "no action outside hidden, so VHS records no frame" in
@@ -458,6 +459,10 @@ let test_of_string () =
            (K7.with_outputs [ "b.txt" ]))
    with
   | Ok t ->
+      Alcotest.(check (list string)) "outputs" [ "b.txt" ] (K7.outputs t);
+      Alcotest.(check bool)
+        "settings" true
+        (K7.settings t = K7.[ Columns 100; Font_size 12 ]);
       expect "replaced"
         "Output \"b.txt\"\nSet Columns 100\nSet FontSize 12\nType x\n"
         (K7.to_string t)
