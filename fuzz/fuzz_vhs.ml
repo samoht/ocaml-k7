@@ -578,7 +578,10 @@ let test_no_publication term =
   | Error e -> failf "ambient environment enables upload: %a" Vhs.pp_error e
 
 (* All documented ambient overrides are removed, while an unrelated
-   application variable survives byte for byte. *)
+   application variable survives byte for byte. The stand-in reads its
+   environment with [env], not its shell's variables: dash, Linux's
+   [/bin/sh], sets [PS1] in every shell, where bash sets it only in an
+   interactive one. *)
 let test_environment_isolation n =
   with_dir @@ fun env path ->
   let executable = path "recorder" in
@@ -587,9 +590,8 @@ let test_environment_isolation n =
     (Fmt.str
        "#!/bin/sh\n\
         cat > /dev/null\n\
-        [ -z \
-        \"${VHS_PUBLISH+x}${rod+x}${PS1+x}${PROMPT+x}${PROMPT_COMMAND+x}\" ] \
-        && [ \"$VHS_TEST_KEEP\" = '%s' ]\n"
+        ! env | grep -E '^(VHS_PUBLISH|rod|PS1|PROMPT|PROMPT_COMMAND)=' \
+        >/dev/null && [ \"$VHS_TEST_KEEP\" = '%s' ]\n"
        value);
   let base =
     (Eio.Stdenv.process_mgr env
