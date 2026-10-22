@@ -15,9 +15,9 @@ each proposed upstream:
   U+26A0, at one cell (#108).
 
 It exists because the released matrix 0.1.0 lacks the terminal fixes that
-vhs's emulator needs: those merged on invariant-hq/mosaic since 0.1.0, the
+k7's emulator needs: those merged on invariant-hq/mosaic since 0.1.0, the
 PR stack #46-#65, #78-#89 and #94-#96 on top of them, and those five,
-#104-#108. It is deleted when vhs moves to matrix 0.2.0 (the `next`
+#104-#108. It is deleted when k7 moves to matrix 0.2.0 (the `next`
 branch).
 
 **Do not edit these files: fix upstream instead.** dune builds the
@@ -37,11 +37,11 @@ The files are copied byte for byte, flattened into this directory:
 | `matrix/lib/vte/`   | `matrix.vte`     | `vte`                                                                                           |
 
 each as its `.ml` and `.mli` where upstream has one, and `LICENSE` from the
-repository root. Only `dune` and this README are vhs's own.
+repository root. Only `dune` and this README are k7's own.
 
 The four upstream libraries are one wrapped library, `matrix_backport`, so
 that none of their modules clashes with matrix 0.1.0's (`Ansi`, `Grid`,
-`Glyph`, `Vte`) in a program that links both. vhs reaches them as
+`Glyph`, `Vte`) in a program that links both. k7 reaches them as
 `Matrix_backport.Ansi`, `Matrix_backport.Matrix_grid`,
 `Matrix_backport.Matrix_text` and `Matrix_backport.Vte`, and takes only
 `matrix.pty` from the released matrix 0.1.0.

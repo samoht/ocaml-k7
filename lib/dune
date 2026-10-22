@@ -1,6 +1,6 @@
 (library
  (name vhs)
- (public_name vhs)
+ (public_name k7)
  (private_modules
   casefold
   casefold_data
@@ -59,7 +59,7 @@
     (echo "|}\n")))))
 
 (mdx
- (package vhs)
+ (package k7)
  (files vhs.mli)
  (libraries vhs))
 

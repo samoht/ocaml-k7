@@ -25,7 +25,7 @@ The recording above is [doc/demo.t](doc/demo.t), recorded natively with
 ## Installation
 
 ```
-opam install vhs
+opam install k7
 ```
 
 To make GIFs, you also need

@@ -12,6 +12,6 @@
 (executable
  (name main)
  (public_name k7)
- (package vhs)
+ (package k7)
  (modules main)
  (libraries k7_cli cmdliner))

@@ -1,6 +1,6 @@
 (lang dune 3.21)
 (using mdx 0.4)
-(name vhs)
+(name k7)
 
 (generate_opam_files true)
 (implicit_transitive_deps false)
@@ -8,20 +8,19 @@
 (license ISC)
 (authors "Thomas Gazagnaire <thomas@gazagnaire.org>")
 (maintainers "Thomas Gazagnaire <thomas@gazagnaire.org>")
-(source (github samoht/ocaml-vhs))
+(source (github samoht/ocaml-k7))
 
 (package
- (name vhs)
+ (name k7)
  (synopsis
-  "Generate and run VHS terminal tapes, or record them as SVG without VHS")
+  "Record terminal sessions as animated SVG images, and write tapes for VHS")
  (tags (command-line-utilities format eio))
  (description
-  "Build VHS terminal recordings as OCaml values, check them against VHS's \
-   own parser rules before VHS runs, print them as .tape files and run vhs \
-   on them to record a GIF or a video. A native recorder plays a tape in \
-   bash, zsh or fish on a pseudo-terminal and draws an SVG image animated \
-   with CSS alone, with no vhs, browser or ffmpeg. The k7 command \
-   records a cram test, a program or a tape.")
+  "k7 records a cram test, any program or a tape on a pseudo-terminal and \
+   draws it as an SVG image animated with CSS alone, with no browser or \
+   ffmpeg. It also builds tapes for Charm's VHS as OCaml values, checks them \
+   against VHS's own parser rules and runs vhs on them to record a GIF or a \
+   video.")
  (depends
   (ocaml (>= 5.4))
   (eio (>= 1.6))
