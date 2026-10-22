@@ -941,6 +941,24 @@ let test_json_theme s =
       | Ok _ | Error (Unsupported _) -> ()
       | Error e -> failf "%a" Vhs.pp_error e)
 
+(* Unknown JSON values are skipped by Go, but still count towards the
+   maximum nesting depth of 10,000, including the theme's root object. *)
+let test_json_depth n =
+  let depth = 9_997 + (n mod 7) in
+  let theme =
+    "{\"extra\":" ^ String.make depth '[' ^ "0" ^ String.make depth ']' ^ "}"
+  in
+  let expected = depth < 10_000 in
+  let accepted =
+    match Vhs.tape ~settings:[ Theme theme ] ~outputs:[ "a.txt" ] [ last ] with
+    | Ok _ -> true
+    | Error (Invalid _) -> false
+    | Error e -> failf "%a" Vhs.pp_error e
+  in
+  if expected <> accepted then
+    failf "JSON array depth %d: Go accepts=%b, tape accepts=%b" depth expected
+      accepted
+
 (* Check the shell's actual input bytes, independently of the tape parser
    and the emulator's rendering of combining marks and joined emoji. *)
 let test_native_literal n =
@@ -1100,6 +1118,7 @@ let decoding =
 let tapes =
   [
     test_case "tape is total" [ bytes; bytes; int ] test_total;
+    test_case "JSON themes obey Go nesting limits" [ uint8 ] test_json_depth;
     test_case "JSON themes"
       [
         choose
