@@ -827,67 +827,87 @@ let lines src =
       else l)
     (String.split_on_char '\n' src)
 
+type reading = {
+  mutable read_settings : setting list;
+  mutable read_outputs : string list;
+  mutable read_actions : action list;
+  mutable hidden : action list option;
+  mutable started : bool;
+  mutable printed : bool;
+}
+
+let add r a =
+  match r.hidden with
+  | Some h -> r.hidden <- Some (a :: h)
+  | None -> r.read_actions <- a :: r.read_actions
+
+let show r =
+  Option.iter
+    (fun h -> r.read_actions <- Hidden (List.rev h) :: r.read_actions)
+    r.hidden;
+  r.hidden <- None
+
+let is_env line =
+  match Tape_syntax.tokens line with Keyword "Env" :: _ -> true | _ -> false
+
+(* [started] ends the settings, as in VHS; [printed], the outputs. *)
+let read_line r n line =
+  let raw ~started ~printed =
+    add r (Raw line);
+    r.started <- r.started || started;
+    r.printed <- r.printed || printed;
+    Ok ()
+  in
+  match Tape_syntax.check line with
+  | Error e -> Fmt.error "line %d: %a: %s" n Quote.pp line e
+  | Ok (Output p) when not r.printed ->
+      r.read_outputs <- p :: r.read_outputs;
+      Ok ()
+  | Ok (Set (name, arg)) when not r.started -> (
+      match setting_of_line line name arg with
+      | Error e -> Fmt.error "line %d: %s" n e
+      | Ok (Some s) ->
+          r.read_settings <- s :: r.read_settings;
+          Ok ()
+      | Ok None -> raw ~started:false ~printed:false)
+  | Ok Hide ->
+      if r.hidden = None then r.hidden <- Some [];
+      r.started <- true;
+      r.printed <- true;
+      Ok ()
+  | Ok Show ->
+      show r;
+      Ok ()
+  | Ok (Blank | Set _ | Require | Output _) -> raw ~started:false ~printed:false
+  | Ok Other when is_env line -> raw ~started:true ~printed:false
+  | Ok (Screenshot _ | Other) -> raw ~started:true ~printed:true
+
 let of_string src =
-  let settings = ref [] and outputs = ref [] and actions = ref [] in
-  let hidden = ref None in
-  let add a =
-    match !hidden with
-    | Some h -> hidden := Some (a :: h)
-    | None -> actions := a :: !actions
+  let r =
+    {
+      read_settings = [];
+      read_outputs = [];
+      read_actions = [];
+      hidden = None;
+      started = false;
+      printed = false;
+    }
   in
-  let show () =
-    Option.iter (fun h -> actions := Hidden (List.rev h) :: !actions) !hidden;
-    hidden := None
-  in
-  let is_env line =
-    match Tape_syntax.tokens line with Keyword "Env" :: _ -> true | _ -> false
-  in
-  (* [started] ends the settings, as in VHS; [printed], the outputs. *)
-  let rec go n ~started ~printed = function
+  let rec go n = function
     | [] -> Ok ()
-    | line :: rest -> (
-        let next ?(printed = printed) ~started () =
-          go (n + 1) ~started ~printed rest
-        in
-        match Tape_syntax.check line with
-        | Error e -> Fmt.error "line %d: %a: %s" n Quote.pp line e
-        | Ok (Output p) when not printed ->
-            outputs := p :: !outputs;
-            next ~started ()
-        | Ok (Set (name, arg)) when not started -> (
-            match setting_of_line line name arg with
-            | Error e -> Fmt.error "line %d: %s" n e
-            | Ok (Some s) ->
-                settings := s :: !settings;
-                next ~started ()
-            | Ok None ->
-                add (Raw line);
-                next ~started ())
-        | Ok Hide ->
-            if !hidden = None then hidden := Some [];
-            next ~started:true ~printed:true ()
-        | Ok Show ->
-            show ();
-            next ~started ()
-        | Ok (Blank | Set _ | Require | Output _) ->
-            add (Raw line);
-            next ~started ()
-        | Ok Other when is_env line ->
-            add (Raw line);
-            next ~started:true ()
-        | Ok (Screenshot _ | Other) ->
-            add (Raw line);
-            next ~started:true ~printed:true ())
+    | line :: rest ->
+        let* () = read_line r n line in
+        go (n + 1) rest
   in
-  match go 1 ~started:false ~printed:false (lines src) with
+  match go 1 (lines src) with
   | Error msg -> Error (Invalid msg)
   | Ok () ->
-      show ();
+      show r;
       let actions =
-        match !actions with Raw "" :: rest -> rest | actions -> actions
+        match r.read_actions with Raw "" :: rest -> rest | actions -> actions
       in
-      tape ~settings:(List.rev !settings) ~outputs:(List.rev !outputs)
-        (List.rev actions)
+      tape ~settings:(List.rev r.read_settings)
+        ~outputs:(List.rev r.read_outputs) (List.rev actions)
       |> Result.map (fun t -> { t with source = Some (lines src) })
 
 let replaces s s' =

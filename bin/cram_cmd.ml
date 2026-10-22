@@ -106,8 +106,7 @@ let render_error ~vhs ~setup ~wait ~name ~tape src e =
       let how =
         match status with
         | `Exited n -> Fmt.str "exited (status %d)" n
-        | `Signaled n ->
-            Fmt.str "was killed by signal %d" (Flags.signal_number n)
+        | `Signaled n -> Fmt.str "was killed by signal %d" (Sys.signal_to_int n)
       in
       Fmt.str "%s: the shell %s while waiting for %s%s" name how
         (after cram tape line) (last_value last)

@@ -353,14 +353,17 @@ let percent ~duration ms =
   let v = (q * 1000) + (r * 1000 / duration) in
   Fmt.str "%d.%04d%%" (v / 10_000) (v mod 10_000)
 
-let add_style t b ~duration frames =
-  let p = t.palette in
-  let rule selector decl =
-    Fmt.kstr (Buffer.add_string b) "#%s %s{%s}" ns selector decl
-  in
-  Buffer.add_string b "<style>";
+let rule b selector decl =
+  Fmt.kstr (Buffer.add_string b) "#%s %s{%s}" ns selector decl
+
+let reduced b f =
+  Buffer.add_string b "@media (prefers-reduced-motion:reduce){";
+  f ();
+  Buffer.add_string b "}"
+
+let add_colours b (p : Palette.t) =
   List.iter
-    (fun (selector, c) -> rule selector ("fill:" ^ hex c))
+    (fun (selector, c) -> rule b selector ("fill:" ^ hex c))
     [
       ("text", p.foreground);
       (".d", p.foreground);
@@ -368,53 +371,52 @@ let add_style t b ~duration frames =
       (".kc", p.cursor);
       (".ka", p.cursor_accent);
     ];
-  Array.iteri (fun i c -> rule (Fmt.str ".p%x" i) ("fill:" ^ hex c)) p.ansi;
-  List.iter
-    (fun (selector, decl) -> rule selector decl)
-    [
-      (".b", "font-weight:bold");
-      (".f", "fill-opacity:.5");
-      (".i", "font-style:italic");
-      (".xu", "text-decoration:underline");
-      (".xs", "text-decoration:line-through");
-      (".xo", "text-decoration:overline");
-      (".xus", "text-decoration:underline line-through");
-      (".xuo", "text-decoration:underline overline");
-      (".xso", "text-decoration:line-through overline");
-      (".xuso", "text-decoration:underline line-through overline");
-    ];
-  let reduced f =
-    Buffer.add_string b "@media (prefers-reduced-motion:reduce){";
-    f ();
-    Buffer.add_string b "}"
+  Array.iteri (fun i c -> rule b (Fmt.str ".p%x" i) ("fill:" ^ hex c)) p.ansi
+
+let attributes =
+  [
+    (".b", "font-weight:bold");
+    (".f", "fill-opacity:.5");
+    (".i", "font-style:italic");
+    (".xu", "text-decoration:underline");
+    (".xs", "text-decoration:line-through");
+    (".xo", "text-decoration:overline");
+    (".xus", "text-decoration:underline line-through");
+    (".xuo", "text-decoration:underline overline");
+    (".xso", "text-decoration:line-through overline");
+    (".xuso", "text-decoration:underline line-through overline");
+  ]
+
+let add_frames t b ~duration frames =
+  let ms = max 1 (int_of_float (Float.round (float duration /. t.speed))) in
+  let delay =
+    if t.loop_offset = 0 then ""
+    else
+      Fmt.str ";animation-delay:-%dms"
+        (int_of_float (Float.round (float t.loop_offset /. t.speed)))
   in
+  rule b ".s" (Fmt.str "animation:%ss %dms steps(1,end) infinite%s" ns ms delay);
+  Fmt.kstr (Buffer.add_string b) "@keyframes %ss{" ns;
+  List.iteri
+    (fun i (time, _) ->
+      Fmt.kstr (Buffer.add_string b) "%s{transform:translateX(%dpx)}"
+        (percent ~duration time)
+        (-i * t.cols * t.cell_width))
+    frames;
+  let last = -(List.length frames - 1) * t.cols * t.cell_width in
+  Fmt.kstr (Buffer.add_string b) "100%%{transform:translateX(%dpx)}}" last;
+  reduced b (fun () ->
+      rule b ".s" (Fmt.str "animation:none;transform:translateX(%dpx)" last))
+
+let add_style t b ~duration frames =
+  Buffer.add_string b "<style>";
+  add_colours b t.palette;
+  List.iter (fun (selector, decl) -> rule b selector decl) attributes;
   if t.blink then (
-    rule ".k" (Fmt.str "animation:%sb 1.2s step-end infinite" ns);
+    rule b ".k" (Fmt.str "animation:%sb 1.2s step-end infinite" ns);
     Fmt.kstr (Buffer.add_string b) "@keyframes %sb{50%%{opacity:0}}" ns;
-    reduced (fun () -> rule ".k" "animation:none"));
-  (match frames with
-  | [] | [ _ ] -> ()
-  | _ ->
-      let ms = max 1 (int_of_float (Float.round (float duration /. t.speed))) in
-      let delay =
-        if t.loop_offset = 0 then ""
-        else
-          Fmt.str ";animation-delay:-%dms"
-            (int_of_float (Float.round (float t.loop_offset /. t.speed)))
-      in
-      rule ".s"
-        (Fmt.str "animation:%ss %dms steps(1,end) infinite%s" ns ms delay);
-      Fmt.kstr (Buffer.add_string b) "@keyframes %ss{" ns;
-      List.iteri
-        (fun i (time, _) ->
-          Fmt.kstr (Buffer.add_string b) "%s{transform:translateX(%dpx)}"
-            (percent ~duration time)
-            (-i * t.cols * t.cell_width))
-        frames;
-      let last = -(List.length frames - 1) * t.cols * t.cell_width in
-      Fmt.kstr (Buffer.add_string b) "100%%{transform:translateX(%dpx)}}" last;
-      reduced (fun () ->
-          rule ".s" (Fmt.str "animation:none;transform:translateX(%dpx)" last)));
+    reduced b (fun () -> rule b ".k" "animation:none"));
+  (match frames with [] | [ _ ] -> () | _ -> add_frames t b ~duration frames);
   Buffer.add_string b "</style>"
 
 (* VHS's draw.go; Go antialiases a circle of radius [r] from [r - 1]. *)

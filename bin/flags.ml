@@ -220,8 +220,6 @@ let pp_play_error ~vhs ppf = function
         K7.pp_error e
   | e -> pp_error ppf e
 
-let signal_number n = try Sys.signal_to_int n with Invalid_argument _ -> n
-
 let interruptible f =
   let received = Atomic.make None and signalled = Eio.Condition.create () in
   let handle s =
@@ -254,7 +252,7 @@ let fail env msg =
 let exit env ~ok = function
   | Ok x, None -> ok x
   | Error msg, None -> fail env msg
-  | Ok _, Some s -> 128 + signal_number s
+  | Ok _, Some s -> 128 + Sys.signal_to_int s
   | Error msg, Some s ->
       ignore (fail env msg);
-      128 + signal_number s
+      128 + Sys.signal_to_int s

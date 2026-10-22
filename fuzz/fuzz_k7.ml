@@ -1391,7 +1391,7 @@ let test_run_cancel_descendant cancelled =
   | _ -> fail "run did not finish as expected");
   if alive then fail "run left its descendant alive"
 
-let with_processes =
+let with_programs =
   [
     test_case "run searches the overridden PATH" [ uint8 ]
       test_run_path_override;
@@ -1411,6 +1411,10 @@ let with_processes =
       [ bool ] test_run_cancel_descendant;
     test_case "a program's screen is the image of its bytes" [ bytes ]
       test_run_screen;
+  ]
+
+let with_processes =
+  [
     test_case "native output paths and positive frame-rate boundaries" [ uint8 ]
       test_native_paths;
     test_case "mixed outputs are refused before playing or writing" [ uint8 ]
@@ -1572,4 +1576,4 @@ let tapes =
 let suite =
   ( "k7",
     (if Option.is_some oracle then with_vhs else [])
-    @ with_processes @ bounds @ decoding @ tapes )
+    @ with_programs @ with_processes @ bounds @ decoding @ tapes )

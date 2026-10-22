@@ -1470,9 +1470,7 @@ let test_record_env_names () =
           (play env cwd)
       with
       | Error _ -> ()
-      | Ok () -> Alcotest.failf "%s: recorded" line
-      | exception e ->
-          Alcotest.failf "%s: raised %s" line (Printexc.to_string e))
+      | Ok () -> Alcotest.failf "%s: recorded" line)
     [ {|Env "A=B" "x"|}; {|Env "" "x"|} ]
 
 let test_run_concurrent_terminals () =

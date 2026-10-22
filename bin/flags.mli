@@ -42,16 +42,12 @@ val shown : string -> string
 
 val pp_error : K7.error Fmt.t
 (** [pp_error] is {!K7.pp_error} with the words of the command line: a wait that
-    times out suggests [Wait@30s] or [Set WaitTimeout], and an output names [k7]
-    or [vhs] rather than the function that writes it. *)
+    times out suggests [Wait@30s] or [Set WaitTimeout], and an output names the
+    command that writes it rather than the function. *)
 
 val pp_play_error : vhs:string -> K7.error Fmt.t
 (** [pp_play_error ~vhs] is {!pp_error}, and says where to get VHS when the
     executable [vhs] is not found. *)
-
-val signal_number : int -> int
-(** [signal_number s] is the system's number for the OCaml signal [s], or [s] if
-    it has none. *)
 
 val interruptible : (unit Eio.Promise.t -> 'a) -> 'a * Sys.signal option
 (** [interruptible f] is [f stop] and the signal, [SIGINT] or [SIGTERM], that
