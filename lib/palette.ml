@@ -940,8 +940,17 @@ let of_json s =
     | Ok _ -> Error (`Json "a theme is a JSON object")
     | Error (_, meta, kind) ->
         let at = Jsont.Textloc.first_byte (Jsont.Meta.textloc meta) in
-        Error
-          (`Json
-             (Fmt.str "%s at offset %d"
-                (plain (Jsont.Error.kind_to_string kind))
-                at))
+        let msg =
+          Fmt.str "%s at offset %d" (plain (Jsont.Error.kind_to_string kind)) at
+        in
+        (* Go reads invalid UTF-8 and an unpaired surrogate escape as
+           U+FFFD, where jsont stops. *)
+        let surrogate =
+          let n = String.length msg and k = String.length "surrogate" in
+          let rec go i =
+            i + k <= n && (String.sub msg i k = "surrogate" || go (i + 1))
+          in
+          go 0
+        in
+        if surrogate || not (String.is_valid_utf_8 s) then Error (`Unread msg)
+        else Error (`Json msg)

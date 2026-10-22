@@ -196,6 +196,9 @@ let set line c name args =
         match Palette.of_json name with
         | Ok palette -> { c with palette }
         | Error (`Json msg) -> unsupported line "VHS cannot read it: %s" msg
+        | Error (`Unread msg) ->
+            unsupported line "this library cannot read it, though VHS does: %s"
+              msg
         | Error (`Colour c) ->
             unsupported line "%s is a colour only a browser reads" c
       else

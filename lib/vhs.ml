@@ -345,6 +345,9 @@ let check_theme t =
     | Ok _ | Error (`Colour _) -> Ok ()
     | Error (`Json msg) ->
         Fmt.error "Set Theme %S: VHS cannot read it: %s" t msg
+    | Error (`Unread msg) ->
+        Fmt.error
+          "Set Theme %S: this library cannot read it, though VHS does: %s" t msg
   else Fmt.error "Set Theme %S: not a VHS theme" t
 
 (* VHS fonts are set by browser code that quotes the list with [']. *)

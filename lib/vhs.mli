@@ -145,7 +145,9 @@ type setting =
           in JSON, which starts with [{], an object whose fields VHS reads as
           strings, matching keys ignoring case, and xterm.js as colours, its
           default for a missing or empty one; or only spaces, for the default
-          theme. *)
+          theme. A JSON theme nests at most 10000 levels, as Go reads it, and is
+          valid UTF-8 without an unpaired surrogate escape such as [\ud800],
+          which VHS reads as U+FFFD but this library does not. *)
   | Padding of int
       (** The padding in pixels, not negative (defaults to [60]). *)
   | Typing_speed of duration

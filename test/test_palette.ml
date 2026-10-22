@@ -65,7 +65,19 @@ let test_json_theme () =
       | Error e ->
           check_contains "refused" ~sub:"VHS cannot read it" (invalid e)
       | Ok _ -> Alcotest.failf "%s accepted" theme)
-    [ {|{"background": 1}|}; {|{"background": "#000"} x|}; {|{"a": tru}|}; "{" ]
+    [ {|{"background": 1}|}; {|{"background": "#000"} x|}; {|{"a": tru}|}; "{" ];
+  (* VHS reads these, with U+FFFD, and jsont does not. *)
+  List.iter
+    (fun theme ->
+      match
+        Vhs.tape ~settings:[ Theme theme ] ~outputs:[ "a.gif" ]
+          [ Vhs.type' "x" ]
+      with
+      | Error e ->
+          check_contains "refused here" ~sub:"this library cannot read it"
+            (invalid e)
+      | Ok _ -> Alcotest.failf "%s accepted" theme)
+    [ {|{"background": "\ud800"}|}; "{\"background\": \"\xff\"}" ]
 
 (* JSON themes as Go reads them, written by theme_oracle.go: whether VHS
    reads the theme and, if it does, the bytes of its background and red
