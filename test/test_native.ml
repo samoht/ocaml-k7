@@ -1178,6 +1178,21 @@ let test_run_env () =
     ~shown:{|$ sh -c 'printf %s "$VHS_TEST|$TERM"'|} (`Exited 0)
     [ "caf\xc3\xa9 au lait|xterm-256color" ]
 
+let test_run_path_override () =
+  with_dir @@ fun env cwd ->
+  script cwd "k7-path-only" "#!/bin/sh\nprintf PATH_OVERRIDE_WORKED\n";
+  let path = Eio.Path.native_exn cwd in
+  match run ~vars:[ ("PATH", path) ] env cwd [ "k7-path-only" ] with
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+  | Ok (image, status) ->
+      Alcotest.(check bool)
+        "executable in overridden PATH runs" true
+        (status = `Exited 0);
+      Alcotest.(check string)
+        "program output"
+        (screen [ "PATH_OVERRIDE_WORKED" ])
+        (last (frames image))
+
 let test_run_errors () =
   with_dir @@ fun env cwd ->
   let error name ?vars argv check =
@@ -1355,6 +1370,7 @@ let suite =
          ("run a program", test_run_program);
          ("run a program that exits at once", test_run_fast);
          ("run environment", test_run_env);
+         ("run searches the overridden PATH", test_run_path_override);
          ("run errors", test_run_errors);
          ("run a killed program", test_run_signal);
          ("run shows the command line", test_run_command_line);
