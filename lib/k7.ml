@@ -1020,6 +1020,9 @@ let pp_error ppf = function
         (List.drop (max 0 (List.length lines - last_lines)) lines)
   | Io msg -> Fmt.string ppf (one_line msg)
   | Unsupported why -> Fmt.string ppf (one_line why)
+  | Timeout { wait; line = 0; _ } ->
+      Fmt.pf ppf "timed out waiting for %s; give the tape a longer Wait_timeout"
+        (one_line wait)
   | Timeout { wait; line; last } ->
       Fmt.pf ppf
         "timed out waiting for line %d, %s%a; give the wait a longer ~timeout \
@@ -1030,8 +1033,10 @@ let pp_error ppf = function
       | `Exited n -> Fmt.pf ppf "the shell exited (status %d)" n
       | `Signaled n ->
           Fmt.pf ppf "the shell was killed by signal %d" (signal_number n));
-      Fmt.pf ppf " while waiting for line %d, %s%a" line (one_line wait) pp_last
-        last
+      if line = 0 then Fmt.pf ppf " while waiting for %s" (one_line wait)
+      else
+        Fmt.pf ppf " while waiting for line %d, %s%a" line (one_line wait)
+          pp_last last
   | Invalid msg -> Fmt.string ppf (one_line msg)
 
 let fs_message path = function
@@ -1281,7 +1286,7 @@ let prepare_vhs ~cwd t =
    in the source of [of_string]: an action's lines keep their text and order. *)
 let source_line tape n =
   match tape with
-  | Some ({ source = Some src; _ } as t) -> (
+  | Some ({ source = Some src; _ } as t) when n > 0 -> (
       let printed = String.split_on_char '\n' (to_string t) in
       match List.nth_opt printed (n - 1) with
       | None -> n

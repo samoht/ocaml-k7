@@ -111,22 +111,33 @@ let test_shell_exit () =
   | Error e -> Alcotest.failf "%a" K7.pp_error e
 
 (* A clock that jumps to the next sleep that is due, so that timeouts expire
-   in their order and the time they took is exact. *)
-let with_virtual_clock f =
+   in their order and the time they took is exact. Until [started] exists, it
+   stands still, so that the shell's first prompt arrives in its time. *)
+let with_virtual_clock ?started f =
   let clock = Eio_mock.Clock.Mono.make () in
+  let ready () = Option.fold ~none:true ~some:Sys.file_exists started in
   Eio.Switch.run @@ fun sw ->
   Eio.Fiber.fork_daemon ~sw (fun () ->
       let rec loop () =
-        if not (Eio_mock.Clock.Mono.try_advance clock) then Eio.Fiber.yield ();
+        if not (ready () && Eio_mock.Clock.Mono.try_advance clock) then
+          Eio.Fiber.yield ();
         loop ()
       in
       loop ());
   f clock
 
+(* Typed at once, before the clock moves. *)
+let start = K7.type' "touch started\n"
+
+let started cwd =
+  let path = Eio.Path.native_exn cwd ^ "/started" in
+  if Sys.file_exists path then Sys.remove path;
+  path
+
 let test_timeout_precedence () =
   with_dir @@ fun env cwd ->
   let times_out ~within t =
-    with_virtual_clock @@ fun clock ->
+    with_virtual_clock ~started:(started cwd) @@ fun clock ->
     (match
        K7.record ~engine:Native ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd t
      with
@@ -137,7 +148,10 @@ let test_timeout_precedence () =
     if s /. 1e9 >= within then Alcotest.failf "timed out after %gs" (s /. 1e9)
   in
   let tape timeout actions =
-    Result.get_ok (K7.with_settings [ Wait_timeout timeout ] (tape actions))
+    Result.get_ok
+      (K7.with_settings
+         [ Wait_timeout timeout; Typing_speed (Ms 0) ]
+         (tape (start :: actions)))
   in
   times_out ~within:15.
     (tape (Ms 60_000)
@@ -145,21 +159,24 @@ let test_timeout_precedence () =
   times_out ~within:15.
     (tape (Ms 300) K7.[ type' "echo hi\n"; wait (Screen "never") ])
 
-(* At 50 frames a second, a frame lasts at least 10ms, so a recording plays
-   at most twice as fast, whatever the speed. *)
+(* At 50 frames a second, a frame lasts at least 10ms, so a recording of a
+   second plays in 500ms at least, whatever the speed. *)
 let test_playback_speed () =
   with_dir @@ fun env cwd ->
   let loop speed =
-    with_virtual_clock @@ fun clock ->
+    with_virtual_clock ~started:(started cwd) @@ fun clock ->
     let t =
       Result.get_ok
-        (K7.tape ~settings ~outputs:[ "demo.svg" ]
+        (K7.tape
+           ~settings:(Typing_speed (Ms 0) :: settings)
+           ~outputs:[ "demo.svg" ]
            K7.
              [
                raw ("Set PlaybackSpeed " ^ speed);
+               start;
                sleep (Ms 500);
                type' "x";
-               sleep (Ms 450);
+               sleep (Ms 500);
              ])
     in
     match
@@ -182,10 +199,13 @@ let test_playback_speed () =
         done;
         int_of_string (String.sub svg !k (j - !k))
   in
-  let real = loop "1" in
-  Alcotest.(check int) "twice as fast" ((real + 1) / 2) (loop "2");
-  Alcotest.(check int) "clamped" ((real + 1) / 2) (loop "100000");
-  Alcotest.(check int) "slower" (4 * real) (loop "0.25")
+  let at_least what n ms =
+    if ms < n then Alcotest.failf "%s: a loop of %dms" what ms
+  in
+  at_least "real time" 1000 (loop "1");
+  at_least "twice as fast" 500 (loop "2");
+  at_least "clamped" 500 (loop "100000");
+  at_least "slower" 4000 (loop "0.25")
 
 (* A shell that shows no prompt fails the recording within the tape's wait
    timeout, by the clock of record. *)

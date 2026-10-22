@@ -32,15 +32,18 @@ let last_value = function "" -> "" | last -> "; last value was: " ^ shown last
 
 (* A cram tape waits after its setup, then after each command. *)
 let after cram tape line =
-  let waits =
-    String.split_on_char '\n' (K7.to_string tape)
-    |> List.filteri (fun i l -> i < line && String.starts_with ~prefix:"Wait" l)
-    |> List.length
-  in
-  match Cram.command cram (waits - 1) with
-  | Some first ->
-      Fmt.str "the prompt after command %d, %a" (waits - 1) Quote.pp first
-  | None -> "the prompt after the setup scripts"
+  if line = 0 then "the shell's first prompt"
+  else
+    let waits =
+      String.split_on_char '\n' (K7.to_string tape)
+      |> List.filteri (fun i l ->
+          i < line && String.starts_with ~prefix:"Wait" l)
+      |> List.length
+    in
+    match Cram.command cram (waits - 1) with
+    | Some first ->
+        Fmt.str "the prompt after command %d, %a" (waits - 1) Quote.pp first
+    | None -> "the prompt after the setup scripts"
 
 let rest_after sub l =
   let n = String.length sub in

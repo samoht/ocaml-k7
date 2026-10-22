@@ -172,6 +172,10 @@ let print_tape env t =
 let shown s = Fmt.str "%a" K7.pp_error (Io s)
 
 let pp_error ppf = function
+  | K7.Timeout { wait; line = 0; _ } ->
+      Fmt.pf ppf
+        "timed out waiting for %s; give the tape a longer Set WaitTimeout"
+        (shown wait)
   | K7.Timeout { wait; line; last } ->
       Fmt.pf ppf
         "timed out waiting for line %d, %s%s; give the wait a longer timeout, \

@@ -135,10 +135,12 @@ type error =
           the tape from, or in the tape as {!to_string} prints it for a tape
           built otherwise, and [wait] is that line, such as [Wait+Line /re/] or
           [Wait@2000ms], or the line of a sourced tape for a wait there. [last]
-          is the line or the screen the wait last read. Only the
-          {!constructor-Native} engine returns it, and the {!constructor-Vhs}
-          engine reports a wait that times out as {!constructor-Vhs_failed},
-          with the message of [vhs] in [output]. *)
+          is the line or the screen the wait last read. Before the first action,
+          the engine waits for the shell's first prompt, as VHS does, within the
+          {!constructor-Wait_timeout} of the tape; [line] is then [0] and [wait]
+          says so. Only the {!constructor-Native} engine returns it, and the
+          {!constructor-Vhs} engine reports a wait that times out as
+          {!constructor-Vhs_failed}, with the message of [vhs] in [output]. *)
   | Exited of {
       status : Eio.Process.exit_status;
       wait : string;
@@ -400,8 +402,10 @@ val record :
     - [Error (Invalid _)] on a [Source] line or a [Set MarginFill] image it
       refuses, and on a [Screenshot] of a sourced tape that has the path of an
       output or of another [Screenshot];
-    - [Error (Timeout _)] if a wait does not hold in time;
-    - [Error (Exited _)] as soon as the shell exits while a wait does not hold;
+    - [Error (Timeout _)] if a wait does not hold in time, or the shell shows no
+      prompt within the {!constructor-Wait_timeout} of the tape;
+    - [Error (Exited _)] as soon as the shell exits while a wait does not hold,
+      or before its first prompt;
     - [Error (Executable_not_found _)] if the shell or the executable of a
       [Require] line is not on the [PATH] the shell gets;
     - [Error (Io _)] if [cwd] is not a directory of the native file system, or

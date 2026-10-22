@@ -1115,17 +1115,25 @@ let spawn ~env ~vars ~cwd t =
     ~vars:((term :: vars) @ prompt @ t.env)
     ~cwd t ~requires:t.requires prog args
 
+let first_prompt = "the shell's first prompt"
+
 (* The prompt arrives before the first action, as in VHS. *)
-let await_prompt st =
-  let rec loop () =
-    if
-      Screen.text st.live
-      = String.make (Array.length (Screen.rows st.live) - 1) '\n'
-    then (
-      Eio.Condition.await_no_mutex st.changed;
-      loop ())
+let await_prompt st c =
+  let blank () =
+    Screen.text st.live
+    = String.make (Array.length (Screen.rows st.live) - 1) '\n'
   in
-  ignore (within st 5. loop)
+  let rec loop () =
+    match st.exited with
+    | Some status ->
+        stop (Exited { status; wait = first_prompt; line = 0; last = "" })
+    | None when blank () ->
+        Eio.Condition.await_no_mutex st.changed;
+        loop ()
+    | None -> ()
+  in
+  if not (within st (float c.wait_timeout /. 1000.) loop) then
+    stop (Timeout { wait = first_prompt; line = 0; last = "" })
 
 let state t ~clock ({ pty; pid; _ } : terminal) =
   let s = t.look in
@@ -1193,7 +1201,7 @@ let play ?interrupt ~clock ~env ~vars ~cwd t =
         closed st)
       (fun () ->
         until interrupt @@ fun () ->
-        await_prompt st;
+        await_prompt st t.config;
         st.hidden <- false;
         st.started <- now st;
         record st;
