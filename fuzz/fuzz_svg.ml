@@ -543,6 +543,42 @@ let test_visible_format n =
            ~sub:("<text class=\"ka k\" x=\"0\" y=\"10\">a" ^ mark ^ "</text>")
            image)
 
+(* xterm's wcwidth gives regional indicators one cell each, including
+   when a pair straddles the right margin. Every byte split must preserve
+   their cells and the final public image. *)
+let test_regional_splits n =
+  let glyph u =
+    let b = Buffer.create 4 in
+    Buffer.add_utf_8_uchar b (Uchar.of_int u);
+    Buffer.contents b
+  in
+  let prefix = List.init (cols - 1 - (n mod 3)) (fun _ -> "a") in
+  let flags = List.init (2 + (n mod 3)) (fun i -> glyph (0x1f1e6 + ((n + i) mod 26))) in
+  let cells = prefix @ flags @ [ "X" ] in
+  let output = String.concat "" cells in
+  let rec lines = function
+    | [] -> []
+    | cells -> String.concat "" (List.take cols cells) :: lines (List.drop cols cells)
+  in
+  let lines = lines cells in
+  let expected =
+    String.concat "\n" (lines @ List.init (rows - List.length lines) (fun _ -> ""))
+  in
+  for cut = 0 to String.length output do
+    let a = String.sub output 0 cut in
+    let b = String.sub output cut (String.length output - cut) in
+    let term = Vte.create ~width_method:`Wcwidth ~rows ~cols () in
+    Vte.feed_string term a;
+    Vte.feed_string term b;
+    check_eq ~pp:pp_string expected (Matrix_grid.to_text (Vte.grid term));
+    match Vhs.svg ~settings [ (Ms 0, a); (Ms 20, b) ] with
+    | Error e -> failf "%a" Vhs.pp_error e
+    | Ok image -> (
+        match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows image with
+        | Error e -> failf "%s" e
+        | Ok frames -> check_eq ~pp:pp_string expected (List.hd (List.rev frames)))
+  done
+
 (* The emulator's terminal state across reads, through the SVG image. *)
 let terminal =
   [
@@ -581,6 +617,8 @@ let suite =
   ( "svg",
     [
       test_case "frames" [ list chunk ] test_frames;
+      test_case "regional indicators retain cells at every PTY split"
+        [ uint8 ] test_regional_splits;
       test_case "format exceptions survive errors and all SVG text paths"
         [ uint8 ] test_visible_format;
       test_case "cursor redraw leaves invisible format characters out"
