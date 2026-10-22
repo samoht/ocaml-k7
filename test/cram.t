@@ -28,8 +28,10 @@ an output.
 
   $ touch demo.txt
   $ k7 play demo.txt
-  k7: "demo.txt": neither a tape (.tape) nor a cram test (.t)
+  k7: demo.txt: neither a tape (.tape) nor a cram test (.t)
   [123]
+  $ cp demo.t upper.T
+  $ k7 play --dry-run -o upper.svg upper.T
   $ k7 play demo.t
   k7: demo.t: no output; give it -o FILE
   [123]

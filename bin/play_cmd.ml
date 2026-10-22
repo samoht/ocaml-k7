@@ -5,12 +5,12 @@
 
 type kind = Tape | Cram
 
+(* Ignoring case, as macOS's disk does. *)
 let kind input =
-  match Filename.extension input with
+  match String.lowercase_ascii (Filename.extension input) with
   | ".tape" -> Ok Tape
   | ".t" -> Ok Cram
-  | _ ->
-      Fmt.error "%a: neither a tape (.tape) nor a cram test (.t)" Quote.pp input
+  | _ -> Fmt.error "%s: neither a tape (.tape) nor a cram test (.t)" input
 
 let cram_only ~setup ~dir ~wait_timeout =
   List.find_map
