@@ -885,6 +885,52 @@ let test_json_theme s =
       | Ok _ | Error (Unsupported _) -> ()
       | Error e -> failf "%a" Vhs.pp_error e)
 
+(* Check the shell's actual input bytes, independently of the tape parser
+   and the emulator's rendering of combining marks and joined emoji. *)
+let test_native_literal n =
+  with_dir @@ fun env path ->
+  let scripts =
+    [|
+      [ 0x0915; 0x093e ];
+      [ 0x1f469; 0x200d; 0x1f4bb ];
+      [ 0x65; 0x0301 ];
+      [ 0x1100; 0x1161; 0x11a8 ];
+      [ 0x2764; 0xfe0f ];
+      [ 0x200b; 0x2060 ];
+    |]
+  in
+  let b = Buffer.create 80 in
+  Buffer.add_string b "quotes: \"'` $\\ ";
+  for i = 0 to Array.length scripts - 1 do
+    List.iter
+      (fun u -> Buffer.add_utf_8_uchar b (Uchar.of_int u))
+      scripts.((n + i) mod Array.length scripts);
+    Buffer.add_char b ' '
+  done;
+  let payload = Buffer.contents b in
+  let command = "printf '%s' " ^ Filename.quote payload ^ " > received\n" in
+  let tape =
+    match
+      Vhs.tape
+        ~settings:Vhs.[ Typing_speed (Ms 1) ]
+        ~outputs:[ path "out.svg" ]
+        Vhs.[ hidden [ type' command; wait Prompt ]; sleep (Ms 100) ]
+    with
+    | Ok tape -> tape
+    | Error e -> failf "%a" Vhs.pp_error e
+  in
+  let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "received")) in
+  (match
+     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 10. (fun () ->
+         Vhs.record
+           ~clock:(Eio.Stdenv.mono_clock env)
+           ~proc:(Eio.Stdenv.process_mgr env)
+           ~cwd tape)
+   with
+  | Ok _ -> ()
+  | Error e -> failf "%a" Vhs.pp_error e);
+  check_eq ~pp:pp_string payload (Eio.Path.load Eio.Path.(cwd / "received"))
+
 (* Properties that run [vhs] itself, so need [oracle]. *)
 let with_vhs =
   [
@@ -902,6 +948,8 @@ let with_vhs =
 (* Properties that run stand-ins for vhs and vhs-cram. *)
 let with_processes =
   [
+    test_case "native typing preserves mixed scripts and shell quotes" [ uint8 ]
+      test_native_literal;
     test_case "CLI wait timeout bounds and diagnostics"
       [
         choose
