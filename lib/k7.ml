@@ -69,7 +69,7 @@ type setting =
 
 type error =
   | Executable_not_found of string
-  | Failed of {
+  | Vhs_failed of {
       vhs : string;
       status : Eio.Process.exit_status;
       output : string;
@@ -1007,7 +1007,7 @@ let signal_number n = try Sys.signal_to_int n with Invalid_argument _ -> n
 let pp_error ppf = function
   | Executable_not_found exe ->
       Fmt.pf ppf "executable not found: %s" (one_line exe)
-  | Failed { vhs; status; output } ->
+  | Vhs_failed { vhs; status; output } ->
       let vhs = one_line vhs in
       (match status with
       | `Exited n -> Fmt.pf ppf "%s exited with code %d" vhs n
@@ -1143,7 +1143,8 @@ let render_vhs ?stop ~vhs ~clock ~proc ~cwd t =
     wait ()
   with
   | Ok (`Exited 0) -> Ok ()
-  | Ok status -> Error (Failed { vhs; status; output = Tail.contents output })
+  | Ok status ->
+      Error (Vhs_failed { vhs; status; output = Tail.contents output })
   | Error (Eio.Io (Eio.Process.E (Executable_not_found exe), _)) ->
       Error (Executable_not_found exe)
   | Error (Eio.Io (err, _)) -> Error (Io (io_message ~cwd err))

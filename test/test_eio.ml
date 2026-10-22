@@ -167,7 +167,7 @@ let run ?vhs ?(status = `Exited 3) writes t =
   K7.render ?vhs ~clock:(clock ()) ~proc ~cwd t
 
 let failed expected = function
-  | Error (K7.Failed { output; status = `Exited 3; _ }) ->
+  | Error (K7.Vhs_failed { output; status = `Exited 3; _ }) ->
       expect "output" expected output
   | Error e -> Alcotest.failf "unexpected error: %a" K7.pp_error e
   | Ok () -> Alcotest.fail "expected child failure"
@@ -191,7 +191,7 @@ let test_long_output () =
   let line i = Fmt.str "line %07d\n" i in
   let writes = List.init 100_000 line in
   match run writes (tape []) with
-  | Error (K7.Failed { output; _ }) ->
+  | Error (K7.Vhs_failed { output; _ }) ->
       Alcotest.(check bool)
         "at most 64 KiB kept" true
         (String.length output <= 65536);
@@ -210,7 +210,8 @@ let test_success () =
 
 let test_signal () =
   match run ~status:(`Signaled 9) [ "killed" ] (tape []) with
-  | Error (K7.Failed { vhs = "vhs"; status = `Signaled 9; output = "killed" })
+  | Error
+      (K7.Vhs_failed { vhs = "vhs"; status = `Signaled 9; output = "killed" })
     ->
       ()
   | _ -> Alcotest.fail "lost signal, executable, or output"
@@ -233,7 +234,7 @@ let test_pp_error () =
     \  line 10\n\
     \  line 11"
     (Fmt.str "%a" K7.pp_error
-       (Failed { vhs = "vhs"; status = `Exited 1; output = output ^ "\n\n" }))
+       (Vhs_failed { vhs = "vhs"; status = `Exited 1; output = output ^ "\n\n" }))
 
 let test_pp_error_controls () =
   let output =
@@ -256,14 +257,14 @@ let test_pp_error_controls () =
     \  done\n\
     \  \xef\xbf\xbd"
     (Fmt.str "%a" K7.pp_error
-       (Failed { vhs = "vhs"; status = `Exited 1; output }))
+       (Vhs_failed { vhs = "vhs"; status = `Exited 1; output }))
 
 let test_pp_error_names () =
   let pp e = Fmt.str "%a" K7.pp_error e in
   expect "executable" "executable not found: ab"
     (pp (Executable_not_found "a\027]0;x\007b"));
   expect "failed" "ab exited with code 1"
-    (pp (Failed { vhs = "a\xc2\x9b2Jb"; status = `Exited 1; output = "" }));
+    (pp (Vhs_failed { vhs = "a\xc2\x9b2Jb"; status = `Exited 1; output = "" }));
   expect "io" "dir x: no such file or directory"
     (pp (Io "dir\nx\027[0m: no such file or directory"));
   expect "format characters"

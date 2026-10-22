@@ -188,7 +188,7 @@ let test_render () =
   let cwd = Eio.Stdenv.cwd env in
   let t = Result.get_ok (K7.tape ~outputs:[ "x.gif" ] [ K7.sleep (Ms 100) ]) in
   (match K7.render ~vhs:(path "ko") ~clock:mono ~proc ~cwd t with
-  | Error (Failed { status = `Exited 3; _ } as e) ->
+  | Error (Vhs_failed { status = `Exited 3; _ } as e) ->
       expect "both streams"
         (path "ko" ^ " exited with code 3\n  from stdout\n  from stderr")
         (Fmt.str "%a" K7.pp_error e)
@@ -199,7 +199,8 @@ let test_render () =
        ~cwd:Eio.Path.(Eio.Stdenv.fs env / dir)
        t
    with
-  | Error (Failed { output; _ }) when output = Unix.realpath dir ^ "\n" -> ()
+  | Error (Vhs_failed { output; _ }) when output = Unix.realpath dir ^ "\n" ->
+      ()
   | Error e -> Alcotest.failf "not run in %s: %a" dir K7.pp_error e
   | Ok () -> Alcotest.fail "pwd succeeded");
   let big =
@@ -208,7 +209,7 @@ let test_render () =
          (List.init 20_000 (fun _ -> K7.type' "echo hello")))
   in
   (match K7.render ~vhs:(path "early") ~clock:mono ~proc ~cwd big with
-  | Error (Failed { status = `Exited 2; _ }) -> ()
+  | Error (Vhs_failed { status = `Exited 2; _ }) -> ()
   | Error e -> Alcotest.failf "early exit: %a" K7.pp_error e
   | Ok () -> Alcotest.fail "early exit succeeded");
   (match

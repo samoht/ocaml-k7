@@ -146,7 +146,7 @@ let test_vhs_oracle () =
   | Ok (), Ok _ -> ()
   | Error e, _ | _, Error e -> Alcotest.failf "%a" K7.pp_error e);
   match both (tape [ K7.wait ~timeout:(Ms 1000) (Screen {|caf\B|}) ]) with
-  | Error (Failed _), Error (Timeout _) -> ()
+  | Error (Vhs_failed _), Error (Timeout _) -> ()
   | _ -> Alcotest.fail "a wait that does not hold ended a recording"
 
 let suite =

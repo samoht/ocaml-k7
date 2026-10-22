@@ -117,7 +117,7 @@ val raw : string -> action
     with a case for the others. *)
 type error =
   | Executable_not_found of string  (** No such executable on the [PATH]. *)
-  | Failed of {
+  | Vhs_failed of {
       vhs : string;
       status : Eio.Process.exit_status;
       output : string;
@@ -136,7 +136,7 @@ type error =
           that line, such as [Wait+Line /re/] or [Wait@2000ms], or the line of a
           sourced tape for a wait there. [last] is the line or the screen the
           wait last read. Only {!record} returns it, and {!render} reports a
-          wait that times out as {!constructor-Failed}, with the message of
+          wait that times out as {!constructor-Vhs_failed}, with the message of
           [vhs] in [output]. *)
   | Exited of {
       status : Eio.Process.exit_status;
@@ -155,14 +155,14 @@ type error =
 
 val pp_error : error Fmt.t
 (** [pp_error] formats an error for humans, on one line. For
-    {!constructor-Failed}, the last ten lines that [vhs] printed and that are
-    not blank follow it, trimmed and indented. It removes escape sequences and
-    control characters from every string it prints. It also removes the format
-    characters (Unicode category [Cf]), but for the joiners U+200C and U+200D
-    and the prepended concatenation marks such as U+0605. It keeps the tag
-    characters of a subdivision flag such as Scotland's. A variation selector
-    stays after a character that shows and goes elsewhere. Invalid UTF-8 becomes
-    U+FFFD. *)
+    {!constructor-Vhs_failed}, the last ten lines that [vhs] printed and that
+    are not blank follow it, trimmed and indented. It removes escape sequences
+    and control characters from every string it prints. It also removes the
+    format characters (Unicode category [Cf]), but for the joiners U+200C and
+    U+200D and the prepended concatenation marks such as U+0605. It keeps the
+    tag characters of a subdivision flag such as Scotland's. A variation
+    selector stays after a character that shows and goes elsewhere. Invalid
+    UTF-8 becomes U+FFFD. *)
 
 (** {1:tapes Tapes} *)
 
@@ -323,20 +323,20 @@ val render :
     - [Error (Io _)] if the directory of an output cannot be written, before it
       runs anything, and on any other I/O failure;
     - [Error (Executable_not_found _)] if [vhs] is not on the [PATH];
-    - [Error (Failed _)] if [vhs] exits with another status than [0], a wait
+    - [Error (Vhs_failed _)] if [vhs] exits with another status than [0], a wait
       that times out included.
 
     [vhs] gets the environment of [proc] without five variables: [VHS_PUBLISH],
     which would upload the recording; [rod], which configures the browser VHS
     drives; and [PS1], [PROMPT] and [PROMPT_COMMAND], which would replace the
     prompt {!constructor-Prompt} waits for. What [vhs] prints is kept for
-    {!constructor-Failed} and dropped on success. If the calling fiber is
+    {!constructor-Vhs_failed} and dropped on success. If the calling fiber is
     cancelled, [render] sends [vhs] [SIGTERM], which makes it stop the terminal
     and the browser it started, and waits for it to exit. If [vhs] still runs
     ten seconds later by [clock], [render] sends it [SIGKILL], which can leave
     the terminal and the browser running, and waits for it to exit. It does the
-    same once [stop] resolves, and is then [Error (Failed _)] unless [vhs] has
-    exited with [0]. *)
+    same once [stop] resolves, and is then [Error (Vhs_failed _)] unless [vhs]
+    has exited with [0]. *)
 
 val record :
   ?stop:unit Eio.Promise.t ->

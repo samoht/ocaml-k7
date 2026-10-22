@@ -130,7 +130,7 @@ k7 differs from VHS in these cases:
   so the queries fish 4 sends as it starts go unanswered. CI tests fish 3.7
   only.
 - A cursor shape set with DECSCUSR is drawn as a block.
-- `K7.render` reports a wait that times out as `K7.Failed`, with VHS's
+- `K7.render` reports a wait that times out as `K7.Vhs_failed`, with VHS's
   message in its output, where `K7.record` returns `K7.Timeout`.
 - `K7.tape` refuses a JSON theme with invalid UTF-8 or an unpaired
   surrogate escape such as `"\ud800"`, which VHS reads as U+FFFD.

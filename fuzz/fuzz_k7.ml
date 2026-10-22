@@ -338,7 +338,7 @@ let test_pp_error s n =
     check (pp (K7.Io s) = Unicode.strip_format s);
   List.iter
     (fun status ->
-      let printed = pp (Failed { vhs = "vhs"; status; output = s }) in
+      let printed = pp (Vhs_failed { vhs = "vhs"; status; output = s }) in
       if has_control ~except:"\n" printed then
         failf "control character in %S" printed;
       let lines = String.split_on_char '\n' printed in

@@ -60,7 +60,7 @@
 - The README lists the known limitations of this release: the private copy
   of matrix's terminal core, the queries and cursor shapes the native
   terminal does not handle yet, a rare `setpgid` error from macOS's bash 3.2
-  under load, the timed-out wait `K7.render` reports as `Failed`, and the
+  under load, the timed-out wait `K7.render` reports as `Vhs_failed`, and the
   JSON themes with invalid UTF-8 or unpaired surrogates that jsont refuses
   and Go reads, and the input and background output `k7 run` does not
   record.

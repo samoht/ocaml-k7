@@ -88,7 +88,7 @@ let render_error ~vhs ~setup ~wait ~name ~tape src e =
   let longer = "; --wait-timeout gives it longer" in
   let output =
     match e with
-    | K7.Failed { output; _ } -> Some output
+    | K7.Vhs_failed { output; _ } -> Some output
     | Timeout { last; _ } | Exited { last; _ } ->
         Some ("last value was: " ^ last)
     | _ -> None
@@ -110,7 +110,8 @@ let render_error ~vhs ~setup ~wait ~name ~tape src e =
       in
       Fmt.str "%s: the shell %s while waiting for %s%s" name how
         (after cram tape line) (last_value last)
-  | None, Failed { output; _ }, _ when Option.is_some (vhs_timeout output) ->
+  | None, Vhs_failed { output; _ }, _ when Option.is_some (vhs_timeout output)
+    ->
       Fmt.str
         "%s: vhs timed out after %s waiting for the prompt after a command%s%s"
         name (seconds_of wait)
@@ -150,7 +151,7 @@ let record ?stop env ~print ~vhs ~setup ?dir ?settings ?env:vars ?wait_timeout_s
     in
     let run_vhs = if String.contains vhs '/' then absolute vhs else vhs in
     let named = function
-      | K7.Failed f -> K7.Failed { f with vhs }
+      | K7.Vhs_failed f -> K7.Vhs_failed { f with vhs }
       | K7.Executable_not_found exe when exe = run_vhs ->
           K7.Executable_not_found vhs
       | e -> e
