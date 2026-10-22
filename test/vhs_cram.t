@@ -36,9 +36,14 @@ written is an error.
   Output "demo.gif"
   $ cat status
   0
-  $ vhs-cram --print --output demo.gif big.t >&-
-  vhs-cram: standard output: Bad file descriptor
+  $ vhs-cram --print --output demo.gif big.t >&- 2> err
   [123]
+
+The reason is the system's, such as "Bad file descriptor" on macOS and
+"Invalid argument" on Linux.
+
+  $ cut -d: -f1,2 err
+  vhs-cram: standard output
 
 A command the tape cannot type is an error, not an exception.
 
