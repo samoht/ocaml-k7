@@ -205,8 +205,11 @@ with the program's exit code once the image is written.
   $ k7 rec -o run.svg -- k7-no-such-program
   k7: executable not found: k7-no-such-program
   [123]
-  $ k7 rec -o missing/run.svg -- true
-  k7: "missing/run.svg": no directory "missing"
+  $ k7 rec -o missing/dir/run.svg -- true
+  $ test -f missing/dir/run.svg && echo created
+  created
+  $ k7 rec -o run.svg/run.svg -- true
+  k7: "run.svg/run.svg": "run.svg" is not a directory
   [123]
   $ k7 rec -o run.svg 2> /dev/null
   [124]

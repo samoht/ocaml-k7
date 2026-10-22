@@ -5,13 +5,19 @@
 
 let ( let* ) = Result.bind
 
+(* As K7.record, k7 rec creates the missing directories of its output,
+   below the nearest one that exists. *)
 let check_output output =
-  let dir = Filename.dirname output in
+  let rec nearest d =
+    let up = Filename.dirname d in
+    if Sys.file_exists d || up = d then d else nearest up
+  in
+  let dir = nearest (Filename.dirname output) in
   if Filename.extension output <> ".svg" then
     Fmt.error "%a: not .svg, the animated SVG image k7 rec writes" Quote.pp
       output
-  else if not (Sys.file_exists dir && Sys.is_directory dir) then
-    Fmt.error "%a: no directory %a" Quote.pp output Quote.pp dir
+  else if not (Sys.is_directory dir) then
+    Fmt.error "%a: %a is not a directory" Quote.pp output Quote.pp dir
   else Ok ()
 
 let exit_code = function
@@ -27,9 +33,12 @@ let record ?show ?delay ?stop stdenv ~settings ~env ~output argv =
       ~cwd:(Eio.Stdenv.cwd stdenv) argv
     |> Result.map_error (Fmt.to_to_string Flags.pp_error)
   in
+  let file = Eio.Path.(Eio.Stdenv.fs stdenv / output) in
   match
-    Eio.Path.(save ~create:(`Or_truncate 0o644) (Eio.Stdenv.fs stdenv / output))
-      svg
+    Option.iter
+      (fun (dir, _) -> Eio.Path.mkdirs ~exists_ok:true ~perm:0o755 dir)
+      (Eio.Path.split file);
+    Eio.Path.save ~create:(`Or_truncate 0o644) file svg
   with
   | () -> Ok status
   | exception Eio.Io (err, _) -> Fmt.error "%s: %a" output Eio.Exn.pp_err err
@@ -42,7 +51,10 @@ let run ?show ?delay stdenv ~settings ~env ~output argv =
 open Cmdliner
 
 let output =
-  let doc = "Write the animated SVG image to $(docv), which ends with .svg." in
+  let doc =
+    "Write the animated SVG image to $(docv), which ends with .svg, creating \
+     its missing directories."
+  in
   Arg.(
     required & opt (some string) None & info [ "o"; "output" ] ~docv:"FILE" ~doc)
 
