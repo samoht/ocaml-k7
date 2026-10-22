@@ -65,8 +65,8 @@ let man =
       "The program is looked up in $(b,PATH) unless its name holds a slash. It \
        gets the environment of $(tname), with $(b,TERM=xterm-256color), then \
        the $(b,--env) variables. Its standard input is the terminal, where \
-       nothing is typed: a program that waits for input waits until $(tname) \
-       is interrupted.";
+       nothing is typed, so a program that waits for input waits until \
+       $(tname) is interrupted.";
     `S Manpage.s_examples;
     `Pre
       "$(cmd) -o ls.svg -- ls -l --color=always\n\

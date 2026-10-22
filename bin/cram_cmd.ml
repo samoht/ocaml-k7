@@ -160,9 +160,8 @@ open Cmdliner
 let output =
   let doc =
     "Write the recording to $(docv), in the format of its extension, in lower \
-     case: an animated SVG image for $(b,.svg), and the text VHS writes for \
-     $(b,.txt), $(b,.ascii) and $(b,.test), which $(tname) records itself, and \
-     what VHS writes for the others."
+     case. $(tname) itself records an $(b,.svg) image and the text outputs \
+     $(b,.txt), $(b,.ascii) and $(b,.test), and $(b,vhs) records the others."
   in
   Arg.(
     required & opt (some string) None & info [ "o"; "output" ] ~docv:"FILE" ~doc)
@@ -181,30 +180,31 @@ let man =
   [
     `S Manpage.s_description;
     `P
-      "$(tname) types each $(b,\\$) command of the cram test $(i,CRAM) into a \
-       terminal running bash, waits for the prompt to come back, and records \
-       the session. Expected output and exit codes are ignored.";
+      "$(tname) records the cram test $(i,CRAM). It types each $(b,\\$) \
+       command into a terminal running bash and waits for the prompt to come \
+       back before the next. It ignores the expected output and exit codes.";
     `P
-      "An $(b,.svg) output and the text outputs are recorded without $(b,vhs): \
-       $(tname) runs bash on a pseudo-terminal itself and draws its screens as \
-       an animated SVG image, which plays in an HTML $(i,img) element, or \
-       writes their text as VHS does. The other outputs are recorded by \
-       $(b,vhs), which needs $(b,ttyd), $(b,ffmpeg) and a browser.";
+      "$(tname) records an $(b,.svg) output and the text outputs without \
+       $(b,vhs). It runs bash on a pseudo-terminal itself and draws its \
+       screens as an animated SVG image, which plays in an HTML $(i,img) \
+       element, or writes their text as VHS does. $(b,vhs) records the other \
+       outputs, and needs $(b,ttyd), $(b,ffmpeg) and a browser.";
     `P
       "Before the first command, and after the setup scripts, $(tname) makes \
        the last command of $(b,PROMPT_COMMAND) set $(b,PS1) to the VHS prompt \
-       followed by a mark: sixteen zero-width characters, U+200B and U+2060, \
-       that spell a digest of the setup scripts and the commands. The mark \
-       tells the prompt from output, even output that ends with $(b,>) or with \
-       a zero-width space. It does not show in a GIF or a video, but the text \
-       outputs ($(b,.txt), $(b,.ascii) and $(b,.test)) hold it after each \
-       prompt. The prompt hooks of the setup scripts still run first; a \
-       command that replaces $(b,PROMPT_COMMAND) makes the next wait time out. \
-       A command that leaves bash waiting for more input, such as an \
-       unterminated quote or here-document, makes the wait after it time out \
-       too; $(tname) then names that command. A wait that times out names the \
-       command whose prompt did not come back, when the recording is native, \
-       and a shell that exits ends a native recording at once.";
+       followed by a mark. The mark is sixteen zero-width characters, U+200B \
+       and U+2060, that spell a digest of the setup scripts and the commands. \
+       It tells the prompt from output, even output that ends with $(b,>) or \
+       with a zero-width space, and does not show in a GIF or a video. The \
+       text outputs hold it after each prompt.";
+    `P
+      "The prompt hooks of the setup scripts still run first, and a command \
+       that replaces $(b,PROMPT_COMMAND) makes the next wait time out. So does \
+       a command that leaves bash waiting for more input, such as an \
+       unterminated quote or here-document, and $(tname) then names that \
+       command. In a native recording, a wait that times out names the command \
+       whose prompt did not come back, and a shell that exits ends the \
+       recording at once.";
     `P
       "Each $(b,--env) variable is set with an $(b,Env) line of the tape, \
        before bash starts.";

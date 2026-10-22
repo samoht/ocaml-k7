@@ -66,9 +66,9 @@ let man =
     `P
       "When every output is an $(b,.svg) image or a text output ($(b,.txt), \
        $(b,.ascii) or $(b,.test)), $(tname) plays the tape itself, in bash, \
-       zsh or fish on a pseudo-terminal. Otherwise $(b,vhs) records it, which \
-       needs $(b,ttyd), $(b,ffmpeg) and a browser. A tape cannot ask for both \
-       an $(b,.svg) image and an output only $(b,vhs) writes.";
+       zsh or fish on a pseudo-terminal. Otherwise $(b,vhs), which needs \
+       $(b,ttyd), $(b,ffmpeg) and a browser, records it. A tape cannot ask for \
+       both an $(b,.svg) image and an output only $(b,vhs) writes.";
     `P
       "Each $(b,--env) variable is set in the environment of $(tname), which \
        the shell inherits, as an $(b,Env) line does; $(b,--print) leaves it \

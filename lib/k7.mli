@@ -6,17 +6,16 @@
 (** Terminal recordings as animated SVG images, and tapes for VHS.
 
     [K7] draws a terminal session as an SVG image animated with CSS alone,
-    without a browser: a tape it plays in a shell on a pseudo-terminal
-    ({!record}), a program it runs there ({!run}), or output given with its
-    times ({!svg}).
+    without a browser. {!record} plays a tape in a shell on a pseudo-terminal,
+    {!run} runs a program there and {!svg} draws output given with its times.
 
     A tape is the script of {{:https://github.com/charmbracelet/vhs}VHS}, by
     {{:https://charm.land/}Charm}, which records a terminal session as a GIF or
-    a video: settings, followed by actions such as typing text, pressing keys
-    and waiting for output. [K7] builds the actions as values, {{!checks}checks}
-    them once when {!val-tape} assembles a tape, reads and prints tapes in the
-    [.tape] syntax and {{!running}runs} them, with [vhs] for a GIF or a video.
-    Only {!render}, {!record}, {!play} and {!run} perform I/O.
+    a video. The script lists settings, then actions such as typing text or
+    waiting for output. [K7] builds the actions as values and {{!checks}checks}
+    them once, when {!val-tape} assembles a tape. It reads and prints tapes in
+    the [.tape] syntax and {{!running}runs} them, with [vhs] for a GIF or a
+    video. Only {!render}, {!record}, {!play} and {!run} perform I/O.
 
     {[
     let demo =
@@ -104,11 +103,10 @@ val hidden : action list -> action
 
 val raw : string -> action
 (** [raw line] is the tape line [line], printed as is, with its arguments quoted
-    by the caller. {!val-tape} checks it as its documentation states. VHS checks
-    the rest only when it runs, such as the tape of a [Source] line, the program
-    of a [Require] line, the image a [Set MarginFill] names when it is not a
-    colour, and what ffmpeg makes of a [Set PlaybackSpeed] or [Set LoopOffset]
-    value. *)
+    by the caller. {!val-tape} checks it as its documentation states. Only VHS,
+    as it runs, checks the tape of a [Source] line, the program of a [Require]
+    line, the image a [Set MarginFill] names when it is not a colour, and what
+    ffmpeg makes of a [Set PlaybackSpeed] or [Set LoopOffset] value. *)
 
 (** {1:errors Errors} *)
 
@@ -129,13 +127,13 @@ type error =
       (** An output, a setting or a command that the function cannot play or
           write, named, and why. *)
   | Timeout of { wait : string; line : int; last : string }
-      (** The wait of {!record} on line [line], counted from 1, of the tape as
-          {!to_string} prints it did not hold in time; [wait] is that line, such
-          as [Wait+Line /re/] or [Wait@2000ms], or for a wait of a sourced tape
-          the line of that tape, and [last] is the line or the screen it last
-          read. Only {!record} returns it: {!render} reports a wait that times
-          out as {!constructor-Failed}, with the message of [vhs] in [output].
-      *)
+      (** A wait of {!record} did not hold in time. [line] is its line, counted
+          from 1, in the tape as {!to_string} prints it, and [wait] is that
+          line, such as [Wait+Line /re/] or [Wait@2000ms], or the line of a
+          sourced tape for a wait there. [last] is the line or the screen the
+          wait last read. Only {!record} returns it, and {!render} reports a
+          wait that times out as {!constructor-Failed}, with the message of
+          [vhs] in [output]. *)
   | Exited of {
       status : Eio.Process.exit_status;
       wait : string;
@@ -143,8 +141,8 @@ type error =
       last : string;
     }
       (** The shell of {!record} exited with [status] while the wait [wait] on
-          line [line], as for {!constructor-Timeout}, did not hold, which it
-          then never does: {!record} fails at once rather than when the wait
+          line [line], as for {!constructor-Timeout}, did not hold. The wait
+          then never holds, so {!record} fails at once rather than when the wait
           times out. *)
   | Invalid of string
       (** A tape, a setting or a time that VHS rejects or partly ignores, or
@@ -152,14 +150,15 @@ type error =
           the first offending item, and why. *)
 
 val pp_error : error Fmt.t
-(** [pp_error] formats an error for humans: one line, followed for
-    {!constructor-Failed} by the last ten lines [vhs] printed that are not
-    blank, trimmed and indented. It removes escape sequences and control
-    characters from every string it prints. It also removes the format
-    characters (Unicode category [Cf]), but for the joiners U+200C and U+200D,
-    the prepended concatenation marks such as U+0605, and the tag characters of
-    a subdivision flag such as Scotland's. A variation selector stays after a
-    character that shows and goes elsewhere. Invalid UTF-8 becomes U+FFFD. *)
+(** [pp_error] formats an error for humans, on one line. For
+    {!constructor-Failed}, the last ten lines that [vhs] printed and that are
+    not blank follow it, trimmed and indented. It removes escape sequences and
+    control characters from every string it prints. It also removes the format
+    characters (Unicode category [Cf]), but for the joiners U+200C and U+200D
+    and the prepended concatenation marks such as U+0605. It keeps the tag
+    characters of a subdivision flag such as Scotland's. A variation selector
+    stays after a character that shows and goes elsewhere. Invalid UTF-8 becomes
+    U+FFFD. *)
 
 (** {1:tapes Tapes} *)
 
@@ -188,27 +187,28 @@ type setting =
           {!raw} [Set Margin], and even with an MP4 output (defaults to [1200]).
           The browser VHS drives takes what is left after the padding, and the
           margin unless a {!raw} [Set MarginFill] is empty, as its viewport, of
-          at most 10,000,000 pixels. *)
+          at most ten million pixels. *)
   | Height of int
       (** The height in pixels, at least twice the padding and the margin, plus
           the size of the window bar of a {!raw} [Set WindowBar], and even with
           an MP4 output (defaults to [600]). Its viewport, what is left after
-          them, is at most 10,000,000 pixels, as for {!constructor-Width}. *)
+          them, is at most ten million pixels, as for {!constructor-Width}. *)
   | Columns of int
       (** The terminal's columns, a positive number, in place of
-          {!constructor-Width}: the frame is as wide as they need, with the
-          font, the padding and the margin of the other settings. *)
+          {!constructor-Width}. The frame is as wide as they need, given the
+          other settings. *)
   | Rows of int
       (** The terminal's rows, a positive number, in place of
           {!constructor-Height}, as for {!constructor-Columns}. *)
   | Theme of string
-      (** The name of a theme of VHS 0.12.1, as [vhs themes] lists them; a theme
-          in JSON, which starts with [{], an object whose fields VHS reads as
-          strings, matching keys ignoring case, and xterm.js as colours, its
-          default for a missing or empty one; or only spaces, for the default
-          theme. A JSON theme nests at most 10000 levels, as Go reads it, and is
-          valid UTF-8 without an unpaired surrogate escape such as [\ud800],
-          which VHS reads as U+FFFD but this library does not. *)
+      (** The name of a theme of VHS 0.12.1, as [vhs themes] lists them, only
+          spaces for the default theme, or a theme in JSON, which starts with
+          [{]. A JSON theme is an object whose fields VHS reads as strings,
+          matching keys ignoring case, and xterm.js reads as colours, with its
+          default for a missing or empty one. It nests at most 10000 levels, as
+          Go reads it. It is valid UTF-8 and holds no unpaired surrogate escape
+          such as [\ud800]; VHS reads both as U+FFFD, and {!val-tape} refuses
+          them. *)
   | Padding of int
       (** The padding in pixels, not negative (defaults to [60]). *)
   | Typing_speed of duration
@@ -227,13 +227,13 @@ val tape :
   (t, error) result
 (** [tape ~settings ~outputs actions] is the tape that applies [settings]
     (defaults to [[]]), runs [actions] and writes the recording to each path of
-    [outputs], in the format of its extension: [.gif], [.mp4], [.webm], [.txt],
-    [.ascii] or [.test] for the screen as text, a directory of PNG frames for
-    [.png] or a trailing slash, and [.svg] for the animated SVG image that
-    {!record} writes and VHS cannot. {{!running}Running tapes} says which
-    function writes which output. It is [Error (Invalid msg)], with [msg] naming
-    the first offending item, if the tape breaks one of the {{!checks}checks}.
-*)
+    [outputs], in the format of its extension. The extensions are [.gif], [.mp4]
+    and [.webm]; [.txt], [.ascii] and [.test] for the screen as text; [.png], or
+    a trailing slash, for a directory of PNG frames; and [.svg] for the animated
+    SVG image that {!record} writes and VHS cannot. {{!running}Running tapes}
+    says which function writes which output. It is [Error (Invalid msg)], with
+    [msg] naming the first offending item, if the tape breaks one of the
+    {{!checks}checks}. *)
 
 val with_settings : setting list -> t -> (t, error) result
 (** [with_settings settings t] is [t] with [settings] after its own settings, in
@@ -248,22 +248,23 @@ val with_outputs : string list -> t -> (t, error) result
     [Error (Invalid _)] as {!val-tape} is. *)
 
 val of_string : string -> (t, error) result
-(** [of_string s] is the tape of the [.tape] source [s], one command per line, a
-    line ending with ["\n"] or ["\r\n"]: the [Output] lines before the first
-    action are its outputs, the [Set] lines before it that a {!setting} writes
-    are its settings, the lines between [Hide] and the next [Show], or the end,
-    are a {!hidden} action, a [Show] outside them is dropped, and every other
-    line is a {!raw} action. It is [Error (Invalid msg)] if a line is not one
-    VHS's parser accepts, with [msg] naming the line by its number from [1], or
-    if {!val-tape} refuses the tape. If a tape [x] has no [.svg] output and no
-    {!raw} [Output] line, [Result.map to_string (of_string (to_string x))] is
-    [Ok (to_string x)]. *)
+(** [of_string s] is the tape of the [.tape] source [s], one command per line,
+    each line ending with ["\n"] or ["\r\n"]. The [Output] lines before the
+    first action are its outputs, and the [Set] lines before it that a
+    {!setting} writes are its settings. The lines between [Hide] and the next
+    [Show], or the end, are a {!hidden} action, and a [Show] outside them is
+    dropped. Every other line is a {!raw} action. It is [Error (Invalid msg)] if
+    a line is not one VHS's parser accepts, with [msg] naming the line by its
+    number from [1], or if {!val-tape} refuses the tape. If a tape [x] has no
+    [.svg] output and no {!raw} [Output] line,
+    [Result.map to_string (of_string (to_string x))] is [Ok (to_string x)]. *)
 
 val to_string : t -> string
-(** [to_string t] is [t] in the [.tape] syntax: the [Output] lines, but those of
-    the [.svg] outputs, then the [Set] lines, then the actions. An action is one
-    or more lines, except [type' ""] and a {!hidden} of such actions, which are
-    none. A {!type'} with all three quote characters is several [Type] lines. *)
+(** [to_string t] is [t] in the [.tape] syntax. The [Output] lines come first,
+    without those of the [.svg] outputs, then the [Set] lines and the actions.
+    An action is one or more lines, except [type' ""] and a {!hidden} of such
+    actions, which are none. A {!type'} with all three quote characters is
+    several [Type] lines. *)
 
 val pp : t Fmt.t
 (** [pp ppf t] is [Fmt.string ppf (to_string t)]. *)
@@ -285,7 +286,7 @@ val pp : t Fmt.t
     Each one writes at the paths the tape names, relative to its [cwd] and
     anywhere else an absolute or [..] path leads. It creates the missing
     directories of an output, as VHS does, but not those of PNG frames or of a
-    screenshot, and reports as {!constructor-Io}, before it plays anything, an
+    screenshot. Before it plays anything, it reports as {!constructor-Io} an
     output whose directory it cannot write in or create.
 
     {!svg} draws the image {!record} would from output given with its times,
@@ -334,14 +335,14 @@ val record :
   t ->
   (unit, error) result
 (** [record ~clock ~proc ~cwd t] plays [t] in its shell in the directory [cwd],
-    with the environment {!render} gives [vhs], and writes the outputs of [t] at
-    the paths {!render} would: the SVG image of what the terminal showed to the
-    [.svg] output, the {{!native_details}text output} to the [.txt], [.ascii] or
-    [.test] output and the {{!native_details}screenshots}. The waits of [t] time
-    out by [clock]. When the recording ends or fails, or the calling fiber is
-    cancelled, [record] sends the shell [SIGTERM], hangs up its terminal, sends
-    it [SIGKILL] if it still runs a second later by [clock], and waits for it to
-    exit. It is:
+    with the environment {!render} gives [vhs]. It writes the outputs of [t] at
+    the paths {!render} would. The [.svg] output is the SVG image of what the
+    terminal showed, the [.txt], [.ascii] or [.test] output is the
+    {{!native_details}text output}, and the {{!native_details}screenshots} are
+    written too. The waits of [t] time out by [clock]. When the recording ends
+    or fails, or the calling fiber is cancelled, [record] sends the shell
+    [SIGTERM], hangs up its terminal, sends it [SIGKILL] if it still runs a
+    second later by [clock], and waits for it to exit. It is:
     - [Error (Unsupported _)] on a [.gif], [.mp4], [.webm] or PNG frames output,
       or a [Screenshot] of a [.png] image, which {!render} writes, and on what
       the {{!native_details}native recorder} does not play, before it plays
@@ -375,9 +376,9 @@ val svg :
     {!record} draws it. [svg] starts no shell and types nothing, so
     {!constructor-Shell} and {!constructor-Typing_speed} have no effect. It is
     [Error (Invalid _)] if a setting is one {!val-tape} refuses, or if a time is
-    out of the range of a {!duration} or before the one ahead of it, and
-    [Error (Unsupported _)] on what the {{!native_details}native recorder}
-    refuses: the {!constructor-Theme} colours and the sizes listed there. *)
+    out of the range of a {!duration} or before the one ahead of it. It is
+    [Error (Unsupported _)] on the {!constructor-Theme} colours and the sizes
+    that the {{!native_details}native recorder} refuses. *)
 
 val run :
   ?settings:setting list ->
@@ -388,14 +389,14 @@ val run :
   string list ->
   (string * Eio.Process.exit_status, error) result
 (** [run ~settings ~env ~clock ~proc ~cwd argv] runs the program [argv] in the
-    directory [cwd] on a pseudo-terminal, with no shell and nothing typed, and
-    is the SVG image of what the terminal showed, as {!svg} draws a terminal
-    with [settings] (defaults to [[]]), with how the program exited. Each output
-    shows at the time it arrived since the program started, rounded down to a
-    frame, and the last screen holds for a second after the program exits. The
-    first element of [argv] is the executable, looked up in the [PATH] unless it
-    holds a slash, and relative to [cwd] if it does. The program gets the
-    environment {!render} gives [vhs], with [TERM=xterm-256color], then the
+    directory [cwd] on a pseudo-terminal, with no shell and nothing typed. It is
+    the SVG image of what the terminal showed, as {!svg} draws a terminal with
+    [settings] (defaults to [[]]), paired with how the program exited. Each
+    output shows at the time it arrived since the program started, rounded down
+    to a frame, and the last screen holds for a second after the program exits.
+    The first element of [argv] is the executable, looked up in the [PATH]
+    unless it holds a slash, and relative to [cwd] if it does. The program gets
+    the environment {!render} gives [vhs], with [TERM=xterm-256color], then the
     variables of [env] (defaults to [[]]).
 
     A program that exits with another status than [0], or is killed, still gives
@@ -419,7 +420,7 @@ val run :
     - [outputs] is empty, or one has another extension, none and no trailing
       slash, or starts with [-], which ffmpeg reads as an option;
     - two outputs, {!raw} [Output] lines included, are of the same kind (GIF,
-      MP4, WebM, text, PNG frames or SVG): VHS writes only the last of each kind
+      MP4, WebM, text, PNG frames or SVG). VHS writes only the last of each kind
       but SVG, which it never reads, and {!record} writes one SVG image;
     - a {!raw} [Screenshot] has the path of an output or of another
       [Screenshot];
@@ -435,24 +436,25 @@ val run :
     - a {!raw} line is not exactly one command VHS's parser accepts, ends inside
       a string, a regular expression or a JSON value, or lacks the argument of
       its command;
-    - a {!raw} [Set] has a value its setting cannot parse: a duration, an
+    - a {!raw} [Set] has a value its setting cannot parse as a duration, an
       integer, a float or a regular expression in Go's syntax;
     - {!constructor-Rows} or {!constructor-Columns} sizes the frame in the
       direction that {!constructor-Height} or {!constructor-Width} does, or asks
-      for more rows or columns than 32 times the browser's viewport has pixels:
+      for more rows or columns than 32 times the browser's viewport has pixels.
       VHS measures the cells in the viewport doubled up to five times, and fails
       with "could not fit" if the terminal there is still smaller. Fewer can
       still not fit with a large font, which [tape] does not check;
     - the {!constructor-Width} or {!constructor-Height} of a GIF output is
       beyond 65535 pixels, of an MP4 output beyond 16384 or of a WebM output
-      beyond 65536, the sizes the encoders of ffmpeg 9 take, or the frame of
-      such an output has more pixels than ffmpeg's image check takes, about 268
-      million: (8 width + 1024) (height + 128) must be below 2{^ 31};
+      beyond 65536, the sizes the encoders of ffmpeg 9 take. The same holds if
+      the frame of such an output has more pixels than ffmpeg's image check
+      takes, about 268 million, where (8 width + 1024) (height + 128) must be
+      below 2{^ 31};
     - a {!raw} line is [Hide] or [Show] (use {!hidden}), [Set] for a setting of
-      {!setting} other than [TypingSpeed] (use the setting), an [Output] that
-      breaks the rules of [outputs] or ends with [.svg], or is [Require] or
-      [Set], other than [Set TypingSpeed], after an action that prints a line,
-      where VHS ignores it;
+      {!setting} other than [TypingSpeed] (use the setting), or an [Output] that
+      breaks the rules of [outputs] or ends with [.svg];
+    - a {!raw} [Require] or [Set], other than [Set TypingSpeed], comes after an
+      action that prints a line, where VHS ignores it;
     - every action outside {!hidden} is a [type' ""] or a {!raw} [Output],
       [Set], [Require], empty or comment line, which VHS does not record, so it
       records no frame and fails. VHS also fails if the actions it records all
@@ -462,45 +464,44 @@ val run :
 (** {1:native_details Native recordings}
 
     The terminal has the size VHS gives it with JetBrains Mono, VHS's first
-    font: [Width] or [Columns], [Height] or [Rows], [Font_size], [Padding] and
+    font. [Width] or [Columns], [Height] or [Rows], [Font_size], [Padding] and
     the raw [Set Margin], [Set LetterSpacing] and [Set LineHeight] size it. VHS
     sizes it with the fonts of the machine it runs on, so it can show more rows
     than the image elsewhere. The image draws each cell on a grid, in a
     monospace font of the viewer's machine, in the colours of the [Theme]. The
     terminal keeps a colour as RGB, so a 256-colour or true colour equal to one
     of xterm's sixteen ANSI colours takes the theme's colour too. The terminal
-    reads what the shell prints as xterm does, where VHS's xterm.js departs from
-    it in a few controls, such as an erasure in the last column or the row a
-    cursor restore returns to. As in xterm.js, a character of no width, such as
-    a combining mark or a zero-width joiner, joins the cell before it.
+    reads what the shell prints as xterm does. VHS's xterm.js departs from xterm
+    in a few controls, such as an erasure in the last column or the row a cursor
+    restore returns to. As in xterm.js, a character of no width, such as a
+    combining mark or a zero-width joiner, joins the cell before it.
 
-    Time is the tape's: a typed character, a key and a sleep last what the tape
-    says, a wait lasts what the program makes it last, and output shows at the
+    Time is the tape's. A typed character, a key and a sleep last what the tape
+    says, and a wait lasts what the program makes it last. Output shows at the
     time it arrives within the action that runs, rounded down to a frame of
     {!constructor-Framerate}, which lasts at least a millisecond. A tape whose
     program prints the same bytes within the same frames gives the same image,
-    byte for byte; the time a command takes to print, including how the machine
+    byte for byte. The time a command takes to print, including how the machine
     schedules it, changes the frames its output lands in.
 
-    The text output, [.txt], [.ascii] or [.test], is VHS's: after each command
-    that runs while recording, the first lines of the terminal's buffer, as many
-    as it has rows, as a {!constructor-Screen} wait reads them, then a line of
-    80 U+2500 characters. VHS also adds a screen for each [Output] and [Set]
-    line it reads before it sizes the terminal, from the text output's line on,
-    whose rows depend on its browser's window; the native output leaves them
-    out.
+    The text output, [.txt], [.ascii] or [.test], is the one VHS writes. After
+    each command that runs while recording, it holds the lines a
+    {!constructor-Screen} wait reads, then a line of 80 U+2500 characters. VHS
+    also adds a screen for each [Output] and [Set] line it reads before it sizes
+    the terminal, from the text output's line on. Their rows depend on its
+    browser's window, and the native output leaves them out.
 
     A [Screenshot] of [shot.svg] writes a still SVG image of the next frame it
     records to [shot.svg], without the cursor blinking, where VHS writes a
     [Screenshot] of [shot.png] as a PNG image.
 
-    {!record} plays the actions of {!action}, the raw [Type], key, [Ctrl],
-    [Alt], [Shift], [Sleep], [Wait], [Copy], [Paste] ([Paste] types the last
-    [Copy]), [Screenshot] and [Output] lines, [Source] lines, whose tape it
-    reads relative to the [cwd] of {!record} and refuses, as
-    {!constructor-Invalid}, where VHS does and on a control character other than
-    a tab or a carriage return, which {!val-tape} refuses in a {!raw} line,
-    [Env], [Require], and every [Set] but those below. It does not play, and is
+    {!record} plays the actions of {!action} and the raw lines [Type], key,
+    [Ctrl], [Alt], [Shift], [Sleep], [Wait], [Copy], [Paste], [Screenshot],
+    [Output], [Source], [Env], [Require] and every [Set] but those below.
+    [Paste] types the last [Copy]. The tape of a [Source] line is read relative
+    to the [cwd] of {!record}, and is {!constructor-Invalid} where VHS refuses
+    it and on a control character other than a tab or a carriage return, which
+    {!val-tape} refuses in a {!raw} line. {!record} does not play, and is
     {!constructor-Unsupported} on:
     - a {!shell} other than {!constructor-Bash}, {!constructor-Zsh} and
       {!constructor-Fish}, which start as in VHS;
@@ -512,22 +513,25 @@ val run :
     Unicode classes of Go's tables included. After a line is submitted, by
     {!constructor-Enter} or the newline of a {!type'}, a {!constructor-Prompt}
     or {!constructor-Line} wait holds only once the terminal has started another
-    line, or changed the line so that it does not hold, so it never holds on the
-    prompt the command was typed at, however fast it is typed.
+    line, or has changed the line so that the wait does not hold. It never holds
+    on the prompt the command was typed at, however fast it is typed.
+
     [Set CursorBlink], [Set BorderRadius], [Set PlaybackSpeed] and
     [Set LoopOffset] change the animation, and [Set WindowBar] and
     [Set WindowBarSize] draw VHS's window bar. For a reader who prefers reduced
     motion, the image shows its last screen, still, and the cursor does not
-    blink. The image leaves out the invisible format characters, as {!pp_error}
-    does. Its title is "Terminal recording" and, unless its last screen is
-    blank, its description, its text alternative, is the text that screen shows,
-    without concealed text. The image of a [Set MarginFill], read relative to
-    the [cwd] of {!record}, is embedded, stretched to the frame as ffmpeg
-    stretches it. It is a regular file, a symlink to one included, of at most 10
-    MiB, that starts with the signature of a PNG, JPEG, GIF, WebP or BMP image,
-    and the tape of a [Source] line a regular file of at most 10 MiB; anything
-    else, such as a FIFO, a directory or a text file, is {!constructor-Invalid}
-    before anything plays. A size beyond 100000 pixels, a terminal beyond 2000
-    cells a side, a [Set LetterSpacing] or [Set LineHeight] beyond 100000 and a
+    blink. The image leaves out the format characters and the stray variation
+    selectors that {!pp_error} removes. Its title is "Terminal recording".
+    Unless its last screen is blank, its description, the text alternative, is
+    the text that screen shows, without concealed text.
+
+    The image of a [Set MarginFill], read relative to the [cwd] of {!record}, is
+    embedded, stretched to the frame as ffmpeg stretches it. It is a regular
+    file of at most 10 MiB, a symlink to one included, that starts with the
+    signature of a PNG, JPEG, GIF, WebP or BMP image. The tape of a [Source]
+    line is a regular file of at most 10 MiB. Anything else, such as a FIFO, a
+    directory or a text file, is {!constructor-Invalid} before anything plays. A
+    size beyond 100000 pixels, a terminal beyond 2000 cells a side, a
+    [Set LetterSpacing] or [Set LineHeight] beyond 100000 and a
     [Set PlaybackSpeed] beyond 100000, or positive and below 0.001, are
     {!constructor-Unsupported}. *)
