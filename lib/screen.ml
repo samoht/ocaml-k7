@@ -63,12 +63,14 @@ let clean s =
   then s
   else "\xef\xbf\xbd"
 
-let cell grid idx =
-  let attrs = Ansi.Attr.unpack (Matrix_grid.get_attrs grid idx) in
-  let bg = colour (Matrix_grid.get_bg grid idx) in
-  if Matrix_grid.is_continuation grid idx then
-    { text = ""; width = 0; fg = Default; bg; attrs }
+(* The cells of a wide glyph after its first take its colours and
+   attributes, as xterm.js paints the whole glyph with them. *)
+let rec cell grid idx =
+  if Matrix_grid.is_continuation grid idx && idx > 0 then
+    { (cell grid (idx - 1)) with text = ""; width = 0 }
   else
+    let attrs = Ansi.Attr.unpack (Matrix_grid.get_attrs grid idx) in
+    let bg = colour (Matrix_grid.get_bg grid idx) in
     let text =
       if Matrix_grid.is_empty grid idx then " "
       else clean (Matrix_grid.get_text grid idx)
