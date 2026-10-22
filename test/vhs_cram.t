@@ -63,13 +63,27 @@ A failing vhs is reported with what it printed.
   $ cat > fake-vhs <<'EOF'
   > #!/bin/sh
   > cat > /dev/null
-  > echo 'Error: timeout waiting for "Line" to match >$'
+  > echo 'Error: no browser'
   > exit 1
   > EOF
   $ chmod +x fake-vhs
   $ vhs-cram --vhs ./fake-vhs --output demo.gif demo.t
   vhs-cram: demo.t: ./fake-vhs exited with code 1
-    Error: timeout waiting for "Line" to match >$
+    Error: no browser
+  [123]
+
+A wait of vhs that times out is said in words, without the regular
+expression of the prompt mark, with the option that waits longer.
+
+  $ cat > slow-vhs <<'EOF'
+  > #!/bin/sh
+  > cat > /dev/null
+  > printf 'Error: timeout waiting for "Line /\\x{200B}$/" to match /\\x{200B}$/; last value was: > sleep 99\n'
+  > exit 1
+  > EOF
+  $ chmod +x slow-vhs
+  $ vhs-cram --vhs ./slow-vhs --wait-timeout 2 --output demo.gif demo.t
+  vhs-cram: demo.t: vhs timed out after 2 seconds waiting for the prompt after a command; last value was: > sleep 99; --wait-timeout gives it longer
   [123]
 
 Setup and clear finish while the recording is still hidden, after

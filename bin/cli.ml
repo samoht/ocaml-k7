@@ -43,30 +43,92 @@ let write flow s =
   | exception Eio.Io (err, _) ->
       Error (Fmt.kstr Option.some "%a" Eio.Exn.pp_err err)
 
+(* [shown s] is [s] as [Vhs.pp_error] prints it: without escape sequences,
+   controls and the invisible characters of the prompt mark. *)
+let shown s = Fmt.str "%a" Vhs.pp_error (Io s)
+let last_value = function "" -> "" | last -> "; last value was: " ^ shown last
+
+(* [after cram tape line] is the prompt that the wait on line [line] of
+   [tape] waits for, in words. The waits of a cram tape are the setup's,
+   then one after each command. *)
+let after cram tape line =
+  let waits =
+    String.split_on_char '\n' (Vhs.to_string tape)
+    |> List.filteri (fun i l -> i < line && String.starts_with ~prefix:"Wait" l)
+    |> List.length
+  in
+  match Cram.command cram (waits - 1) with
+  | Some first ->
+      Fmt.str "the prompt after command %d, %s" (waits - 1) (Cram.quote first)
+  | None -> "the prompt after the setup scripts"
+
+(* [rest_after sub l] is what follows the first [sub] in [l], if any. *)
+let rest_after sub l =
+  let n = String.length sub in
+  let rec go i =
+    match String.index_from_opt l i sub.[0] with
+    | Some j when j + n <= String.length l ->
+        if String.sub l j n = sub then
+          Some (String.sub l (j + n) (String.length l - j - n))
+        else go (j + 1)
+    | _ -> None
+  in
+  go 0
+
+(* What [vhs] last read in a wait that timed out, from the line of its
+   message, if a wait timed out. *)
+let vhs_timeout output =
+  List.find_map
+    (fun l ->
+      Option.map
+        (fun rest ->
+          Option.value (rest_after "last value was: " rest) ~default:"")
+        (rest_after "timeout waiting for" l))
+    (String.split_on_char '\n' output)
+
+let seconds_of n = Fmt.str "%d second%s" n (if n = 1 then "" else "s")
+
 (* A command that leaves bash at its continuation prompt makes the next
-   wait time out; the error then names it. A native timeout carries the line
-   that [vhs] prints after "last value was: ". *)
-let render_error ~setup ~name src e =
+   wait time out; the error then names it. A timeout otherwise names the
+   prompt it waited for, in words, without the prompt mark of the tape's
+   pattern, and the option that waits longer. *)
+let render_error ~setup ~wait ~name ~tape src e =
+  let cram = Result.to_option (Cram.parse src) in
+  let unfinished output =
+    Option.bind cram (fun t -> Cram.unfinished ~setup t output)
+  in
+  let longer = "; --wait-timeout gives it longer" in
   let output =
     match e with
     | Vhs.Failed { output; _ } -> Some output
-    | Timeout { last; _ } -> Some ("last value was: " ^ last)
+    | Timeout { last; _ } | Exited { last; _ } ->
+        Some ("last value was: " ^ last)
     | _ -> None
   in
-  match output with
-  | Some output -> (
-      match
-        Option.bind
-          (Result.to_option (Cram.parse src))
-          (fun t -> Cram.unfinished ~setup t output)
-      with
-      | Some (n, line) ->
-          Fmt.str
-            "%s: command %d, %s, left bash waiting for more input, such as the \
-             end of a quote or of a here-document"
-            name n (Cram.quote line)
-      | None -> Fmt.str "%s: %a" name Vhs.pp_error e)
-  | None -> Fmt.str "%s: %a" name Vhs.pp_error e
+  match (Option.bind output unfinished, e, cram) with
+  | Some (n, line), _, _ ->
+      Fmt.str
+        "%s: command %d, %s, left bash waiting for more input, such as the end \
+         of a quote or of a here-document"
+        name n (Cram.quote line)
+  | None, Timeout { line; last; _ }, Some cram ->
+      Fmt.str "%s: timed out after %s waiting for %s%s%s" name (seconds_of wait)
+        (after cram tape line) (last_value last) longer
+  | None, Exited { status; line; last; _ }, Some cram ->
+      let how =
+        match status with
+        | `Exited n -> Fmt.str "exited (status %d)" n
+        | `Signaled n -> Fmt.str "was killed by signal %d" n
+      in
+      Fmt.str "%s: the shell %s while waiting for %s%s" name how
+        (after cram tape line) (last_value last)
+  | None, Failed { output; _ }, _ when Option.is_some (vhs_timeout output) ->
+      Fmt.str
+        "%s: vhs timed out after %s waiting for the prompt after a command%s%s"
+        name (seconds_of wait)
+        (last_value (Option.get (vhs_timeout output)))
+        longer
+  | None, _, _ -> Fmt.str "%s: %a" name Vhs.pp_error e
 
 let record env ~print ~vhs ~setup ?wait_timeout_s ~output input =
   let* src =
@@ -88,7 +150,10 @@ let record env ~print ~vhs ~setup ?wait_timeout_s ~output input =
     (if Filename.extension output = ".svg" then
        Vhs.record ~clock ~proc ~cwd tape
      else Vhs.render ~vhs ~clock ~proc ~cwd tape)
-    |> Result.map_error (render_error ~setup ~name:input src)
+    |> Result.map_error
+         (render_error ~setup
+            ~wait:(Option.value wait_timeout_s ~default:15)
+            ~name:input ~tape src)
 
 let run env ~print ~vhs ~setup ?wait_timeout_s ~output input =
   match record env ~print ~vhs ~setup ?wait_timeout_s ~output input with
@@ -179,7 +244,9 @@ let man =
        command that replaces $(b,PROMPT_COMMAND) makes the next wait time out. \
        A command that leaves bash waiting for more input, such as an \
        unterminated quote or here-document, makes the wait after it time out \
-       too; $(tname) then names that command.";
+       too; $(tname) then names that command. A wait that times out names the \
+       command whose prompt did not come back, when the recording is native, \
+       and a shell that exits ends a native recording at once.";
     `S Manpage.s_examples;
     `Pre
       "$(cmd) --output demo.svg demo.t\n\

@@ -81,6 +81,10 @@ let parse src =
 
 let is_empty t = t = []
 
+let command t n =
+  if n < 1 then None
+  else match List.nth_opt t (n - 1) with Some (l :: _) -> Some l | _ -> None
+
 let sh_quote s =
   "'" ^ String.concat {|'\''|} (String.split_on_char '\'' s) ^ "'"
 
@@ -150,14 +154,14 @@ let prepare mark setup =
       ready mark;
     ]
 
-let command mark lines =
+let typed mark lines =
   [
     Vhs.type' (String.concat "\n" lines ^ "\n"); ready mark; Vhs.sleep (Ms 1000);
   ]
 
 let actions ~setup t =
   let mark = mark ~setup t in
-  prepare mark setup :: List.concat_map (command mark) t
+  prepare mark setup :: List.concat_map (typed mark) t
 
 (* [find sub s ~from] is the index of the first [sub] in [s] from [from]. *)
 let find sub s ~from =

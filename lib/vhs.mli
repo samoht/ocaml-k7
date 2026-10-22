@@ -177,11 +177,23 @@ type error =
           write, named, and why: an output that only the other of {!render} and
           {!record} writes, or what the {{!native_details}native recorder} does
           not play. *)
-  | Timeout of { wait : string; last : string }
-      (** The wait line [wait] of {!record} did not hold in time; [last] is the
-          line or the screen it last read. Only {!record} returns it: {!render}
-          reports a wait that times out as {!constructor-Failed}, with the
-          message of [vhs] in [output]. *)
+  | Timeout of { wait : string; line : int; last : string }
+      (** The wait of {!record} on line [line] of {!to_string}[ t], counted from
+          1, did not hold in time; [wait] is that line, such as [Wait+Line /re/]
+          or [Wait@2000ms], or for a wait of a sourced tape the line of that
+          tape, and [last] is the line or the screen it last read. Only
+          {!record} returns it: {!render} reports a wait that times out as
+          {!constructor-Failed}, with the message of [vhs] in [output]. *)
+  | Exited of {
+      status : Eio.Process.exit_status;
+      wait : string;
+      line : int;
+      last : string;
+    }
+      (** The shell of {!record} exited with [status] while the wait [wait] on
+          line [line], as for {!constructor-Timeout}, did not hold, which it
+          then never does: {!record} fails at once rather than when the wait
+          times out. *)
   | Invalid of string
       (** A tape VHS rejects, or one of whose lines it ignores, naming the first
           offending item, and why. *)
@@ -279,6 +291,7 @@ val record :
       of a sourced tape that has the path of an output or of another
       [Screenshot];
     - [Error (Timeout _)] if a wait does not hold in time;
+    - [Error (Exited _)] as soon as the shell exits while a wait does not hold;
     - [Error (Executable_not_found _)] if the shell or the executable of a
       [Require] line is not on the [PATH];
     - [Error (Io _)] if [cwd] is not a directory of the native file system, and

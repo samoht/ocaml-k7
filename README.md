@@ -207,7 +207,10 @@ output that ends with `>`, or with a zero-width space, while its command still
 runs is not mistaken for the prompt. A command that leaves bash waiting for
 more input, such as an unterminated quote or here-document, makes that wait
 time out, and `vhs-cram` then names the command. A wait times out after 15
-seconds, or after the number of seconds `--wait-timeout` gives.
+seconds, or after the number of seconds `--wait-timeout` gives; the error
+names the command whose prompt did not come back, when the recording is
+native, and says that `--wait-timeout` waits longer. A shell that exits, as
+after `exit 3`, ends a native recording at once, with its status.
 
 ## Known limitations
 

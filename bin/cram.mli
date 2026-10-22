@@ -33,6 +33,10 @@ val quote : string -> string
 val is_empty : t -> bool
 (** [is_empty t] is [true] iff [t] has no command. *)
 
+val command : t -> int -> string option
+(** [command t n] is the first line of command [n] of [t], counted from [1], if
+    there is one. *)
+
 val actions : setup:string list -> t -> Vhs.action list
 (** [actions ~setup t] sources the shell scripts [setup] in order, appends to
     bash's [PROMPT_COMMAND], after the hooks [setup] installs, a command that
@@ -54,8 +58,9 @@ val actions : setup:string list -> t -> Vhs.action list
 
 val unfinished : setup:string list -> t -> string -> (int * string) option
 (** [unfinished ~setup t output] is [Some (n, line)] if [output], what [vhs]
-    printed when a recording of [actions ~setup t] timed out, shows bash waiting
-    for more of command [n], counted from [1], whose first line is [line]: an
-    unterminated quote or here-document, or a line that ends with a backslash,
-    leaves bash at its continuation prompt [PS2], where no wait can end. It is
-    [None] otherwise. *)
+    printed, or ["last value was: "] followed by the [last] of a
+    {!Vhs.constructor-Timeout} or a {!Vhs.constructor-Exited}, when a recording
+    of [actions ~setup t] failed, shows bash waiting for more of command [n],
+    counted from [1], whose first line is [line]: an unterminated quote or
+    here-document, or a line that ends with a backslash, leaves bash at its
+    continuation prompt [PS2], where no wait can end. It is [None] otherwise. *)

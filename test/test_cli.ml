@@ -485,6 +485,59 @@ let test_unfinished ~native () =
         Alcotest.failf "error lacks %S: %s" sub msg)
     [ "command 1"; "cat <<EOF"; "waiting for more input" ]
 
+(* [run_err env path ~wait_timeout_s src] runs vhs-cram natively on [src]
+   and is its exit code and what it printed on standard error. *)
+let run_err env path ?wait_timeout_s src =
+  Eio.Path.save ~create:(`Or_truncate 0o644)
+    Eio.Path.(Eio.Stdenv.fs env / path "demo.t")
+    src;
+  Eio.Path.save ~create:(`Or_truncate 0o644)
+    Eio.Path.(Eio.Stdenv.fs env / path "err")
+    "";
+  let err = Unix.openfile (path "err") [ O_WRONLY; O_TRUNC ] 0 in
+  let code =
+    Fun.protect ~finally:(fun () -> Unix.close err) @@ fun () ->
+    redirect Unix.stderr (Some err) @@ fun () ->
+    Cli.run env ~print:false ~vhs:"vhs" ~setup:[] ?wait_timeout_s
+      ~output:(path "out.svg") (path "demo.t")
+  in
+  (code, In_channel.with_open_bin (path "err") In_channel.input_all)
+
+let check_message msg ~has ~lacks =
+  List.iter
+    (fun sub ->
+      if not (contains ~sub msg) then
+        Alcotest.failf "error lacks %S: %s" sub msg)
+    has;
+  List.iter
+    (fun sub ->
+      if contains ~sub msg then Alcotest.failf "error has %S: %s" sub msg)
+    lacks
+
+(* A command that does not give the prompt back in time is named, with the
+   option that waits longer, and the wait is in words, without the prompt
+   mark. *)
+let test_timeout_message () =
+  with_files [] @@ fun env path ->
+  let code, msg =
+    run_err env path ~wait_timeout_s:1 "  $ true\n  $ sleep 5\n"
+  in
+  Alcotest.(check int) "exit code" 123 code;
+  check_message msg
+    ~has:[ "command 2"; "sleep 5"; "1 second"; "--wait-timeout" ]
+    ~lacks:[ "x{200B}"; "x{2060}"; "Wait+Line"; "\u{200B}" ]
+
+(* A shell that exits fails the recording at once, naming the command. *)
+let test_exit_message () =
+  with_files [] @@ fun env path ->
+  let start = Unix.gettimeofday () in
+  let code, msg = run_err env path ~wait_timeout_s:30 "  $ exit 3\n" in
+  Alcotest.(check int) "exit code" 123 code;
+  Alcotest.(check bool) "at once" true (Unix.gettimeofday () -. start < 20.);
+  check_message msg
+    ~has:[ "the shell exited (status 3)"; "command 1"; "exit 3" ]
+    ~lacks:[ "x{200B}"; "Wait+Line"; "timed out" ]
+
 (* Without a UTF-8 locale, bash's readline still takes and shows typed
    non-ASCII text. *)
 let test_non_ascii ~native () =
@@ -523,6 +576,8 @@ let suite =
          ("write errors", test_write_errors);
          ("errors name the input", test_error_names_input);
          ("render real processes", test_render);
+         ("timeout message", test_timeout_message);
+         ("shell exit message", test_exit_message);
          ("command line", test_command);
        ]
       @ readiness ~native:true

@@ -75,7 +75,13 @@ type error =
     }
   | Io of string
   | Unsupported of string
-  | Timeout of { wait : string; last : string }
+  | Timeout of { wait : string; line : int; last : string }
+  | Exited of {
+      status : Eio.Process.exit_status;
+      wait : string;
+      line : int;
+      last : string;
+    }
   | Invalid of string
 
 type t = {
@@ -867,9 +873,17 @@ let pp_error ppf = function
         (List.drop (max 0 (List.length lines - last_lines)) lines)
   | Io msg -> Fmt.string ppf (one_line msg)
   | Unsupported why -> Fmt.string ppf (one_line why)
-  | Timeout { wait; last } ->
-      Fmt.pf ppf "%s timed out; last value was: %s" (one_line wait)
-        (one_line last)
+  | Timeout { wait; line; last } ->
+      Fmt.pf ppf
+        "timed out waiting for line %d, %s; last value was: %s; give the wait \
+         a longer ~timeout or the tape a Set WaitTimeout"
+        line (one_line wait) (one_line last)
+  | Exited { status; wait; line; last } ->
+      (match status with
+      | `Exited n -> Fmt.pf ppf "the shell exited (status %d)" n
+      | `Signaled n -> Fmt.pf ppf "the shell was killed by signal %d" n);
+      Fmt.pf ppf " while waiting for line %d, %s; last value was: %s" line
+        (one_line wait) (one_line last)
   | Invalid msg -> Fmt.string ppf (one_line msg)
 
 let fs_message path = function
@@ -1024,7 +1038,8 @@ let render ?(vhs = "vhs") ~clock ~proc ~cwd t =
 
 let native_error : Native.error -> error = function
   | Unsupported why -> Unsupported ("not recorded natively: " ^ why)
-  | Timeout { wait; last } -> Timeout { wait; last }
+  | Timeout { wait; line; last } -> Timeout { wait; line; last }
+  | Exited { status; wait; line; last } -> Exited { status; wait; line; last }
   | Executable_not_found exe -> Executable_not_found exe
   | Io msg -> Io msg
   | Invalid msg -> Invalid msg

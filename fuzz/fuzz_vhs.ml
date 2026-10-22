@@ -331,7 +331,12 @@ let test_unified_errors message last =
       check (String.is_valid_utf_8 output);
       if has_control output then failf "non-printable error: %S" output)
     Vhs.
-      [ Invalid message; Unsupported message; Timeout { wait = message; last } ]
+      [
+        Invalid message;
+        Unsupported message;
+        Timeout { wait = message; line = 1; last };
+        Exited { status = `Exited 1; wait = message; line = 1; last };
+      ]
 
 (* [Ctrl c] is accepted iff [c] is an ASCII letter or one of [@[\\]^-.];
    [Alt c] iff [c] is a letter other than [m] and [s], [.] or a bracket. *)

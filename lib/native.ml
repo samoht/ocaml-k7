@@ -10,7 +10,13 @@ type error =
   | Executable_not_found of string
   | Io of string
   | Unsupported of string
-  | Timeout of { wait : string; last : string }
+  | Timeout of { wait : string; line : int; last : string }
+  | Exited of {
+      status : Eio.Process.exit_status;
+      wait : string;
+      line : int;
+      last : string;
+    }
   | Invalid of string
 
 open Tape_syntax
@@ -35,6 +41,7 @@ type command =
   | Sleep of int
   | Wait of {
       line : string;
+      at : int;  (** The line of the tape, from 1. *)
       scope : scope;
       timeout : int option;
       pattern : Regexp_match.t option;
@@ -339,7 +346,7 @@ type t = {
 let is_text path =
   match extension path with ".txt" | ".ascii" | ".test" -> true | _ -> false
 
-let wait_command line tokens =
+let wait_command ~at line tokens =
   let scope, rest =
     match tokens with
     | Sym '+' :: Str "Screen" :: rest -> (Screen, rest)
@@ -352,7 +359,7 @@ let wait_command line tokens =
     | Pattern p :: _ -> Some (Regexp_match.compile p)
     | _ -> None
   in
-  Wait { line; scope; timeout; pattern }
+  Wait { line; at; scope; timeout; pattern }
 
 (* The settings, environment and requirements a line adds, or its action. *)
 (* The lines of the tape a [Source] line names, as VHS's parser reads it:
@@ -421,12 +428,12 @@ let data_uri ~source line path =
   | Ok data -> "data:" ^ mime ^ ";base64," ^ base64 data
   | Error msg -> stop (Io msg)
 
-let rec read ~source line t =
+let rec read ~source ~at line t =
   match tokens line with
   | [] -> t
   | Keyword "Source" :: p :: _ ->
       List.fold_left
-        (fun t l -> read ~source l t)
+        (fun t l -> read ~source ~at l t)
         t
         (sourced ~source line (lit p))
   | Keyword "Output" :: p :: _ when t.actions = [] ->
@@ -462,7 +469,7 @@ let rec read ~source line t =
         | Keyword "Alt" :: Sym '+' :: k :: _ -> Alt k
         | Keyword "Shift" :: Sym '+' :: k :: _ -> Shift k
         | Keyword "Sleep" :: rest -> Sleep (ms line (fst (time line rest)))
-        | Keyword "Wait" :: rest -> wait_command line rest
+        | Keyword "Wait" :: rest -> wait_command ~at line rest
         | [ Keyword "Hide" ] -> Hide
         | [ Keyword "Show" ] -> Show
         | Keyword "Copy" :: rest -> Copy (strings rest)
@@ -488,7 +495,11 @@ let of_lines ?(source = fun path -> Error (path ^ ": no file to read")) lines =
     }
   in
   match
-    let t = List.fold_left (fun t line -> read ~source line t) empty lines in
+    let t, _ =
+      List.fold_left
+        (fun (t, at) line -> (read ~source ~at line t, at + 1))
+        (empty, 1) lines
+    in
     { t with look = style t.config }
   with
   | t ->
@@ -645,6 +656,8 @@ type state = {
   mutable submitted : int option;
       (** The cursor's row when a line was submitted, until the terminal starts
           another line. *)
+  mutable exited : Eio.Process.exit_status option;
+      (** How the shell exited, once it has. *)
 }
 
 let now st = Eio.Time.Mono.now st.clock
@@ -705,10 +718,31 @@ let settle st output =
       st.submitted <- None
   | _ -> ()
 
+(* How the shell exited, once its terminal has closed: it can take a moment
+   to exit after closing it. [None] if it still runs a second later. *)
+let reap st =
+  let rec go n pid =
+    match Unix.waitpid [ WNOHANG ] pid with
+    | 0, _ when n > 0 ->
+        Eio.Time.Mono.sleep st.clock 0.01;
+        go (n - 1) pid
+    | 0, _ -> None
+    | _, WEXITED c -> Some (`Exited c)
+    | _, (WSIGNALED s | WSTOPPED s) -> Some (`Signaled s)
+    | exception Unix.Unix_error _ -> None
+  in
+  Option.bind (Pty.pid st.pty) (go 100)
+
+(* The end of the terminal's output: the shell has exited. *)
+let closed st =
+  st.exited <- reap st;
+  Eio.Condition.broadcast st.changed;
+  Eio.Fiber.await_cancel ()
+
 (* The terminal answers the queries it reads. *)
 let rec reader st buf =
   match Pty.read st.pty buf 0 (Bytes.length buf) with
-  | 0 -> Eio.Fiber.await_cancel ()
+  | 0 -> closed st
   | n ->
       let output = Bytes.sub_string buf 0 n in
       Screen.feed st.term output;
@@ -719,7 +753,7 @@ let rec reader st buf =
   | exception Unix.Unix_error ((EAGAIN | EWOULDBLOCK | EINTR), _, _) ->
       Eio_unix.await_readable (fd st);
       reader st buf
-  | exception Unix.Unix_error _ -> Eio.Fiber.await_cancel ()
+  | exception Unix.Unix_error _ -> closed st
 
 (* Typing scrolls the screen back down. A carriage return or a line feed
    submits the line under the cursor. *)
@@ -792,7 +826,7 @@ let wait_text st = function
         if i >= 0 && i < Array.length lines then lines.(i) else ""
   | Screen -> String.concat "\n" (top st)
 
-let wait st c ~line ~scope ~timeout ~pattern =
+let wait st c ~line ~at ~scope ~timeout ~pattern =
   let re = Option.value pattern ~default:c.wait_pattern in
   let timeout = Option.value timeout ~default:c.wait_timeout in
   st.started <- now st;
@@ -809,13 +843,20 @@ let wait st c ~line ~scope ~timeout ~pattern =
         false
     | _ -> h
   in
+  (* A shell that has exited changes the screen no more. *)
   let rec loop () =
-    if not (holds ()) then (
-      Eio.Condition.await_no_mutex st.changed;
-      loop ())
+    if not (holds ()) then
+      match st.exited with
+      | Some status ->
+          stop
+            (Exited
+               { status; wait = line; line = at; last = wait_text st scope })
+      | None ->
+          Eio.Condition.await_no_mutex st.changed;
+          loop ()
   in
   if not (within st (float timeout /. 1000.) loop) then
-    stop (Timeout { wait = line; last = wait_text st scope });
+    stop (Timeout { wait = line; line = at; last = wait_text st scope });
   if not st.hidden then st.logical <- st.logical + elapsed st;
   st.started <- now st;
   st.cap <- Some 0
@@ -846,8 +887,8 @@ let run_command st c = function
   | Alt k -> press st ("\027" ^ modified ~shift:false k)
   | Shift k -> press st (modified ~shift:true k)
   | Sleep ms -> step st ms
-  | Wait { line; scope; timeout; pattern } ->
-      wait st c ~line ~scope ~timeout ~pattern
+  | Wait { line; at; scope; timeout; pattern } ->
+      wait st c ~line ~at ~scope ~timeout ~pattern
   | Hide -> st.hidden <- true
   | Show ->
       st.hidden <- false;
@@ -977,6 +1018,7 @@ let state t ~clock pty =
     still = None;
     stills = [];
     submitted = None;
+    exited = None;
   }
 
 let recording t st =
@@ -997,11 +1039,16 @@ let play ~clock ~env ~cwd t =
   let clock = (clock :> Eio.Time.Mono.ty Eio.Resource.t) in
   match
     let pty = spawn ~env ~cwd t t.look in
-    Fun.protect ~finally:(fun () ->
-        Eio.Cancel.protect (fun () -> close clock pty))
-    @@ fun () ->
-    Pty.set_nonblock pty;
     let st = state t ~clock pty in
+    (* A shell already reaped is not signalled: its pid may be another
+       process's by now. *)
+    let finally () =
+      if Option.is_some st.exited then
+        try Unix.close (Pty.file_descr pty) with Unix.Unix_error _ -> ()
+      else close clock pty
+    in
+    Fun.protect ~finally:(fun () -> Eio.Cancel.protect finally) @@ fun () ->
+    Pty.set_nonblock pty;
     Eio.Fiber.first
       (fun () -> reader st (Bytes.create 65536))
       (fun () ->

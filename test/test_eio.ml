@@ -277,13 +277,24 @@ let test_pp_error_names () =
     (pp (Failed { vhs = "a\xc2\x9b2Jb"; status = `Exited 1; output = "" }));
   expect "io" "dir x: no such file or directory"
     (pp (Io "dir\nx\027[0m: no such file or directory"));
-  expect "format characters" "Wait+Line /x/ timed out; last value was: > ab"
+  expect "format characters"
+    "timed out waiting for line 3, Wait+Line /x/; last value was: > ab; give \
+     the wait a longer ~timeout or the tape a Set WaitTimeout"
     (pp
        (Timeout
           {
             wait = "Wait+Line /x/";
+            line = 3;
             last = "> a\u{200B}\u{2060}b\u{FEFF}\u{200B}";
-          }))
+          }));
+  expect "shell exit"
+    "the shell exited (status 3) while waiting for line 3, Wait; last value \
+     was: >"
+    (pp (Exited { status = `Exited 3; wait = "Wait"; line = 3; last = ">" }));
+  expect "shell killed"
+    "the shell was killed by signal 9 while waiting for line 3, Wait; last \
+     value was: >"
+    (pp (Exited { status = `Signaled 9; wait = "Wait"; line = 3; last = ">" }))
 
 let test_spawn_errors () =
   Eio_mock.Backend.run @@ fun () ->

@@ -90,11 +90,34 @@ let test_timeout () =
     tape Vhs.[ type' "echo hi\n"; wait ~timeout:(Ms 300) (Screen "never") ]
   in
   match record env cwd t with
-  | Error (Timeout { wait; last }) ->
+  | Error (Timeout { wait; line; last } as e) ->
       Alcotest.(check string) "wait" "Wait+Screen@300ms /never/" wait;
-      check_contains "last screen" ~sub:"> echo hi\nhi" last
+      (* The line of [Vhs.to_string t]: settings, then Type and Enter. *)
+      Alcotest.(check string)
+        "line" "Wait+Screen@300ms /never/"
+        (List.nth (String.split_on_char '\n' (Vhs.to_string t)) (line - 1));
+      check_contains "last screen" ~sub:"> echo hi\nhi" last;
+      check_contains "names the line" ~sub:(Fmt.str "line %d," line)
+        (Fmt.str "%a" Vhs.pp_error e);
+      check_contains "how to wait longer"
+        ~sub:"~timeout or the tape a Set WaitTimeout"
+        (Fmt.str "%a" Vhs.pp_error e)
   | Ok _ -> Alcotest.fail "no timeout"
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+
+(* A shell that exits while a wait waits for it fails the wait at once,
+   with its status, not after the wait's timeout. *)
+let test_shell_exit () =
+  with_dir @@ fun env cwd ->
+  let t = tape Vhs.[ type' "exit 3\n"; wait ~timeout:(Ms 20_000) Prompt ] in
+  let start = Unix.gettimeofday () in
+  (match record env cwd t with
+  | Error (Exited { status = `Exited 3; wait = "Wait@20000ms"; _ } as e) ->
+      check_contains "message" ~sub:"the shell exited (status 3) while waiting"
+        (Fmt.str "%a" Vhs.pp_error e)
+  | Ok _ -> Alcotest.fail "no error"
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+  Alcotest.(check bool) "at once" true (Unix.gettimeofday () -. start < 10.)
 
 (* A wait's own timeout takes precedence over a raw [Set WaitTimeout], which
    the other waits take. *)
@@ -1033,6 +1056,7 @@ let suite =
          ("zero-speed prompt wait", test_zero_speed_prompt);
          ("screenshot over the recording", test_screenshot_clash);
          ("timeout", test_timeout);
+         ("shell exit", test_shell_exit);
          ("timeout precedence", test_timeout_precedence);
          ("hidden", test_hidden);
          ("scroll", test_scroll);
