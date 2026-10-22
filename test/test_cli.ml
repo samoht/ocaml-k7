@@ -49,6 +49,10 @@ Sleep 1000ms
     "  $ echo \001\n" ~setup:[] ~output:"x.gif";
   error "output" {|Output "demo": neither an extension nor a trailing slash|}
     "  $ true\n" ~setup:[] ~output:"demo";
+  (* VHS reads extensions case-sensitively. *)
+  error "upper case"
+    {|Output "demo.SVG": not .gif, .mp4, .webm, .txt, .ascii, .test, .png or .svg; extensions are lower case|}
+    "  $ true\n" ~setup:[] ~output:"demo.SVG";
   (* Typed into bash, a tab completes and a newline continues the line, so
      neither reaches [source] as part of the path. *)
   List.iter
@@ -476,7 +480,7 @@ let test_unfinished ~native () =
     Cli.run env ~print:false
       ~vhs:(Option.value oracle ~default:"vhs")
       ~setup:[]
-      ~output:(path (if native then "out.svg" else "out.txt"))
+      ~output:(path (if native then "out.svg" else "out.gif"))
       (path "demo.t")
   in
   let msg = In_channel.with_open_bin (path "err") In_channel.input_all in
@@ -515,6 +519,20 @@ let check_message msg ~has ~lacks =
     (fun sub ->
       if contains ~sub msg then Alcotest.failf "error has %S: %s" sub msg)
     lacks
+
+(* vhs-cram records the text outputs natively too, without vhs. *)
+let test_native_text () =
+  with_files [ ("demo.t", 0o644, "  $ echo native-text\n") ] @@ fun env path ->
+  List.iter
+    (fun output ->
+      let code =
+        Cli.run env ~print:false ~vhs:"vhs-no-such-executable" ~setup:[]
+          ~output:(path output) (path "demo.t")
+      in
+      Alcotest.(check int) output 0 code;
+      Native_test.check_contains output ~sub:"native-text"
+        (In_channel.with_open_bin (path output) In_channel.input_all))
+    [ "out.txt"; "out.ascii"; "out.test" ]
 
 (* A command that does not give the prompt back in time is named, with the
    option that waits longer, and the wait is in words, without the prompt
@@ -579,6 +597,7 @@ let suite =
          ("errors name the input", test_error_names_input);
          ("render real processes", test_render);
          ("timeout message", test_timeout_message);
+         ("native text outputs", test_native_text);
          ("shell exit message", test_exit_message);
          ("command line", test_command);
        ]
