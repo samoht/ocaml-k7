@@ -436,6 +436,76 @@ let test_margin_fill_refused () =
       ({|Source "fifo.tape"|}, "not a regular file");
     ]
 
+(* Each engine reports an output it cannot write before it plays: a
+   [Screenshot] needs its directory, and the other outputs a directory VHS
+   can create, as it creates them. *)
+let test_output_dirs () =
+  with_dir @@ fun env cwd ->
+  let dir = Option.get (Eio.Path.native cwd) in
+  Eio.Path.save ~create:(`Or_truncate 0o644) Eio.Path.(cwd / "file") "";
+  Eio.Path.mkdir ~perm:0o555 Eio.Path.(cwd / "ro");
+  let played = Eio.Path.(cwd / "played") in
+  let fake = Filename.concat dir "fake-vhs" in
+  Eio.Path.save ~create:(`Or_truncate 0o755)
+    Eio.Path.(cwd / "fake-vhs")
+    (Fmt.str "#!/bin/sh\ncat > /dev/null\ntouch %s\n"
+       (Filename.quote (Filename.concat dir "played")));
+  let refused name ~engine ~outputs ~raws sub =
+    let t =
+      match
+        Vhs.tape ~settings ~outputs
+          (List.map Vhs.raw raws @ Vhs.[ type' "touch played\n"; wait Prompt ])
+      with
+      | Ok t -> t
+      | Error e -> Alcotest.failf "%s: %a" name Vhs.pp_error e
+    in
+    match engine t with
+    | Error (Vhs.Io msg) ->
+        check_contains name ~sub msg;
+        Alcotest.(check bool)
+          (name ^ ": not played") false (Eio.Path.is_file played)
+    | Ok () -> Alcotest.failf "%s: Ok" name
+    | Error e -> Alcotest.failf "%s: %a" name Vhs.pp_error e
+  in
+  let record = play env cwd in
+  let render t =
+    Vhs.render ~vhs:fake
+      ~clock:(Eio.Stdenv.mono_clock env)
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd t
+  in
+  refused "record, file" ~engine:record ~outputs:[ "file/demo.svg" ] ~raws:[]
+    "file/demo.svg: file is not a directory";
+  refused "record, read-only" ~engine:record ~outputs:[ "ro/new/demo.svg" ]
+    ~raws:[] "ro/new/demo.svg: cannot write in ro";
+  refused "record, screenshot" ~engine:record ~outputs:[ "demo.svg" ]
+    ~raws:[ {|Screenshot "none/shot.svg"|} ]
+    "none/shot.svg: no directory none";
+  refused "render, read-only" ~engine:render ~outputs:[ "ro/demo.gif" ] ~raws:[]
+    "ro/demo.gif: cannot write in ro";
+  refused "render, screenshot" ~engine:render ~outputs:[ "demo.gif" ]
+    ~raws:[ {|Screenshot "none/shot.png"|} ]
+    "none/shot.png: no directory none";
+  refused "render, frames" ~engine:render ~outputs:[ "none/frames/" ] ~raws:[]
+    "none/frames/: no directory none";
+  (* VHS creates the directories of the other outputs, and so does record. *)
+  let t =
+    match
+      Vhs.tape ~settings
+        ~outputs:[ "a/b/demo.svg"; "c/demo.txt" ]
+        Vhs.[ type' "true\n"; wait Prompt ]
+    with
+    | Ok t -> t
+    | Error e -> Alcotest.failf "%a" Vhs.pp_error e
+  in
+  (match record t with
+  | Ok () -> ()
+  | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+  Alcotest.(check bool)
+    "created" true
+    (Eio.Path.is_file Eio.Path.(cwd / "a" / "b" / "demo.svg")
+    && Eio.Path.is_file Eio.Path.(cwd / "c" / "demo.txt"))
+
 (* zsh plays natively, with VHS's prompt. *)
 let test_zsh () =
   with_dir @@ fun env cwd ->
@@ -1109,6 +1179,7 @@ let suite =
          ("window bar", test_window_bar);
          ("margin fill", test_margin_fill);
          ("margin fill refused", test_margin_fill_refused);
+         ("output directories", test_output_dirs);
          ("zsh", test_zsh);
          ("fish", test_fish);
          ("replies", test_replies);
