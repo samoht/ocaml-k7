@@ -5,8 +5,12 @@
 
 open Cmdliner
 
+let decimal s =
+  if s <> "" && String.for_all Char.Ascii.is_digit s then int_of_string_opt s
+  else None
+
 let positive what s =
-  match int_of_string_opt s with
+  match decimal s with
   | Some n when n > 0 -> Ok n
   | _ -> Fmt.error "%a is not a positive %s" Quote.pp s what
 
@@ -81,7 +85,7 @@ let seconds s =
     Fmt.error "%a is too large: a wait lasts at most %d seconds" Quote.pp s
       max_seconds
   in
-  match int_of_string_opt s with
+  match decimal s with
   | Some n when n > 0 && n <= max_seconds -> Ok n
   | Some n when n > 0 -> too_large ()
   (* Digits [int_of_string] cannot read are beyond [max_int]. *)
