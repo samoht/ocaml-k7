@@ -1,5 +1,5 @@
 (copy_files
- ../lib/{screen,tape_syntax,quote,regexp_syntax,unicode,unicode_data}.{ml,mli})
+ ../lib/{screen,tape_syntax,quote,regexp_syntax,unicode,unicode_data,pty_reader}.{ml,mli})
 
 (executable
  (name fuzz)
@@ -13,6 +13,7 @@
   fmt
   alcobar
   eio
+  eio.mock
   eio_main
   unix))
 

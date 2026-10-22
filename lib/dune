@@ -6,6 +6,7 @@
   casefold_data
   native
   palette
+  pty_reader
   quote
   regexp_match
   regexp_syntax

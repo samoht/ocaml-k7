@@ -1252,6 +1252,39 @@ let test_run_program () =
         "the last screen holds a second" 2000. duration
 
 (* The clock never moves, so the program's output arrives at 0ms. *)
+(* What a program writes at once, more than the terminal holds, is all read
+   before run returns. The clock stands still. *)
+let test_run_burst () =
+  with_dir @@ fun env cwd ->
+  Eio.Path.save ~create:(`Or_truncate 0o644)
+    Eio.Path.(cwd / "burst")
+    (String.make 65_536 'x' ^ "\r\027[2KFINAL_MARKER");
+  let settings = K7.[ Columns 40; Rows 6; Font_size 10 ] in
+  let last image =
+    match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows:6 image with
+    | Ok frames -> List.nth frames (List.length frames - 1)
+    | Error e -> Alcotest.fail e
+  in
+  let expected =
+    K7.svg ~settings
+      [
+        ( Ms 0,
+          String.concat "\r\n"
+            (List.init 5 (fun _ -> String.make 40 'x') @ [ "FINAL_MARKER" ]) );
+      ]
+  in
+  match
+    ( K7.run ~settings ~show:""
+        ~clock:(Eio_mock.Clock.Mono.make ())
+        ~proc:(Eio.Stdenv.process_mgr env)
+        ~cwd [ "/bin/cat"; "burst" ],
+      expected )
+  with
+  | Ok (image, `Exited 0), Ok expected ->
+      Alcotest.(check string) "last screen" (last expected) (last image)
+  | Error e, _ | _, Error e -> Alcotest.failf "%a" K7.pp_error e
+  | Ok (_, status), _ -> Alcotest.failf "cat: %a" Eio.Process.pp_status status
+
 let test_run_delay () =
   with_dir @@ fun env cwd ->
   let clock = Eio_mock.Clock.Mono.make () in
@@ -1783,6 +1816,7 @@ let suite =
          ("run a killed program", test_run_signal);
          ("run shows the command line", test_run_command_line);
          ("run shows the command line alone first", test_run_delay);
+         ("run reads a burst of 64 KiB", test_run_burst);
          ("run keeps the rows", test_run_rows);
          ("run shows another line", test_run_show);
          ("run cancelled", test_run_cancel);

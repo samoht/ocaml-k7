@@ -1207,37 +1207,6 @@ let test_run_path_override n =
   | Ok _ -> fail "the executable in the overridden PATH did not run"
   | Error e -> failf "%a" K7.pp_error e
 
-let test_run_large_burst n =
-  with_dir @@ fun env path ->
-  let text =
-    String.make (65_536 * (1 + (n mod 32))) 'x' ^ "\r\027[2KFINAL_MARKER"
-  in
-  save env (path "burst") text;
-  let settings = K7.[ Columns 40; Rows 6; Font_size 10 ] in
-  let last image =
-    match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows:6 image with
-    | Ok frames -> List.nth frames (List.length frames - 1)
-    | Error e -> failf "%s" e
-  in
-  match
-    ( K7.run ~settings ~show:""
-        ~clock:(Eio.Stdenv.mono_clock env)
-        ~proc:(Eio.Stdenv.process_mgr env)
-        ~cwd:Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "burst"))
-        [ "/bin/cat"; "burst" ],
-      K7.svg ~settings
-        [
-          ( Ms 0,
-            String.concat "\r\n"
-              (List.init 5 (fun _ -> String.make 40 'x') @ [ "FINAL_MARKER" ])
-          );
-        ] )
-  with
-  | Ok (image, `Exited 0), Ok expected ->
-      check_eq ~pp:pp_string (last expected) (last image)
-  | Error e, _ | _, Error e -> failf "%a" K7.pp_error e
-  | Ok _, _ -> fail "cat did not exit successfully"
-
 let test_run_signal_disposition n =
   with_dir @@ fun env _ ->
   let previous = Sys.signal Sys.sigpipe Sys.Signal_ignore in
@@ -1461,8 +1430,6 @@ let with_programs =
       test_command_line_roundtrip;
     test_case "run searches the overridden PATH" [ uint8 ]
       test_run_path_override;
-    test_case "run drains large immediate bursts before returning" [ uint8 ]
-      test_run_large_burst;
     test_case "run children have normal signal dispositions" [ uint8 ]
       test_run_signal_disposition;
     test_case "run reports exec errors instead of a program status" [ uint8 ]
@@ -1753,8 +1720,73 @@ let test_replace_outputs n =
   let none = get (K7.with_outputs [] original) in
   check_eq ~pp:pp_string "Sleep 100ms\n" (K7.to_string none)
 
+(* A fake terminal: the program writes [output] into a buffer of
+   [capacity] bytes and exits, and the terminal, once empty, reads as
+   [closed] says: not ready, closed, or failed. The program runs while the
+   reader asks whether it has exited, and the mock clock moves only when
+   every fiber waits. *)
+let test_reader output capacity closed size =
+  Eio_mock.Backend.run_full @@ fun env ->
+  let clock = Eio.Stdenv.mono_clock env in
+  let capacity = 1 + capacity and size = 1 + size in
+  let pending = Buffer.create capacity and fed = Buffer.create 256 in
+  let changed = Eio.Condition.create () and exited = ref false in
+  let empty () =
+    match closed mod 3 with
+    | 0 -> raise (Unix.Unix_error (EAGAIN, "read", ""))
+    | 1 -> 0
+    | _ -> raise (Unix.Unix_error (EIO, "read", ""))
+  in
+  let read buf off len =
+    if Buffer.length pending = 0 then
+      if !exited then empty () else raise (Unix.Unix_error (EAGAIN, "read", ""))
+    else
+      let n = min len (Buffer.length pending) in
+      let rest = Buffer.sub pending n (Buffer.length pending - n) in
+      Buffer.blit pending 0 buf off n;
+      Buffer.clear pending;
+      Buffer.add_string pending rest;
+      Eio.Condition.broadcast changed;
+      n
+  in
+  let rec write i =
+    if i < String.length output then (
+      let room = capacity - Buffer.length pending in
+      (if room = 0 then Eio.Condition.await_no_mutex changed
+       else
+         let n = min room (String.length output - i) in
+         Buffer.add_substring pending output i n;
+         Eio.Condition.broadcast changed);
+      write (i + min room (String.length output - i)))
+    else (
+      exited := true;
+      Eio.Condition.broadcast changed)
+  in
+  let pause () = Eio.Time.Mono.sleep clock 0.02 in
+  let ready () =
+    Eio.Fiber.first
+      (fun () ->
+        while Buffer.length pending = 0 && not !exited do
+          Eio.Condition.await_no_mutex changed
+        done)
+      pause
+  in
+  Eio.Fiber.both
+    (fun () -> write 0)
+    (fun () ->
+      Pty_reader.run ~read ~ready ~pause
+        ~exited:(fun () ->
+          Eio.Fiber.yield ();
+          !exited)
+        ~feed:(fun buf n -> Buffer.add_subbytes fed buf 0 n)
+        (Bytes.create size));
+  check_eq ~pp:pp_string output (Buffer.contents fed)
+
 let bounds =
   [
+    test_case "the reader drains what a program wrote before it exited"
+      [ bytes; uint8; uint8; uint8 ]
+      test_reader;
     test_case "settings and outputs roundtrip including zero Wait_timeout"
       [ uint8 ] test_accessors_roundtrip;
     test_case "cell and pixel dimensions replace each other" [ uint8 ]

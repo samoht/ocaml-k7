@@ -731,37 +731,17 @@ let feed st buf n =
   send st (Screen.take_replies st.term);
   refresh st
 
-let rec drain st buf =
-  match Pty.read st.pty buf 0 (Bytes.length buf) with
-  | 0 -> ()
-  | n ->
-      feed st buf n;
-      drain st buf
-  | exception Unix.Unix_error _ -> ()
-
 (* In real time: [st.clock] gives the recording's times, and a clock that
    stands still must not stop the reader. *)
 let poll () = Eio_unix.sleep 0.02
 
-(* On macOS a read can find the terminal closed while the program runs. *)
-let rec reader st buf =
-  match Pty.read st.pty buf 0 (Bytes.length buf) with
-  | 0 -> ended st buf
-  | n ->
-      feed st buf n;
-      reader st buf
-  | exception Unix.Unix_error ((EAGAIN | EWOULDBLOCK | EINTR), _, _) ->
-      if not (exited st) then (
-        Eio.Fiber.first (fun () -> Eio_unix.await_readable (fd st)) poll;
-        reader st buf)
-      else drain st buf
-  | exception Unix.Unix_error _ -> ended st buf
-
-and ended st buf =
-  if exited st then drain st buf
-  else (
-    poll ();
-    reader st buf)
+let reader st buf =
+  Pty_reader.run ~read:(Pty.read st.pty)
+    ~ready:(fun () ->
+      Eio.Fiber.first (fun () -> Eio_unix.await_readable (fd st)) poll)
+    ~pause:poll
+    ~exited:(fun () -> exited st)
+    ~feed:(feed st) buf
 
 let write st s =
   if st.offset > 0 then (
