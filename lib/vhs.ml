@@ -1023,14 +1023,17 @@ let refuse ~by ~other kinds t =
 
 (* Directories *)
 
+(* [in_dir dir path] is [path] relative to the native directory [dir]: as
+   [vhs] reads it, wherever the path leads. *)
+let in_dir dir path =
+  if Filename.is_relative path then Filename.concat dir path else path
+
 (* [dir_problem ~create dir path] is why [path], relative to the native
    directory [dir], cannot be written, if it cannot: its directory is not a
    directory the user can write in, or with [create], since VHS creates the
    directories of its outputs, its nearest ancestor that exists is not. *)
 let dir_problem ~create dir path =
-  let file =
-    if Filename.is_relative path then Filename.concat dir path else path
-  in
+  let file = in_dir dir path in
   let shown d =
     (* The directory as the path names it. *)
     let k = String.length file - String.length path in
@@ -1070,9 +1073,7 @@ let check_dirs cwd paths =
 (* [mkdirs dir path] creates the missing directories of [path], relative to
    [dir], as VHS does for its outputs. *)
 let mkdirs dir path =
-  let file =
-    if Filename.is_relative path then Filename.concat dir path else path
-  in
+  let file = in_dir dir path in
   let rec go d =
     if not (Sys.file_exists d || Filename.dirname d = d) then (
       go (Filename.dirname d);
@@ -1125,9 +1126,7 @@ let native ?verb ?source lines =
    relative to the native directory [dir], wherever the path leads, not only
    below the [cwd] capability. *)
 let with_file dir path flags f =
-  let file =
-    if Filename.is_relative path then Filename.concat dir path else path
-  in
+  let file = in_dir dir path in
   let error e =
     Error (path ^ ": " ^ String.uncapitalize_ascii (Unix.error_message e))
   in
