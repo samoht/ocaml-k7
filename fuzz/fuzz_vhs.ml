@@ -591,6 +591,73 @@ let test_cancel_reaps delay =
   in
   if alive then failf "cancelled render left process %d alive" pid
 
+(* Losing a recording's switch also stops a command's nested shell. *)
+let test_record_reaps delay callback_raises =
+  with_dir @@ fun env path ->
+  let clock = Eio.Stdenv.clock env in
+  let cwd =
+    Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "shell.pid"))
+  in
+  let tape =
+    Result.get_ok
+      (Vhs.tape ~settings:[ Typing_speed (Ms 1) ] ~outputs:[ "image.svg" ]
+         Vhs.
+           [
+             type'
+               "echo $$ > shell.pid; bash --norc --noprofile -c 'echo $$ > \
+                child.pid; while :; do sleep 0.1; done'\n";
+             wait ~timeout:(Ms 10000) (Line "NEVER_READY");
+           ])
+  in
+  let ready () =
+    Sys.file_exists (path "child.pid")
+    && String.trim (Eio.Path.load Eio.Path.(cwd / "child.pid")) <> ""
+  in
+  let cancel () =
+    while not (ready ()) do
+      Eio.Time.sleep clock 0.001
+    done;
+    Eio.Time.sleep clock (float_of_int (delay land 15) /. 1000.);
+    if callback_raises then raise Exit;
+    `Cancelled
+  in
+  let result =
+    try
+      Eio.Time.with_timeout_exn clock 5. (fun () ->
+          Eio.Fiber.first
+            (fun () ->
+              `Recorded
+                (Vhs.record
+                   ~clock:(Eio.Stdenv.mono_clock env)
+                   ~proc:(Eio.Stdenv.process_mgr env)
+                   ~cwd tape))
+            cancel)
+    with Exit when callback_raises -> `Cancelled
+  in
+  (match result with
+  | `Cancelled -> ()
+  | `Recorded (Ok _) -> fail "recording ended before cancellation"
+  | `Recorded (Error e) -> failf "%a" Vhs.pp_error e);
+  let pids =
+    List.map
+      (fun name ->
+        Eio.Path.load Eio.Path.(cwd / name) |> String.trim |> int_of_string)
+      [ "shell.pid"; "child.pid" ]
+  in
+  let alive pid =
+    try
+      Unix.kill pid 0;
+      true
+    with Unix.Unix_error (Unix.ESRCH, _, _) -> false
+  in
+  let left = List.filter alive pids in
+  (* Even a failing cleanup property must not leave its test processes. *)
+  List.iter
+    (fun pid -> try Unix.kill pid Sys.sigkill with Unix.Unix_error _ -> ())
+    left;
+  if left <> [] then
+    failf "recording left shells alive: %a" Fmt.(Dump.list int) left
+
 let test_exit_codes n =
   with_dir @@ fun env path ->
   let executable = path "recorder" in
@@ -742,6 +809,8 @@ let with_vhs =
 (* Properties that run stand-ins for vhs and vhs-cram. *)
 let with_processes =
   [
+    test_case "record cancellation and callback exceptions reap shells"
+      [ int8; bool ] test_record_reaps;
     test_case "recording environment isolation" [ int ]
       test_environment_isolation;
     test_case "documented executable exit codes" [ int16 ] test_exit_codes;
