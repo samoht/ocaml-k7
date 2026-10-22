@@ -18,6 +18,8 @@
  ; The terminal core comes from matrix_backport until matrix 0.2.0.
  (flags
   (:standard -open Matrix_backport))
+ ; Temporary, until matrix's Pty.spawn keeps the slave open: see
+ ; terminal_stubs.c.
  (foreign_stubs
   (language c)
   (names terminal_stubs))

@@ -659,7 +659,15 @@ let modified ~shift = function
 
 (* A program on a terminal. The recorder keeps [slave] open until the
    program has exited and its output is read: macOS drops what a program
-   printed before it exits if no one else holds the terminal. *)
+   printed before it exits if no one else holds the terminal.
+
+   Temporary: matrix 0.1.0's [Pty.spawn] closes the slave in the parent and
+   loses that output, so k7 opens the terminal itself, with [open_terminal]
+   and the [acquire_terminal] stub of terminal_stubs.c. Once matrix fixes
+   it, delete [slave], [open_terminal], [acquire_terminal] and the stub, and
+   spawn with [Pty.spawn] again. The upstream issue, to file: "matrix.pty:
+   Pty.spawn closes the slave, so macOS loses the output of a program that
+   exits at once". *)
 type terminal = {
   pty : Pty.t;  (** The master side. *)
   slave : Pty.t;
@@ -1001,10 +1009,12 @@ let stop_terminal clock (t : terminal) =
   in
   reap 100
 
+(* Temporary, see [terminal]. *)
 external acquire_terminal : Unix.file_descr -> unit = "native_acquire_terminal"
 
 (* [open_terminal ~env ~cwd ~winsize prog args] runs [prog] with [args] in
-   a new session whose controlling terminal is a new pseudo-terminal. *)
+   a new session whose controlling terminal is a new pseudo-terminal. It is
+   [Pty.spawn] that keeps the slave; temporary, see [terminal]. *)
 let open_terminal ~env ~cwd ~winsize prog args =
   let pty, slave = Pty.open_pty ~winsize () in
   let argv = Array.of_list (prog :: args) in
