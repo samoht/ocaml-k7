@@ -61,6 +61,8 @@ type setting =
   | Font_family of string
   | Width of int
   | Height of int
+  | Columns of int
+  | Rows of int
   | Theme of string
   | Padding of int
   | Typing_speed of duration
@@ -262,18 +264,18 @@ let check_screenshots outputs shots =
 
 (* VHS refuses a frame sized both by its pixels and by its cells in one
    direction. *)
-let check_cells settings actions =
+let check_cells settings =
   let sets p = List.exists p settings in
   let height = sets (function Height _ -> true | _ -> false)
   and width = sets (function Width _ -> true | _ -> false) in
   iter_result
     (function
-      | Tape_syntax.Set ("Rows", arg) when height ->
-          Fmt.error "Set Rows %s: VHS cannot set both Height and Rows" arg
-      | Tape_syntax.Set ("Columns", arg) when width ->
-          Fmt.error "Set Columns %s: VHS cannot set both Width and Columns" arg
+      | Rows n when height ->
+          Fmt.error "Set Rows %d: VHS cannot set both Height and Rows" n
+      | Columns n when width ->
+          Fmt.error "Set Columns %d: VHS cannot set both Width and Columns" n
       | _ -> Ok ())
-    (raw_commands actions)
+    settings
 
 (* The constructor that writes each setting [Set] can also write, but
    [Shell], which VHS applies wherever it is. *)
@@ -283,6 +285,8 @@ let constructors =
     ("FontFamily", "Font_family");
     ("Width", "Width");
     ("Height", "Height");
+    ("Columns", "Columns");
+    ("Rows", "Rows");
     ("Theme", "Theme");
     ("Padding", "Padding");
     ("Framerate", "Framerate");
@@ -396,6 +400,8 @@ let check_setting = function
   | Shell _ -> Ok ()
   | Font_size n when n <= 0 -> Fmt.error "Set FontSize %d: not positive" n
   | Framerate n when n <= 0 -> Fmt.error "Set Framerate %d: not positive" n
+  | Columns n when n <= 0 -> Fmt.error "Set Columns %d: not positive" n
+  | Rows n when n <= 0 -> Fmt.error "Set Rows %d: not positive" n
   | Padding n when n < 0 -> Fmt.error "Set Padding %d: negative" n
   | Font_family f when String.exists (fun c -> c = '\'' || c = '\\') f ->
       Fmt.error "Set FontFamily %a: holds a single quote or a backslash"
@@ -403,7 +409,9 @@ let check_setting = function
   | Font_family f -> check_quotable "Set FontFamily" f
   | Theme t -> check_theme t
   | Typing_speed (Ms n) -> check_ms "Set TypingSpeed " n
-  | Font_size _ | Framerate _ | Padding _ | Width _ | Height _ -> Ok ()
+  | Font_size _ | Framerate _ | Padding _ | Width _ | Height _ | Columns _
+  | Rows _ ->
+      Ok ()
 
 (* The argument of the last raw [Set name] of [actions]. *)
 let raw_set actions name =
@@ -455,13 +463,14 @@ let sum ns =
 (* The longest side of a viewport the browser VHS drives accepts. *)
 let max_viewport = 10_000_000L
 
-(* VHS measures the cells of a raw [Set Rows] or [Set Columns] in the
-   viewport, doubled up to five times, and fails if the terminal there is
-   still smaller; a cell takes at least a pixel. *)
-let check_measured actions ~border name size default bar =
-  match Option.bind (raw_set actions name) Tape_syntax.atoi with
+(* VHS measures the [cells] of [Rows] or [Columns] in the viewport,
+   doubled up to five times, and fails if the terminal there is still
+   smaller; a cell takes at least a pixel. *)
+let check_measured ~border name cells size default bar =
+  match cells with
   | None -> Ok ()
   | Some n ->
+      let n = Int64.of_int n in
       let side =
         Int64.sub
           (Int64.of_int (Option.value size ~default))
@@ -478,9 +487,9 @@ let check_measured actions ~border name size default bar =
 
 (* VHS sizes the browser's viewport to the frame less twice the padding,
    twice the margin unless [MarginFill] is empty, and the window bar in the
-   height, also to measure the cells a raw [Set Rows] or [Set Columns] asks
-   for; vhs panics if the browser refuses a side. *)
-let check_viewport actions ~padding ~margin ~bar ~width ~height =
+   height, also to measure the cells [Rows] or [Columns] asks for; vhs
+   panics if the browser refuses a side. *)
+let check_viewport actions ~padding ~margin ~bar ~width ~height ~columns ~rows =
   let p = Int64.of_int (Option.value padding ~default:60) in
   let m = if raw_set actions "MarginFill" = Some "" then 0L else margin in
   let check name size default border =
@@ -509,9 +518,9 @@ let check_viewport actions ~padding ~margin ~bar ~width ~height =
   in
   let* () = check "Width" width 1200 0L in
   let* () = check "Height" height 600 bar in
-  let cells = check_measured actions ~border:(Int64.mul 2L (Int64.add p m)) in
-  let* () = cells "Columns" width 1200 0L in
-  cells "Rows" height 600 bar
+  let cells = check_measured ~border:(Int64.mul 2L (Int64.add p m)) in
+  let* () = cells "Columns" columns width 1200 0L in
+  cells "Rows" rows height 600 bar
 
 (* The value of the last setting [f] reads. *)
 let last settings f = List.find_map f (List.rev settings)
@@ -521,6 +530,8 @@ let check_size settings actions =
   let padding = last (function Padding n -> Some n | _ -> None) in
   let width = last (function Width n -> Some n | _ -> None) in
   let height = last (function Height n -> Some n | _ -> None) in
+  let columns = last (function Columns n -> Some n | _ -> None) in
+  let rows = last (function Rows n -> Some n | _ -> None) in
   let int name default =
     Option.value ~default (Option.bind (raw_set actions name) Tape_syntax.atoi)
   in
@@ -558,7 +569,7 @@ let check_size settings actions =
               culprit mw mh w h
         | _ -> Fmt.error "Set %s: the frame size overflows 64 bits" culprit
   in
-  check_viewport actions ~padding ~margin ~bar ~width ~height
+  check_viewport actions ~padding ~margin ~bar ~width ~height ~columns ~rows
 
 (* VHS encodes an MP4 in yuv420p, which ffmpeg refuses for an odd width or
    height. *)
@@ -628,7 +639,7 @@ let check_tape ~settings ~outputs actions =
   let* () = iter_result check_setting settings in
   let* _started = check_actions ~started:false actions in
   let* () = check_records actions in
-  let* () = check_cells settings actions in
+  let* () = check_cells settings in
   let* () = check_size settings actions in
   let outputs' = outputs @ raw_outputs actions in
   let* () = check_paths settings outputs' in
@@ -762,6 +773,8 @@ let setting_line = function
   | Font_family f -> ("FontFamily", f)
   | Width n -> ("Width", Int.to_string n)
   | Height n -> ("Height", Int.to_string n)
+  | Columns n -> ("Columns", Int.to_string n)
+  | Rows n -> ("Rows", Int.to_string n)
   | Theme t -> ("Theme", t)
   | Padding n -> ("Padding", Int.to_string n)
   | Typing_speed (Ms n) -> ("TypingSpeed", Int.to_string n ^ "ms")

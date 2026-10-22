@@ -191,6 +191,13 @@ type setting =
           the size of the window bar of a {!raw} [Set WindowBar], and even with
           an MP4 output (defaults to [600]). Its viewport, what is left after
           them, is at most 10,000,000 pixels, as for {!constructor-Width}. *)
+  | Columns of int
+      (** The terminal's columns, a positive number, in place of
+          {!constructor-Width}: the frame is as wide as they need, with the
+          font, the padding and the margin of the other settings. *)
+  | Rows of int
+      (** The terminal's rows, a positive number, in place of
+          {!constructor-Height}, as for {!constructor-Columns}. *)
   | Theme of string
       (** The name of a theme of VHS 0.12.1, as [vhs themes] lists them; a theme
           in JSON, which starts with [{], an object whose fields VHS reads as
@@ -358,14 +365,13 @@ val svg :
       a string, a regular expression or a JSON value, or lacks the argument of
       its command;
     - a {!raw} [Set] has a value its setting cannot parse: a duration, an
-      integer, a float or a regular expression in Go's syntax, or a positive
-      integer for [Rows] and [Columns];
-    - a {!raw} [Set Rows] or [Set Columns] sizes the frame in the direction that
-      {!constructor-Height} or {!constructor-Width} does, or asks for more rows
-      or columns than 32 times the browser's viewport has pixels: VHS measures
-      the cells in the viewport doubled up to five times, and fails with "could
-      not fit" if the terminal there is still smaller. Fewer can still not fit
-      with a large font, which [tape] does not check;
+      integer, a float or a regular expression in Go's syntax;
+    - {!constructor-Rows} or {!constructor-Columns} sizes the frame in the
+      direction that {!constructor-Height} or {!constructor-Width} does, or asks
+      for more rows or columns than 32 times the browser's viewport has pixels:
+      VHS measures the cells in the viewport doubled up to five times, and fails
+      with "could not fit" if the terminal there is still smaller. Fewer can
+      still not fit with a large font, which [tape] does not check;
     - the {!constructor-Width} or {!constructor-Height} of a GIF output is
       beyond 65535 pixels, of an MP4 output beyond 16384 or of a WebM output
       beyond 65536, the sizes the encoders of ffmpeg 9 take, or the frame of
@@ -385,10 +391,10 @@ val svg :
 (** {1:native_details Native recordings}
 
     The terminal has the size VHS gives it with JetBrains Mono, VHS's first
-    font: [Width], [Height], [Font_size], [Padding] and the raw [Set Margin],
-    [Set LetterSpacing], [Set LineHeight], [Set Rows] and [Set Columns] size it.
-    VHS sizes it with the fonts of the machine it runs on, so it can show more
-    rows than the image elsewhere. The image draws each cell on a grid, in a
+    font: [Width] or [Columns], [Height] or [Rows], [Font_size], [Padding] and
+    the raw [Set Margin], [Set LetterSpacing] and [Set LineHeight] size it. VHS
+    sizes it with the fonts of the machine it runs on, so it can show more rows
+    than the image elsewhere. The image draws each cell on a grid, in a
     monospace font of the viewer's machine, in the colours of the [Theme]. The
     terminal keeps a colour as RGB, so a 256-colour or true colour equal to one
     of xterm's sixteen ANSI colours takes the theme's colour too. The terminal

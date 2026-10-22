@@ -173,7 +173,7 @@ let test_numbers () =
       match tape [ Vhs.raw line ] with
       | Ok () -> ()
       | Error e -> Alcotest.failf "rejected %S: %s" line e)
-    [ "Set Rows 5"; "Set LoopOffset 20"; {|Set LoopOffset "1.5%%"|} ]
+    [ "Set LoopOffset 20"; {|Set LoopOffset "1.5%%"|} ]
 
 let suite =
   ( "tape_syntax",

@@ -642,25 +642,25 @@ let test_modified_arrows () =
    reduced to the loop they offset, rather than wrapping around. *)
 let test_bounds () =
   with_dir @@ fun env cwd ->
-  let play raws =
+  let play ?settings raws =
     match
-      Vhs.tape ~outputs:[ "demo.svg" ]
+      Vhs.tape ?settings ~outputs:[ "demo.svg" ]
         (List.map Vhs.raw raws @ [ Vhs.type' "x" ])
     with
     | Ok t -> record env cwd t
     | Error e -> Alcotest.failf "%a" Vhs.pp_error e
   in
   List.iter
-    (fun raws ->
-      match play raws with
+    (fun (settings, raws) ->
+      match play ~settings raws with
       | Error (Unsupported _) -> ()
       | Ok _ -> Alcotest.failf "%s played" (String.concat "; " raws)
       | Error e -> Alcotest.failf "%a" Vhs.pp_error e)
     [
-      [ "Set LetterSpacing 1000000000000000000"; "Set Columns 2000" ];
-      [ "Set LineHeight 1000000000000000000" ];
-      [ "Set Columns 2000"; "Set LetterSpacing 100" ];
-      [ "Set PlaybackSpeed 0.0000000001" ];
+      ([ Vhs.Columns 2000 ], [ "Set LetterSpacing 1000000000000000000" ]);
+      ([], [ "Set LineHeight 1000000000000000000" ]);
+      ([ Vhs.Columns 2000 ], [ "Set LetterSpacing 100" ]);
+      ([], [ "Set PlaybackSpeed 0.0000000001" ]);
     ];
   (match play [ "Set LoopOffset 1" ^ String.make 300 '0' ] with
   | Ok s ->
@@ -893,8 +893,9 @@ let same_text env cwd (vhs_tape, native_tape) =
 let oracle_tape ?(settings = []) actions =
   let tape outputs =
     match
-      Vhs.tape ~settings ~outputs
-        (Vhs.raw "Set Columns 60" :: Vhs.raw "Set Rows 12" :: actions)
+      Vhs.tape
+        ~settings:(Vhs.[ Columns 60; Rows 12 ] @ settings)
+        ~outputs actions
     with
     | Ok t -> t
     | Error e -> Alcotest.failf "%a" Vhs.pp_error e

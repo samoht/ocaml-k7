@@ -78,6 +78,17 @@ let test_settings () =
   (* 10px: 7 x 13 pixel cells, 50 columns and 13 rows. *)
   check_contains "grid" ~sub:{|<svg x="10" y="10" width="350" height="169">|} s
 
+(* The columns and the rows size the frame: 7 x 13 pixel cells at 10px,
+   with the padding and xterm.js's 25 x 10 pixels, rounded up to even. *)
+let test_cells () =
+  let s =
+    svg
+      ~settings:Vhs.[ Columns 100; Rows 5; Font_size 10; Padding 10 ]
+      [ (Ms 0, String.make 100 'x') ]
+  in
+  check_contains "size" ~sub:{|width="746" height="96" viewBox="0 0 746 96"|} s;
+  check_contains "grid" ~sub:{|<svg x="10" y="10" width="700" height="65">|} s
+
 (* Sizes far beyond a screen are refused, not computed with overflow. *)
 let test_huge () =
   (match Vhs.svg ~settings:[ Width 1_000_000 ] [] with
@@ -291,6 +302,7 @@ let suite =
         ("spacing mark", test_spacing_mark);
         ("one frame", test_one_frame);
         ("settings", test_settings);
+        ("columns and rows", test_cells);
         ("huge sizes", test_huge);
         ("deterministic", test_deterministic);
         ("svg output", test_svg_output);

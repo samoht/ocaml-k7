@@ -240,13 +240,18 @@ let test_settings () =
     (str ~outputs:[ "a.gif"; "a.webm" ] ~settings:[ Width 601 ] []);
   (* VHS sizes the frame by its pixels or by its cells, not both. *)
   expect "rows" "Set Width 800\nSet Rows 10\n"
-    (body ~settings:[ Width 800 ] [ raw "Set Rows 10" ]);
+    (body ~settings:[ Width 800; Rows 10 ] []);
+  expect "columns" "Set Columns 100\nSet Height 400\n"
+    (body ~settings:[ Columns 100; Height 400 ] []);
   error "rows and height" "Set Rows 10: VHS cannot set both Height and Rows"
-    ~settings:[ Height 400 ]
-    [ raw "Set Rows 10" ];
+    ~settings:[ Height 400; Rows 10 ] [];
   error "columns and width"
     "Set Columns 80: VHS cannot set both Width and Columns"
-    ~settings:[ Width 800 ]
+    ~settings:[ Columns 80; Width 800 ] [];
+  error "zero columns" "Set Columns 0: not positive" ~settings:[ Columns 0 ] [];
+  error "negative rows" "Set Rows -1: not positive" ~settings:[ Rows (-1) ] [];
+  error "raw columns"
+    {|raw line "Set Columns 80": use the setting Columns instead|}
     [ raw "Set Columns 80" ]
 
 (* VHS fails with "no frames" on a recording without a visible action. *)
@@ -388,17 +393,18 @@ let test_viewport () =
     [
       Vhs.raw "Set WindowBar Colorful";
       Vhs.raw {|Set WindowBarSize "-20000000"|};
-      Vhs.raw "Set Rows 10";
-    ];
+    ]
+    ~settings:[ Vhs.Rows 10 ];
   (* VHS measures the cells at up to 32 times the viewport, where a cell
      takes at least a pixel: the 1080 x 480 pixels of the default frame
      less its padding hold at most 34560 columns and 15360 rows. *)
-  ignore (body [ Vhs.raw "Set Columns 34560" ]);
-  ignore (body [ Vhs.raw "Set Rows 15360" ]);
-  rejects "more columns than VHS measures" [ Vhs.raw "Set Columns 34561" ];
-  rejects "more rows than VHS measures" [ Vhs.raw "Set Rows 15361" ];
-  rejects "rows in an empty viewport" ~settings:[ Vhs.Padding 0 ]
-    [ Vhs.raw "Set Margin 300"; Vhs.raw "Set Rows 1" ]
+  ignore (body ~settings:[ Vhs.Columns 34560 ] []);
+  ignore (body ~settings:[ Vhs.Rows 15360 ] []);
+  rejects "more columns than VHS measures" ~settings:[ Vhs.Columns 34561 ] [];
+  rejects "more rows than VHS measures" ~settings:[ Vhs.Rows 15361 ] [];
+  rejects "rows in an empty viewport"
+    ~settings:[ Vhs.Padding 0; Vhs.Rows 1 ]
+    [ Vhs.raw "Set Margin 300" ]
 
 (* ffmpeg encodes a GIF of at most 65535 pixels a side, libx264 an MP4 of
    16384 and libvpx a WebM of 65536, and takes a frame of at most about

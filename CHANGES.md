@@ -25,6 +25,9 @@
   designations of the character sets, `ESC % G` selects ASCII, an erasure at
   the right margin keeps the wrap pending, the cursor reports count the
   column beyond the last, and `CSI S` keeps no scrollback.
+- `Vhs.Columns` and `Vhs.Rows` size the terminal in cells, as VHS's
+  `Set Columns` and `Set Rows` do, in place of `Vhs.Width` and
+  `Vhs.Height`.
 - `Vhs.tape` refuses a JSON theme that Go or jsont does not read, more
   rows or columns than VHS can measure, a frame larger than the encoder of
   a GIF, MP4 or WebM output takes, and a screenshot with the path of an
