@@ -1463,43 +1463,58 @@ let svg ?(settings = []) output =
   let* () = check_times output in
   Ok (Native.replay tape (List.map (fun (Ms ms, s) -> (ms, s)) output))
 
-let is_c1 s i =
-  s.[i] = '\xc2'
-  && i + 1 < String.length s
-  && Char.code s.[i + 1] < 0xa0
-  && Char.code s.[i + 1] >= 0x80
+let is_control c = c < 0x20 || (c >= 0x7f && c <= 0x9f)
 
+(* [s] is valid UTF-8 and [f] holds for each of its code points. *)
+let for_all_uchars f s =
+  let rec go i =
+    i >= String.length s
+    ||
+    let d = String.get_utf_8_uchar s i in
+    Uchar.utf_decode_is_valid d
+    && f (Uchar.to_int (Uchar.utf_decode_uchar d))
+    && go (i + Uchar.utf_decode_length d)
+  in
+  go 0
+
+(* A control character or a byte that is not UTF-8 is written [\xHH], so
+   that bash reads back the same bytes. *)
 let ansi_c_quote s =
   let b = Buffer.create (String.length s + 3) in
-  Buffer.add_string b "$'";
-  String.iteri
-    (fun i c ->
-      match c with
-      | '\'' | '\\' ->
+  let bytes i n =
+    String.iter
+      (fun c -> Buffer.add_string b (Fmt.str "\\x%02X" (Char.code c)))
+      (String.sub s i n)
+  in
+  let rec go i =
+    if i < String.length s then (
+      let d = String.get_utf_8_uchar s i in
+      let n = Uchar.utf_decode_length d in
+      (match Uchar.to_int (Uchar.utf_decode_uchar d) with
+      | _ when not (Uchar.utf_decode_is_valid d) -> bytes i n
+      | 0x27 | 0x5c ->
           Buffer.add_char b '\\';
-          Buffer.add_char b c
-      | '\n' -> Buffer.add_string b {|\n|}
-      | '\t' -> Buffer.add_string b {|\t|}
-      | c
-        when Char.code c < 0x20
-             || c = '\x7f' || is_c1 s i
-             || (i > 0 && is_c1 s (i - 1)) ->
-          Buffer.add_string b {|\x|};
-          Buffer.add_char b "0123456789ABCDEF".[Char.code c lsr 4];
-          Buffer.add_char b "0123456789ABCDEF".[Char.code c land 15]
-      | c -> Buffer.add_char b c)
-    s;
+          Buffer.add_char b s.[i]
+      | 0x0a -> Buffer.add_string b {|\n|}
+      | 0x09 -> Buffer.add_string b {|\t|}
+      | c when is_control c -> bytes i n
+      | _ -> Buffer.add_substring b s i n);
+      go (i + n))
+  in
+  Buffer.add_string b "$'";
+  go 0;
   Buffer.add_char b '\'';
   Buffer.contents b
 
 let shell_word s =
   let safe c =
-    Char.Ascii.is_alphanum c
-    || String.contains "_@%+=:,./-" c
-    || Char.code c >= 0x80
+    c >= 0xa0
+    || c < 0x80
+       && (Char.Ascii.is_alphanum (Char.chr c)
+          || String.contains "_@%+=:,./-" (Char.chr c))
   in
-  if has_control s then ansi_c_quote s
-  else if s <> "" && String.for_all safe s then s
+  if not (for_all_uchars (Fun.negate is_control) s) then ansi_c_quote s
+  else if s <> "" && for_all_uchars safe s then s
   else "'" ^ String.concat {|'\''|} (String.split_on_char '\'' s) ^ "'"
 
 let command_line = function

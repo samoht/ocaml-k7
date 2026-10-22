@@ -1418,8 +1418,12 @@ let test_command_line_roundtrip n =
         "😀";
         "`echo replaced`";
         "a\tb";
+        "a\x9b[2Jb";
+        "\xc2\x9b";
+        "\xff\xfe";
+        "caf\xc3";
       ]
-      (n mod 11)
+      (n mod 15)
   in
   let settings = K7.[ Columns 200; Rows 6; Font_size 10; Padding 0 ] in
   let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "unused")) in
