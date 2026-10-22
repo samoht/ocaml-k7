@@ -184,12 +184,24 @@ let test_spacing_mark () =
     [ screen [ "\u{0915}\u{093E}x \u{0F7F}\u{FFFD}" ] ]
     (frames s)
 
+(* Framerate is documented as positive; the native limits enumerate pixel
+   sizes and terminal dimensions, without a frame-rate ceiling. *)
+let test_framerate_limit () =
+  let settings = Vhs.Framerate 100_001 :: settings in
+  (match Vhs.tape ~settings ~outputs:[ "x.svg" ] [ Vhs.sleep (Ms 100) ] with
+  | Ok _ -> ()
+  | Error e -> Alcotest.failf "tape: %a" Vhs.pp_error e);
+  match Vhs.svg ~settings [ (Ms 0, "hello") ] with
+  | Ok _ -> ()
+  | Error e -> Alcotest.failf "svg: %a" Vhs.pp_error e
+
 let suite =
   ( "svg",
     List.map
       (fun (name, fn) -> Alcotest.test_case name `Quick fn)
       [
         ("hostile text", test_hostile);
+        ("positive frame rate above the pixel limit", test_framerate_limit);
         ("row dedup", test_dedup);
         ("keyframes", test_keyframes);
         ("accessible", test_accessible);
