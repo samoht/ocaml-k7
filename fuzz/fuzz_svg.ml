@@ -25,7 +25,7 @@ let xml_text s =
   Buffer.contents b
 
 (* The text of each row of a screen as the image draws it: a hidden cell
-   is blank, and trailing spaces do not show. *)
+   is blank, format characters and trailing spaces do not show. *)
 let drawn screen =
   Array.to_list (Screen.rows screen)
   |> List.map (fun r ->
@@ -33,7 +33,7 @@ let drawn screen =
       |> List.map (fun (c : Screen.cell) ->
           if c.width = 0 then ""
           else if Ansi.Attr.mem Hidden c.attrs then " "
-          else c.text)
+          else match Unicode.strip_format c.text with "" -> " " | s -> s)
       |> String.concat "")
   |> String.concat "\n" |> Svg_check.trim_rows |> xml_text
 
@@ -499,6 +499,40 @@ let test_narrow_symbols n selector split_at =
     (Matrix_grid.to_text (Vte.grid term), image);
   check_eq ~pp:Fmt.(Dump.pair int int) cursor (Vte.cursor_pos term)
 
+(* The emulator's terminal state across reads, through the SVG image. *)
+let terminal =
+  [
+    test_case "scroll regions preserve header and footer" [ uint8 ]
+      test_scroll_region_boundaries;
+    test_case "Unicode Prepend survives delivery boundaries" [ uint8 ]
+      test_prepend_boundaries;
+    test_case "reverse wrap crosses automatic line breaks" [ uint8; bool ]
+      test_reverse_wrap;
+    test_case "selective erasure preserves protected cells" [ uint8; bool ]
+      test_selective_erase;
+    test_case "1049 restores the main screen and cursor" [ uint8; uint8 ]
+      test_alternate_restore;
+    test_case "47 and 1047 share the alternate-screen cursor" [ uint8; bool ]
+      test_alternate_cursor;
+    test_case "erasure ends a pending right-margin wrap" [ uint8; bool ]
+      test_margin_erasure;
+    test_case "UTF-8 C1 controls act as terminal commands" [ uint8; bool ]
+      test_c1_controls;
+    test_case "REP preserves combining marks" [ uint8; uint8 ]
+      test_repeat_combining;
+    test_case "PTY chunk boundaries preserve terminal state"
+      [ list chunk ]
+      test_chunk_boundaries;
+    test_case "wide glyph deletion preserves columns" [ uint8; bool ]
+      test_delete_wide;
+    test_case "cleared tabs reach the right margin" [ uint8 ] test_clear_tabs;
+    test_case "saved character sets survive restore" [ uint8; bool ]
+      test_saved_charset;
+    test_case "zero width"
+      [ list (map [ uint8; uint8; bool ] (fun b m a -> (b, m, a))) ]
+      test_zero_width;
+  ]
+
 let suite =
   ( "svg",
     [
@@ -528,33 +562,5 @@ let suite =
       test_case "cursor respects SGR conceal" [ uint8 ] test_concealed_cursor;
       test_case "svg refuses the settings tape refuses" [ setting ]
         test_setting_errors;
-      test_case "scroll regions preserve header and footer" [ uint8 ]
-        test_scroll_region_boundaries;
-      test_case "Unicode Prepend survives delivery boundaries" [ uint8 ]
-        test_prepend_boundaries;
-      test_case "reverse wrap crosses automatic line breaks" [ uint8; bool ]
-        test_reverse_wrap;
-      test_case "selective erasure preserves protected cells" [ uint8; bool ]
-        test_selective_erase;
-      test_case "1049 restores the main screen and cursor" [ uint8; uint8 ]
-        test_alternate_restore;
-      test_case "47 and 1047 share the alternate-screen cursor" [ uint8; bool ]
-        test_alternate_cursor;
-      test_case "erasure ends a pending right-margin wrap" [ uint8; bool ]
-        test_margin_erasure;
-      test_case "UTF-8 C1 controls act as terminal commands" [ uint8; bool ]
-        test_c1_controls;
-      test_case "REP preserves combining marks" [ uint8; uint8 ]
-        test_repeat_combining;
-      test_case "PTY chunk boundaries preserve terminal state"
-        [ list chunk ]
-        test_chunk_boundaries;
-      test_case "wide glyph deletion preserves columns" [ uint8; bool ]
-        test_delete_wide;
-      test_case "cleared tabs reach the right margin" [ uint8 ] test_clear_tabs;
-      test_case "saved character sets survive restore" [ uint8; bool ]
-        test_saved_charset;
-      test_case "zero width"
-        [ list (map [ uint8; uint8; bool ] (fun b m a -> (b, m, a))) ]
-        test_zero_width;
-    ] )
+    ]
+    @ terminal )

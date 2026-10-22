@@ -181,7 +181,12 @@ let test_zero_width_description () =
     s;
   Alcotest.(check (pair int int))
     "nor the image's text" (0, 0)
-    (count ~sub:"\xe2\x80\x8b" s, count ~sub:"\xe2\x81\xa0" s)
+    (count ~sub:"\xe2\x80\x8b" s, count ~sub:"\xe2\x81\xa0" s);
+  (* A prepended concatenation mark, U+0605, shows over the digits; it
+     joins the cell before it, as a zero-width character does. *)
+  let s = svg [ (Ms 0, "a\xd8\x8512") ] in
+  check_contains "number mark" ~sub:"<desc>a\xd8\x8512</desc>" s;
+  check_contains "number mark shown" ~sub:">a\xd8\x85</tspan>" s
 
 (* A spacing mark, such as the vowel sign after Devanagari KA, joins the
    cluster before it but adds a cell to it, the cell xterm.js gives it. *)

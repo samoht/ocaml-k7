@@ -59,8 +59,16 @@ let find name =
 
 let format = lazy (match find "Cf" with Some (r, false) -> r | _ -> [])
 
+(* The prepended concatenation marks, format characters that show, over the
+   digits after them. *)
+let is_concatenation_mark u =
+  (u >= 0x600 && u <= 0x605)
+  || u = 0x6dd || u = 0x70f || u = 0x890 || u = 0x891 || u = 0x8e2
+  || u = 0x110bd || u = 0x110cd
+
 let is_format u =
   u <> 0x200c && u <> 0x200d
+  && (not (is_concatenation_mark u))
   && List.exists (fun (lo, hi) -> lo <= u && u <= hi) (Lazy.force format)
 
 let strip_format s =
