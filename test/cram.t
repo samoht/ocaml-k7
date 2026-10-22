@@ -50,6 +50,10 @@ Numbers are plain decimal digits, as the messages say.
   [124]
   $ k7 rec --framerate 0 -o rate.svg -- true 2> /dev/null
   [124]
+  $ k7 rec --delay -5 -o delay.svg -- true 2> /dev/null
+  [124]
+  $ k7 rec --delay 9223372036855 -o delay.svg -- true 2> /dev/null
+  [124]
 
 --print shows the tape instead of running vhs.
 

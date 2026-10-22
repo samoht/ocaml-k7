@@ -65,12 +65,26 @@ let show =
   in
   Arg.(value & opt (some string) None & info [ "show" ] ~docv:"TEXT" ~doc)
 
+(* Go's longest duration, in milliseconds. *)
+let max_ms = 9_223_372_036_854
+
+let milliseconds s =
+  match
+    if s <> "" && String.for_all Char.Ascii.is_digit s then int_of_string_opt s
+    else None
+  with
+  | Some n when n <= max_ms -> Ok n
+  | _ ->
+      Fmt.error "%a is not a number of milliseconds from 0 to %d" Quote.pp s
+        max_ms
+
 let delay =
   let doc =
     "Show the command line alone for $(docv) milliseconds, as if typed, before \
-     the program's output (defaults to 500); 0 shows the output at once."
+     the program's output; 0 shows the output at once."
   in
-  Arg.(value & opt int 500 & info [ "delay" ] ~docv:"MS" ~doc)
+  let ms = Arg.Conv.make ~docv:"MS" ~parser:milliseconds ~pp:Fmt.int () in
+  Arg.(value & opt ms 500 & info [ "delay" ] ~docv:"MS" ~doc)
 
 let command =
   let doc = "The program to record, then its arguments, after $(b,--)." in
