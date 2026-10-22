@@ -506,8 +506,16 @@ let test_output_dirs () =
     (Eio.Path.is_file Eio.Path.(cwd / "a" / "b" / "demo.svg")
     && Eio.Path.is_file Eio.Path.(cwd / "c" / "demo.txt"))
 
-(* zsh plays natively, with VHS's prompt. *)
+(* zsh plays natively, with VHS's prompt. zsh is in CI; the test skips
+   where it is missing. *)
+let on_path exe =
+  List.exists
+    (fun dir -> dir <> "" && Sys.file_exists (Filename.concat dir exe))
+    (String.split_on_char ':'
+       (Option.value (Sys.getenv_opt "PATH") ~default:""))
+
 let test_zsh () =
+  if not (on_path "zsh") then Alcotest.skip ();
   with_dir @@ fun env cwd ->
   let t =
     match
@@ -532,13 +540,7 @@ let test_zsh () =
    prompt and its typed command. fish is in CI; the test skips where it is
    not on the [PATH]. *)
 let test_fish () =
-  let on_path =
-    List.exists
-      (fun dir -> dir <> "" && Sys.file_exists (Filename.concat dir "fish"))
-      (String.split_on_char ':'
-         (Option.value (Sys.getenv_opt "PATH") ~default:""))
-  in
-  if not on_path then Alcotest.skip ();
+  if not (on_path "fish") then Alcotest.skip ();
   with_dir @@ fun env cwd ->
   let t =
     match

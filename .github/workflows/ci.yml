@@ -28,10 +28,10 @@ jobs:
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
-      # The native recorder's fish test needs fish, which the Ubuntu
-      # runners lack.
+      # The native recorder's zsh and fish tests need zsh and fish, which the
+      # Ubuntu runners lack; the tests skip where they are missing.
       - if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y fish
+        run: sudo apt-get update && sudo apt-get install -y zsh fish
 
       - run: opam install . --deps-only --with-test
       - run: opam exec -- dune build
