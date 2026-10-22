@@ -941,6 +941,96 @@ let test_json_theme s =
       | Ok _ | Error (Unsupported _) -> ()
       | Error e -> failf "%a" Vhs.pp_error e)
 
+(* [json_string s] is the valid UTF-8 [s] as a JSON string, with \u escapes
+   for its controls, its quotes and, if [escape], every non-ASCII
+   character, astral ones as surrogate pairs. *)
+let json_string ~escape s =
+  let b = Buffer.create (String.length s + 2) in
+  Buffer.add_char b '"';
+  let rec go i =
+    if i < String.length s then (
+      let d = String.get_utf_8_uchar s i in
+      let u = Uchar.to_int (Uchar.utf_decode_uchar d) in
+      if u < 0x20 || u = 0x22 || u = 0x5c || (escape && u > 0x7f) then
+        if u > 0xffff then
+          let v = u - 0x10000 in
+          Fmt.kstr (Buffer.add_string b) "\\u%04x\\u%04X"
+            (0xd800 lor (v lsr 10))
+            (0xdc00 lor (v land 0x3ff))
+        else Fmt.kstr (Buffer.add_string b) "\\u%04x" u
+      else Buffer.add_utf_8_uchar b (Uchar.utf_decode_uchar d);
+      go (i + Uchar.utf_decode_length d))
+  in
+  go 0;
+  Buffer.add_char b '"';
+  Buffer.contents b
+
+let theme_key =
+  choose
+    [
+      const "background";
+      const "Background";
+      const "BACKGROUND";
+      const "red";
+      const "r\u{017F}d";
+      const "\u{212A}ey";
+      const "brightRed";
+      const "cursorAccent";
+      const "name";
+      const "other";
+      map [ bytes ] String.lowercase_ascii;
+    ]
+
+let theme_value =
+  fix (fun value ->
+      choose
+        [
+          map
+            [
+              choose
+                [
+                  const "#123";
+                  const "#abcdef";
+                  const "rgb(1, 2, 3)";
+                  const "";
+                  const "tomato";
+                  const "#12";
+                  bytes;
+                ];
+              bool;
+            ]
+            (fun s escape ->
+              json_string ~escape (if String.is_valid_utf_8 s then s else "x"));
+          const "null";
+          const "true";
+          const "-0.5e3";
+          const "[]";
+          map [ list value ] (fun l -> "[" ^ String.concat ", " l ^ "]");
+          map [ theme_key; value ] (fun k v ->
+              "{" ^ json_string ~escape:false k ^ ": " ^ v ^ "}");
+        ])
+
+(* The jsont reader and the one that imitates Go read valid JSON themes the
+   same way. *)
+let test_json_readers members space =
+  let ws = if space then " \n\t" else "" in
+  let json =
+    "{" ^ ws
+    ^ String.concat ("," ^ ws)
+        (List.map
+           (fun (k, v) -> json_string ~escape:false k ^ ws ^ ":" ^ ws ^ v)
+           members)
+    ^ ws ^ "}"
+  in
+  let show = function
+    | Ok t -> Fmt.str "Ok %a" Palette.pp t
+    | Error (`Json m) -> "Json " ^ m
+    | Error (`Colour c) -> "Colour " ^ c
+  in
+  check_eq ~pp:Fmt.string
+    (show (Palette.go_of_json json))
+    (show (Palette.of_json json))
+
 (* Check the shell's actual input bytes, independently of the tape parser
    and the emulator's rendering of combining marks and joined emoji. *)
 let test_native_literal n =
@@ -1075,6 +1165,9 @@ let tapes =
           ];
       ]
       test_json_theme;
+    test_case "JSON theme readers agree"
+      [ list (pair theme_key theme_value); bool ]
+      test_json_readers;
     test_case "durations"
       [ choose [ int; const max_ms; const (max_ms + 1); const 0 ] ]
       test_durations;

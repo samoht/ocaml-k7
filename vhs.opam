@@ -21,6 +21,8 @@ depends: [
   "cstruct" {>= "6.0.1"}
   "matrix" {>= "0.1.0" & < "0.2.0"}
   "re" {>= "1.10.0"}
+  "jsont" {>= "0.4.0"}
+  "bytesrw" {>= "0.1.0"}
   "markup" {>= "1.0.0" & with-test}
   "alcobar" {with-test}
   "mdx" {with-test}

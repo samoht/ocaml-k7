@@ -231,6 +231,11 @@ seconds, or after the number of seconds `--wait-timeout` gives.
   screen fail. It is rare, and its cause is not known yet.
 - `Vhs.render` reports a wait that times out as `Vhs.Failed`, with VHS's
   message in its output, where `Vhs.record` returns `Vhs.Timeout`.
+- A JSON theme is read with [jsont](https://erratique.ch/software/jsont),
+  which refuses invalid UTF-8 and an unpaired surrogate escape, such as
+  `"\ud800"`, in a string. VHS reads them with Go's `encoding/json`, which
+  replaces them with U+FFFD, so `Vhs.tape` refuses such a theme where VHS
+  would not.
 
 ## Credits
 

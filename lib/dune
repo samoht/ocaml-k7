@@ -22,6 +22,8 @@
   eio
   eio.unix
   fmt
+  jsont
+  jsont.bytesrw
   matrix_backport
   matrix.pty
   mtime

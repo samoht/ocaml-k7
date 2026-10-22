@@ -33,5 +33,9 @@ val of_json : string -> (t, [ `Json of string | `Colour of string ]) result
     [#RGBA], [#RRGGBB], [#RRGGBBAA], [rgb()] or [rgba()], the forms xterm.js
     reads without a browser. *)
 
+val go_of_json : string -> (t, [ `Json of string | `Colour of string ]) result
+(** [go_of_json s] is like {!of_json} with the reader that imitates Go's
+    [encoding/json]. *)
+
 val pp : t Fmt.t
 (** [pp] formats a theme's colours for humans. *)

@@ -2,7 +2,7 @@
 ; library; their properties compile them in.
 
 (copy_files
- ../lib/{screen,tape_syntax,regexp_syntax,unicode,unicode_data}.{ml,mli})
+ ../lib/{screen,tape_syntax,regexp_syntax,unicode,unicode_data,palette}.{ml,mli})
 
 (executable
  (name fuzz)
@@ -15,6 +15,9 @@
   matrix_backport
   fmt
   alcobar
+  re
+  jsont
+  jsont.bytesrw
   eio
   eio_main
   unix))

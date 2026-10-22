@@ -1045,34 +1045,78 @@ let field members f =
       | Other -> None)
     (Some "") members
 
-let of_json s =
+let theme_of_members field members =
+  let values = List.map (fun f -> (f, field members f)) fields in
+  match List.find_opt (fun (_, v) -> v = None) values with
+  | Some (f, _) -> Error (`Json (Fmt.str "the %s of a theme is a string" f))
+  | None -> (
+      let get i default =
+        match List.nth values i with
+        | _, Some "" -> default
+        | f, Some c -> (
+            match colour c with
+            | Some c -> c
+            | None -> raise_notrace (Colour (f ^ " " ^ c)))
+        | _, None -> default
+      in
+      match
+        let background = get 0 xterm.background
+        and foreground = get 1 xterm.foreground
+        and cursor = get 2 xterm.cursor in
+        {
+          background;
+          foreground;
+          cursor;
+          cursor_accent = get 3 (accent ~background ~foreground ~cursor);
+          ansi = Array.init 16 (fun i -> get (4 + i) xterm.ansi.(i));
+        }
+      with
+      | t -> Ok t
+      | exception Colour c -> Error (`Colour c))
+
+let go_of_json s =
   match json s with
   | exception Json msg -> Error (`Json msg)
-  | members -> (
-      let values = List.map (fun f -> (f, field members f)) fields in
-      match List.find_opt (fun (_, v) -> v = None) values with
-      | Some (f, _) -> Error (`Json (Fmt.str "the %s of a theme is a string" f))
-      | None -> (
-          let get i default =
-            match List.nth values i with
-            | _, Some "" -> default
-            | f, Some c -> (
-                match colour c with
-                | Some c -> c
-                | None -> raise_notrace (Colour (f ^ " " ^ c)))
-            | _, None -> default
-          in
-          match
-            let background = get 0 xterm.background
-            and foreground = get 1 xterm.foreground
-            and cursor = get 2 xterm.cursor in
-            {
-              background;
-              foreground;
-              cursor;
-              cursor_accent = get 3 (accent ~background ~foreground ~cursor);
-              ansi = Array.init 16 (fun i -> get (4 + i) xterm.ansi.(i));
-            }
-          with
-          | t -> Ok t
-          | exception Colour c -> Error (`Colour c)))
+  | members -> theme_of_members field members
+
+(* [plain msg] is [msg] without the SGR sequences jsont styles it with. *)
+let plain msg =
+  let b = Buffer.create (String.length msg) in
+  let rec go i =
+    if i < String.length msg then
+      if msg.[i] = '\027' && i + 1 < String.length msg && msg.[i + 1] = '[' then
+        skip (i + 2)
+      else (
+        Buffer.add_char b msg.[i];
+        go (i + 1))
+  and skip i =
+    if i < String.length msg then
+      if msg.[i] = 'm' then go (i + 1) else skip (i + 1)
+  in
+  go 0;
+  Buffer.contents b
+
+(* The string of field [f] in [members], [""] if none: Go keeps the last
+   string of a key that matches it, and fails on any other value but
+   [null]. *)
+let jsont_field members f =
+  List.fold_left
+    (fun acc ((k, _), v) ->
+      match (v : Jsont.json) with
+      | _ when not (equal_fold k f) -> acc
+      | String (s, _) -> Option.map (fun _ -> s) acc
+      | Null _ -> acc
+      | _ -> None)
+    (Some "") members
+
+let of_json s =
+  match Jsont_bytesrw.decode_string' ~locs:true Jsont.json s with
+  | Ok (Object (members, _)) -> theme_of_members jsont_field members
+  | Ok _ -> Error (`Json "a theme is a JSON object")
+  | Error (_, meta, kind) ->
+      let at = Jsont.Textloc.first_byte (Jsont.Meta.textloc meta) in
+      Error
+        (`Json
+           (Fmt.str "%s at offset %d"
+              (plain (Jsont.Error.kind_to_string kind))
+              at))

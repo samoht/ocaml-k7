@@ -31,6 +31,8 @@
   ; private copy in lib/matrix_backport until matrix 0.2.0 is on opam.
   (matrix (and (>= 0.1.0) (< 0.2.0)))
   (re (>= 1.10.0))
+  (jsont (>= 0.4.0))
+  (bytesrw (>= 0.1.0))
   (markup (and (>= 1.0.0) :with-test))
   (alcobar :with-test)
   (mdx :with-test)
