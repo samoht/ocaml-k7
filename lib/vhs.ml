@@ -770,17 +770,20 @@ let utf_8 s =
 let printable s =
   let n = String.length s in
   let b = Buffer.create n in
-  (* [c1 i] is the C1 control encoded at [i], as its ESC final byte. *)
+  (* [c1 i] is the C1 control encoded at [i], as its ESC final byte, and the
+     index after it. *)
   let c1 i =
-    if s.[i] = '\xc2' && i + 1 < n && Char.code s.[i + 1] land 0xe0 = 0x80 then
-      Some (Char.chr (Char.code s.[i + 1] - 0x40))
-    else None
+    let d = String.get_utf_8_uchar s i in
+    match Uchar.to_int (Uchar.utf_decode_uchar d) with
+    | c when c >= 0x80 && c <= 0x9f ->
+        Some (Char.chr (c - 0x40), i + Uchar.utf_decode_length d)
+    | _ -> None
   in
   let rec text i =
     if i < n then
       match (s.[i], c1 i) with
       | '\027', _ when i + 1 < n -> escape s.[i + 1] (i + 2)
-      | _, Some f -> escape f (i + 2)
+      | _, Some (f, j) -> escape f j
       | ('\r' | '\n'), _ ->
           Buffer.add_char b '\n';
           text (i + 1)
@@ -810,7 +813,7 @@ let printable s =
       match (s.[i], c1 i) with
       | '\007', _ -> text (i + 1)
       | '\027', _ when i + 1 < n && s.[i + 1] = '\\' -> text (i + 2)
-      | _, Some '\\' -> text (i + 2)
+      | _, Some ('\\', j) -> text j
       | _ -> control_string (i + 1)
   in
   text 0;

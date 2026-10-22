@@ -96,17 +96,16 @@ let is_js_space = function
   | u -> u >= 0x2000 && u <= 0x200a
 
 let trim_end s =
-  let rec start i =
-    if i > 0 && Char.code s.[i] land 0xc0 = 0x80 then start (i - 1) else i
-  in
-  let rec go n =
-    if n = 0 then 0
+  (* [keep] ends the last character that is not a space. *)
+  let rec go i keep =
+    if i >= String.length s then keep
     else
-      let i = start (n - 1) in
       let d = String.get_utf_8_uchar s i in
-      if is_js_space (Uchar.to_int (Uchar.utf_decode_uchar d)) then go i else n
+      let next = i + Uchar.utf_decode_length d in
+      if is_js_space (Uchar.to_int (Uchar.utf_decode_uchar d)) then go next keep
+      else go next next
   in
-  String.sub s 0 (go (String.length s))
+  String.sub s 0 (go 0 0)
 
 let row grid y =
   let width = Matrix_grid.width grid in

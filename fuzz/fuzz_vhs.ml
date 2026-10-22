@@ -47,6 +47,62 @@ let has_control ?(except = "") s =
   in
   go 0
 
+(* [decode s] is [s] as the stdlib decodes it: each character, U+FFFD for a
+   maximal invalid subpart, with its bytes. *)
+let decode s =
+  let rec go i acc =
+    if i >= String.length s then List.rev acc
+    else
+      let d = String.get_utf_8_uchar s i in
+      let n = Uchar.utf_decode_length d in
+      go (i + n)
+        ((Uchar.to_int (Uchar.utf_decode_uchar d), String.sub s i n) :: acc)
+  in
+  go 0 []
+
+(* [Tape_syntax.has_control] finds a C0 control but [except], DEL or a C1
+   control where the stdlib decodes one. *)
+let test_control_decoding s except =
+  let control (u, _) =
+    (u < 0x20 && not (String.contains except (Char.chr u)))
+    || (u >= 0x7f && u <= 0x9f)
+  in
+  check_eq ~pp:Fmt.bool
+    (List.exists control (decode s))
+    (Tape_syntax.has_control ~except s)
+
+(* [Screen.trim_end] drops the JavaScript white space that ends the
+   characters the stdlib decodes. *)
+let test_trim_end_decoding s =
+  let js_space u =
+    List.mem u
+      [
+        0x09;
+        0x0a;
+        0x0b;
+        0x0c;
+        0x0d;
+        0x20;
+        0xa0;
+        0x1680;
+        0x2028;
+        0x2029;
+        0x202f;
+        0x205f;
+        0x3000;
+        0xfeff;
+      ]
+    || (u >= 0x2000 && u <= 0x200a)
+  in
+  let rec drop = function
+    | (u, _) :: rest when js_space u -> drop rest
+    | l -> l
+  in
+  let expected =
+    String.concat "" (List.rev_map snd (drop (List.rev (decode s))))
+  in
+  check_eq ~pp:Fmt.Dump.string expected (Screen.trim_end s)
+
 (* An independent reader for the [Type] subset of VHS: no escapes, the
    matching quote ends the string. *)
 let decode_type line =
@@ -997,6 +1053,18 @@ let bounds =
 let tapes =
   [
     test_case "tape is total" [ bytes; bytes; int ] test_total;
+    test_case "control characters as the stdlib decodes them"
+      [ bytes; choose [ const ""; const "\t\n"; const "\t\r" ] ]
+      test_control_decoding;
+    test_case "trailing spaces as the stdlib decodes them"
+      [
+        choose
+          [
+            bytes;
+            map [ bytes; bytes ] (fun a b -> a ^ "\xe3\x80\x80\xc2" ^ b ^ " ");
+          ];
+      ]
+      test_trim_end_decoding;
     test_case "JSON themes"
       [
         choose

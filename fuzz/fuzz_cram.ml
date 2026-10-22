@@ -52,14 +52,9 @@ let typeable s =
   let rec go i =
     if i < String.length s then (
       let d = String.get_utf_8_uchar s i in
-      let u =
-        if Uchar.utf_decode_is_valid d then Uchar.utf_decode_uchar d
-        else Uchar.rep
-      in
+      let u = Uchar.utf_decode_uchar d in
       if is_control u then Buffer.add_char b ' ' else Buffer.add_utf_8_uchar b u;
-      go
-        (i
-        + if Uchar.utf_decode_is_valid d then Uchar.utf_decode_length d else 1))
+      go (i + Uchar.utf_decode_length d))
   in
   go 0;
   Buffer.contents b

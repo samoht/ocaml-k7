@@ -588,16 +588,13 @@ let tokens line =
       | Comment | Eof | Illegal -> None)
 
 let has_control ?(except = "") s =
-  let n = String.length s in
   let rec go i =
-    i < n
+    i < String.length s
     &&
-    match s.[i] with
-    | '\xc2' when i + 1 < n && Char.code s.[i + 1] land 0xe0 = 0x80 -> true
-    | c
-      when (Char.code c < 0x20 && not (String.contains except c)) || c = '\x7f'
-      ->
-        true
-    | _ -> go (i + 1)
-  in
+    let d = String.get_utf_8_uchar s i in
+    match Uchar.to_int (Uchar.utf_decode_uchar d) with
+    | c when c < 0x20 -> (not (String.contains except (Char.chr c))) || next d i
+    | c when c >= 0x7f && c <= 0x9f -> true
+    | _ -> next d i
+  and next d i = go (i + Uchar.utf_decode_length d) in
   go 0

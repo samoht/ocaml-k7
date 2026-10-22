@@ -59,6 +59,10 @@ type row
 val cells : row -> cell array
 (** [cells r] are the cells of [r], one per column. *)
 
+val trim_end : string -> string
+(** [trim_end s] is [s] without the white space and line terminators of
+    JavaScript at its end, which VHS's [trimEnd] removes. *)
+
 val row_text : row -> string
 (** [row_text r] is the text of [r] as xterm.js's [translateToString] and
     JavaScript's [trimEnd] give it: without its trailing white space, such as

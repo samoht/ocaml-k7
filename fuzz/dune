@@ -1,7 +1,8 @@
-; The emulator and the Unicode tables are private to the library; their
-; properties compile them in.
+; The emulator, the tape lexer and the Unicode tables are private to the
+; library; their properties compile them in.
 
-(copy_files ../lib/{screen,unicode,unicode_data}.{ml,mli})
+(copy_files
+ ../lib/{screen,tape_syntax,regexp_syntax,unicode,unicode_data}.{ml,mli})
 
 (executable
  (name fuzz)
