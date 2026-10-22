@@ -82,6 +82,13 @@ val play :
     [TERM=xterm-256color], then [vars], the prompt VHS gives it and the [Env]
     lines of [t]. *)
 
+val resolve : cwd:string -> Eio.Process.Env.t -> string -> string option
+(** [resolve ~cwd env exe] is the file [exe] names, as [execvp] finds it: [exe]
+    itself if it holds a slash, and otherwise the first executable file named
+    [exe] in a directory of the [PATH] of [env], or the first such file if none
+    is executable, so that running it reports why. A relative path is relative
+    to [cwd]. It is [None] if there is no such file. *)
+
 val replay : t -> (int * string) list -> string
 (** [replay t output] is the SVG image of a terminal with the settings of [t]
     that receives each string of [output] at its time, in milliseconds. *)

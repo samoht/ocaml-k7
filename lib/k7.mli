@@ -362,20 +362,21 @@ val record :
     shell the others itself, so ttyd's [TERM] replaces one of [env].
 
     With {!constructor-Vhs}, [record] runs the executable [vhs] (defaults to
-    ["vhs"]) as [vhs -q] in the directory [cwd], with the tape [t] on its
-    standard input, so that it writes the outputs of [t]. What [vhs] prints is
-    kept for {!constructor-Vhs_failed} and dropped on success. If the calling
-    fiber is cancelled, [record] sends [vhs] [SIGTERM], which makes it stop the
-    terminal and the browser it started, and waits for it to exit. If [vhs]
-    still runs ten seconds later by [clock], [record] sends it [SIGKILL], which
-    can leave the terminal and the browser running, and waits for it to exit. It
-    does the same once [stop] resolves, and is then [Error (Vhs_failed _)]
-    unless [vhs] has exited with [0]. It is:
+    ["vhs"]), looked up in the [PATH] it gets unless it holds a slash, as
+    [vhs -q] in the directory [cwd], with the tape [t] on its standard input, so
+    that it writes the outputs of [t]. What [vhs] prints is kept for
+    {!constructor-Vhs_failed} and dropped on success. If the calling fiber is
+    cancelled, [record] sends [vhs] [SIGTERM], which makes it stop the terminal
+    and the browser it started, and waits for it to exit. If [vhs] still runs
+    ten seconds later by [clock], [record] sends it [SIGKILL], which can leave
+    the terminal and the browser running, and waits for it to exit. It does the
+    same once [stop] resolves, and is then [Error (Vhs_failed _)] unless [vhs]
+    has exited with [0]. It is:
     - [Error (Unsupported _)] on an [.svg] output or a {!raw} [Screenshot] of an
       [.svg] image, which {!constructor-Native} writes, before it runs anything;
     - [Error (Io _)] if the directory of an output cannot be written, before it
       runs anything, and on any other I/O failure;
-    - [Error (Executable_not_found _)] if [vhs] is not on the [PATH];
+    - [Error (Executable_not_found _)] if [vhs] is not found;
     - [Error (Vhs_failed _)] if [vhs] exits with another status than [0], a wait
       that times out included.
 
@@ -399,7 +400,7 @@ val record :
     - [Error (Timeout _)] if a wait does not hold in time;
     - [Error (Exited _)] as soon as the shell exits while a wait does not hold;
     - [Error (Executable_not_found _)] if the shell or the executable of a
-      [Require] line is not on the [PATH];
+      [Require] line is not on the [PATH] the shell gets;
     - [Error (Io _)] if [cwd] is not a directory of the native file system, or
       if the directory of an output cannot be written, before it plays anything,
       and on any other I/O failure. *)

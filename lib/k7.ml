@@ -1091,6 +1091,20 @@ let check_env env =
   | None -> Ok ()
   | Some ((k, v), why) -> err_invalid "env %a: %s" Quote.pp (k ^ "=" ^ v) why
 
+(* Without a PATH in [vars], Eio looks [vhs] up in k7's, which [proc]
+   passes on. *)
+let executable ~vars ~cwd env vhs =
+  if String.contains vhs '/' || not (List.mem_assoc "PATH" vars) then None
+  else
+    let dir =
+      match Eio.Path.native cwd with
+      | Some dir -> dir
+      | None | (exception Failure _) -> "."
+    in
+    match Native.resolve ~cwd:dir env vhs with
+    | Some path -> Some path
+    | None -> raise (Eio.Process.err (Executable_not_found vhs))
+
 let run_vhs ~vhs ~vars ~clock ~proc ~cwd ~cancelled ~sink tape =
   Eio.Switch.run @@ fun sw ->
   let stdin, feed = Eio.Process.pipe ~sw proc in
@@ -1098,6 +1112,7 @@ let run_vhs ~vhs ~vars ~clock ~proc ~cwd ~cancelled ~sink tape =
   let child =
     Eio.Process.spawn ~sw proc ~env
       ~cwd:(cwd :> Eio.Fs.dir_ty Eio.Path.t)
+      ?executable:(executable ~vars ~cwd env vhs)
       ~stdin ~stdout:sink ~stderr:sink [ vhs; "-q" ]
   in
   Eio.Flow.close stdin;
