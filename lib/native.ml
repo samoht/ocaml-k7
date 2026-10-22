@@ -748,7 +748,9 @@ let rec drain st buf =
       drain st buf
   | exception Unix.Unix_error _ -> ()
 
-let poll = 0.02
+(* In real time: [st.clock] gives the recording's times, and a clock that
+   stands still must not stop the reader. *)
+let poll () = Eio_unix.sleep 0.02
 
 (* On macOS a read can find the terminal closed while the program runs. *)
 let rec reader st buf =
@@ -759,16 +761,14 @@ let rec reader st buf =
       reader st buf
   | exception Unix.Unix_error ((EAGAIN | EWOULDBLOCK | EINTR), _, _) ->
       if not (exited st) then (
-        Eio.Fiber.first
-          (fun () -> Eio_unix.await_readable (fd st))
-          (fun () -> Eio.Time.Mono.sleep st.clock poll);
+        Eio.Fiber.first (fun () -> Eio_unix.await_readable (fd st)) poll;
         reader st buf)
   | exception Unix.Unix_error _ -> ended st buf
 
 and ended st buf =
   if exited st then drain st buf
   else (
-    Eio.Time.Mono.sleep st.clock poll;
+    poll ();
     reader st buf)
 
 let write st s =
