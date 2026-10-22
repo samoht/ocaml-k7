@@ -1588,6 +1588,42 @@ let test_output_directory_preflight () =
     (Result.map_error (Fmt.str "%a" K7.pp_error) recorded)
     (Result.map_error (Fmt.str "%a" K7.pp_error) checked)
 
+(* The $ COMMAND line quotes each argument so that the line runs the same
+   argv; a byte that is not UTF-8 needs $'\xHH', as a control character
+   gets. *)
+let test_run_command_line_invalid_utf_8 () =
+  with_dir @@ fun env cwd ->
+  let proc = Eio.Stdenv.process_mgr env in
+  let arg = "a\x9b[2Jb" in
+  let image =
+    match
+      K7.run
+        ~settings:K7.[ Columns 200; Rows 6; Font_size 10; Padding 0 ]
+        ~clock:(Eio.Stdenv.mono_clock env)
+        ~proc ~cwd
+        [ "/usr/bin/printf"; "%s"; arg ]
+    with
+    | Ok (image, `Exited 0) -> image
+    | Ok (_, status) -> Alcotest.failf "printf: %a" Eio.Process.pp_status status
+    | Error e -> Alcotest.failf "%a" K7.pp_error e
+  in
+  let line =
+    match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows:6 image with
+    | Ok (first :: _) -> List.hd (String.split_on_char '\n' first)
+    | Ok [] -> Alcotest.fail "no frame"
+    | Error e -> Alcotest.fail e
+  in
+  let command = String.sub line 2 (String.length line - 2) in
+  let output = Buffer.create 16 in
+  Eio.Process.run
+    ~stdout:(Eio.Flow.buffer_sink output)
+    proc
+    [ "/bin/bash"; "-c"; command ];
+  Alcotest.(check string)
+    (Fmt.str "%S runs the same argv" line)
+    (String.escaped arg)
+    (String.escaped (Buffer.contents output))
+
 let test_run_concurrent_terminals () =
   with_dir @@ fun env cwd ->
   script cwd "ttys.sh"
@@ -1673,6 +1709,8 @@ let suite =
          ("record respects TERM override", test_record_term_override);
          ("check", test_check);
          ("output directory preflight", test_output_directory_preflight);
+         ( "command line quotes invalid UTF-8",
+           test_run_command_line_invalid_utf_8 );
          ("concurrent runs keep their terminals", test_run_concurrent_terminals);
        ]
       @ known_differences
