@@ -357,6 +357,18 @@ let setting =
       const (Vhs.Shell Cmd);
     ]
 
+(* Several settings can interact, and repeated settings must be checked in
+   the same order by both public entry points. Native size and colour limits
+   are documented separately from tape validation. *)
+let test_setting_list_errors settings =
+  let tape = Vhs.tape ~settings ~outputs:[ "x.svg" ] [ Vhs.type' "hi" ] in
+  match (tape, Vhs.svg ~settings [ (Ms 0, "hello") ]) with
+  | Error (Invalid expected), Error (Invalid actual) ->
+      check_eq ~pp:pp_string expected actual
+  | Ok _, (Ok _ | Error (Unsupported _)) -> ()
+  | Error e, _ -> failf "tape: %a, but svg did not agree" Vhs.pp_error e
+  | Ok _, Error e -> failf "svg: %a" Vhs.pp_error e
+
 let contains ~sub s =
   let rec go i =
     i + String.length sub <= String.length s
@@ -426,6 +438,9 @@ let suite =
   ( "svg",
     [
       test_case "frames" [ list chunk ] test_frames;
+      test_case "SVG and tape return identical setting-list errors"
+        [ list setting ]
+        test_setting_list_errors;
       test_case "SVG times obey duration bounds and ordering"
         [
           choose [ int; const (-1); const 0; const 9_223_372_036_854 ];
