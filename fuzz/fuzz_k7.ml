@@ -1446,10 +1446,33 @@ let test_check_directory_destination n =
   | Error e -> failf "expected I/O error for %s: %a" name K7.pp_error e
   | Ok () -> failf "check accepted directory destination %s" name
 
+let test_record_term n =
+  with_dir @@ fun env path ->
+  let term = List.nth [ "dumb"; "vt100"; "ansi" ] (n mod 3) in
+  let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "term")) in
+  let t =
+    Result.get_ok
+      (K7.tape ~settings:[ Typing_speed (Ms 0) ]
+         ~outputs:[ path "out.txt" ]
+         K7.[ type' "printf '%s' \"$TERM\" > term\n"; wait Prompt ])
+  in
+  (match
+     K7.record ~engine:Native
+       ~env:[ ("TERM", term) ]
+       ~clock:(Eio.Stdenv.mono_clock env)
+       ~proc:(Eio.Stdenv.process_mgr env)
+       ~cwd t
+   with
+  | Ok () -> ()
+  | Error e -> failf "%a" K7.pp_error e);
+  check_eq ~pp:Fmt.Dump.string term (Eio.Path.load Eio.Path.(cwd / "term"))
+
 let with_processes =
   [
     test_case "check rejects directory destinations for outputs and screenshots"
       [ uint8 ] test_check_directory_destination;
+    test_case "record respects the explicit terminal environment" [ uint8 ]
+      test_record_term;
     test_case "native output paths and positive frame-rate boundaries" [ uint8 ]
       test_native_paths;
     test_case "mixed outputs are refused before playing or writing" [ uint8 ]
