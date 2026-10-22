@@ -415,26 +415,29 @@ val run :
   ?settings:setting list ->
   ?env:(string * string) list ->
   ?show:string ->
+  ?delay:duration ->
   ?stop:unit Eio.Promise.t ->
   clock:_ Eio.Time.Mono.t ->
   proc:_ Eio.Process.mgr ->
   cwd:_ Eio.Path.t ->
   string list ->
   (string * Eio.Process.exit_status, error) result
-(** [run ~settings ~env ~show ~stop ~clock ~proc ~cwd argv] runs the program
-    [argv] in the directory [cwd] on a pseudo-terminal, with no shell and
-    nothing typed. It is the SVG image of what the terminal showed, as {!svg}
-    draws a terminal with [settings] (defaults to [[]]), paired with how the
-    program exited. Each output shows at the time it arrived since the program
-    started, rounded down to a frame, and the last screen holds for a second
-    after the program exits. The image's first line is [$ ] in the colour of
-    VHS's prompt, then [show] (defaults to [argv], each argument shell-quoted
+(** [run ~settings ~env ~show ~delay ~stop ~clock ~proc ~cwd argv] runs the
+    program [argv] in the directory [cwd] on a pseudo-terminal, with no shell
+    and nothing typed. It is the SVG image of what the terminal showed, as
+    {!svg} draws a terminal with [settings] (defaults to [[]]), paired with how
+    the program exited. Each output shows at the time it arrived since the
+    program started, rounded down to a frame, and the last screen holds for a
+    second after the program exits. The image's first line is [$ ] in the colour
+    of VHS's prompt, then [show] (defaults to [argv], each argument shell-quoted
     where needed), and the program's output starts on the next line; an empty
-    [show] shows no line. The first element of [argv] is the executable, looked
-    up in the [PATH] the program gets unless it holds a slash, and relative to
-    [cwd] if it does. The program gets the environment of [proc] without the
-    five variables {!record} removes, with [TERM=xterm-256color], then the
-    variables of [env] (defaults to [[]]).
+    [show] shows no line. A line that shows stays alone for [delay] (defaults to
+    [Ms 500]), as if typed, and the program's output shows that much later. The
+    first element of [argv] is the executable, looked up in the [PATH] the
+    program gets unless it holds a slash, and relative to [cwd] if it does. The
+    program gets the environment of [proc] without the five variables {!record}
+    removes, with [TERM=xterm-256color], then the variables of [env] (defaults
+    to [[]]).
 
     A program that exits with another status than [0], or is killed, still gives
     its image: the status says how it exited. [run] returns once the program has
@@ -447,8 +450,9 @@ val run :
     up its terminal, sends the group [SIGKILL] if one of it still runs a second
     later by [clock], and waits for the program to exit. It is:
     - [Error (Invalid _)] if [argv] is empty, if a setting is one {!svg}
-      refuses, if [show] holds a control character, or if a name of [env] is
-      empty or holds [=], or a name or a value holds a NUL byte;
+      refuses, if [show] holds a control character, if [delay] is out of the
+      range of a {!duration}, or if a name of [env] is empty or holds [=], or a
+      name or a value holds a NUL byte;
     - [Error (Unsupported _)] on what {!svg} refuses;
     - [Error (Executable_not_found _)] if the executable is not found;
     - [Error (Io _)] if [cwd] is not a directory of the native file system or

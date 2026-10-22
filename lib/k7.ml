@@ -1496,8 +1496,13 @@ let command_line = function
   | "" -> ""
   | show -> "\027[38;2;90;86;224m$ \027[0m" ^ show ^ "\r\n"
 
-let run ?(settings = []) ?(env = []) ?show ?stop ~clock ~proc ~cwd argv =
+let run ?(settings = []) ?(env = []) ?show ?(delay = Ms 500) ?stop ~clock ~proc
+    ~cwd argv =
   let* () = if argv = [] then Error (Invalid "no command to run") else Ok () in
+  let (Ms delay) = delay in
+  let* () =
+    Result.map_error (fun msg -> Invalid msg) (check_ms "delay " delay)
+  in
   let* () = check_env env in
   let show =
     Option.value show ~default:(String.concat " " (List.map shell_word argv))
@@ -1514,4 +1519,6 @@ let run ?(settings = []) ?(env = []) ?show ?stop ~clock ~proc ~cwd argv =
   in
   Result.map_error native_error
     (Native.run ?interrupt:stop ~clock ~env:(environment proc) ~vars:env
-       ~cwd:dir ~line:(command_line show) tape argv)
+       ~cwd:dir ~line:(command_line show)
+       ~delay:(if show = "" then 0 else delay)
+       tape argv)

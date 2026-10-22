@@ -18,10 +18,10 @@ let exit_code = function
   | `Exited n -> n
   | `Signaled s -> 128 + Sys.signal_to_int s
 
-let record ?show ?stop stdenv ~settings ~env ~output argv =
+let record ?show ?delay ?stop stdenv ~settings ~env ~output argv =
   let* () = check_output output in
   let* svg, status =
-    K7.run ~settings ~env ?show ?stop
+    K7.run ~settings ~env ?show ?delay ?stop
       ~clock:(Eio.Stdenv.mono_clock stdenv)
       ~proc:(Eio.Stdenv.process_mgr stdenv)
       ~cwd:(Eio.Stdenv.cwd stdenv) argv
@@ -34,9 +34,9 @@ let record ?show ?stop stdenv ~settings ~env ~output argv =
   | () -> Ok status
   | exception Eio.Io (err, _) -> Fmt.error "%s: %a" output Eio.Exn.pp_err err
 
-let run ?show stdenv ~settings ~env ~output argv =
+let run ?show ?delay stdenv ~settings ~env ~output argv =
   Flags.interruptible (fun stop ->
-      record ?show ~stop stdenv ~settings ~env ~output argv)
+      record ?show ?delay ~stop stdenv ~settings ~env ~output argv)
   |> Flags.exit stdenv ~ok:exit_code
 
 open Cmdliner
@@ -52,6 +52,13 @@ let show =
      $(i,COMMAND); an empty $(docv) shows no line."
   in
   Arg.(value & opt (some string) None & info [ "show" ] ~docv:"TEXT" ~doc)
+
+let delay =
+  let doc =
+    "Show the command line alone for $(docv) milliseconds, as if typed, before \
+     the program's output (defaults to 500); 0 shows the output at once."
+  in
+  Arg.(value & opt int 500 & info [ "delay" ] ~docv:"MS" ~doc)
 
 let command =
   let doc = "The program to record, then its arguments, after $(b,--)." in
@@ -107,9 +114,11 @@ let exits =
 
 let cmd =
   let doc = "run a program on a pseudo-terminal and record its screens" in
-  let run settings env show output argv =
-    Eio_main.run @@ fun stdenv -> run ?show stdenv ~settings ~env ~output argv
+  let run settings env show delay output argv =
+    Eio_main.run @@ fun stdenv ->
+    run ?show ~delay:(Ms delay) stdenv ~settings ~env ~output argv
   in
   Cmd.make
     (Cmd.info "run" ~doc ~man ~exits)
-    Term.(const run $ Flags.settings $ Flags.env $ show $ output $ command)
+    Term.(
+      const run $ Flags.settings $ Flags.env $ show $ delay $ output $ command)

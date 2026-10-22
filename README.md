@@ -33,9 +33,10 @@ $ k7 cram --output hello.svg hello.t
 
 `k7 run` records a program, with no shell and nothing typed. The image's
 first line is `$ ` and the command, which `--show` replaces or, empty,
-hides. Each screen shows at the time the program printed it. `k7 run` exits
-with the program's exit code; an error of k7 itself prints `k7:` and the
-reason on standard error, and exits 123.
+hides; it shows alone for half a second, as if typed, or for `--delay`
+milliseconds. Each screen shows at the time the program printed it.
+`k7 run` exits with the program's exit code; an error of k7 itself
+prints `k7:` and the reason on standard error, and exits 123.
 
 ```sh
 $ k7 run --output ls.svg -- ls -l
@@ -48,11 +49,12 @@ $ printf 'Output hello.svg\nType "echo hello"\nEnter\nSleep 1s\n' > hello.tape
 $ k7 tape hello.tape
 ```
 
-Each subcommand takes `--columns`, `--rows`, `--font-size`, `--theme` and
-`--env VAR=VALUE`, and `k7 cram` and `k7 tape` take `--wait-timeout`. k7 writes `.svg` outputs and the text outputs (`.txt`,
-`.ascii` and `.test`) itself, and `k7 cram` and `k7 tape` run `vhs` for the
-others. `k7 cram` and `k7 tape` call `K7.record`, and `k7 run` calls `K7.run`.
-`k7 COMMAND --help` gives the details.
+Each subcommand takes `--columns`, `--rows`, `--font-size`, `--theme`
+and `--env VAR=VALUE`, and `k7 cram` and `k7 tape` take
+`--wait-timeout`. k7 writes `.svg` outputs and the text outputs (`.txt`,
+`.ascii` and `.test`) itself, and `k7 cram` and `k7 tape` run `vhs` for
+the others. `k7 cram` and `k7 tape` call `K7.record`, and `k7 run` calls
+`K7.run`. `k7 COMMAND --help` gives the details.
 
 ## OCaml
 

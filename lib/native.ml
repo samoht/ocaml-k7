@@ -1224,7 +1224,7 @@ let terminate clock (t : terminal) =
   signal Sys.sigkill;
   Eio.Fiber.await_cancel ()
 
-let run ?interrupt ~clock ~env ~vars ~cwd ~line t argv =
+let run ?interrupt ~clock ~env ~vars ~cwd ~line ~delay t argv =
   let clock = (clock :> Eio.Time.Mono.ty Eio.Resource.t) in
   match
     let prog, args =
@@ -1242,6 +1242,7 @@ let run ?interrupt ~clock ~env ~vars ~cwd ~line t argv =
     Screen.feed st.term line;
     refresh st;
     record st;
+    st.logical <- delay;
     Eio.Fiber.first
       (fun () -> reader st (Bytes.create 65536))
       (fun () ->

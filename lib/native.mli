@@ -91,15 +91,16 @@ val run :
   vars:(string * string) list ->
   cwd:string ->
   line:string ->
+  delay:int ->
   t ->
   string list ->
   (string * Eio.Process.exit_status, error) result
-(** [run ~interrupt ~clock ~env ~vars ~cwd ~line t argv] runs the program [argv]
-    in the directory [cwd] on a terminal with the settings of [t], until it
-    exits, and is the SVG image of what the terminal showed, each output at the
-    time it arrived since the program started, after [line], which the terminal
-    shows from the first frame, with how the program exited. The image holds the
-    last screen for a second. The program gets [env] with [TERM=xterm-256color],
-    then [vars]. Once [interrupt] resolves, its process group gets [SIGTERM],
-    then [SIGKILL] a second later by [clock]. It is [Error (Invalid _)] if
-    [argv] is empty. *)
+(** [run ~interrupt ~clock ~env ~vars ~cwd ~line ~delay t argv] runs the program
+    [argv] in the directory [cwd] on a terminal with the settings of [t], until
+    it exits, and is the SVG image of what the terminal showed, each output
+    [delay] milliseconds after the time it arrived since the program started,
+    after [line], which the terminal shows from the first frame, with how the
+    program exited. The image holds the last screen for a second. The program
+    gets [env] with [TERM=xterm-256color], then [vars]. Once [interrupt]
+    resolves, its process group gets [SIGTERM], then [SIGKILL] a second later by
+    [clock]. It is [Error (Invalid _)] if [argv] is empty. *)

@@ -1080,9 +1080,9 @@ let known_differences =
   |> List.map (fun (name, payload, vhs, image, text) ->
       (name, fun () -> check_payload ~vhs ?text payload image))
 
-let run ?clock ?vars ?show env cwd argv =
+let run ?clock ?vars ?show ?delay env cwd argv =
   Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 60. @@ fun () ->
-  K7.run ~settings ?env:vars ?show
+  K7.run ~settings ?env:vars ?show ?delay
     ~clock:
       (match clock with
       | Some c -> (c :> Eio.Time.Mono.ty Eio.Resource.t)
@@ -1127,7 +1127,8 @@ let times svg =
   (duration, keyframes 0 [])
 
 (* The program prints nothing until the clock reads 500ms, so its output and
-   its exit land on that frame, whatever the machine's load. *)
+   its exit land on that frame, after the line's 500ms, whatever the
+   machine's load. *)
 let test_run_program () =
   with_dir @@ fun env cwd ->
   script cwd "demo.sh"
@@ -1163,10 +1164,42 @@ let test_run_program () =
         (frames s);
       let duration, starts = times (unprefixed s) in
       Alcotest.(check (list (float 0.)))
-        "starts" [ 0.; 500. ]
+        "starts" [ 0.; 1000. ]
         (List.map Float.round starts);
       Alcotest.(check (float 0.))
-        "the last screen holds a second" 1500. duration
+        "the last screen holds a second" 2000. duration
+
+(* The clock never moves, so the program's output arrives at 0ms. *)
+let test_run_delay () =
+  with_dir @@ fun env cwd ->
+  let clock = Eio_mock.Clock.Mono.make () in
+  let image ?show ?delay name =
+    match run ~clock ?show ?delay env cwd [ "echo"; "hi" ] with
+    | Error e -> Alcotest.failf "%s: %a" name K7.pp_error e
+    | Ok (s, _) -> s
+  in
+  let line = screen [ "$ echo hi" ] and both = screen [ "$ echo hi"; "hi" ] in
+  let check ?delay name beat =
+    let s = image ?delay name in
+    Alcotest.(check (list string)) (name ^ ": frames") [ line; both ] (frames s);
+    Alcotest.(check (list (float 0.)))
+      (name ^ ": starts") [ 0.; beat ]
+      (List.map Float.round (snd (times (unprefixed s))))
+  in
+  check "default" 500.;
+  check "longer" ~delay:(Ms 2000) 2000.;
+  Alcotest.(check (list string))
+    "at once" [ both ]
+    (frames (image ~delay:(Ms 0) "at once"));
+  Alcotest.(check (list string))
+    "no line"
+    [ screen [ "hi" ] ]
+    (frames (image ~show:"" "no line"));
+  match run ~clock ~delay:(Ms (-1)) env cwd [ "true" ] with
+  | Error (Invalid msg) ->
+      Alcotest.(check string) "negative" "delay -1ms: negative duration" msg
+  | Ok _ -> Alcotest.fail "negative delay accepted"
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
 
 let test_run_fast () =
   with_dir @@ fun env cwd ->
@@ -1563,6 +1596,7 @@ let suite =
          ("run errors", test_run_errors);
          ("run a killed program", test_run_signal);
          ("run shows the command line", test_run_command_line);
+         ("run shows the command line alone first", test_run_delay);
          ("run keeps the rows", test_run_rows);
          ("run shows another line", test_run_show);
          ("run cancelled", test_run_cancel);
