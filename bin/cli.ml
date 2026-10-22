@@ -9,7 +9,7 @@ let man =
   [
     `S Manpage.s_description;
     `P
-      "$(tname) records terminal sessions as animated SVG images, without a \
+      "$(tool) records terminal sessions as animated SVG images, without a \
        browser. For a GIF or a video, $(b,k7 cram) and $(b,k7 tape) run \
        Charm's $(b,vhs).";
     `P

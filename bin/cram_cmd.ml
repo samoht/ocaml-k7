@@ -172,7 +172,7 @@ open Cmdliner
 let output =
   let doc =
     "Write the recording to $(docv), in the format of its extension, in lower \
-     case. $(tname) itself records an $(b,.svg) image and the text outputs \
+     case. $(cmd) itself records an $(b,.svg) image and the text outputs \
      $(b,.txt), $(b,.ascii) and $(b,.test), and $(b,vhs) records the others."
   in
   Arg.(
@@ -198,20 +198,20 @@ let man =
   [
     `S Manpage.s_description;
     `P
-      "$(tname) records the cram test $(i,CRAM). It types each $(b,\\$) \
-       command into a terminal running bash and waits for the prompt to come \
-       back before the next. It ignores the expected output and exit codes. As \
-       dune does, it runs the commands in a new empty temporary directory, \
-       which it removes afterwards, unless $(b,--dir) names another one.";
+      "$(cmd) records the cram test $(i,CRAM). It types each $(b,\\$) command \
+       into a terminal running bash and waits for the prompt to come back \
+       before the next. It ignores the expected output and exit codes. As dune \
+       does, it runs the commands in a new empty temporary directory, which it \
+       removes afterwards, unless $(b,--dir) names another one.";
     `P
-      "$(tname) records an $(b,.svg) output and the text outputs without \
+      "$(cmd) records an $(b,.svg) output and the text outputs without \
        $(b,vhs). It runs bash on a pseudo-terminal itself and draws its \
        screens as an animated SVG image, which plays in an HTML $(i,img) \
        element, or writes their text as VHS does. $(b,vhs) records the other \
        outputs, and needs $(b,ttyd), $(b,ffmpeg) and a browser.";
     `P
-      "Before the first command, and after the setup scripts, $(tname) makes \
-       the last command of $(b,PROMPT_COMMAND) set $(b,PS1) to the VHS prompt \
+      "Before the first command, and after the setup scripts, $(cmd) makes the \
+       last command of $(b,PROMPT_COMMAND) set $(b,PS1) to the VHS prompt \
        followed by a mark. The mark is sixteen zero-width characters, U+200B \
        and U+2060, that spell a digest of the setup scripts and the commands. \
        It tells the prompt from output, even output that ends with $(b,>) or \
@@ -221,7 +221,7 @@ let man =
       "The prompt hooks of the setup scripts still run first, and a command \
        that replaces $(b,PROMPT_COMMAND) makes the next wait time out. So does \
        a command that leaves bash waiting for more input, such as an \
-       unterminated quote or here-document, and $(tname) then names that \
+       unterminated quote or here-document, and $(cmd) then names that \
        command. In a native recording, a wait that times out names the command \
        whose prompt did not come back, and a shell that exits ends the \
        recording at once.";
@@ -229,7 +229,7 @@ let man =
       "Each $(b,--env) variable is set with an $(b,Env) line of the tape, \
        before bash starts.";
     `P
-      "On SIGINT or SIGTERM, $(tname) types no more commands, writes what it \
+      "On SIGINT or SIGTERM, $(cmd) types no more commands, writes what it \
        recorded so far, and exits 130 or 143.";
     `S Manpage.s_examples;
     `Pre

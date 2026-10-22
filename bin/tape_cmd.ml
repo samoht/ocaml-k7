@@ -63,19 +63,19 @@ let man =
   [
     `S Manpage.s_description;
     `P
-      "$(tname) reads the tape $(i,TAPE) and records it. Its $(b,Set) lines \
+      "$(cmd) reads the tape $(i,TAPE) and records it. Its $(b,Set) lines \
        before the first action are its settings, which $(b,--cols), \
        $(b,--rows), $(b,--font-size) and $(b,--theme) replace.";
     `P
       "When every output is an $(b,.svg) image or a text output ($(b,.txt), \
-       $(b,.ascii) or $(b,.test)), $(tname) plays the tape itself, in bash, \
-       zsh or fish on a pseudo-terminal. Otherwise $(b,vhs), which needs \
+       $(b,.ascii) or $(b,.test)), $(cmd) plays the tape itself, in bash, zsh \
+       or fish on a pseudo-terminal. Otherwise $(b,vhs), which needs \
        $(b,ttyd), $(b,ffmpeg) and a browser, records it. A tape cannot ask for \
        both an $(b,.svg) image and an output only $(b,vhs) writes.";
     `P
-      "Each $(b,--env) variable is set in the environment of $(tname), which \
-       the shell inherits, as an $(b,Env) line does; $(b,--print) leaves it \
-       out of the tape.";
+      "Each $(b,--env) variable is set in the environment of $(cmd), which the \
+       shell inherits, as an $(b,Env) line does; $(b,--print) leaves it out of \
+       the tape.";
     `S Manpage.s_examples;
     `Pre
       "$(cmd) demo.tape\n\

@@ -61,7 +61,7 @@ let man =
   [
     `S Manpage.s_description;
     `P
-      "$(tname) runs $(i,COMMAND) on a pseudo-terminal, with no shell and \
+      "$(cmd) runs $(i,COMMAND) on a pseudo-terminal, with no shell and \
        nothing typed, and writes what the terminal showed as an animated SVG \
        image, which plays in an HTML $(i,img) element. Each screen shows at \
        the time it arrived since the program started, and the last one holds \
@@ -70,12 +70,12 @@ let man =
        the program's output starts on the next line.";
     `P
       "The program is looked up in $(b,PATH) unless its name holds a slash. It \
-       gets the environment of $(tname), with $(b,TERM=xterm-256color), then \
-       the $(b,--env) variables. Its standard input is the terminal, where \
-       nothing is typed, so a program that waits for input waits until \
-       $(tname) is interrupted.";
+       gets the environment of $(cmd), with $(b,TERM=xterm-256color), then the \
+       $(b,--env) variables. Its standard input is the terminal, where nothing \
+       is typed, so a program that waits for input waits until $(cmd) is \
+       interrupted.";
     `P
-      "On SIGINT or SIGTERM, $(tname) sends the program and its descendants \
+      "On SIGINT or SIGTERM, $(cmd) sends the program and its descendants \
        SIGTERM, then SIGKILL a second later, writes the image of what the \
        terminal showed until the program exited, and exits 130 or 143.";
     `S Manpage.s_examples;
