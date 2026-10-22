@@ -534,7 +534,7 @@ let test_error_item n =
 
 let with_dir fn =
   Eio_main.run @@ fun env ->
-  let dir = Filename.temp_dir "vhs-property" "" in
+  let dir = Filename.temp_dir "k7-property" "" in
   Fun.protect
     ~finally:(fun () ->
       Array.iter

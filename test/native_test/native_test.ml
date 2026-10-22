@@ -43,7 +43,7 @@ let screen lines =
 
 let with_dir f =
   Eio_main.run @@ fun env ->
-  let tmp = Filename.temp_dir "vhs-native" "" in
+  let tmp = Filename.temp_dir "k7-native" "" in
   Fun.protect ~finally:(fun () ->
       ignore (Sys.command ("rm -rf " ^ Filename.quote tmp)))
   @@ fun () -> f env Eio.Path.(Eio.Stdenv.fs env / tmp)

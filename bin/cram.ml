@@ -87,12 +87,12 @@ let ready mark = K7.wait (Line (concat_map regexp mark ^ "$"))
 
 (* The variable that hands [init] to bash, through VHS's [Env], which sets it
    before the shell starts; [init] unsets it. *)
-let var = "VHS_CRAM_PROMPT"
+let var = "K7_PROMPT"
 
-(* [init mark] makes [__vhs_prompt] the last command of [PROMPT_COMMAND],
+(* [init mark] makes [__k7_prompt] the last command of [PROMPT_COMMAND],
    after the hooks a setup installs, which may rewrite [PS1] before each
    prompt; the hooks of an array, which bash 5.1 and later run in order, are
-   joined into one string, run by every bash. [__vhs_prompt] sets [PS1] to
+   joined into one string, run by every bash. [__k7_prompt] sets [PS1] to
    the prompt VHS gives bash followed by [mark], and [PS2] to bash's [> ]
    followed by [mark] and one [tally mark] per prompt shown so far. The mark
    follows the space so that it stays on the line under the cursor when the
@@ -101,13 +101,13 @@ let var = "VHS_CRAM_PROMPT"
 let init mark =
   String.concat ""
     [
-      {|bind 'set input-meta on'; bind 'set output-meta on'; bind 'set convert-meta off'; __vhs_n=; __vhs_prompt() { PS1='\[\e[38;2;90;86;224m\]> \[|};
+      {|bind 'set input-meta on'; bind 'set output-meta on'; bind 'set convert-meta off'; __k7_n=; __k7_prompt() { PS1='\[\e[38;2;90;86;224m\]> \[|};
       concat_map octal mark;
-      {|\e[0m\]'; __vhs_n=$__vhs_n'|};
+      {|\e[0m\]'; __k7_n=$__k7_n'|};
       octal (tally mark);
       {|'; PS2='> \[|};
       concat_map octal mark;
-      {|'$__vhs_n'\]'; }; __vhs=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} __vhs_prompt); unset PROMPT_COMMAND; PROMPT_COMMAND=$__vhs; unset __vhs |};
+      {|'$__k7_n'\]'; }; __k7=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} __k7_prompt); unset PROMPT_COMMAND; PROMPT_COMMAND=$__k7; unset __k7 |};
       var;
     ]
 

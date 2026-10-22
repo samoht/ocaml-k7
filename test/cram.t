@@ -17,8 +17,8 @@ varies across cmdliner versions.
   Output "demo.gif"
   Set Shell "bash"
   Hide
-  Env VHS_CRAM_PROMPT `bind 'set input-meta on'; bind 'set output-meta on'; bind 'set convert-meta off'; __vhs_n=; __vhs_prompt() { PS1='\[\e[38;2;90;86;224m\]> \[\342\201\240\342\201\240\342\200\213\342\201\240\342\200\213\342\200\213\342\200\213\342\201\240\342\200\213\342\201\240\342\200\213\342\200\213\342\201\240\342\200\213\342\201\240\342\201\240\e[0m\]'; __vhs_n=$__vhs_n'\342\200\213'; PS2='> \[\342\201\240\342\201\240\342\200\213\342\201\240\342\200\213\342\200\213\342\200\213\342\201\240\342\200\213\342\201\240\342\200\213\342\200\213\342\201\240\342\200\213\342\201\240\342\201\240'$__vhs_n'\]'; }; __vhs=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} __vhs_prompt); unset PROMPT_COMMAND; PROMPT_COMMAND=$__vhs; unset __vhs VHS_CRAM_PROMPT`
-  Type 'eval "$VHS_CRAM_PROMPT"; clear'
+  Env K7_PROMPT `bind 'set input-meta on'; bind 'set output-meta on'; bind 'set convert-meta off'; __k7_n=; __k7_prompt() { PS1='\[\e[38;2;90;86;224m\]> \[\342\201\240\342\201\240\342\200\213\342\201\240\342\200\213\342\200\213\342\200\213\342\201\240\342\200\213\342\201\240\342\200\213\342\200\213\342\201\240\342\200\213\342\201\240\342\201\240\e[0m\]'; __k7_n=$__k7_n'\342\200\213'; PS2='> \[\342\201\240\342\201\240\342\200\213\342\201\240\342\200\213\342\200\213\342\200\213\342\201\240\342\200\213\342\201\240\342\200\213\342\200\213\342\201\240\342\200\213\342\201\240\342\201\240'$__k7_n'\]'; }; __k7=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} __k7_prompt); unset PROMPT_COMMAND; PROMPT_COMMAND=$__k7; unset __k7 K7_PROMPT`
+  Type 'eval "$K7_PROMPT"; clear'
   Enter
   Wait+Line /\x{2060}\x{2060}\x{200B}\x{2060}\x{200B}\x{200B}\x{200B}\x{2060}\x{200B}\x{2060}\x{200B}\x{200B}\x{2060}\x{200B}\x{2060}\x{2060}$/
   Show
@@ -99,8 +99,8 @@ resetting the prompt that the waits rely on.
   Output "demo.gif"
   Set Shell "bash"
   Hide
-  Env VHS_CRAM_PROMPT `bind 'set input-meta on'; bind 'set output-meta on'; bind 'set convert-meta off'; __vhs_n=; __vhs_prompt() { PS1='\[\e[38;2;90;86;224m\]> \[\342\201\240\342\201\240\342\201\240\342\200\213\342\201\240\342\200\213\342\201\240\342\201\240\342\201\240\342\201\240\342\200\213\342\201\240\342\200\213\342\201\240\342\200\213\342\200\213\e[0m\]'; __vhs_n=$__vhs_n'\342\201\240'; PS2='> \[\342\201\240\342\201\240\342\201\240\342\200\213\342\201\240\342\200\213\342\201\240\342\201\240\342\201\240\342\201\240\342\200\213\342\201\240\342\200\213\342\201\240\342\200\213\342\200\213'$__vhs_n'\]'; }; __vhs=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} __vhs_prompt); unset PROMPT_COMMAND; PROMPT_COMMAND=$__vhs; unset __vhs VHS_CRAM_PROMPT`
-  Type `source './setup.sh'; eval "$VHS_CRAM_PROMPT"; clear`
+  Env K7_PROMPT `bind 'set input-meta on'; bind 'set output-meta on'; bind 'set convert-meta off'; __k7_n=; __k7_prompt() { PS1='\[\e[38;2;90;86;224m\]> \[\342\201\240\342\201\240\342\201\240\342\200\213\342\201\240\342\200\213\342\201\240\342\201\240\342\201\240\342\201\240\342\200\213\342\201\240\342\200\213\342\201\240\342\200\213\342\200\213\e[0m\]'; __k7_n=$__k7_n'\342\201\240'; PS2='> \[\342\201\240\342\201\240\342\201\240\342\200\213\342\201\240\342\200\213\342\201\240\342\201\240\342\201\240\342\201\240\342\200\213\342\201\240\342\200\213\342\201\240\342\200\213\342\200\213'$__k7_n'\]'; }; __k7=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} __k7_prompt); unset PROMPT_COMMAND; PROMPT_COMMAND=$__k7; unset __k7 K7_PROMPT`
+  Type `source './setup.sh'; eval "$K7_PROMPT"; clear`
   Enter
   Wait+Line /\x{2060}\x{2060}\x{2060}\x{200B}\x{2060}\x{200B}\x{2060}\x{2060}\x{2060}\x{2060}\x{200B}\x{2060}\x{200B}\x{2060}\x{200B}\x{200B}$/
   Show
@@ -114,7 +114,7 @@ An .svg output is recorded without vhs, with the same prompt and mark.
   $ k7 cram --print --output demo.svg demo.t | grep -v '^Env'
   Set Shell "bash"
   Hide
-  Type 'eval "$VHS_CRAM_PROMPT"; clear'
+  Type 'eval "$K7_PROMPT"; clear'
   Enter
   Wait+Line /\x{2060}\x{2060}\x{200B}\x{2060}\x{200B}\x{200B}\x{200B}\x{2060}\x{200B}\x{2060}\x{200B}\x{200B}\x{2060}\x{200B}\x{2060}\x{2060}$/
   Show

@@ -38,17 +38,17 @@ let env =
   let z = {|\342\200\213|} in
   String.concat ""
     [
-      {|Env VHS_CRAM_PROMPT `bind 'set input-meta on'; bind 'set output-meta on'; bind 'set convert-meta off'; __vhs_n=; __vhs_prompt() { PS1='\[\e[38;2;90;86;224m\]> \[|};
+      {|Env K7_PROMPT `bind 'set input-meta on'; bind 'set output-meta on'; bind 'set convert-meta off'; __k7_n=; __k7_prompt() { PS1='\[\e[38;2;90;86;224m\]> \[|};
       repeat z;
-      {|\e[0m\]'; __vhs_n=$__vhs_n'|};
+      {|\e[0m\]'; __k7_n=$__k7_n'|};
       z;
       {|'; PS2='> \[|};
       repeat z;
-      {|'$__vhs_n'\]'; }; __vhs=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} __vhs_prompt); unset PROMPT_COMMAND; PROMPT_COMMAND=$__vhs; unset __vhs VHS_CRAM_PROMPT`|};
+      {|'$__k7_n'\]'; }; __k7=$(printf '%s\n' ${PROMPT_COMMAND+"${PROMPT_COMMAND[@]}"} __k7_prompt); unset PROMPT_COMMAND; PROMPT_COMMAND=$__k7; unset __k7 K7_PROMPT`|};
     ]
 
 (* What every recording starts with, hidden. *)
-let prelude ?(typed = {|Type 'eval "$VHS_CRAM_PROMPT"; clear'|}) () =
+let prelude ?(typed = {|Type 'eval "$K7_PROMPT"; clear'|}) () =
   "Hide\n" ^ env ^ "\n" ^ typed ^ "\nEnter\n" ^ ready ^ "Show\n"
 
 let printed ?(setup = []) src =
@@ -143,7 +143,7 @@ let test_setup () =
   expect "setup"
     (prelude
        ~typed:
-         {|Type `source './slow.sh'; source './it'\''s.sh'; eval "$VHS_CRAM_PROMPT"; clear`|}
+         {|Type `source './slow.sh'; source './it'\''s.sh'; eval "$K7_PROMPT"; clear`|}
        ()
     ^ "Type \"echo ready\"\nEnter\n" ^ ready ^ "Sleep 1000ms\n")
     (cram ~setup:[ "slow.sh"; "it's.sh" ] "  $ echo ready\n")
