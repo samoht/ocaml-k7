@@ -961,6 +961,7 @@ let stop_terminal clock (t : terminal) =
 
 (* Temporary, see [terminal]. *)
 external acquire_terminal : Unix.file_descr -> unit = "native_acquire_terminal"
+external default_signals : unit -> unit = "native_default_signals"
 
 let lower e = String.uncapitalize_ascii (Unix.error_message e)
 
@@ -1014,6 +1015,7 @@ let open_terminal ~env ~cwd ~winsize ~path prog args =
         List.iter (Unix.dup2 fd) [ Unix.stdin; Unix.stdout; Unix.stderr ];
         if not (List.mem fd [ Unix.stdin; Unix.stdout; Unix.stderr ]) then
           Unix.close fd;
+        default_signals ();
         Unix.chdir cwd;
         exec ~path argv env
       with e ->
