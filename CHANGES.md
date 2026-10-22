@@ -13,8 +13,9 @@
   checks.
 - The `k7` command plays a tape or a cram test (`k7 play`), or records
   any program (`k7 rec`), as an animated SVG image, and runs `vhs` for
-  the other outputs of a tape or a cram test. `--columns`, `--rows`,
-  `--font-size`, `--theme` and `--env` set the terminal of each.
+  the other outputs of a tape or a cram test, or when `--engine vhs`
+  says so. `--columns`, `--rows`, `--font-size`, `--theme`,
+  `--framerate` and `--env` set the terminal of each.
 - `K7.run` records a program on a pseudo-terminal, with no shell and
   nothing typed, and returns the animated SVG image of its screens below
   its command line, timed as they arrived, with how the program exited.
@@ -23,7 +24,9 @@
 - `K7.check` returns the error `K7.record` would before it records,
   without starting a shell or `vhs`.
 - `K7.run` and `K7.record` take `?env`, variables for the environment of
-  the program or the shell, which `--env` sets for each subcommand.
+  the program or the shell, which `--env` sets for each subcommand. Both
+  clear an inherited `COLUMNS` and `LINES`, so that the program reads the
+  size of its terminal.
 - `K7.run` and `K7.record` take `?stop`, which ends a recording and keeps
   what it recorded; `k7 play` and `k7 rec` resolve it on SIGINT or
   SIGTERM, then exit 130 or 143.
@@ -31,10 +34,11 @@
   outputs given, without recording it.
 - `k7 play` runs the commands of a cram test in a new empty temporary
   directory, as dune does, or in the directory of `--dir`.
-- `K7.of_string` reads a tape in the `.tape` syntax, its settings as
-  `K7.setting` values and `Hide`/`Show` as `K7.hidden`, and
-  `K7.with_settings` and `K7.with_outputs` replace a tape's settings and
-  outputs, which `K7.settings` and `K7.outputs` return. A tape may have no output until it plays, so a tape without an
+- `K7.of_string` reads a tape in the `.tape` syntax, every `Output` line
+  as an output, its settings as `K7.setting` values and `Hide`/`Show` as
+  `K7.hidden`, and `K7.with_settings` and `K7.with_outputs` replace a
+  tape's settings and outputs, which `K7.settings` and `K7.outputs`
+  return. A tape may have no output until it plays, so a tape without an
   `Output` line reads, and `k7 play -o` gives it one.
 - The native recorder plays bash, zsh and fish as VHS starts them, VHS's
   window bar, named and JSON themes, margin colours and images, `Screenshot`
