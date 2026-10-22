@@ -48,6 +48,35 @@ let test_timeout () =
   | Ok _ -> Alcotest.fail "no timeout"
   | Error e -> Alcotest.failf "%a" Vhs.pp_error e
 
+(* A wait's own timeout takes precedence over a raw [Set WaitTimeout], which
+   the other waits take. *)
+let test_timeout_precedence () =
+  with_dir @@ fun env cwd ->
+  let times_out ~within t =
+    let start = Unix.gettimeofday () in
+    (match record env cwd t with
+    | Error (Timeout _) -> ()
+    | Ok _ -> Alcotest.fail "no timeout"
+    | Error e -> Alcotest.failf "%a" Vhs.pp_error e);
+    Alcotest.(check bool)
+      "timed out in time" true
+      (Unix.gettimeofday () -. start < within)
+  in
+  times_out ~within:30.
+    (tape
+       Vhs.
+         [
+           raw "Set WaitTimeout 60s";
+           type' "echo hi\n";
+           wait ~timeout:(Ms 300) (Screen "never");
+         ]);
+  times_out ~within:30.
+    (tape
+       Vhs.
+         [
+           raw "Set WaitTimeout 300ms"; type' "echo hi\n"; wait (Screen "never");
+         ])
+
 let test_hidden () =
   with_dir @@ fun env cwd ->
   let t =
@@ -872,6 +901,7 @@ let suite =
       ([
          ("record", test_record);
          ("timeout", test_timeout);
+         ("timeout precedence", test_timeout_precedence);
          ("hidden", test_hidden);
          ("scroll", test_scroll);
          ("scroll far", test_scroll_far);

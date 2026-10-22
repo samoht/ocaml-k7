@@ -30,7 +30,7 @@
 type duration = Ms of int
 
 (** The type for keys. A key without an argument is the VHS key of the same
-    name. *)
+    name. Constructors may be added as VHS gains keys. *)
 type key =
   | Enter
   | Tab
@@ -54,18 +54,21 @@ type key =
       (** [Alt c] holds alt and presses [c]: an ASCII letter other than [m] and
           [s], which VHS reads as time units, [.] or a square bracket. *)
 
-(** The type for conditions on the terminal. *)
+(** The type for conditions on the terminal. Constructors may be added. *)
 type wait =
   | Prompt
       (** The line under the cursor ends with [>], or matches the pattern of a
           {!raw} [Set WaitPattern] if the tape has one. VHS starts each shell
           with the prompt ["> "], so this holds when the shell is ready for the
           next command. It never holds once something changes the prompt, such
-          as a sourced script that sets [PS1], and it holds early when a command
-          prints a line ending with [>] and waits. *)
+          as a sourced script that sets [PS1].
+
+          {b Warning.} It also holds while a command prints a line ending with
+          [>] and waits. Wait for such a command with {!Line} or
+          {!constructor-Screen}. *)
   | Line of string
       (** The line under the cursor, without its trailing spaces, matches the
-          regular expression, as for {!Screen}. *)
+          regular expression, as for {!constructor-Screen}. *)
   | Screen of string
       (** The screen, its lines joined by newlines, matches the regular
           expression, in the {{:https://github.com/google/re2/wiki/Syntax}RE2}
@@ -89,8 +92,8 @@ val sleep : duration -> action
 
 val wait : ?timeout:duration -> wait -> action
 (** [wait ~timeout w] pauses until [w] holds and fails the recording if it does
-    not hold within [timeout] (defaults to 15 seconds, or to the duration of a
-    {!raw} [Set WaitTimeout] if the tape has one). *)
+    not hold within [timeout]. Without [timeout], the wait takes the duration of
+    a {!raw} [Set WaitTimeout] if the tape has one, and 15 seconds otherwise. *)
 
 val hidden : action list -> action
 (** [hidden actions] runs [actions] without recording them. A [hidden] inside
@@ -106,7 +109,8 @@ val raw : string -> action
 
 (** {1:tapes Tapes} *)
 
-(** The type for the shells VHS can start. *)
+(** The type for the shells VHS can start. Constructors may be added as VHS
+    starts more. *)
 type shell =
   | Bash
   | Zsh
@@ -118,7 +122,8 @@ type shell =
   | Osh
   | Xonsh
 
-(** The type for settings, applied before the first action. *)
+(** The type for settings, applied before the first action. Constructors may be
+    added for more of VHS's settings. *)
 type setting =
   | Shell of shell  (** The shell to run (defaults to {!constructor-Bash}). *)
   | Font_size of int  (** A positive size (defaults to [22]). *)
@@ -150,7 +155,8 @@ type setting =
 type t
 (** The type for tapes VHS reads without error and without ignoring a line. *)
 
-(** The type for errors. *)
+(** The type for errors. Constructors may be added, so a match on [error] ends
+    with a case for the others. *)
 type error =
   | Executable_not_found of string  (** No such executable on the [PATH]. *)
   | Failed of {
@@ -167,7 +173,9 @@ type error =
           {!render} plays it. *)
   | Timeout of { wait : string; last : string }
       (** The wait line [wait] of {!record} did not hold in time; [last] is the
-          line or the screen it last read. *)
+          line or the screen it last read. Only {!record} returns it: {!render}
+          reports a wait that times out as {!Failed}, with the message of [vhs]
+          in [output]. *)
   | Invalid of string
       (** A tape VHS rejects, or one of whose lines it ignores, naming the first
           offending item, and why. *)
@@ -197,11 +205,12 @@ val tape :
       but SVG, which it never reads, and {!record} writes one SVG image;
     - a string holds a control character, C1 controls included (the tabs and
       newlines of {!type'} aside), or, in typed text, invalid UTF-8;
-    - an output path, a {!Theme} or a {!Font_family} holds all three quote
-      characters (['"'], ['\''] and ['`']), which no VHS string can quote; a
-      {!type'} can hold them, see {!to_string};
+    - an output path or a {!Theme} holds all three quote characters (['"'],
+      ['\''] and ['`']), which no VHS string can quote; a {!type'} can hold
+      them, see {!to_string};
     - a duration is out of range, or a wait timeout is [Ms 0];
-    - a {!Line} or {!Screen} pattern is not valid Go regular expression syntax;
+    - a {!Line} or {!constructor-Screen} pattern is not valid Go regular
+      expression syntax;
     - a key or a setting breaks the condition its documentation states;
     - a {!raw} line is not exactly one command VHS's parser accepts, ends inside
       a string, a regular expression or a JSON value, or lacks the argument of
@@ -225,9 +234,11 @@ val tape :
       breaks the rules of [outputs] or ends with [.svg], or is [Require] or
       [Set], other than [Set TypingSpeed], after an action that prints a line,
       where VHS ignores it;
-    - no action prints a line outside {!hidden}, so VHS records no frame and
-      fails; it also fails if the actions it records all end within one frame,
-      such as a lone [sleep (Ms 0)], which [tape] does not check. *)
+    - every action outside {!hidden} is a [type' ""] or a {!raw} [Output],
+      [Set], [Require], empty or comment line, which VHS does not record, so it
+      records no frame and fails. VHS also fails if the actions it records all
+      end within one frame, such as a lone [sleep (Ms 0)], which [tape] does not
+      check. *)
 
 val to_string : t -> string
 (** [to_string t] is [t] in the [.tape] syntax: the [Output] lines, but those of
@@ -249,16 +260,17 @@ val render :
   (unit, error) result
 (** [render ~vhs ~clock ~proc ~cwd t] runs [vhs -q] (defaults to ["vhs"]) in the
     directory [cwd] with the tape [t] on its standard input, so the outputs of
-    [t] are relative to [cwd]. [vhs] gets the environment of [proc] without
-    [VHS_PUBLISH], which would upload the recording, [rod], which configures the
-    browser VHS drives, and [PS1], [PROMPT] and [PROMPT_COMMAND], which would
-    replace the prompt {!Prompt} waits for. What [vhs] prints is kept for
-    {!Failed} and dropped on success. [render] writes neither the [.svg] outputs
-    of [t] nor anything else if they are its only outputs. If the calling fiber
-    is cancelled, [render] sends [vhs] [SIGTERM], which makes it stop the
-    terminal and the browser it started, and waits for it to exit. If [vhs]
-    still runs ten seconds later by [clock], [render] sends it [SIGKILL], which
-    can leave the terminal and the browser running, and waits for it to exit. *)
+    [t] are relative to [cwd]. [vhs] gets the environment of [proc] without five
+    variables: [VHS_PUBLISH], which would upload the recording; [rod], which
+    configures the browser VHS drives; and [PS1], [PROMPT] and [PROMPT_COMMAND],
+    which would replace the prompt {!Prompt} waits for. What [vhs] prints is
+    kept for {!Failed} and dropped on success. [render] writes neither the
+    [.svg] outputs of [t] nor anything else if they are its only outputs. If the
+    calling fiber is cancelled, [render] sends [vhs] [SIGTERM], which makes it
+    stop the terminal and the browser it started, and waits for it to exit. If
+    [vhs] still runs ten seconds later by [clock], [render] sends it [SIGKILL],
+    which can leave the terminal and the browser running, and waits for it to
+    exit. *)
 
 (** {1:native Recording natively}
 
@@ -291,10 +303,11 @@ val render :
 
     The text output, [.txt], [.ascii] or [.test], is VHS's: after each command
     that runs while recording, the first lines of the terminal's buffer, as many
-    as it has rows, as a {!Screen} wait reads them, then a line of 80 U+2500
-    characters. VHS also adds a screen for each [Output] and [Set] line it reads
-    before it sizes the terminal, from the text output's line on, whose rows
-    depend on its browser's window; the native output leaves them out.
+    as it has rows, as a {!constructor-Screen} wait reads them, then a line of
+    80 U+2500 characters. VHS also adds a screen for each [Output] and [Set]
+    line it reads before it sizes the terminal, from the text output's line on,
+    whose rows depend on its browser's window; the native output leaves them
+    out.
 
     A [Screenshot] of [shot.png], which VHS writes as a PNG image of the next
     frame it records, writes a still SVG image of that frame to [shot.svg],
@@ -339,8 +352,18 @@ val record :
     showed. [record] also writes the image to the [.svg] output of [t] and the
     {{!native}text output} to the [.txt], [.ascii] or [.test] output of [t] and
     the {{!native}screenshots} of [t], relative to [cwd], and writes no other
-    output. The waits of [t] time out by [clock]. It is {!Executable_not_found}
-    if the shell or the executable of a [Require] line is not on the [PATH]. *)
+    output. The waits of [t] time out by [clock]. When the recording ends or
+    fails, or the calling fiber is cancelled, [record] sends the shell
+    [SIGTERM], hangs up its terminal, sends it [SIGKILL] if it still runs a
+    second later by [clock], and waits for it to exit. It is:
+    - [Error (Unsupported _)] on what the {{!native}native recorder} does not
+      play;
+    - [Error (Invalid _)] on a [Source] line it refuses;
+    - [Error (Timeout _)] if a wait does not hold in time;
+    - [Error (Executable_not_found _)] if the shell or the executable of a
+      [Require] line is not on the [PATH];
+    - [Error (Io _)] on any other I/O failure, such as an output it cannot
+      write. *)
 
 val svg :
   ?settings:setting list -> (duration * string) list -> (string, error) result
