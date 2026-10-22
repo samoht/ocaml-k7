@@ -1402,8 +1402,59 @@ let test_run_cancel_descendant cancelled =
   | _ -> fail "run did not finish as expected");
   if alive then fail "run left its descendant alive"
 
+let test_command_line_roundtrip n =
+  with_dir @@ fun env path ->
+  let payload =
+    List.nth
+      [
+        "";
+        "two words";
+        "it's";
+        "\"quoted\"";
+        "$HOME";
+        "a\nb";
+        "caf\xc3\xa9";
+        "世界";
+        "😀";
+        "`echo replaced`";
+        "a\tb";
+      ]
+      (n mod 11)
+  in
+  let settings = K7.[ Columns 200; Rows 6; Font_size 10; Padding 0 ] in
+  let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "unused")) in
+  let proc = Eio.Stdenv.process_mgr env in
+  let image =
+    match
+      K7.run ~settings
+        ~clock:(Eio.Stdenv.mono_clock env)
+        ~proc ~cwd
+        [ "/usr/bin/printf"; "%s"; payload ]
+    with
+    | Ok (image, `Exited 0) -> image
+    | Ok (_, status) -> failf "printf: %a" Eio.Process.pp_status status
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  let first =
+    match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows:6 image with
+    | Ok (first :: _) -> first
+    | Ok [] -> fail "no command frame"
+    | Error e -> fail e
+  in
+  let line = List.hd (String.split_on_char '\n' first) in
+  check (String.starts_with ~prefix:"$ " line);
+  let command = String.sub line 2 (String.length line - 2) in
+  let output = Buffer.create 128 in
+  Eio.Process.run
+    ~stdout:(Eio.Flow.buffer_sink output)
+    proc
+    [ "/bin/bash"; "-c"; command ];
+  check_eq ~pp:Fmt.Dump.string payload (Buffer.contents output)
+
 let with_programs =
   [
+    test_case "the command read from SVG runs the same arguments" [ uint8 ]
+      test_command_line_roundtrip;
     test_case "run searches the overridden PATH" [ uint8 ]
       test_run_path_override;
     test_case "run drains large immediate bursts before returning" [ uint8 ]
