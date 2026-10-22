@@ -1617,10 +1617,35 @@ let test_cli_dry_run_preflight n =
   check (recorded = checked);
   check (entries () = before)
 
+let test_cli_successful_dry_run_is_pure n =
+  with_dir @@ fun env path ->
+  let command = "touch " ^ Filename.quote (path "played") in
+  let name, src =
+    if n mod 2 = 0 then ("input.t", Fmt.str "  $ %s\n" command)
+    else ("input.tape", Fmt.str "Type %S\nEnter\nWait\nSleep 100ms\n" command)
+  in
+  save env (path name) src;
+  let before =
+    List.sort compare
+      (Array.to_list (Sys.readdir (Filename.dirname (path name))))
+  in
+  let status, output =
+    run_cli env [ "--dry-run"; "-o"; path "absent/out.svg"; path name ]
+  in
+  if status <> `Exited 0 then
+    failf "dry-run: %a: %s" Eio.Process.pp_status status output;
+  check_eq ~pp:Fmt.Dump.string "" output;
+  check
+    (List.sort compare
+       (Array.to_list (Sys.readdir (Filename.dirname (path name))))
+    = before)
+
 let with_processes =
   [
     test_case "CLI dry-run and recording refuse the same preflight failures"
       [ uint8 ] test_cli_dry_run_preflight;
+    test_case "successful CLI dry-run is silent and creates no output directory"
+      [ uint8 ] test_cli_successful_dry_run_is_pure;
     test_case "check rejects directory destinations for outputs and screenshots"
       [ uint8 ] test_check_directory_destination;
     test_case "record respects the explicit terminal environment" [ uint8 ]
