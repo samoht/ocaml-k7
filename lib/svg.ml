@@ -292,7 +292,10 @@ let add_cursor_defs t b =
     t.cell_width t.cell_height (2 * t.cell_width) t.cell_height
 
 let add_cursor t b screen (r, c) =
-  let cell = (Screen.cells (Screen.rows screen).(r)).(c) in
+  let cells = Screen.cells (Screen.rows screen).(r) in
+  (* A cursor on the second cell of a wide glyph covers the glyph. *)
+  let c = if c > 0 && cells.(c).width = 0 then c - 1 else c in
+  let cell = cells.(c) in
   Fmt.kstr (Buffer.add_string b)
     "<use href=\"#%s\" class=\"k\" x=\"%d\" y=\"%d\"/>"
     (if cell.width = 2 then "w" else "c")
