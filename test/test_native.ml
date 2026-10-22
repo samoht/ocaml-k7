@@ -1548,6 +1548,28 @@ let test_check () =
        (fun f -> Eio.Path.is_file Eio.Path.(cwd / f))
        [ "demo.svg"; "demo.txt"; "played" ])
 
+let test_output_directory_preflight () =
+  with_dir @@ fun env cwd ->
+  Eio.Path.mkdir ~perm:0o755 Eio.Path.(cwd / "occupied.svg");
+  let t =
+    Result.get_ok
+      (K7.tape ~settings ~outputs:[ "occupied.svg" ]
+         K7.[ type' "touch played\n"; wait Prompt ])
+  in
+  let checked = K7.check ~engine:Native ~cwd t in
+  let recorded = play env cwd t in
+  (match recorded with
+  | Error (Io _) -> ()
+  | Error e -> Alcotest.failf "expected I/O error: %a" K7.pp_error e
+  | Ok () -> Alcotest.fail "recorded over a directory");
+  Alcotest.(check bool)
+    "unwritable output is refused before playing" false
+    (Eio.Path.is_file Eio.Path.(cwd / "played"));
+  Alcotest.(check (result unit string))
+    "check returns the recording's preflight error"
+    (Result.map_error (Fmt.str "%a" K7.pp_error) recorded)
+    (Result.map_error (Fmt.str "%a" K7.pp_error) checked)
+
 let test_run_concurrent_terminals () =
   with_dir @@ fun env cwd ->
   script cwd "ttys.sh"
@@ -1631,6 +1653,7 @@ let suite =
          ("record refuses Env names", test_record_env_names);
          ("record environment", test_record_env);
          ("check", test_check);
+         ("output directory preflight", test_output_directory_preflight);
          ("concurrent runs keep their terminals", test_run_concurrent_terminals);
        ]
       @ known_differences
