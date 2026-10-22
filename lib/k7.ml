@@ -3,8 +3,7 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(* The tape syntax, the key names and the characters [Ctrl] and [Alt] accept
-   follow VHS's lexer/lexer.go and parser/parser.go (MIT, Charm) at v0.12.1. *)
+(* Follows VHS v0.12.1's lexer/lexer.go and parser/parser.go (MIT, Charm). *)
 
 type duration = Ms of int
 
@@ -92,8 +91,6 @@ type t = {
   actions : action list;
 }
 
-(* Checking *)
-
 let ( let* ) = Result.bind
 let err_unsupported fmt = Fmt.kstr (fun s -> Error (Unsupported s)) fmt
 let err_invalid fmt = Fmt.kstr (fun s -> Error (Invalid s)) fmt
@@ -169,15 +166,13 @@ let check_wait timeout w =
       |> Result.map_error (fun e ->
           Fmt.str "%s %a: %s" (wait_name w) Quote.pp re e)
 
-(* VHS hands an unknown extension to ffmpeg as a GIF, and ffmpeg then picks
-   the format from the extension and fails. *)
+(* VHS hands an unknown extension to ffmpeg, which then fails. *)
 let extensions =
   [ ".gif"; ".mp4"; ".webm"; ".txt"; ".ascii"; ".test"; ".png"; ".svg" ]
 
 (* VHS writes a [.svg] output as a GIF, so it never reaches VHS. *)
 let is_svg path = Tape_syntax.extension path = ".svg"
 
-(* [output_problem path] is why [path] cannot be an output, if it cannot. *)
 let output_problem path =
   if Option.is_some (quotable_problem path) then quotable_problem path
   else if String.starts_with ~prefix:"-" path then
@@ -188,7 +183,7 @@ let output_problem path =
     match Tape_syntax.extension path with
     | "" -> Some Tape_syntax.no_extension
     | e when List.mem e extensions -> None
-    (* VHS reads an extension as it is, and so does this module. *)
+    (* Case-sensitive, as in VHS. *)
     | e when List.mem (String.lowercase_ascii e) extensions ->
         Some (known ^ "; extensions are lower case")
     | _ -> Some known
@@ -198,8 +193,7 @@ let check_output path =
     ~some:(Fmt.error "Output %a: %s" Quote.pp path)
     (output_problem path)
 
-(* VHS keeps one output of each kind and writes the last one it reads;
-   [record] writes one SVG output. *)
+(* VHS keeps the last output of each kind; [record] writes one SVG. *)
 let kind path =
   if String.ends_with ~suffix:"/" path then "frames"
   else
@@ -227,8 +221,6 @@ let check_kinds paths =
   in
   go [] paths
 
-(* The commands of the raw lines of [actions] VHS's parser accepts, in
-   order. *)
 let rec raw_commands actions =
   List.concat_map
     (function
@@ -247,8 +239,6 @@ let raw_screenshots actions =
     (function Tape_syntax.Screenshot p -> Some p | _ -> None)
     (raw_commands actions)
 
-(* [shared outputs shots] is a path of [shots] that is also another path of
-   [outputs] or [shots], if any. *)
 let shared outputs shots =
   let rec go seen = function
     | [] -> None
@@ -263,8 +253,7 @@ let check_screenshots outputs shots =
       Fmt.error "Screenshot %a: the path of an output or another screenshot"
         Quote.pp p
 
-(* VHS refuses a frame sized both by its pixels and by its cells in one
-   direction. *)
+(* VHS refuses a frame sized by both pixels and cells in one direction. *)
 let check_cells settings =
   let sets p = List.exists p settings in
   let height = sets (function Height _ -> true | _ -> false)
@@ -322,13 +311,11 @@ let check_raw ~started line =
     | Ok (Set _ | Require) -> Ok false
     | Ok (Screenshot _ | Other) -> Ok true
 
-(* [is_empty a] is [true] iff [a] prints nothing. *)
 let rec is_empty = function
   | Hidden actions -> List.for_all is_empty actions
   | Type s -> s = ""
   | Key _ | Sleep _ | Wait _ | Raw _ -> false
 
-(* [records a] is [true] iff VHS runs [a] while it records frames. *)
 let records = function
   | Type s -> s <> ""
   | Key _ | Sleep _ | Wait _ -> true
@@ -338,8 +325,6 @@ let records = function
       | Ok (Screenshot _ | Other) -> true
       | _ -> false)
 
-(* [check_actions ~started actions] is whether an action that ends the
-   settings has run once [actions] have. *)
 let rec check_actions ~started = function
   | [] -> Ok started
   | a :: rest ->
@@ -414,17 +399,14 @@ let check_setting = function
   | Rows _ ->
       Ok ()
 
-(* The argument of the last raw [Set name] of [actions]. *)
 let raw_set actions name =
   List.fold_left
     (fun v -> function
       | Tape_syntax.Set (n, a) when n = name -> Some a | _ -> v)
     None (raw_commands actions)
 
-(* VHS refuses a frame smaller than twice the padding, its defaults
-   included; the error names a setting the caller gave. The padding is not
-   negative here, and halving the size, unlike doubling the padding, cannot
-   overflow. *)
+(* VHS refuses a frame smaller than twice the padding. Halving the size,
+   unlike doubling the padding, cannot overflow. *)
 let check_padding ~padding ~width ~height =
   let p = Option.value padding ~default:60 in
   let check name size default =
@@ -444,7 +426,6 @@ let check_padding ~padding ~width ~height =
   let* () = check "Width" width 1200 in
   check "Height" height 600
 
-(* [sum ns] is the sum of [ns], or [None] if it overflows 64 bits. *)
 let sum ns =
   let add a n =
     let s = Int64.add a n in
@@ -457,16 +438,13 @@ let sum ns =
   in
   List.fold_left (fun acc n -> Option.bind acc (fun a -> add a n)) (Some 0L) ns
 
-(* A raw margin also counts twice, and a raw window bar its size in the
-   height; a quoted value can be negative. VHS checks the frame in wrapping
-   64-bit arithmetic, which a huge margin passes before the browser refuses
-   the viewport, so a sum that overflows does not fit. *)
+(* VHS checks the frame in wrapping 64-bit arithmetic, which a huge margin
+   passes: a sum that overflows does not fit. *)
 (* The longest side of a viewport the browser VHS drives accepts. *)
 let max_viewport = 10_000_000L
 
-(* VHS measures the [cells] of [Rows] or [Columns] in the viewport,
-   doubled up to five times, and fails if the terminal there is still
-   smaller; a cell takes at least a pixel. *)
+(* VHS measures the cells in the viewport doubled up to five times; a cell
+   takes at least a pixel. *)
 let check_measured ~border name cells size default bar =
   match cells with
   | None -> Ok ()
@@ -486,10 +464,9 @@ let check_measured ~border name cells size default bar =
           name n most
           (String.lowercase_ascii name)
 
-(* VHS sizes the browser's viewport to the frame less twice the padding,
-   twice the margin unless [MarginFill] is empty, and the window bar in the
-   height, also to measure the cells [Rows] or [Columns] asks for; vhs
-   panics if the browser refuses a side. *)
+(* VHS's viewport is the frame less twice the padding, twice the margin
+   unless [MarginFill] is empty, and the window bar; vhs panics if the
+   browser refuses a side. *)
 let check_viewport actions ~padding ~margin ~bar ~width ~height ~columns ~rows =
   let p = Int64.of_int (Option.value padding ~default:60) in
   let m = if raw_set actions "MarginFill" = Some "" then 0L else margin in
@@ -523,7 +500,6 @@ let check_viewport actions ~padding ~margin ~bar ~width ~height ~columns ~rows =
   let* () = cells "Columns" columns width 1200 0L in
   cells "Rows" rows height 600 bar
 
-(* The value of the last setting [f] reads. *)
 let last settings f = List.find_map f (List.rev settings)
 
 let check_size settings actions =
@@ -652,8 +628,6 @@ let tape ?(settings = []) ~outputs actions =
     (fun msg -> Invalid msg)
     (check_tape ~settings ~outputs actions)
 
-(* Printing *)
-
 let shell_name = function
   | Bash -> "bash"
   | Zsh -> "zsh"
@@ -685,8 +659,6 @@ let key_name = function
   | Ctrl c -> "Ctrl+" ^ String.make 1 c
   | Alt c -> "Alt+" ^ String.make 1 c
 
-(* [add_quoted b s ~first ~last ~quotes] adds [s.[first..last-1]] quoted with
-   a character absent from [quotes], the bits of the quotes it holds. *)
 let add_quoted b s ~first ~last ~quotes =
   let q =
     if quotes land 1 = 0 then '"' else if quotes land 2 = 0 then '\'' else '`'
@@ -699,7 +671,6 @@ let add_string b s =
   let quotes = String.fold_left (fun m c -> m lor quote_bit c) 0 s in
   add_quoted b s ~first:0 ~last:(String.length s) ~quotes
 
-(* A [Type] line per run of [s.[first..last-1]] without all three quotes. *)
 let add_text b s ~first ~last =
   let line start stop quotes =
     Buffer.add_string b "Type ";
@@ -804,12 +775,8 @@ let to_string t =
   Buffer.contents b
 
 let pp ppf t = Fmt.string ppf (to_string t)
-
-(* Reading *)
-
 let shells = [ Bash; Zsh; Fish; Powershell; Pwsh; Cmd; Nushell; Osh; Xonsh ]
 
-(* The setting of the line [Set name arg], if a constructor writes it. *)
 let setting_of_line line name arg =
   let int f =
     match Tape_syntax.atoi arg with
@@ -834,7 +801,6 @@ let setting_of_line line name arg =
   | "Padding" -> int (fun n -> Padding n)
   | "Framerate" -> int (fun n -> Framerate n)
   | "TypingSpeed" -> (
-      (* A duration in whole milliseconds, seconds without a unit. *)
       let d =
         match Tape_syntax.tokens line with
         | [ _; _; Num n; Keyword (("ms" | "s" | "m") as u) ] -> Some (n ^ u)
@@ -847,10 +813,6 @@ let setting_of_line line name arg =
       | _ -> Ok None)
   | _ -> Ok None
 
-(* [of_string] reads the settings, while no action has started, with their
-   constructors, the [Output] lines before them as outputs, [Hide] and
-   [Show] as {!hidden}, and every other line as a raw line. *)
-(* The lines of [src], which end with a newline or a CRLF. *)
 let lines src =
   List.map
     (fun l ->
@@ -906,15 +868,12 @@ let of_string src =
   | Error msg -> Error (Invalid msg)
   | Ok () ->
       show ();
-      (* A trailing newline ends the last line rather than adding one. *)
       let actions =
         match !actions with Raw "" :: rest -> rest | actions -> actions
       in
       tape ~settings:(List.rev !settings) ~outputs:(List.rev !outputs)
         (List.rev actions)
 
-(* The settings [s] replaces: those of its constructor, and those that size
-   the frame in its direction. *)
 let replaces s s' =
   match (s, s') with
   | (Width _ | Columns _), (Width _ | Columns _)
@@ -932,11 +891,6 @@ let with_settings settings t =
 
 let with_outputs outputs t = tape ~settings:t.settings ~outputs t.actions
 
-(* Running *)
-
-(* [utf_8 s] is [s] with each invalid byte replaced by U+FFFD, and without
-   C1 controls, which dropping a byte between a lead byte and a continuation
-   byte can create, nor format characters, which do not show. *)
 let utf_8 s =
   let b = Buffer.create (String.length s) in
   let rec go i =
@@ -950,15 +904,10 @@ let utf_8 s =
   go 0;
   Unicode.strip_format (Buffer.contents b)
 
-(* [printable s] is [s] without its escape sequences (CSI, OSC, DCS and the
-   other ECMA-48 strings, two-byte ESC sequences, and their C1 forms) and
-   control characters, as valid UTF-8, a carriage return read as a newline
-   and a tab as a space. VHS styles its messages when it thinks it can, and a terminal
-   would run what the report prints. *)
+(* A terminal would run the escape sequences of what the report prints. *)
 let printable s =
   let n = String.length s in
   let b = Buffer.create n in
-  (* The C1 control at [i], as its ESC final byte, and the index after it. *)
   let c1 i =
     let d = String.get_utf_8_uchar s i in
     match Uchar.to_int (Uchar.utf_decode_uchar d) with
@@ -981,7 +930,6 @@ let printable s =
       | c, _ ->
           Buffer.add_char b c;
           text (i + 1)
-  (* [escape f i] skips the sequence that ESC [f] starts, [i] after [f]. *)
   and escape f i =
     match f with
     | '[' -> csi i
@@ -994,7 +942,7 @@ let printable s =
   and escape_final i =
     if i < n then
       match s.[i] with ' ' .. '/' -> escape_final (i + 1) | _ -> text (i + 1)
-  (* A control string ends with BEL or ST: ESC \ or its C1 form. *)
+  (* ST is ESC \ or its C1 form. *)
   and control_string i =
     if i < n then
       match (s.[i], c1 i) with
@@ -1007,11 +955,8 @@ let printable s =
   utf_8 (Buffer.contents b)
 
 let last_lines = 10
-
-(* [one_line s] is [printable s] with its line breaks read as spaces. *)
 let one_line s = String.concat " " (String.split_on_char '\n' (printable s))
 
-(* What a wait last read, if anything. *)
 let pp_last ppf = function
   | "" -> ()
   | last -> Fmt.pf ppf "; last value was: %s" (one_line last)
@@ -1060,20 +1005,12 @@ let io_message ~cwd = function
       fs_message (Option.value (Eio.Path.native cwd) ~default:(snd cwd)) e
   | err -> Fmt.str "%a" Eio.Exn.pp_err err
 
-(* The variables vhs reads that change what it does with a tape: it uploads
-   the recording if [VHS_PUBLISH] is [true]; go-rod configures the browser
-   from [rod]; and vhs gives the shell its own prompt but then the inherited
-   environment, whose [PS1], [PROMPT] or [PROMPT_COMMAND] would replace the
-   prompt that [Prompt] waits for. *)
+(* vhs uploads if [VHS_PUBLISH] is true, go-rod reads [rod], and an
+   inherited [PS1], [PROMPT] or [PROMPT_COMMAND] replaces the prompt that
+   [Prompt] waits for. *)
 let cleared = [ "VHS_PUBLISH"; "rod"; "PS1"; "PROMPT"; "PROMPT_COMMAND" ]
-
-(* The seconds a cancelled [vhs] has to clean up before SIGKILL. *)
 let grace = 10.
 
-(* [run_vhs] runs protected from cancellation, so that its switch keeps
-   reaping [vhs] until it exits; [cancelled] makes it send [vhs] SIGTERM,
-   which [vhs] cleans up after, and SIGKILL if it is still running [grace]
-   seconds later. *)
 let environment proc =
   Eio.Process.environment proc
   |> Eio.Process.Env.override (List.map (fun v -> (v, None)) cleared)
@@ -1088,7 +1025,6 @@ let run_vhs ~vhs ~clock ~proc ~cwd ~cancelled ~sink tape =
       ~stdin ~stdout:sink ~stderr:sink [ vhs; "-q" ]
   in
   Eio.Flow.close stdin;
-  (* A [vhs] that exits before reading the whole tape reports why itself. *)
   Eio.Fiber.fork ~sw (fun () ->
       (try Eio.Flow.copy_string tape feed with Eio.Io _ -> ());
       Eio.Flow.close feed);
@@ -1101,8 +1037,6 @@ let run_vhs ~vhs ~clock ~proc ~cwd ~cancelled ~sink tape =
       Eio.Process.signal child Sys.sigkill;
       Eio.Process.await child)
 
-(* A sink that keeps the last [kept] bytes written to it, in amortised
-   constant time per byte. *)
 module Tail = struct
   type t = Buffer.t
 
@@ -1129,6 +1063,7 @@ let render_vhs ~vhs ~clock ~proc ~cwd t =
   let tape = to_string t in
   let cancelled, cancel = Eio.Promise.create () in
   let finished, finish = Eio.Promise.create () in
+  (* Protected, so that [vhs] is reaped even when the caller is cancelled. *)
   let supervise () =
     Eio.Cancel.protect @@ fun () ->
     Eio.Promise.resolve finish
@@ -1155,9 +1090,6 @@ let render_vhs ~vhs ~clock ~proc ~cwd t =
   | Error (Eio.Io (err, _)) -> Error (Io (io_message ~cwd err))
   | Error e -> raise e
 
-(* [refuse ~by ~other kinds t] is [Error (Unsupported _)] on the first output
-   of [t], raw [Output] lines included, of one of [kinds], which [other]
-   writes. *)
 let refuse ~by ~other kinds t =
   match
     List.find_opt
@@ -1177,21 +1109,12 @@ let refuse ~by ~other kinds t =
       err_unsupported "not recorded %s: Output %a: %s, which K7.%s records" by
         Quote.pp p what other
 
-(* Directories *)
-
-(* [in_dir dir path] is [path] relative to the native directory [dir]: as
-   [vhs] reads it, wherever the path leads. *)
 let in_dir dir path =
   if Filename.is_relative path then Filename.concat dir path else path
 
-(* [dir_problem ~create dir path] is why [path], relative to the native
-   directory [dir], cannot be written, if it cannot: its directory is not a
-   directory the user can write in, or with [create], since VHS creates the
-   directories of its outputs, its nearest ancestor that exists is not. *)
 let dir_problem ~create dir path =
   let file = in_dir dir path in
   let shown d =
-    (* The directory as the path names it. *)
     let k = String.length file - String.length path in
     if k >= 0 && k <= String.length d && String.length d > k then
       String.sub d k (String.length d - k)
@@ -1213,10 +1136,7 @@ let dir_problem ~create dir path =
   | exception Unix.Unix_error _ ->
       Fmt.kstr Option.some "%s: no directory %s" path (shown d)
 
-(* [check_dirs cwd paths] is [Error (Io _)] on the first of [paths], each
-   with whether its directories can be created, that cannot be written. *)
 let check_dirs cwd paths =
-  (* A directory with no native path, such as a mock's, is not checked. *)
   match Eio.Path.native cwd with
   | None | (exception Failure _) -> Ok ()
   | Some dir -> (
@@ -1226,8 +1146,6 @@ let check_dirs cwd paths =
       | None -> Ok ()
       | Some msg -> Error (Io msg))
 
-(* [mkdirs dir path] creates the missing directories of [path], relative to
-   [dir], as VHS does for its outputs. *)
 let mkdirs dir path =
   let file = in_dir dir path in
   let rec go d =
@@ -1237,8 +1155,8 @@ let mkdirs dir path =
   in
   go (Filename.dirname file)
 
-(* VHS creates the directories of its outputs, but those of PNG frames,
-   which it renames into place, and of screenshots, which ffmpeg writes. *)
+(* VHS creates the directories of its outputs, but not those of PNG frames
+   or screenshots. *)
 let creates path = kind path <> "frames"
 
 let render ?(vhs = "vhs") ~clock ~proc ~cwd t =
@@ -1263,10 +1181,6 @@ let render ?(vhs = "vhs") ~clock ~proc ~cwd t =
   in
   render_vhs ~vhs ~clock ~proc ~cwd t
 
-(* Recording natively *)
-
-(* [native_error ~verb e] is [e], an [Unsupported] one saying what was not
-   done natively: recorded by [record], drawn by [svg]. *)
 let native_error ?(verb = "recorded") : Native.error -> error = function
   | Unsupported why -> Unsupported ("not " ^ verb ^ " natively: " ^ why)
   | Timeout { wait; line; last } -> Timeout { wait; line; last }
@@ -1278,9 +1192,7 @@ let native_error ?(verb = "recorded") : Native.error -> error = function
 let native ?verb ?source lines =
   Result.map_error (native_error ?verb) (Native.of_lines ?source lines)
 
-(* [record] reads and writes its files as [vhs] does under [render]:
-   relative to the native directory [dir], wherever the path leads, not only
-   below the [cwd] capability. *)
+(* As under vhs, paths are relative to [dir], not confined to [cwd]. *)
 let with_file dir path flags f =
   let file = in_dir dir path in
   let error e =
@@ -1293,12 +1205,9 @@ let with_file dir path flags f =
       | x -> Ok x
       | exception Unix.Unix_error (e, _, _) -> error e)
 
-(* The largest file [record] reads: a sourced tape or a margin image. *)
 let max_load = 10 * 1024 * 1024
 
-(* [load dir path] reads a regular file, following symlinks, of at most
-   [max_load] bytes; opening it does not block, so a FIFO is refused rather
-   than waited on. *)
+(* Opened non-blocking, so a FIFO is refused rather than waited on. *)
 let load dir path : (string, Native.error) result =
   let too_large = Error (Native.Invalid (path ^ ": larger than 10 MiB")) in
   let read fd =
@@ -1344,7 +1253,6 @@ let record ~clock ~proc ~cwd t =
   let* tape =
     native ~source:(load dir) (String.split_on_char '\n' (to_string t))
   in
-  (* A sourced tape's screenshots, which [tape] does not see. *)
   let* () =
     Result.map_error
       (fun msg -> Invalid msg)
@@ -1375,7 +1283,6 @@ let record ~clock ~proc ~cwd t =
   let* () = iter_result (save ~create:true text) texts in
   iter_result (fun (path, s) -> save s path) stills
 
-(* The outputs and screenshots only [render] writes. *)
 let needs_vhs t =
   List.exists
     (fun p -> List.mem (kind p) [ "GIF"; "MP4"; "WebM"; "frames" ])
@@ -1398,8 +1305,6 @@ let check_times output =
   in
   Result.map_error (fun msg -> Invalid msg) (go 0 output)
 
-(* [terminal settings] is the terminal of [settings] that [svg] and [run]
-   draw, with no shell. *)
 let terminal settings =
   let* () =
     Result.map_error
@@ -1417,8 +1322,6 @@ let svg ?(settings = []) output =
   let* () = check_times output in
   Ok (Native.replay tape (List.map (fun (Ms ms, s) -> (ms, s)) output))
 
-(* Eio's environments take a name without [=] and neither a name nor a
-   value with a NUL byte. *)
 let check_env env =
   let bad (k, v) =
     if k = "" then Some "an empty name"

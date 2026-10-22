@@ -3,9 +3,8 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(* Go's syntax, as in [regexp/syntax/parse.go] (BSD-3-Clause), parsed to a
-   tree on code points and matched by a Pike VM, as Go's [regexp] matches:
-   in linear time, with ASCII word boundaries and Unicode case folding. *)
+(* Go's regexp/syntax/parse.go (BSD-3-Clause), matched by a Pike VM in linear
+   time, with ASCII word boundaries and Unicode case folding. *)
 
 type assertion = Bot | Eot | Bol | Eol | Boundary | Not_boundary
 
@@ -16,7 +15,7 @@ type node =
   | Repeat of node * int * int option
   | Assert of assertion
 
-(* Code point sets are sorted lists of disjoint inclusive ranges. *)
+(* Sorted, disjoint, inclusive ranges. *)
 
 let max_cp = 0x10ffff
 
@@ -37,8 +36,6 @@ let negate ranges =
   go 0 (normalise ranges)
 
 let of_ranges ranges = Set (normalise ranges)
-
-(* Parsing *)
 
 type flags = { fold : bool; dot_nl : bool; multi_line : bool }
 
@@ -77,7 +74,6 @@ let looking p s =
        (fun k -> p.cps.(p.pos + k) = Char.code s.[k])
        (List.init n Fun.id)
 
-(* Code points outside Latin-1, and the end, are no ASCII syntax character. *)
 let chr c = if c < 0 || c > 0xff then '\xff' else Char.chr c
 
 let take p =
@@ -96,11 +92,9 @@ let rec hex_digits p acc n =
 let is_octal c = c >= Char.code '0' && c <= Char.code '7'
 let fold flags ranges = if flags.fold then Casefold.fold ranges else ranges
 
-(* A negated class is the complement of the folded one, as in Go's
-   [appendGroup]. *)
+(* Go's [appendGroup]: the complement of the folded class. *)
 let negated flags ranges = negate (fold flags ranges)
 
-(* A Perl class escape, after its backslash, as ranges. *)
 let perl_class flags c =
   match chr c with
   | 'd' -> Some digit
@@ -111,9 +105,7 @@ let perl_class flags c =
   | 'W' -> Some (negated flags word)
   | _ -> None
 
-(* A Unicode class escape, after its [p] or [P] ([negate]), as ranges: Go's
-   table, folded if [flags] say so, then negated, as in Go's
-   [parseUnicodeClass]. *)
+(* Go's [parseUnicodeClass]: fold, then negate. *)
 let unicode_class flags p ~negate:n =
   let b = Buffer.create 16 in
   let add c = if c >= 0 then Buffer.add_utf_8_uchar b (Uchar.of_int c) in
@@ -135,14 +127,12 @@ let unicode_class flags p ~negate:n =
   | Some (r, negated') ->
       if n <> negated' then negated flags r else fold flags r
 
-(* A class escape, after its backslash, as ranges. *)
 let class_escape flags p c =
   match chr c with
   | 'p' -> Some (unicode_class flags p ~negate:false)
   | 'P' -> Some (unicode_class flags p ~negate:true)
   | _ -> perl_class flags c
 
-(* The code point of a character escape, after its backslash. *)
 let escaped_char p c =
   match chr c with
   | 'a' -> 7
@@ -166,8 +156,6 @@ let escaped_char p c =
       octal (c - 48) 2
   | _ -> c
 
-(* The ranges of a class item, after [\[]: an escape, a POSIX class, a
-   character or a range. *)
 let class_item flags p =
   let close =
     let rec find i =
@@ -268,7 +256,6 @@ let escape p flags =
       | Some r -> of_ranges (fold flags r)
       | None -> literal flags (escaped_char p c))
 
-(* [{n}], [{n,}] or [{n,m}] at the cursor, which is otherwise a literal. *)
 let bounds p =
   let start = p.pos in
   let number () =
@@ -323,8 +310,7 @@ let rec repeat p r =
       | None -> r)
   | _ -> r
 
-(* The flags a branch sets hold in the branches after it, up to the end of
-   the group, as in Go. *)
+(* As in Go, a branch's flags hold up to the end of the group. *)
 let rec alternation p flags =
   let rec branches flags acc =
     let b, flags = sequence p flags in
@@ -343,8 +329,7 @@ and sequence p flags =
     else
       match atom p flags with
       | `Flags flags -> (
-          (* A flag group is no item: a repetition after it repeats the item
-             before it, as in Go. *)
+          (* As in Go, a repetition after flags repeats the item before. *)
           match acc with
           | r :: rest -> go flags (repeat p r :: rest)
           | [] -> go flags [])
@@ -393,8 +378,6 @@ let code_points s =
         (i + Uchar.utf_decode_length d)
   in
   go [] 0
-
-(* Programs *)
 
 type inst =
   | Char of (int * int) array
@@ -446,7 +429,7 @@ let rec gen code = function
               set code split (Split (split + 1, Dynarray.length code)))
             splits)
 
-(* Go's [isWordChar]: ASCII letters, digits and the underscore. *)
+(* Go's [isWordChar]. *)
 let is_word c =
   c = 0x5f || (c >= 0 && c < 0x80 && Char.Ascii.is_alphanum (Char.chr c))
 
@@ -474,8 +457,6 @@ let mem ranges c =
 
 exception Matched
 
-(* [add prog cps i marks list pc] adds the thread at [pc] and those its
-   jumps and true assertions lead to at position [i], each once. *)
 let add prog cps i marks list pc =
   let stack = ref [ pc ] in
   while !stack <> [] do

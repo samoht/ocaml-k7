@@ -3,9 +3,8 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(* The checker follows [parse] in Go's [regexp/syntax/parse.go] (BSD-3-Clause)
-   with the [Perl] flags, case by case, but builds no tree: each group frame
-   keeps only what decides validity. *)
+(* Follows Go's [parse] in regexp/syntax/parse.go (BSD-3-Clause) with the
+   [Perl] flags, keeping only what decides validity. *)
 
 exception Bad of string
 
@@ -29,9 +28,8 @@ let is_perl_class c = String.contains "dDsSwW" c
 let unhex c =
   if Char.Ascii.is_hex_digit c then Char.Ascii.hex_digit_to_int c else -1
 
-(* A group being parsed: [operand] when its last item can take a repetition,
-   [top] the repetition product of that item, [widest] the largest product
-   among its earlier items. *)
+(* [top] is the repetition product of the last item, [widest] the largest
+   of the earlier ones. *)
 type frame = { operand : bool; top : int; widest : int }
 
 let empty = { operand = false; top = 1; widest = 1 }
@@ -51,12 +49,10 @@ let slice re i j = String.sub re i (j - i)
 let byte_at re i = if i < String.length re then Some re.[i] else None
 let is_byte p re i = Option.fold ~none:false ~some:p (byte_at re i)
 
-(* The code point at [i] and the index after it. *)
 let rune re i =
   let d = String.get_utf_8_uchar re i in
   (Uchar.to_int (Uchar.utf_decode_uchar d), i + Uchar.utf_decode_length d)
 
-(* [\x{h...}] from the [h] at [j]. *)
 let rec hex_braces re ~invalid j nhex r =
   if j >= String.length re then invalid j
   else
@@ -74,8 +70,7 @@ let rec octal re r j k =
       octal re ((r * 8) + unhex d) (j + 1) (k + 1)
   | _ -> (r, j)
 
-(* [parseEscape]: the code point of the escape at [i] and the index after
-   it. *)
+(* Go's [parseEscape]. *)
 let escape re i =
   let n = String.length re in
   let invalid j = fail "invalid escape sequence: `%s`" (slice re i j) in
@@ -101,7 +96,7 @@ let escape re i =
     | 'v' -> (11, j)
     | _ -> invalid j
 
-(* [parseUnicodeClass] for the [\p] or [\P] at [i]. *)
+(* Go's [parseUnicodeClass]. *)
 let unicode_class re i =
   let n = String.length re and k = i + 2 in
   let name, j =
@@ -123,10 +118,7 @@ let unicode_class re i =
     fail "invalid character class range: `%s`" (slice re i j);
   j
 
-(* The last search for [":]"]: the pattern, where it started and what it
-   found. A search from [from] reuses it while the answer cannot differ, so
-   the searches of one pattern scan each byte once, however many classes
-   open with [[:]. *)
+(* Cached so that one pattern's searches for [":]"] scan each byte once. *)
 let last_close = Domain.DLS.new_key (fun () -> ("", 0, None))
 
 let close_of re from =
@@ -140,7 +132,7 @@ let close_of re from =
       Domain.DLS.set last_close (re, from, found);
       found
 
-(* [parseNamedClass] for a [[:name:]] at [k], if any. *)
+(* Go's [parseNamedClass]. *)
 let named_class re k =
   let named = String.length re - k > 2 && re.[k] = '[' && re.[k + 1] = ':' in
   match if named then close_of re (k + 2) else None with
@@ -151,7 +143,6 @@ let named_class re k =
         fail "invalid character class range: `%s`" name;
       Some (e + 2)
 
-(* A character of a class at [k], or a range from it: the index after. *)
 let class_range re ~missing k =
   let n = String.length re in
   let class_char k =
@@ -166,7 +157,7 @@ let class_range re ~missing k =
     j')
   else j
 
-(* [parseClass] for the [\[] at [i]: the index after its closing bracket. *)
+(* Go's [parseClass]. *)
 let char_class re i =
   let n = String.length re in
   let missing () = fail "missing closing ]: `%s`" (slice re i n) in
@@ -186,8 +177,7 @@ let char_class re i =
   let k = i + 1 in
   items (if byte_at re k = Some '^' then k + 1 else k) true
 
-(* Go's [parseInt]: [Some (v, j)] for the digits at [k], without leading
-   zero, [v] being [-1] past [10^8]. *)
+(* Go's [parseInt]: [-1] past [10^8]. *)
 let int_at re k =
   let rec scan k v =
     match byte_at re k with
@@ -201,8 +191,7 @@ let int_at re k =
   | Some c when Char.Ascii.is_digit c -> scan k 0
   | _ -> None
 
-(* [parseRepeat] for the [{] at [i]: [Some (min, max, j)] when it reads as a
-   counted repetition, [min] being [-1] for too large a number. *)
+(* Go's [parseRepeat]: [min] is [-1] for too large a number. *)
 let counted re i =
   let close min max k =
     if byte_at re k = Some '}' then Some (min, max, k + 1) else None
@@ -222,7 +211,7 @@ let is_capture_name name =
   name <> ""
   && String.for_all (fun c -> c = '_' || Char.Ascii.is_alphanum c) name
 
-(* [parsePerlFlags] for the [(?] at [i]. *)
+(* Go's [parsePerlFlags]. *)
 let perl_flags re i =
   let n = String.length re in
   let named_p = n - i > 4 && re.[i + 2] = 'P' && re.[i + 3] = '<' in
@@ -251,21 +240,16 @@ let perl_flags re i =
         `Group (e + 1))
   else flags (i + 2) false false
 
-(* The repetition product of the item a counted repetition [{min,max}]
-   applies to, whose product is [top]. *)
 let repeated ~min ~max top =
   let m = if max = -1 then min else max in
   let top = if m = 0 then 1 else m * top in
   if (min >= 2 || max >= 2) && top > 1000 then None else Some top
 
-(* The index after [\Q...\E] at [i] and whether it quotes anything. *)
 let quote re i =
   match index_of re ~from:(i + 2) "\\E" with
   | None -> (String.length re, String.length re > i + 2)
   | Some e -> (e + 2, e > i + 2)
 
-(* The escape at [i] in the main parser: [`Item j] when it is an item ending
-   before [j], [`Nothing j] for an empty [\\Q\\E]. *)
 let backslash_item re i =
   match byte_at re (i + 1) with
   | Some ('A' | 'b' | 'B' | 'z') -> `Item (i + 2)
@@ -322,7 +306,6 @@ let rec parse re i f outer last_repeat =
     | '\\' -> backslash re i f outer
     | _ -> atom (snd (rune re i))
 
-(* An item without repetition, then the rest from [j]. *)
 and push_atom re j f outer = parse re j (push 1 f) outer false
 
 and backslash re i f outer =

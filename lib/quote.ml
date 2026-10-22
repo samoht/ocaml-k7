@@ -20,7 +20,6 @@ let pp ppf s =
           Fmt.kstr (Buffer.add_string b) {|\x%02x|} c
       | c when c >= 0x80 && c <= 0x9f ->
           Fmt.kstr (Buffer.add_string b) {|\u{%X}|} c
-      (* An invalid byte decodes as U+FFFD. *)
       | _ -> Buffer.add_utf_8_uchar b u);
       go (i + Uchar.utf_decode_length d))
   in

@@ -15,16 +15,8 @@
 #include <unistd.h>
 #endif
 
-/* Temporary: matrix 0.1.0's Pty.spawn closes the slave side of the
-   terminal in the parent, and macOS then loses the output of a program
-   that prints and exits at once. Until matrix fixes that (upstream issue
-   to file: "matrix.pty: Pty.spawn closes the slave, so macOS loses the
-   output of a program that exits at once"), k7 forks the program itself
-   and keeps the slave, and needs this stub for what matrix does not
-   expose. Delete this file, its foreign_stubs stanza in lib/dune and
-   acquire_terminal in lib/native.ml once k7 can use Pty.spawn again. */
-
-/* Start a new session whose controlling terminal is [fd]. */
+/* Temporary, until matrix's Pty.spawn keeps the slave open: delete it with
+   [slave] in native.ml. */
 CAMLprim value native_acquire_terminal(value fd) {
   CAMLparam1(fd);
 #ifdef _WIN32

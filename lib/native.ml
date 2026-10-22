@@ -3,8 +3,7 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(* The commands follow VHS's command.go and the geometry its vhs.go, at
-   v0.12.1 (MIT, Charm). *)
+(* Follows VHS v0.12.1's command.go and vhs.go (MIT, Charm). *)
 
 type error =
   | Executable_not_found of string
@@ -28,8 +27,6 @@ let stop e = raise_notrace (Stop e)
 let unsupported line fmt =
   Fmt.kstr (fun why -> stop (Unsupported (line ^ ": " ^ why))) fmt
 
-(* Commands *)
-
 type scope = Line | Screen
 
 type command =
@@ -41,7 +38,7 @@ type command =
   | Sleep of int
   | Wait of {
       line : string;
-      at : int;  (** The line of the tape, from 1. *)
+      at : int;
       scope : scope;
       timeout : int option;
       pattern : Regexp_match.t option;
@@ -62,7 +59,7 @@ let keys =
 
 let ms_of_ns ns = Int64.to_int (Int64.div ns 1_000_000L)
 
-(* parseTime: a number and an optional unit, seconds by default. *)
+(* VHS's parseTime: seconds without a unit. *)
 let time line = function
   | Num n :: Keyword (("ms" | "s" | "m") as u) :: rest -> (n ^ u, rest)
   | Num n :: rest -> (n ^ "s", rest)
@@ -87,8 +84,6 @@ let lit = function
   | Keyword s | Str s | Pattern s | Json_value s | Num s -> s
   | Sym c -> String.make 1 c
 
-(* Settings *)
-
 type config = {
   shell : string;
   font_size : int;
@@ -97,7 +92,7 @@ type config = {
   height : int;
   padding : int;
   margin : int;
-  margin_fill : Svg.fill option;  (** [None] without a margin. *)
+  margin_fill : Svg.fill option;
   border_radius : int;
   window_bar : string;
   bar_size : int;
@@ -147,8 +142,7 @@ let default_config () =
     cursor_blink = true;
   }
 
-(* Sizes beyond this many pixels or cells are refused, which also keeps the
-   frame arithmetic from overflowing. *)
+(* Larger sizes are refused, so the frame arithmetic cannot overflow. *)
 let max_size = 100_000
 
 let int_value line s =
@@ -163,8 +157,7 @@ let float_value line ?(min = -.float max_size) s =
   | Some _ -> unsupported line "%s is not between %g and %d" s min max_size
   | None -> unsupported line "%s is not a number" s
 
-(* The slowest playback: the animation's times then stay within Go's
-   duration range. *)
+(* Keeps the animation's times within Go's duration range. *)
 let min_speed = 0.001
 
 let is_hex_colour s =
@@ -218,7 +211,6 @@ let set line c name args =
       in
       { c with typing_speed = ms line (n ^ u) }
   | "Framerate", _ -> (
-      (* A rate only sets the frame length, of at least a millisecond. *)
       match int_of_string_opt (value ()) with
       | Some n when n >= 0 -> { c with framerate = max 1 n }
       | Some _ -> unsupported line "%s is negative" (value ())
@@ -231,7 +223,6 @@ let set line c name args =
   | "LoopOffset", _ -> (
       match float_of_string_opt (value ()) with
       | Some f when Float.is_finite f ->
-          (* An offset of a whole loop is none. *)
           let f = Float.rem (f /. 100.) 1. in
           { c with loop_offset = (if f < 0. then f +. 1. else f) }
       | _ -> unsupported line "%s is not a number" (value ()))
@@ -247,9 +238,9 @@ let set line c name args =
   | "WindowBarSize", _ -> { c with bar_size = int_value line (value ()) }
   | _ -> unsupported line "not a setting this module knows"
 
-(* Geometry: xterm.js fits whole cells of JetBrains Mono, VHS's first font,
-   in the viewport, less its 10px padding and 15px scrollbar. Chrome rounds
-   the ascent and the descent of the font. *)
+(* xterm.js fits whole cells of JetBrains Mono, VHS's first font, in the
+   viewport less 10px padding and a 15px scrollbar; Chrome rounds the font's
+   ascent and descent. *)
 
 let round f = int_of_float (Float.round f)
 let max_cells = 2_000
@@ -331,16 +322,14 @@ let style c =
       speed = (if c.playback_speed > 0. then c.playback_speed else 1.);
     }
 
-(* Tapes *)
-
 type t = {
   config : config;
   look : Svg.look;
   actions : command list;
   env : (string * string) list;
   requires : string list;
-  text : string option;  (** The text output of the settings. *)
-  dumps : bool;  (** Whether the text output starts with the first action. *)
+  text : string option;
+  dumps : bool;
 }
 
 let is_text path =
@@ -361,11 +350,6 @@ let wait_command ~at line tokens =
   in
   Wait { line; at; scope; timeout; pattern }
 
-(* The settings, environment and requirements a line adds, or its action. *)
-(* The lines of the tape a [Source] line names, as VHS's parser reads it:
-   not empty, without error and without a [Source] line; it drops their
-   [Output] lines. A line also holds no control character but white space,
-   as {!K7.tape} requires of a raw line. *)
 let sourced ~source line path =
   let invalid fmt =
     Fmt.kstr (fun why -> stop (Invalid (line ^ ": " ^ why))) fmt
@@ -399,7 +383,6 @@ let base64 s =
   let rec go i =
     if i < n then (
       let v = (byte i lsl 16) lor (byte (i + 1) lsl 8) lor byte (i + 2) in
-      (* One byte left makes two characters, two make three. *)
       let chars = min 4 (n - i + 1) in
       for k = 0 to 3 do
         if k < chars then
@@ -411,8 +394,6 @@ let base64 s =
   go 0;
   Buffer.contents b
 
-(* The type of the image [data], by its signature, if a browser and ffmpeg
-   both read it. *)
 let image_type data =
   let at i prefix =
     String.length data >= i + String.length prefix
@@ -425,7 +406,6 @@ let image_type data =
   else if at 0 "BM" then Some "image/bmp"
   else None
 
-(* The image of [Set MarginFill], which ffmpeg reads, embedded. *)
 let data_uri ~source line path =
   match source path with
   | Ok data -> (
@@ -528,15 +508,11 @@ let of_lines ?(source = fun path -> Error (Io (path ^ ": no file to read")))
         }
   | exception Stop e -> Error e
 
-(* Timelines *)
-
 type timeline = {
   quantum : int;
   mutable frames : (int * Screen.t) list;  (** Latest first. *)
 }
 
-(* A screen replaces one of the same frame, and merges into an equal one
-   before it. *)
 let add tl ms screen =
   let q = ms / tl.quantum * tl.quantum in
   match tl.frames with
@@ -579,7 +555,6 @@ let replay t output =
     List.fold_left
       (fun _ (ms, bytes) ->
         Screen.feed term bytes;
-        (* Output given with its times has no program to answer. *)
         ignore (Screen.take_replies term);
         screen := Screen.of_terminal ~previous:!screen term;
         Screen.clear_dirty term;
@@ -589,7 +564,7 @@ let replay t output =
   in
   svg t tl ~end_ms
 
-(* Keys: the bytes xterm sends. *)
+(* The bytes xterm.js sends. *)
 
 let arrow term c = if Screen.cursor_keys term then "\027O" ^ c else "\027[" ^ c
 
@@ -609,7 +584,6 @@ let key_bytes term = function
   | "PageDown" -> "\027[6~"
   | _ -> ""
 
-(* Control with a character: caret notation, where there is one. *)
 let ctrl_char c =
   match c with
   | 'a' .. 'z' -> String.make 1 (Char.chr (Char.code c - 96))
@@ -618,9 +592,8 @@ let ctrl_char c =
   | '-' -> "\x1f"
   | c -> String.make 1 c
 
-(* xterm.js sends an arrow with modifiers as [CSI 1 ; m X], [m] one more
-   than the sum of 1 for Shift, 2 for Alt and 4 for Control; Alt prefixes
-   ESC to the other keys. *)
+(* xterm.js: [CSI 1 ; m X] with [m] one more than Shift 1 + Alt 2 + Control
+   4 for an arrow; Alt prefixes ESC to the other keys. *)
 let ctrl_bytes args =
   let alt = List.mem (Keyword "Alt") args
   and shift = List.mem (Keyword "Shift") args in
@@ -655,24 +628,10 @@ let modified ~shift = function
   | Str s -> if shift then String.uppercase_ascii s else s
   | t -> lit t
 
-(* Playing *)
-
-(* A program on a terminal. The recorder keeps [slave] open until the
-   program has exited and its output is read: macOS drops what a program
-   printed before it exits if no one else holds the terminal.
-
-   Temporary: matrix 0.1.0's [Pty.spawn] closes the slave in the parent and
-   loses that output, so k7 opens the terminal itself, with [open_terminal]
-   and the [acquire_terminal] stub of terminal_stubs.c. Once matrix fixes
-   it, delete [slave], [open_terminal], [acquire_terminal] and the stub, and
-   spawn with [Pty.spawn] again. The upstream issue, to file: "matrix.pty:
-   Pty.spawn closes the slave, so macOS loses the output of a program that
-   exits at once". *)
-type terminal = {
-  pty : Pty.t;  (** The master side. *)
-  slave : Pty.t;
-  pid : int;
-}
+(* Temporary: matrix 0.1.0's [Pty.spawn] closes the slave, so macOS loses the
+   output of a program that exits at once. Once matrix fixes it, delete
+   [slave], [open_terminal], [acquire_terminal] and terminal_stubs.c. *)
+type terminal = { pty : Pty.t; slave : Pty.t; pid : int }
 
 type state = {
   term : Screen.terminal;
@@ -681,24 +640,21 @@ type state = {
   clock : Eio.Time.Mono.ty Eio.Resource.t;
   tl : timeline;
   changed : Eio.Condition.t;
-  mutable live : Screen.t;  (** The screen without scrolling. *)
+  mutable live : Screen.t;
   mutable shown : Screen.t;
   mutable offset : int;
   mutable hidden : bool;
-  mutable logical : int;  (** The tape's time at the start of the action. *)
-  mutable started : Mtime.t;  (** When the action started. *)
-  mutable cap : int option;  (** The tape's duration of the action. *)
+  mutable logical : int;
+  mutable started : Mtime.t;
+  mutable cap : int option;
   mutable typing_speed : int;
   mutable clipboard : string;
   text : Buffer.t;
-  mutable dumps : bool;  (** Whether a command adds its screen to [text]. *)
-  mutable still : string option;  (** The screenshot of the next frame. *)
+  mutable dumps : bool;
+  mutable still : string option;
   mutable stills : (string * Screen.t) list;
   mutable submitted : int option;
-      (** The cursor's row when a line was submitted, until the terminal starts
-          another line. *)
   mutable exited : Eio.Process.exit_status option;
-      (** How the shell exited, once it has. *)
 }
 
 let now st = Eio.Time.Mono.now st.clock
@@ -713,7 +669,6 @@ let stamp st =
   st.logical
   + match st.cap with Some c -> min c (elapsed st) | None -> elapsed st
 
-(* VHS takes a screenshot of the next frame it records. *)
 let record st =
   if not st.hidden then (
     add st.tl (stamp st) st.shown;
@@ -749,8 +704,6 @@ let send st s =
 
 let is_line_feed c = c = '\n' || c = '\x0b' || c = '\x0c'
 
-(* A submitted line is over once the cursor leaves its row or a line feed,
-   which can scroll the row away, arrives. *)
 let settle st output =
   match st.submitted with
   | Some row
@@ -763,8 +716,6 @@ let exit_status : Unix.process_status -> Eio.Process.exit_status = function
   | WEXITED c -> `Exited c
   | WSIGNALED s | WSTOPPED s -> `Signaled s
 
-(* [exited st] is [true] once the program has exited, which it then records
-   in [st.exited]. *)
 let exited st =
   Option.is_some st.exited
   ||
@@ -775,12 +726,10 @@ let exited st =
       true
   | exception Unix.Unix_error _ -> true
 
-(* The end of the terminal's output: the shell has exited. *)
 let closed st =
   Eio.Condition.broadcast st.changed;
   Eio.Fiber.await_cancel ()
 
-(* The terminal answers the queries it reads. *)
 let feed st buf n =
   let output = Bytes.sub_string buf 0 n in
   Screen.feed st.term output;
@@ -788,7 +737,6 @@ let feed st buf n =
   send st (Screen.take_replies st.term);
   refresh st
 
-(* What is left to read once the program has exited. *)
 let rec drain st buf =
   match Pty.read st.pty buf 0 (Bytes.length buf) with
   | 0 -> ()
@@ -797,13 +745,9 @@ let rec drain st buf =
       drain st buf
   | exception Unix.Unix_error _ -> ()
 
-(* How often the reader looks for the program's exit while the terminal is
-   quiet, in seconds. *)
 let poll = 0.02
 
-(* [reader st buf] reads the terminal until the program has exited and all
-   it printed is read. A read can find the terminal closed while the program
-   still runs, as on macOS when it starts. *)
+(* On macOS a read can find the terminal closed while the program runs. *)
 let rec reader st buf =
   match Pty.read st.pty buf 0 (Bytes.length buf) with
   | 0 -> ended st buf
@@ -824,8 +768,6 @@ and ended st buf =
     Eio.Time.Mono.sleep st.clock poll;
     reader st buf)
 
-(* Typing scrolls the screen back down. A carriage return or a line feed
-   submits the line under the cursor. *)
 let write st s =
   if st.offset > 0 then (
     st.offset <- 0;
@@ -835,7 +777,6 @@ let write st s =
     st.submitted <- Some (Screen.cursor_row st.term);
   send st s
 
-(* [step st ms] runs an action the tape gives [ms] milliseconds. *)
 let step st ms =
   st.started <- now st;
   st.cap <- Some ms;
@@ -876,8 +817,7 @@ let within st seconds f =
       Eio.Time.Mono.sleep st.clock seconds;
       false)
 
-(* VHS reads as many lines as the screen has rows, from the top of the
-   buffer. *)
+(* VHS reads as many lines as the screen has rows, from the buffer's top. *)
 let top st =
   Screen.buffer st.term st.live
   |> Array.to_list
@@ -888,8 +828,7 @@ let wait_text st = function
       let row = Screen.cursor_row st.term in
       if st.offset = 0 then Screen.line st.live row
       else
-        (* VHS reads the line of the cursor's row on the viewport, which a
-           scroll moves up. *)
+        (* VHS reads the cursor's row on the viewport. *)
         let lines = Screen.buffer st.term st.live
         and i = Screen.history st.term + row - st.offset in
         if i >= 0 && i < Array.length lines then lines.(i) else ""
@@ -900,10 +839,7 @@ let wait st c ~line ~at ~scope ~timeout ~pattern =
   let timeout = Option.value timeout ~default:c.wait_timeout in
   st.started <- now st;
   st.cap <- None;
-  (* The line under the cursor holds only once the terminal has started
-     another line since the last one was submitted, or has changed it so
-     that it no longer holds: the prompt a command was typed at is not the
-     one that follows it. *)
+  (* The prompt a command was typed at is not the one that follows it. *)
   let holds () =
     let h = Regexp_match.matches re (wait_text st scope) in
     match (scope, st.submitted) with
@@ -912,7 +848,6 @@ let wait st c ~line ~at ~scope ~timeout ~pattern =
         false
     | _ -> h
   in
-  (* A shell that has exited changes the screen no more. *)
   let rec loop () =
     if not (holds ()) then
       match st.exited with
@@ -930,8 +865,8 @@ let wait st c ~line ~at ~scope ~timeout ~pattern =
   st.started <- now st;
   st.cap <- Some 0
 
-(* VHS's text output: the lines {!top} reads after each command it records,
-   each followed by a newline, then a line of 80 box-drawing characters. *)
+(* VHS's text output: the {!top} lines after each command, then 80 box
+   characters. *)
 let separator = String.concat "" (List.init 80 (fun _ -> "\xe2\x94\x80"))
 
 let dump st =
@@ -975,8 +910,7 @@ let run st c command =
   run_command st c command;
   dump st
 
-(* An executable named with a slash is relative to [cwd], as the child
-   resolves it. *)
+(* The child resolves a path with a slash relative to [cwd]. *)
 let on_path ~cwd env exe =
   if String.contains exe '/' then
     Sys.file_exists
@@ -991,8 +925,6 @@ let close_terminal (t : terminal) =
   Pty.close t.pty;
   Pty.close t.slave
 
-(* SIGTERM, then the hang-up of closing the terminal, then SIGKILL a second
-   later. *)
 let stop_terminal clock (t : terminal) =
   (try Unix.kill t.pid Sys.sigterm with Unix.Unix_error _ -> ());
   close_terminal t;
@@ -1012,9 +944,6 @@ let stop_terminal clock (t : terminal) =
 (* Temporary, see [terminal]. *)
 external acquire_terminal : Unix.file_descr -> unit = "native_acquire_terminal"
 
-(* [open_terminal ~env ~cwd ~winsize prog args] runs [prog] with [args] in
-   a new session whose controlling terminal is a new pseudo-terminal. It is
-   [Pty.spawn] that keeps the slave; temporary, see [terminal]. *)
 let open_terminal ~env ~cwd ~winsize prog args =
   let pty, slave = Pty.open_pty ~winsize () in
   let argv = Array.of_list (prog :: args) in
@@ -1036,8 +965,7 @@ let open_terminal ~env ~cwd ~winsize prog args =
       Pty.close slave;
       raise e
 
-(* The shells VHS starts, from its shell.go: the environment it gives
-   them before the tape's, their arguments, and their prompts. *)
+(* VHS's shell.go. *)
 let shell = function
   | "zsh" ->
       ( [ ("PROMPT", "%F{#5B56E0}> %F{reset_color}") ],
@@ -1062,9 +990,6 @@ let shell = function
 
 let term = ("TERM", "xterm-256color")
 
-(* [start ~env ~vars ~cwd t ~requires prog args] runs [prog] on a terminal
-   of the size of [t], with [env] and then [vars], once it and [requires]
-   are found. *)
 let start ~env ~vars ~cwd t ~requires prog args =
   let env =
     Eio.Process.Env.override (List.map (fun (k, v) -> (k, Some v)) vars) env
@@ -1090,8 +1015,7 @@ let spawn ~env ~cwd t =
     ~vars:(vars @ [ term ] @ t.env)
     ~cwd t ~requires:t.requires prog args
 
-(* The first output, the prompt, arrives before the first action, as it
-   does in VHS, which starts a browser in the meantime. *)
+(* The prompt arrives before the first action, as in VHS. *)
 let await_prompt st =
   let rec loop () =
     if
@@ -1145,10 +1069,7 @@ let recording t st =
     stills = List.rev_map still st.stills;
   }
 
-(* [with_terminal ~clock t terminal f] is [f] of the state of [terminal],
-   which it then closes, stopping the program unless it has exited: a
-   program already reaped is not signalled, as its pid may be another
-   process's by now. *)
+(* A reaped program is not signalled: its pid may be reused. *)
 let with_terminal ~clock t (terminal : terminal) f =
   let st = state t ~clock terminal in
   let finally () =
@@ -1178,8 +1099,6 @@ let play ~clock ~env ~cwd t =
   | r -> Ok r
   | exception Stop e -> Error e
 
-(* How long the last screen of {!run} shows, as a cram test's last command
-   shows its output. *)
 let hold = 1000
 
 let run ~clock ~env ~vars ~cwd t argv =

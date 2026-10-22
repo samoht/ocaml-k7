@@ -3,10 +3,8 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(* The tables of Unicode 17.0.0, which Go 1.27 and the VHS it builds use, in
-   unicode.txt, which test/unicode_table.go writes: a line per table, its
-   name and its ranges in hexadecimal, then a line per name that resolves
-   to another table, [name=table], or [name=^table] for its complement. *)
+(* Go's Unicode 17.0.0 tables, from unicode.txt, which test/unicode_table.go
+   writes. *)
 let tables =
   lazy
     (let tables = Hashtbl.create 256 and names = Hashtbl.create 256 in
@@ -35,8 +33,7 @@ let tables =
          | [] -> ());
      (tables, names))
 
-(* Go's [canonicalName]: drop underscores, hyphens and spaces, then capitalise
-   the first letter and lower the others. *)
+(* Go's [canonicalName]. *)
 let canonical name =
   let b = Buffer.create (String.length name) in
   let add first = function
@@ -59,8 +56,6 @@ let find name =
 
 let format = lazy (match find "Cf" with Some (r, false) -> r | _ -> [])
 
-(* The prepended concatenation marks, format characters that show, over the
-   digits after them. *)
 let is_concatenation_mark u =
   (u >= 0x600 && u <= 0x605)
   || u = 0x6dd || u = 0x70f || u = 0x890 || u = 0x891 || u = 0x8e2
@@ -74,19 +69,13 @@ let is_format u =
 let is_selector u =
   (u >= 0xfe00 && u <= 0xfe0f) || (u >= 0xe0100 && u <= 0xe01ef)
 
-(* A character a variation selector may follow: one that shows, other than
-   a selector or a joiner. *)
 let is_base u =
   u > 0x20
   && (not (u >= 0x7f && u <= 0x9f))
   && (not (is_selector u))
   && u <> 0x200c && u <> 0x200d
 
-(* UTS #51 ED-14a: an emoji tag sequence is a base, tag characters U+E0020
-   to U+E007E, then U+E007F CANCEL TAG. Its only base in
-   emoji-sequences.txt is U+1F3F4, which picks a subdivision flag.
-   [tags s j n] is where the sequence whose [n] tags so far end at [j]
-   ends, if it does. *)
+(* UTS #51 ED-14a: U+1F3F4, tags U+E0020 to U+E007E, then U+E007F. *)
 let rec tags s j n =
   if j >= String.length s then None
   else

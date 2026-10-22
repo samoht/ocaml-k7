@@ -25,9 +25,8 @@ let default =
   }
 [@@ocamlformat "disable"]
 
-(* The colours of themes.json of VHS v0.12.1 (MIT, Charm), in its order:
-   background, foreground, cursor (xterm.js's white where the theme has
-   none), then the sixteen ANSI colours. *)
+(* themes.json of VHS v0.12.1 (MIT, Charm), in its order: background,
+   foreground, cursor (white if none), then the sixteen ANSI colours. *)
 let themes =
   [
     ("3024 Day",
@@ -729,7 +728,7 @@ let themes =
   ]
 [@@ocamlformat "disable"]
 
-(* WCAG's relative luminance of a colour, and the contrast ratio of two. *)
+(* WCAG's relative luminance and contrast ratio. *)
 let luminance c =
   let channel shift =
     let v = float ((c lsr shift) land 0xff) /. 255. in
@@ -741,9 +740,7 @@ let contrast a b =
   let la = luminance a and lb = luminance b in
   (Float.max la lb +. 0.05) /. (Float.min la lb +. 0.05)
 
-(* The text under the cursor of a theme without an accent: its background or
-   its foreground, whichever stands out more on the cursor. xterm.js draws
-   it black, which can vanish on a dark cursor. *)
+(* Not black, as xterm.js draws it: black can vanish on a dark cursor. *)
 let accent ~background ~foreground ~cursor =
   if contrast background cursor >= contrast foreground cursor then background
   else foreground
@@ -782,12 +779,9 @@ let pp ppf t =
     (Fmt.array ~sep:Fmt.sp pp_colour)
     t.ansi
 
-(* JSON themes *)
-
 exception Colour of string
 
-(* Go matches a key to a field of VHS's [Theme] ignoring case, as
-   [bytes.EqualFold] does, where U+017F folds to [s] and U+212A to [k]. *)
+(* Go's [bytes.EqualFold]: U+017F folds to [s] and U+212A to [k]. *)
 let equal_fold key field =
   let b = Buffer.create (String.length key) in
   let rec go i =
@@ -802,8 +796,7 @@ let equal_fold key field =
   go 0;
   String.lowercase_ascii (Buffer.contents b) = String.lowercase_ascii field
 
-(* xterm.js's [css.toColor]: [#RGB], [#RGBA], [#RRGGBB], [#RRGGBBAA] and
-   [rgb()] or [rgba()]; the alpha is not drawn. *)
+(* xterm.js's [css.toColor]; the alpha is not drawn. *)
 let colour s =
   let hex =
     String.length s > 1
@@ -828,7 +821,7 @@ let colour s =
           if c 1 > 255 || c 2 > 255 || c 3 > 255 then None
           else Some ((c 1 lsl 16) lor (c 2 lsl 8) lor c 3))
 
-(* xterm.js's colours where a theme has none, or one it cannot read. *)
+(* xterm.js's defaults. *)
 let xterm =
   {
     background = 0x000000;
@@ -842,8 +835,6 @@ let xterm =
   }
 [@@ocamlformat "disable"]
 
-(* The fields of VHS's [Theme], all strings: the colours in the order of
-   [t], then those xterm.js does not draw here. *)
 let fields =
   [ "background"; "foreground"; "cursor"; "cursorAccent"; "black"; "red";
     "green"; "yellow"; "blue"; "magenta"; "cyan"; "white"; "brightBlack";
@@ -851,7 +842,6 @@ let fields =
     "brightCyan"; "brightWhite"; "name"; "selection" ]
 [@@ocamlformat "disable"]
 
-(* [plain msg] is [msg] without the SGR sequences jsont styles it with. *)
 let plain msg =
   let b = Buffer.create (String.length msg) in
   let rec go i =
@@ -868,9 +858,8 @@ let plain msg =
   go 0;
   Buffer.contents b
 
-(* The string of field [f] in [members], [""] if none: Go keeps the last
-   string of a key that matches it, and fails on any other value but
-   [null]. *)
+(* As Go: the last string of a matching key wins, and any other value but
+   [null] fails. *)
 let field members f =
   List.fold_left
     (fun acc ((k, _), v) ->
@@ -910,12 +899,9 @@ let theme_of_members members =
       | t -> Ok t
       | exception Colour c -> Error (`Colour c))
 
-(* Go's encoding/json refuses arrays and objects nested deeper than this,
-   the outermost one included. *)
+(* Go's encoding/json nesting limit. *)
 let max_depth = 10_000
 
-(* [too_deep s] is [true] iff [s] opens more than [max_depth] arrays and
-   objects at once, outside its strings. *)
 let too_deep s =
   let n = String.length s in
   let rec go i depth ~quoted =

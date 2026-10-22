@@ -5,8 +5,8 @@
 
 type terminal = Vte.t
 
-(* xterm.js keeps a thousand lines of scrollback, gives each code point its
-   own width and answers DA2 as xterm.js 5. *)
+(* As xterm.js: a thousand lines of scrollback, a width per code point, and
+   DA2 answered as xterm.js 5. *)
 let terminal ~rows ~cols =
   Vte.create ~scrollback:1000 ~width_method:`Wcwidth
     ~default_fg:Ansi.Color.default ~default_bg:Ansi.Color.default
@@ -49,13 +49,10 @@ let colour c =
       let r, g, b = Ansi.Color.to_rgb c in
       Rgb ((r lsl 16) lor (g lsl 8) lor b)
 
-(* The attributes that show on a blank cell. *)
 let visible_on_blank =
   Ansi.Attr.(
     of_list [ Inverse; Underline; Double_underline; Strikethrough; Overline ])
 
-(* Valid UTF-8 without control characters, which the terminal never stores
-   but which a cell must not hold. *)
 let clean s =
   if
     String.is_valid_utf_8 s
@@ -63,8 +60,7 @@ let clean s =
   then s
   else "\xef\xbf\xbd"
 
-(* The cells of a wide glyph after its first take its colours and
-   attributes, as xterm.js paints the whole glyph with them. *)
+(* xterm.js paints a wide glyph's cells with its first cell's style. *)
 let rec cell grid idx =
   if Matrix_grid.is_continuation grid idx && idx > 0 then
     { (cell grid (idx - 1)) with text = ""; width = 0 }
@@ -89,8 +85,7 @@ let rec cell grid idx =
       }
     else { text; width; fg; bg; attrs }
 
-(* The white space and line terminators of JavaScript, which VHS's
-   [trimEnd] removes. *)
+(* JavaScript's [trimEnd] set. *)
 let is_js_space = function
   | 0x09 | 0x0a | 0x0b | 0x0c | 0x0d | 0x20 | 0xa0 | 0x1680 | 0x2028 | 0x2029
   | 0x202f | 0x205f | 0x3000 | 0xfeff ->
@@ -98,7 +93,6 @@ let is_js_space = function
   | u -> u >= 0x2000 && u <= 0x200a
 
 let trim_end s =
-  (* [keep] ends the last character that is not a space. *)
   let rec go i keep =
     if i >= String.length s then keep
     else

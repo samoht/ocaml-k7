@@ -3,8 +3,8 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(* This follows VHS's lexer/lexer.go, token/token.go and parser/parser.go
-   (MIT, Charm) at v0.12.1, and Go's time.ParseDuration. *)
+(* Follows VHS v0.12.1's lexer/lexer.go, token/token.go and parser/parser.go
+   (MIT, Charm), and Go's time.ParseDuration. *)
 
 type command =
   | Blank
@@ -16,11 +16,9 @@ type command =
   | Screenshot of string
   | Other
 
-(* Lexing *)
-
 type kind =
   | Punct of char
-  | Word  (** A keyword; its literal says which. *)
+  | Word
   | String
   | Regex
   | Json
@@ -68,12 +66,9 @@ let fail fmt = Fmt.kstr (fun s -> raise (Error s)) fmt
 let rec span line p i =
   if i < String.length line && p line.[i] then span line p (i + 1) else i
 
-(* [delimited line q i] is the index of the [q] closing what starts at [i]. *)
 let delimited line q i =
   Option.value (String.index_from_opt line i q) ~default:(String.length line)
 
-(* The index of the slash closing the regular expression that starts at
-   [i]: a run of backslashes escapes the slash after it iff it is odd. *)
 let rec regex line i =
   let n = String.length line in
   if i >= n then i
@@ -89,7 +84,6 @@ let closed line i what =
 
 let tok kind lit = { kind; lit }
 
-(* The token at [i], not a comment, and the index after it. *)
 let token line i =
   let n = String.length line in
   let sub i j = String.sub line i (j - i) in
@@ -118,9 +112,8 @@ let token line i =
       (tok (if List.mem lit keywords then Word else String) lit, j)
   | c -> (tok Illegal (String.make 1 c), i + 1)
 
-(* [lex line] are the tokens of [line], ending with [Eof]. A string, regular
-   expression or JSON value that [line] does not close would take the next
-   lines of a tape, so it is an error here. *)
+(* An unclosed string, regular expression or JSON value would take the
+   next lines of a tape. *)
 let lex line =
   let n = String.length line in
   let rec go acc i =
@@ -152,7 +145,7 @@ let unsigned_float u =
   if Int64.compare u 0L < 0 then Int64.to_float u +. 0x1p64
   else Int64.to_float u
 
-(* [leadingInt]: the integer at [i] and the index after it. *)
+(* Go's [leadingInt]. *)
 let rec leading_int s v i =
   if i < String.length s && Char.Ascii.is_digit s.[i] then
     let v' = Int64.(add (mul v 10L) (digit s i)) in
@@ -160,8 +153,7 @@ let rec leading_int s v i =
     else leading_int s v' (i + 1)
   else Some (v, i)
 
-(* [leadingFraction]: the digits at [i] as [f / scale], those past the
-   precision of [f] dropped, and the index after them. *)
+(* Go's [leadingFraction]. *)
 let rec fraction s f scale i =
   if i < String.length s && Char.Ascii.is_digit s.[i] then
     let y = Int64.(add (mul f 10L) (digit s i)) in
@@ -170,7 +162,6 @@ let rec fraction s f scale i =
     else fraction s y (scale *. 10.) (i + 1)
   else (f, scale, i)
 
-(* [v + f / scale] in [unit]s, as nanoseconds. *)
 let scaled v f scale unit =
   if v >! Int64.unsigned_div top unit then None
   else
@@ -183,7 +174,6 @@ let scaled v f scale unit =
     in
     if v >! top then None else Some v
 
-(* One [number unit] term at [i]: its nanoseconds and the index after it. *)
 let term s i =
   let is_num c = c = '.' || Char.Ascii.is_digit c in
   match leading_int s 0L i with
@@ -224,14 +214,13 @@ let atoi s =
   if digits = "" || not (String.for_all Char.Ascii.is_digit digits) then None
   else Int64.of_string_opt (if s.[0] = '+' then digits else s)
 
-(* Go's [special]: an infinity, with a sign or not, or a NaN, without. *)
+(* Go's [special]. *)
 let is_special s =
   let l = String.lowercase_ascii s in
   let body = without_sign l in
   body = "inf" || body = "infinity" || l = "nan"
 
-(* Go's [underscoreOK]: each [_] follows a digit or the base prefix, and
-   precedes a digit. *)
+(* Go's [underscoreOK]. *)
 let underscore_ok s =
   let s = without_sign s in
   let n = String.length s in
@@ -250,8 +239,7 @@ let underscore_ok s =
   in
   go (if prefix then '0' else '^') (if prefix then 2 else 0)
 
-(* Go's [readFloat] reads all of [s]: digits with at most one dot, then an
-   exponent, which a hexadecimal mantissa must have. *)
+(* Go's [readFloat]. *)
 let is_float_syntax s =
   let n = String.length s in
   let lower i = Char.lowercase_ascii s.[i] in
@@ -290,7 +278,6 @@ let is_float_syntax s =
   | Some i -> i = n && ((not (String.contains s '_')) || underscore_ok s)
   | None -> false
 
-(* A well-formed value fails only if it rounds beyond the largest float. *)
 let is_float s =
   is_special s
   || is_float_syntax s
@@ -301,8 +288,6 @@ let is_float s =
      | Some f -> Float.is_finite f
      | None -> true
 
-(* Parsing *)
-
 type parser = { tokens : token array; mutable pos : int }
 
 let cur p = p.tokens.(p.pos)
@@ -310,8 +295,7 @@ let peek p = p.tokens.(min (p.pos + 1) (Array.length p.tokens - 1))
 let next p = p.pos <- min (p.pos + 1) (Array.length p.tokens - 1)
 let is_word w t = t.kind = Word && t.lit = w
 
-(* [take p] moves to the argument after the current token, which VHS takes
-   whatever it is: at the end of the line, the next line's first token. *)
+(* VHS takes the next token as the argument, even from the next line. *)
 let take p =
   if (peek p).kind = Eof then fail "%s expects an argument" (cur p).lit;
   next p;
@@ -320,7 +304,7 @@ let take p =
 let check_duration what s =
   if Option.is_none (duration s) then fail "%s %s: not a Go duration" what s
 
-(* parseTime: a number and an optional unit, seconds by default. *)
+(* VHS's parseTime. *)
 let time p =
   if (peek p).kind <> Number then fail "Expected time after %s" (cur p).lit;
   next p;
@@ -455,7 +439,7 @@ let ctrl_key t =
   | String -> String.length t.lit = 1
   | _ -> false
 
-(* parseCtrl: modifiers, then keys, each after a [+]. *)
+(* VHS's parseCtrl. *)
 let ctrl p =
   let rec go ~chain args =
     if (peek p).kind <> Punct '+' then args
@@ -567,8 +551,6 @@ let check line =
   with
   | c -> Ok c
   | exception Error msg -> Error msg
-
-(* Tokens *)
 
 type lexeme =
   | Keyword of string

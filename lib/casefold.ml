@@ -3,10 +3,8 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(* Each code point of an orbit of Go's [unicode.SimpleFold], sorted, with
-   its orbit. The orbits are those of Unicode 17.0.0, which Go 1.27 and the
-   VHS it builds use, in casefold.txt, which test/casefold_table.go writes:
-   one per line, its code points in hexadecimal. *)
+(* The orbits of Go's [unicode.SimpleFold] (Unicode 17.0.0), from
+   casefold.txt, which test/casefold_table.go writes. *)
 let index =
   lazy
     (let orbits =
@@ -25,7 +23,6 @@ let index =
      in
      Array.of_list (List.sort (fun (a, _) (b, _) -> compare a b) entries))
 
-(* The index of the first entry at or after [c]. *)
 let first index c =
   let rec go lo hi =
     if lo >= hi then lo

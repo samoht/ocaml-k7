@@ -3,7 +3,7 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(* The names in themes.json of VHS v0.12.1 (MIT, Charm), in its order. *)
+(* themes.json of VHS v0.12.1 (MIT, Charm), in its order. *)
 let names =
   [ "3024 Day"; "3024 Night"; "Aardvark Blue"; "Abernathy"; "Adventure";
     "AdventureTime"; "Afterglow"; "Alabaster"; "AlienBlood"; "Andromeda";

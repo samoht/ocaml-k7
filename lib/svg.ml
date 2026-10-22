@@ -30,8 +30,7 @@ type look = {
 
 type paint = Foreground | Background | Ansi of int | Rgb of int
 
-(* The theme replaces the first sixteen colours of the palette, and xterm.js
-   draws bold text in the bright variant of the first eight. *)
+(* xterm.js draws bold in the bright variant of the first eight colours. *)
 let paint ~bold ~default : Screen.colour -> paint = function
   | Default -> default
   | Indexed i when i < 16 -> Ansi (if bold && i < 8 then i + 8 else i)
@@ -42,15 +41,12 @@ let paint ~bold ~default : Screen.colour -> paint = function
 
 let has flag (c : Screen.cell) = Ansi.Attr.mem flag c.attrs
 
-(* The text and background paints of [c]. *)
 let paints (c : Screen.cell) =
   let bold = has Bold c in
   let fg = paint ~bold ~default:Foreground c.fg in
   let bg = paint ~bold:false ~default:Background c.bg in
   if has Inverse c then (paint ~bold:false ~default:Background c.bg, fg)
   else (fg, bg)
-
-(* Escaping *)
 
 let add_escaped b s =
   let rec go i =
@@ -72,8 +68,6 @@ let add_escaped b s =
   go 0
 
 let hex rgb = Fmt.str "#%06x" rgb
-
-(* Rows *)
 
 let class_of = function
   | Foreground -> Some "d"
@@ -109,10 +103,8 @@ let add_backgrounds t b ~from cells =
   in
   go from
 
-(* The classes of a text run other than its colour. *)
 let text_classes (c : Screen.cell) =
   let deco =
-    (* A double underline is drawn apart, see [add_double_underlines]. *)
     (if has Underline c && not (has Double_underline c) then "u" else "")
     ^ (if has Strikethrough c then "s" else "")
     ^ if has Overline c then "o" else ""
@@ -158,8 +150,6 @@ let add_tspan t b (c : Screen.cell) xs text =
 let same_style (a : Screen.cell) (b : Screen.cell) =
   fst (paints a) = fst (paints b) && text_classes a = text_classes b
 
-(* A tspan per run of cells of one style, a multi-code-point grapheme in a
-   tspan of its own, whose position its first code point takes. *)
 let add_texts t b ~from cells =
   let n = Array.length cells in
   let flush first xs text =
@@ -171,8 +161,6 @@ let add_texts t b ~from cells =
     if x >= n then Option.iter (fun f -> flush f xs text) first
     else
       let (c : Screen.cell) = cells.(x) in
-      (* Format characters and stray variation selectors do not show, and
-         a cell of only such characters is blank. *)
       let shown = match Unicode.strip_format c.text with "" -> " " | s -> s in
       if c.width = 0 then go (x + 1) first xs
       else if not (shows c) then (
@@ -193,9 +181,7 @@ let add_texts t b ~from cells =
   in
   go from None []
 
-(* SGR 21, a double underline in xterm.js, is two lines under the text in
-   its colour, drawn as rectangles: WebKit ignores text-decoration-style on
-   SVG text. *)
+(* Rectangles: WebKit ignores text-decoration-style on SVG text. *)
 let add_double_underlines t b ~from cells =
   let n = Array.length cells in
   let double x = has Double_underline cells.(x) && shows cells.(x) in
@@ -205,7 +191,6 @@ let add_double_underlines t b ~from cells =
       if not (double x) then go (x + 1)
       else
         let p = fst (paints cells.(x)) in
-        (* The second cell of a wide glyph goes with the first. *)
         let rec stop y =
           if
             y < n
@@ -249,8 +234,6 @@ module Rows = Hashtbl.Make (struct
   let hash r = Hashtbl.hash (Screen.row_text r)
 end)
 
-(* The id of each distinct non-blank row, the markup of its definition, and
-   how many rows its definition nests. *)
 type defs = {
   ids : string option Rows.t;
   by_markup : (string, string) Hashtbl.t;
@@ -262,7 +245,6 @@ type defs = {
 let is_blank (c : Screen.cell) =
   c.text = " " && c.bg = Default && Ansi.Attr.is_empty c.attrs
 
-(* The cells up to the last one that is not blank. *)
 let used cells =
   let rec go n = if n > 0 && is_blank cells.(n - 1) then go (n - 1) else n in
   go (Array.length cells)
@@ -270,8 +252,6 @@ let used cells =
 let rec same_prefix c0 c1 k =
   k = 0 || (c0.(k - 1) = c1.(k - 1) && same_prefix c0 c1 (k - 1))
 
-(* A chain of rows that each add to the one before, as typing makes, is
-   drawn by reference to the previous row, up to this depth. *)
 let max_depth = 16
 
 let markup t d ~base row =
@@ -323,8 +303,6 @@ let row_id t d ~base row =
       Rows.replace d.ids row id;
       id
 
-(* The cursor is a block, [#c], or [#w] on a wide glyph, which it draws in
-   the cursor accent colour. *)
 let add_cursor_defs t b =
   Fmt.kstr (Buffer.add_string b)
     "<rect id=\"c\" class=\"kc\" width=\"%d\" height=\"%d\"/><rect id=\"w\" \
@@ -333,15 +311,12 @@ let add_cursor_defs t b =
 
 let add_cursor t b screen (r, c) =
   let cells = Screen.cells (Screen.rows screen).(r) in
-  (* A cursor on the second cell of a wide glyph covers the glyph. *)
   let c = if c > 0 && cells.(c).width = 0 then c - 1 else c in
   let cell = cells.(c) in
   Fmt.kstr (Buffer.add_string b)
     "<use href=\"#%s\" class=\"k\" x=\"%d\" y=\"%d\"/>"
     (if cell.width = 2 then "w" else "c")
     (c * t.cell_width) (r * t.cell_height);
-  (* The glyph under the cursor leaves out format characters, as its row
-     does. *)
   let text = Unicode.strip_format cell.text in
   if cell.width > 0 && text <> "" && text <> " " && not (has Hidden cell) then (
     Fmt.kstr (Buffer.add_string b) "<text class=\"ka k\" x=\"%d\" y=\"%d\">"
@@ -350,8 +325,6 @@ let add_cursor t b screen (r, c) =
     add_escaped b text;
     Buffer.add_string b "</text>")
 
-(* [shown] holds, for each row, the row the previous screen showed there and
-   its id. *)
 let add_frame t d b shown i screen =
   if i = 0 then Buffer.add_string b "<g>"
   else
@@ -369,13 +342,9 @@ let add_frame t d b shown i screen =
   Option.iter (add_cursor t b screen) (Screen.cursor screen);
   Buffer.add_string b "</g>"
 
-(* Style *)
-
-(* A percentage of [duration] with four decimals, in integers so that the
-   output does not depend on float printing. *)
+(* In integers, so that the output does not depend on float printing. *)
 let percent ~duration ms =
-  (* [ms * 1_000_000 / duration] in two steps, so that neither product
-     overflows for [ms <= duration]. *)
+  (* In two steps, so that neither product overflows. *)
   let q = ms * 1000 / duration and r = ms * 1000 mod duration in
   let v = (q * 1000) + (r * 1000 / duration) in
   Fmt.str "%d.%04d%%" (v / 10_000) (v mod 10_000)
@@ -419,17 +388,13 @@ let add_style t b ~duration frames =
         frames;
       let last = -(List.length frames - 1) * t.cols * t.cell_width in
       Fmt.kstr (Buffer.add_string b) "100%%{transform:translateX(%dpx)}}" last;
-      (* A reader who prefers reduced motion sees the last screen still. *)
       Fmt.kstr (Buffer.add_string b)
         "@media \
          (prefers-reduced-motion:reduce){.s{animation:none;transform:translateX(%dpx)}}"
         last);
   Buffer.add_string b "</style>"
 
-(* VHS's window bar, from its draw.go: three dots, or three rings, on the
-   left or on the right of the top of the window, in the colour of the
-   terminal's background. Go draws a circle of radius [r] antialiased from
-   [r - 1] to [r]. *)
+(* VHS's draw.go; Go antialiases a circle of radius [r] from [r - 1]. *)
 let add_bar t b bar =
   let circle ~cx ~cy ~r fill =
     if r > 0 then
@@ -461,8 +426,6 @@ let add_bar t b bar =
         circle ~cx:(centre ~gap ~r ~space i) ~cy:(cy r gap) ~r fill)
       [ {|fill="#ff4f4d"|}; {|fill="#febb00"|}; {|fill="#00cc1d"|} ]
 
-(* The text a row shows: a concealed cell is blank, and a format character
-   is left out. *)
 let shown_text row =
   let b = Buffer.create 256 in
   Array.iter
@@ -474,8 +437,6 @@ let shown_text row =
   let rec stop n = if n > 0 && s.[n - 1] = ' ' then stop (n - 1) else n in
   String.sub s 0 (stop (String.length s))
 
-(* The text alternative: the text the last screen shows, without its blank
-   last rows. A blank screen has none, and the title stands alone. *)
 let add_desc b screen =
   let lines = Array.to_list (Array.map shown_text (Screen.rows screen)) in
   let rec drop_blank = function "" :: rest -> drop_blank rest | l -> l in
@@ -522,8 +483,6 @@ let image t ~duration frames =
      viewBox=\"0 0 %d %d\" font-family=\""
     t.width t.height t.width t.height;
   add_escaped b t.font_family;
-  (* An inlined image names itself by its title and describes itself by
-     its description, as an [img] element does by its [alt]. *)
   let desc = Buffer.create 256 in
   (match List.rev frames with
   | (_, screen) :: _ -> add_desc desc screen
