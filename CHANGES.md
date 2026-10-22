@@ -53,4 +53,5 @@
   terminal does not handle yet, a rare `setpgid` error from macOS's bash 3.2
   under load, the timed-out wait `K7.render` reports as `Failed`, and the
   JSON themes with invalid UTF-8 or unpaired surrogates that jsont refuses
-  and Go reads.
+  and Go reads, and the input and background output `k7 run` does not
+  record.
