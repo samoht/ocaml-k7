@@ -20,10 +20,13 @@
     {[
     let demo =
       K7.tape
-        ~settings:K7.[ Width 1000; Height 560 ]
-        ~outputs:[ "demo.gif" ]
+        ~settings:K7.[ Columns 80; Rows 12 ]
+        ~outputs:[ "demo.svg" ]
         K7.[ type' "ls\n"; wait Prompt ]
-    ]} *)
+    ]}
+
+    {!record} writes [demo.svg] without [vhs], and {!play} picks {!record} or
+    {!render} by the outputs of a tape, as [k7 cram] and [k7 tape] do. *)
 
 (** {1:actions Actions} *)
 
@@ -202,14 +205,14 @@ type setting =
       (** The terminal's rows, a positive number, in place of
           {!constructor-Height}, as for {!constructor-Columns}. *)
   | Theme of string
-      (** The name of a theme of VHS 0.12.1, as [vhs themes] lists them, only
-          spaces for the default theme, or a theme in JSON, which starts with
-          [{]. A JSON theme is an object whose fields VHS reads as strings,
-          matching keys ignoring case, and xterm.js reads as colours, with its
-          default for a missing or empty one. It nests at most 10000 levels, as
-          Go reads it. It is valid UTF-8 and holds no unpaired surrogate escape
-          such as [\ud800]; VHS reads both as U+FFFD, and {!val-tape} refuses
-          them. *)
+      (** The name of a theme of VHS 0.12.1, such as ["Dracula"], as
+          [vhs themes] lists them, an empty or blank string for the default
+          theme, or a theme in JSON, which starts with [{]. A JSON theme is an
+          object whose fields VHS reads as strings, matching keys ignoring case,
+          and xterm.js reads as colours, with its default for a missing or empty
+          one. It nests at most 10000 levels, as Go reads it. It is valid UTF-8
+          and holds no unpaired surrogate escape such as [\ud800]; VHS reads
+          both as U+FFFD, and {!val-tape} refuses them. *)
   | Padding of int
       (** The padding in pixels, not negative (defaults to [60]). *)
   | Typing_speed of duration
@@ -385,12 +388,14 @@ val svg :
   ?settings:setting list -> (duration * string) list -> (string, error) result
 (** [svg ~settings output] is the SVG image of a terminal with [settings]
     (defaults to [[]]) that receives each string of [output] at its time, as
-    {!record} draws it. [svg] starts no shell and types nothing, so
-    {!constructor-Shell} and {!constructor-Typing_speed} have no effect. It is
-    [Error (Invalid _)] if a setting is one {!val-tape} refuses, or if a time is
-    out of the range of a {!duration} or before the one ahead of it. It is
-    [Error (Unsupported _)] on the {!constructor-Theme} colours and the sizes
-    that the {{!native_details}native recorder} refuses. *)
+    {!record} draws it. The strings are raw terminal output, so a line ends with
+    ["\r\n"]: ["a\nb"] moves down without returning to the first column. [svg]
+    starts no shell and types nothing, so {!constructor-Shell} and
+    {!constructor-Typing_speed} have no effect. It is [Error (Invalid _)] if a
+    setting is one {!val-tape} refuses, or if a time is out of the range of a
+    {!duration} or before the one ahead of it. It is [Error (Unsupported _)] on
+    the {!constructor-Theme} colours and the sizes that the
+    {{!native_details}native recorder} refuses. *)
 
 val run :
   ?settings:setting list ->
