@@ -150,7 +150,11 @@ let test_error_names_input () =
   Alcotest.(check (pair int string))
     "message"
     ( 123,
-      Fmt.str "k7: %s: executable not found: vhs-no-such-executable\n"
+      Fmt.str
+        "k7: %s: executable not found: vhs-no-such-executable; a GIF or a \
+         video needs Charm's VHS, see \
+         https://github.com/charmbracelet/vhs#installation, and an .svg output \
+         does not\n"
         (path "demo.t") )
     ( captured path @@ fun () ->
       run env ~vhs:"vhs-no-such-executable" (path "demo.t") )
