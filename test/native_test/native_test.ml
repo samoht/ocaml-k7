@@ -79,6 +79,10 @@ let with_dir f =
       ignore (Sys.command ("rm -rf " ^ Filename.quote tmp)))
   @@ fun () -> f env Eio.Path.(Eio.Stdenv.fs env / tmp)
 
+let executable path contents =
+  Out_channel.with_open_gen [ Open_wronly; Open_creat; Open_trunc; Open_binary ]
+    0o755 path (fun oc -> Out_channel.output_string oc contents)
+
 let play env cwd t =
   Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 60. @@ fun () ->
   K7.record ~engine:Native

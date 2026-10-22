@@ -482,7 +482,8 @@ let test_vhs_path_override () =
   Native_test.with_dir @@ fun env cwd ->
   let name = "k7-r14-path-vhs" in
   let executable = Eio.Path.(cwd / name) in
-  Eio.Path.save ~create:(`Or_truncate 0o755) executable
+  Native_test.executable
+    (Eio.Path.native_exn executable)
     "#!/bin/sh\n/bin/cat > /dev/null\nprintf started > launched\n";
   let vars = [ ("PATH", Eio.Path.native_exn cwd) ] in
   let record vhs =

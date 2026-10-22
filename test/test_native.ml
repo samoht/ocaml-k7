@@ -501,8 +501,8 @@ let test_output_dirs () =
   Eio.Path.mkdir ~perm:0o555 Eio.Path.(cwd / "ro");
   let played = Eio.Path.(cwd / "played") in
   let fake = Filename.concat dir "fake-vhs" in
-  Eio.Path.save ~create:(`Or_truncate 0o755)
-    Eio.Path.(cwd / "fake-vhs")
+  executable
+    (Eio.Path.native_exn Eio.Path.(cwd / "fake-vhs"))
     (Fmt.str "#!/bin/sh\ncat > /dev/null\ntouch %s\n"
        (Filename.quote (Filename.concat dir "played")));
   let refused name ~engine ~outputs ~raws sub =
@@ -1173,7 +1173,7 @@ let run ?clock ?vars ?show ?delay env cwd argv =
     ~cwd argv
 
 let script cwd name src =
-  Eio.Path.save ~create:(`Or_truncate 0o755) Eio.Path.(cwd / name) src
+  executable (Eio.Path.native_exn Eio.Path.(cwd / name)) src
 
 let times svg =
   let number s i =

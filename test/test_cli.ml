@@ -68,9 +68,11 @@ let with_files files fn =
   let path name = Filename.concat dir name in
   List.iter
     (fun (name, perm, contents) ->
-      Eio.Path.save ~create:(`Or_truncate perm)
-        Eio.Path.(Eio.Stdenv.fs env / path name)
-        contents)
+      if perm land 0o111 <> 0 then Native_test.executable (path name) contents
+      else
+        Eio.Path.save ~create:(`Or_truncate perm)
+          Eio.Path.(Eio.Stdenv.fs env / path name)
+          contents)
     files;
   fn env path
 

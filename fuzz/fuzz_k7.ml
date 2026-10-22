@@ -526,10 +526,11 @@ let with_dir fn =
       Unix.rmdir dir)
     (fun () -> fn env (Filename.concat dir))
 
-let save env path contents =
-  Eio.Path.save ~create:(`Or_truncate 0o755)
-    Eio.Path.(Eio.Stdenv.fs env / path)
-    contents
+(* With a blocking close: under io_uring, Eio closes a file late, and
+   running it at once fails with ETXTBSY. *)
+let save _env path contents =
+  Out_channel.with_open_gen [ Open_wronly; Open_creat; Open_trunc; Open_binary ]
+    0o755 path (fun oc -> Out_channel.output_string oc contents)
 
 let render_tape () = Result.get_ok (K7.tape ~outputs:[ "demo.gif" ] [ last ])
 

@@ -53,6 +53,11 @@ val with_dir : (Eio_unix.Stdenv.base -> Eio.Fs.dir_ty Eio.Path.t -> 'a) -> 'a
 (** [with_dir f] is [f env dir] in a fresh temporary directory [dir], which it
     removes afterwards. *)
 
+val executable : string -> string -> unit
+(** [executable path contents] writes [contents] to the executable file [path]
+    with a blocking [close]. Under io_uring, Eio closes a file late, and running
+    it at once fails with [ETXTBSY]. *)
+
 val play :
   Eio_unix.Stdenv.base ->
   Eio.Fs.dir_ty Eio.Path.t ->
