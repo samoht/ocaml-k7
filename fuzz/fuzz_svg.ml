@@ -499,6 +499,28 @@ let test_narrow_symbols n selector split_at =
     (Matrix_grid.to_text (Vte.grid term), image);
   check_eq ~pp:Fmt.(Dump.pair int int) cursor (Vte.cursor_pos term)
 
+(* A cursor redraw cannot reintroduce a format character removed from
+   the rows and description. Check that matrix retains the exact input cell,
+   so a dropped terminal character cannot make the property vacuous. *)
+let test_cursor_format n =
+  let forbidden =
+    [| 0x061c; 0x180e; 0x200b; 0x200e; 0x200f; 0x202a; 0x202e;
+       0x2060; 0x2066; 0xfeff; 0xfff9; 0x13430; 0x1bca0; 0xe0001 |]
+  in
+  let b = Buffer.create 8 in
+  Buffer.add_utf_8_uchar b (Uchar.of_int forbidden.(n mod Array.length forbidden));
+  let mark = Buffer.contents b in
+  let output = "a" ^ mark ^ "b\r" in
+  let term = Vte.create ~width_method:`Wcwidth ~rows ~cols () in
+  Vte.feed_string term output;
+  check_eq ~pp:pp_string ("a" ^ mark) (Matrix_grid.get_text (Vte.grid term) 0);
+  check_eq ~pp:Fmt.(Dump.pair int int) (0, 0) (Vte.cursor_pos term);
+  match Vhs.svg ~settings [ (Ms 0, output) ] with
+  | Error e -> failf "%a" Vhs.pp_error e
+  | Ok image ->
+      check (contains ~sub:"<desc>ab</desc>" image);
+      check (not (contains ~sub:mark image))
+
 (* The emulator's terminal state across reads, through the SVG image. *)
 let terminal =
   [
@@ -537,6 +559,8 @@ let suite =
   ( "svg",
     [
       test_case "frames" [ list chunk ] test_frames;
+      test_case "cursor redraw leaves invisible format characters out"
+        [ uint8 ] test_cursor_format;
       test_case "text symbols keep xterm cell widths across PTY splits"
         [ uint8; uint8; uint8 ] test_narrow_symbols;
       test_case "positive SVG frame rates are not pixel sizes"
