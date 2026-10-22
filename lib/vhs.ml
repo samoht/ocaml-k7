@@ -1257,17 +1257,49 @@ let check_times output =
   in
   Result.map_error (fun msg -> Invalid msg) (go 0 output)
 
-let svg ?(settings = []) output =
+(* [terminal settings] is the terminal of [settings] that [svg] and [run]
+   draw, with no shell. *)
+let terminal settings =
   let* () =
     Result.map_error
       (fun msg -> Invalid msg)
       (let* () = iter_result check_setting settings in
+       let* () = check_cells settings in
        check_size settings [])
   in
-  let* () = check_times output in
   let b = Buffer.create 256 in
   List.iter (function Shell _ -> () | s -> add_setting b s) settings;
-  let* tape =
-    native ~verb:"drawn" (String.split_on_char '\n' (Buffer.contents b))
-  in
+  native ~verb:"drawn" (String.split_on_char '\n' (Buffer.contents b))
+
+let svg ?(settings = []) output =
+  let* tape = terminal settings in
+  let* () = check_times output in
   Ok (Native.replay tape (List.map (fun (Ms ms, s) -> (ms, s)) output))
+
+(* Eio's environments take a name without [=] and neither a name nor a
+   value with a NUL byte. *)
+let check_env env =
+  let bad (k, v) =
+    if k = "" then Some "an empty name"
+    else if String.contains k '=' then Some "a name with ="
+    else if String.contains k '\000' || String.contains v '\000' then
+      Some "a NUL byte"
+    else None
+  in
+  match
+    List.find_map (fun kv -> Option.map (fun why -> (kv, why)) (bad kv)) env
+  with
+  | None -> Ok ()
+  | Some ((k, v), why) ->
+      Error (Invalid (Fmt.str "env %a: %s" Quote.pp (k ^ "=" ^ v) why))
+
+let run ?(settings = []) ?(env = []) ~clock ~proc ~cwd argv =
+  let* () = if argv = [] then Error (Invalid "no command to run") else Ok () in
+  let* () = check_env env in
+  let* tape = terminal settings in
+  let* dir =
+    Option.to_result ~none:(Io "the directory is not a native path")
+      (Eio.Path.native cwd)
+  in
+  Result.map_error native_error
+    (Native.run ~clock ~env:(environment proc) ~vars:env ~cwd:dir tape argv)

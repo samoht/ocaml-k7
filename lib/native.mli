@@ -3,13 +3,13 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-(** Playing tapes without VHS.
+(** Playing tapes and programs without VHS.
 
-    A tape runs in bash or zsh on a pseudo-terminal whose output a {!Vte.t}
-    reads, and its screens make an {!Svg} image. Time is counted by the tape:
-    typing, a key and a sleep take the time the tape gives them, whatever the
-    recorder spends around them, and a wait takes the time the program makes it
-    wait. Output gets the time it arrives at within the action that runs,
+    A tape runs in bash, zsh or fish on a pseudo-terminal whose output a
+    {!Vte.t} reads, and its screens make an {!Svg} image. Time is counted by the
+    tape: typing, a key and a sleep take the time the tape gives them, whatever
+    the recorder spends around them, and a wait takes the time the program makes
+    it wait. Output gets the time it arrives at within the action that runs,
     rounded down to a frame. *)
 
 (** The type for the reasons a tape does not play, as [Vhs.error] names them. *)
@@ -30,7 +30,7 @@ type error =
           [line], did not hold; [last] is what it last read. *)
   | Invalid of string
       (** A line of the tape of a [Source] line that VHS rejects or that holds a
-          control character, and why. *)
+          control character, or an empty command, and why. *)
 
 type t
 (** The type for tapes to play. *)
@@ -81,3 +81,18 @@ val play :
 val replay : t -> (int * string) list -> string
 (** [replay t output] is the SVG image of a terminal with the settings of [t]
     that receives each string of [output] at its time, in milliseconds. *)
+
+val run :
+  clock:_ Eio.Time.Mono.t ->
+  env:Eio.Process.Env.t ->
+  vars:(string * string) list ->
+  cwd:string ->
+  t ->
+  string list ->
+  (string * Eio.Process.exit_status, error) result
+(** [run ~clock ~env ~vars ~cwd t argv] runs the program [argv] in the directory
+    [cwd] on a terminal with the settings of [t], until it exits, and is the SVG
+    image of what the terminal showed, each output at the time it arrived since
+    the program started, with how the program exited. The image holds the last
+    screen for a second. The program gets [env] with [TERM=xterm-256color], then
+    [vars]. It is [Error (Invalid _)] if [argv] is empty. *)

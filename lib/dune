@@ -18,6 +18,9 @@
  ; The terminal core comes from matrix_backport until matrix 0.2.0.
  (flags
   (:standard -open Matrix_backport))
+ (foreign_stubs
+  (language c)
+  (names terminal_stubs))
  (libraries
   cstruct
   eio

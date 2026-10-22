@@ -1166,8 +1166,46 @@ let with_vhs =
   ]
 
 (* Properties that run stand-ins for vhs and vhs-cram. *)
+(* What a program prints shows as [svg] draws the same bytes, which the
+   terminal's line discipline gives a carriage return before each newline. *)
+let test_run_screen bytes =
+  with_dir @@ fun env path ->
+  let text =
+    String.concat ""
+      (List.map
+         (fun c ->
+           match c with
+           | ' ' .. '~' -> String.make 1 c
+           | '\000' .. '\031' -> "\n"
+           | c -> Fmt.str "\027[3%dm" (Char.code c land 7))
+         (List.of_seq (String.to_seq bytes)))
+  in
+  save env (path "out") text;
+  let settings = Vhs.[ Columns 40; Rows 6; Font_size 10 ] in
+  let last svg =
+    match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows:6 svg with
+    | Ok frames -> List.nth frames (List.length frames - 1)
+    | Error e -> failf "not well-formed: %s" e
+  in
+  let crlf = String.concat "\r\n" (String.split_on_char '\n' text) in
+  match
+    ( Vhs.run ~settings
+        ~clock:(Eio.Stdenv.mono_clock env)
+        ~proc:(Eio.Stdenv.process_mgr env)
+        ~cwd:Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "out"))
+        [ "cat"; "out" ],
+      Vhs.svg ~settings [ (Ms 0, crlf) ] )
+  with
+  | Ok (image, `Exited 0), Ok expected ->
+      if last image <> last expected then
+        failf "%S shows as\n%s\nnot\n%s" text (last image) (last expected)
+  | Ok (_, _), Ok _ -> fail "cat did not exit with 0"
+  | Error e, _ | _, Error e -> failf "%a" Vhs.pp_error e
+
 let with_processes =
   [
+    test_case "a program's screen is the image of its bytes" [ bytes ]
+      test_run_screen;
     test_case "native output paths and positive frame-rate boundaries" [ uint8 ]
       test_native_paths;
     test_case "mixed outputs are refused before playing or writing" [ uint8 ]

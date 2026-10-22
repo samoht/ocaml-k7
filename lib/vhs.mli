@@ -13,7 +13,8 @@
     [Vhs] builds the actions as values, {{!checks}checks} them once when
     {!val-tape} assembles a tape, prints tapes in the [.tape] syntax and
     {{!running}runs} them, with [vhs] or, for an animated SVG image, without it.
-    Only {!render} and {!record} perform I/O.
+    {!run} records a program as an animated SVG image without a tape. Only
+    {!render}, {!record} and {!run} perform I/O.
 
     {[
     let demo =
@@ -340,6 +341,39 @@ val svg :
     out of the range of a {!duration} or before the one ahead of it, and
     [Error (Unsupported _)] on what the {{!native_details}native recorder}
     refuses: the {!constructor-Theme} colours and the sizes listed there. *)
+
+val run :
+  ?settings:setting list ->
+  ?env:(string * string) list ->
+  clock:_ Eio.Time.Mono.t ->
+  proc:_ Eio.Process.mgr ->
+  cwd:_ Eio.Path.t ->
+  string list ->
+  (string * Eio.Process.exit_status, error) result
+(** [run ~settings ~env ~clock ~proc ~cwd argv] runs the program [argv] in the
+    directory [cwd] on a pseudo-terminal, with no shell and nothing typed, and
+    is the SVG image of what the terminal showed, as {!svg} draws a terminal
+    with [settings] (defaults to [[]]), with how the program exited. Each output
+    shows at the time it arrived since the program started, rounded down to a
+    frame, and the last screen holds for a second after the program exits. The
+    first element of [argv] is the executable, looked up in the [PATH] unless it
+    holds a slash, and relative to [cwd] if it does. The program gets the
+    environment {!render} gives [vhs], with [TERM=xterm-256color], then the
+    variables of [env] (defaults to [[]]).
+
+    A program that exits with another status than [0], or is killed, still gives
+    its image: the status says how it exited. [run] returns once the program has
+    exited and what it printed is read, so a program that waits for input waits
+    until the calling fiber is cancelled. If the calling fiber is cancelled,
+    [run] sends the program [SIGTERM], hangs up its terminal, sends it [SIGKILL]
+    if it still runs a second later by [clock], and waits for it to exit. It is:
+    - [Error (Invalid _)] if [argv] is empty, if a setting is one {!svg}
+      refuses, or if a name of [env] is empty or holds [=], or a name or a value
+      holds a NUL byte;
+    - [Error (Unsupported _)] on what {!svg} refuses;
+    - [Error (Executable_not_found _)] if the executable is not found;
+    - [Error (Io _)] if [cwd] is not a directory of the native file system, and
+      on any other I/O failure. *)
 
 (** {1:checks Checks}
 

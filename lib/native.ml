@@ -656,9 +656,19 @@ let modified ~shift = function
 
 (* Playing *)
 
+(* A program on a terminal. The recorder keeps [slave] open until the
+   program has exited and its output is read: macOS drops what a program
+   printed before it exits if no one else holds the terminal. *)
+type terminal = {
+  pty : Pty.t;  (** The master side. *)
+  slave : Pty.t;
+  pid : int;
+}
+
 type state = {
   term : Screen.terminal;
   pty : Pty.t;
+  pid : int;
   clock : Eio.Time.Mono.ty Eio.Resource.t;
   tl : timeline;
   changed : Eio.Condition.t;
@@ -740,42 +750,69 @@ let settle st output =
       st.submitted <- None
   | _ -> ()
 
-(* How the shell exited, once its terminal has closed: it can take a moment
-   to exit after closing it. [None] if it still runs a second later. *)
-let reap st =
-  let rec go n pid =
-    match Unix.waitpid [ WNOHANG ] pid with
-    | 0, _ when n > 0 ->
-        Eio.Time.Mono.sleep st.clock 0.01;
-        go (n - 1) pid
-    | 0, _ -> None
-    | _, WEXITED c -> Some (`Exited c)
-    | _, (WSIGNALED s | WSTOPPED s) -> Some (`Signaled s)
-    | exception Unix.Unix_error _ -> None
-  in
-  Option.bind (Pty.pid st.pty) (go 100)
+let exit_status : Unix.process_status -> Eio.Process.exit_status = function
+  | WEXITED c -> `Exited c
+  | WSIGNALED s | WSTOPPED s -> `Signaled s
+
+(* [exited st] is [true] once the program has exited, which it then records
+   in [st.exited]. *)
+let exited st =
+  Option.is_some st.exited
+  ||
+  match Unix.waitpid [ WNOHANG ] st.pid with
+  | 0, _ -> false
+  | _, s ->
+      st.exited <- Some (exit_status s);
+      true
+  | exception Unix.Unix_error _ -> true
 
 (* The end of the terminal's output: the shell has exited. *)
 let closed st =
-  st.exited <- reap st;
   Eio.Condition.broadcast st.changed;
   Eio.Fiber.await_cancel ()
 
 (* The terminal answers the queries it reads. *)
+let feed st buf n =
+  let output = Bytes.sub_string buf 0 n in
+  Screen.feed st.term output;
+  settle st output;
+  send st (Screen.take_replies st.term);
+  refresh st
+
+(* How often the reader looks for the program's exit while the terminal is
+   quiet, in seconds. *)
+let poll = 0.02
+
+(* [reader st buf] reads the terminal until the program has exited and all
+   it printed is read. A read can find the terminal closed while the program
+   still runs, as on macOS when it starts. *)
 let rec reader st buf =
   match Pty.read st.pty buf 0 (Bytes.length buf) with
-  | 0 -> closed st
+  | 0 -> ended st buf
   | n ->
-      let output = Bytes.sub_string buf 0 n in
-      Screen.feed st.term output;
-      settle st output;
-      send st (Screen.take_replies st.term);
-      refresh st;
+      feed st buf n;
       reader st buf
   | exception Unix.Unix_error ((EAGAIN | EWOULDBLOCK | EINTR), _, _) ->
-      Eio_unix.await_readable (fd st);
-      reader st buf
-  | exception Unix.Unix_error _ -> closed st
+      if not (exited st) then (
+        Eio.Fiber.first
+          (fun () -> Eio_unix.await_readable (fd st))
+          (fun () -> Eio.Time.Mono.sleep st.clock poll);
+        reader st buf)
+  | exception Unix.Unix_error _ -> ended st buf
+
+and ended st buf =
+  if exited st then drain st buf
+  else (
+    Eio.Time.Mono.sleep st.clock poll;
+    reader st buf)
+
+and drain st buf =
+  match Pty.read st.pty buf 0 (Bytes.length buf) with
+  | 0 -> ()
+  | n ->
+      feed st buf n;
+      drain st buf
+  | exception Unix.Unix_error _ -> ()
 
 (* Typing scrolls the screen back down. A carriage return or a line feed
    submits the line under the cursor. *)
@@ -928,34 +965,64 @@ let run st c command =
   run_command st c command;
   dump st
 
-let on_path env exe =
-  if String.contains exe '/' then Sys.file_exists exe
+(* An executable named with a slash is relative to [cwd], as the child
+   resolves it. *)
+let on_path ~cwd env exe =
+  if String.contains exe '/' then
+    Sys.file_exists
+      (if Filename.is_relative exe then Filename.concat cwd exe else exe)
   else
     let path = Option.value (Eio.Process.Env.get_opt "PATH" env) ~default:"" in
     List.exists
       (fun dir -> dir <> "" && Sys.file_exists (Filename.concat dir exe))
       (String.split_on_char ':' path)
 
+let close_terminal (t : terminal) =
+  Pty.close t.pty;
+  Pty.close t.slave
+
 (* SIGTERM, then the hang-up of closing the terminal, then SIGKILL a second
    later. *)
-let close clock pty =
-  let pid = Pty.pid pty in
-  Pty.close ~wait:false pty;
-  Option.iter
-    (fun pid ->
-      let rec reap n =
-        match Unix.waitpid [ WNOHANG ] pid with
-        | 0, _ when n > 0 ->
-            Eio.Time.Mono.sleep clock 0.01;
-            reap (n - 1)
-        | 0, _ -> (
-            (try Unix.kill pid Sys.sigkill with Unix.Unix_error _ -> ());
-            try ignore (Unix.waitpid [] pid) with Unix.Unix_error _ -> ())
-        | _ -> ()
-        | exception Unix.Unix_error _ -> ()
-      in
-      reap 100)
-    pid
+let stop_terminal clock (t : terminal) =
+  (try Unix.kill t.pid Sys.sigterm with Unix.Unix_error _ -> ());
+  close_terminal t;
+  let rec reap n =
+    match Unix.waitpid [ WNOHANG ] t.pid with
+    | 0, _ when n > 0 ->
+        Eio.Time.Mono.sleep clock 0.01;
+        reap (n - 1)
+    | 0, _ -> (
+        (try Unix.kill t.pid Sys.sigkill with Unix.Unix_error _ -> ());
+        try ignore (Unix.waitpid [] t.pid) with Unix.Unix_error _ -> ())
+    | _ -> ()
+    | exception Unix.Unix_error _ -> ()
+  in
+  reap 100
+
+external acquire_terminal : Unix.file_descr -> unit = "native_acquire_terminal"
+
+(* [open_terminal ~env ~cwd ~winsize prog args] runs [prog] with [args] in
+   a new session whose controlling terminal is a new pseudo-terminal. *)
+let open_terminal ~env ~cwd ~winsize prog args =
+  let pty, slave = Pty.open_pty ~winsize () in
+  let argv = Array.of_list (prog :: args) in
+  match Unix.fork () with
+  | 0 -> (
+      try
+        Unix.close (Pty.file_descr pty);
+        let fd = Pty.file_descr slave in
+        acquire_terminal fd;
+        List.iter (Unix.dup2 fd) [ Unix.stdin; Unix.stdout; Unix.stderr ];
+        if not (List.mem fd [ Unix.stdin; Unix.stdout; Unix.stderr ]) then
+          Unix.close fd;
+        Unix.chdir cwd;
+        Unix.execvpe prog argv (Eio.Process.Env.to_array env)
+      with _ -> Unix._exit 127)
+  | pid -> { pty; slave; pid }
+  | exception e ->
+      Pty.close pty;
+      Pty.close slave;
+      raise e
 
 (* The shells VHS starts, from its shell.go: the environment it gives
    them before the tape's, their arguments, and their prompts. *)
@@ -981,27 +1048,35 @@ let shell = function
         ],
         [ "--noprofile"; "--norc"; "--login"; "+o"; "history" ] )
 
-let spawn ~env ~cwd t s =
-  let prog = t.config.shell in
-  let vars, args = shell prog in
+let term = ("TERM", "xterm-256color")
+
+(* [start ~env ~vars ~cwd t ~requires prog args] runs [prog] on a terminal
+   of the size of [t], with [env] and then [vars], once it and [requires]
+   are found. *)
+let start ~env ~vars ~cwd t ~requires prog args =
   let env =
-    Eio.Process.Env.override
-      (List.map
-         (fun (k, v) -> (k, Some v))
-         (vars @ [ ("TERM", "xterm-256color") ] @ t.env))
-      env
+    Eio.Process.Env.override (List.map (fun (k, v) -> (k, Some v)) vars) env
   in
   List.iter
-    (fun exe -> if not (on_path env exe) then stop (Executable_not_found exe))
-    (prog :: t.requires);
+    (fun exe ->
+      if not (on_path ~cwd env exe) then stop (Executable_not_found exe))
+    (prog :: requires);
+  let s = t.look in
   match
-    Pty.spawn ~env ~cwd
+    open_terminal ~env ~cwd
       ~winsize:{ rows = s.Svg.rows; cols = s.cols; xpixel = 0; ypixel = 0 }
-      ~prog ~args ()
+      prog args
   with
-  | pty -> pty
+  | terminal -> terminal
   | exception Unix.Unix_error (e, f, _) ->
       Fmt.kstr (fun msg -> stop (Io msg)) "%s: %s" f (Unix.error_message e)
+
+let spawn ~env ~cwd t =
+  let prog = t.config.shell in
+  let vars, args = shell prog in
+  start ~env
+    ~vars:(vars @ [ term ] @ t.env)
+    ~cwd t ~requires:t.requires prog args
 
 (* The first output, the prompt, arrives before the first action, as it
    does in VHS, which starts a browser in the meantime. *)
@@ -1016,13 +1091,14 @@ let await_prompt st =
   in
   ignore (within st 5. loop)
 
-let state t ~clock pty =
+let state t ~clock ({ pty; pid; _ } : terminal) =
   let s = t.look in
   let term = Screen.terminal ~rows:s.rows ~cols:s.cols in
   let screen = Screen.of_terminal term in
   {
     term;
     pty;
+    pid;
     clock;
     tl = timeline t.config;
     changed = Eio.Condition.create ();
@@ -1057,22 +1133,28 @@ let recording t st =
     stills = List.rev_map still st.stills;
   }
 
+(* [with_terminal ~clock t terminal f] is [f] of the state of [terminal],
+   which it then closes, stopping the program unless it has exited: a
+   program already reaped is not signalled, as its pid may be another
+   process's by now. *)
+let with_terminal ~clock t (terminal : terminal) f =
+  let st = state t ~clock terminal in
+  let finally () =
+    if Option.is_some st.exited then close_terminal terminal
+    else stop_terminal clock terminal
+  in
+  Fun.protect ~finally:(fun () -> Eio.Cancel.protect finally) @@ fun () ->
+  Pty.set_nonblock terminal.pty;
+  f st
+
 let play ~clock ~env ~cwd t =
   let clock = (clock :> Eio.Time.Mono.ty Eio.Resource.t) in
   match
-    let pty = spawn ~env ~cwd t t.look in
-    let st = state t ~clock pty in
-    (* A shell already reaped is not signalled: its pid may be another
-       process's by now. *)
-    let finally () =
-      if Option.is_some st.exited then
-        try Unix.close (Pty.file_descr pty) with Unix.Unix_error _ -> ()
-      else close clock pty
-    in
-    Fun.protect ~finally:(fun () -> Eio.Cancel.protect finally) @@ fun () ->
-    Pty.set_nonblock pty;
+    with_terminal ~clock t (spawn ~env ~cwd t) @@ fun st ->
     Eio.Fiber.first
-      (fun () -> reader st (Bytes.create 65536))
+      (fun () ->
+        reader st (Bytes.create 65536);
+        closed st)
       (fun () ->
         await_prompt st;
         st.hidden <- false;
@@ -1080,6 +1162,35 @@ let play ~clock ~env ~cwd t =
         record st;
         List.iter (run st t.config) t.actions);
     recording t st
+  with
+  | r -> Ok r
+  | exception Stop e -> Error e
+
+(* How long the last screen of {!run} shows, as a cram test's last command
+   shows its output. *)
+let hold = 1000
+
+let run ~clock ~env ~vars ~cwd t argv =
+  let clock = (clock :> Eio.Time.Mono.ty Eio.Resource.t) in
+  match
+    let prog, args =
+      match argv with
+      | prog :: args -> (prog, args)
+      | [] -> stop (Invalid "no command")
+    in
+    let terminal =
+      start ~env ~vars:(term :: vars) ~cwd t ~requires:[] prog args
+    in
+    with_terminal ~clock t terminal @@ fun st ->
+    st.hidden <- false;
+    st.cap <- None;
+    st.started <- now st;
+    record st;
+    reader st (Bytes.create 65536);
+    let end_ms = stamp st + hold in
+    match st.exited with
+    | Some status -> (svg t st.tl ~end_ms, status)
+    | None -> stop (Io "the program's exit status is lost")
   with
   | r -> Ok r
   | exception Stop e -> Error e

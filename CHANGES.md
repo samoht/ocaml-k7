@@ -10,6 +10,9 @@
   `Vhs.svg` draws the image of timed output, with the settings `Vhs.tape`
   checks. `vhs-cram` records an `.svg` output and the text outputs this
   way, waiting for the same prompt mark as with VHS.
+- `Vhs.run` records a program on a pseudo-terminal, with no shell and
+  nothing typed, and returns the animated SVG image of its own screens,
+  timed as they arrived, with how the program exited.
 - The native recorder plays bash, zsh and fish as VHS starts them, VHS's
   window bar, named and JSON themes, margin colours and images, `Screenshot`
   of an `.svg` path (a still SVG image), `Source` and the `.txt`, `.ascii`
