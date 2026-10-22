@@ -552,6 +552,14 @@ let test_non_ascii ~native () =
   if not (contains ~sub:"\ncaf\xc3\xa9\n" screen) then
     Alcotest.failf "typed text lost: %s" screen
 
+let test_tab ~native () =
+  with_files [] @@ fun env path ->
+  let screen =
+    record_cram ~native env path "  $ x='a\tb'; echo \"length ${#x}\"\n"
+  in
+  if not (contains ~sub:"\nlength 3\n" screen) then
+    Alcotest.failf "tab not typed: %s" screen
+
 let readiness ~native =
   List.map
     (fun (name, fn) -> ((if native then "native " else "") ^ name, fn ~native))
@@ -563,6 +571,7 @@ let readiness ~native =
       ("unfinished command", test_unfinished);
       ("wrapped prompt", test_wrapped_prompt);
       ("non-ASCII", test_non_ascii);
+      ("tab", test_tab);
     ]
 
 let test_run_exec_failure () =
