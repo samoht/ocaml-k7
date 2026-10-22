@@ -617,22 +617,36 @@ let ctrl_char c =
   | '-' -> "\x1f"
   | c -> String.make 1 c
 
+(* xterm.js sends an arrow with modifiers as [CSI 1 ; m X], [m] one more
+   than the sum of 1 for Shift, 2 for Alt and 4 for Control; Alt prefixes
+   ESC to the other keys. *)
 let ctrl_bytes args =
-  let alt = List.mem (Keyword "Alt") args in
+  let alt = List.mem (Keyword "Alt") args
+  and shift = List.mem (Keyword "Shift") args in
+  let arrow c =
+    Fmt.str "\027[1;%d%c"
+      (1 + 4 + (if alt then 2 else 0) + if shift then 1 else 0)
+      c
+  in
   let key = function
     | Keyword "Enter" -> "\r"
     | Keyword "Space" -> "\x00"
     | Keyword "Backspace" -> "\x08"
-    | Keyword "Up" -> "\027[1;5A"
-    | Keyword "Down" -> "\027[1;5B"
-    | Keyword "Right" -> "\027[1;5C"
-    | Keyword "Left" -> "\027[1;5D"
+    | Keyword "Up" -> arrow 'A'
+    | Keyword "Down" -> arrow 'B'
+    | Keyword "Right" -> arrow 'C'
+    | Keyword "Left" -> arrow 'D'
     | Keyword ("Alt" | "Shift") -> ""
     | Str s when String.length s = 1 -> ctrl_char s.[0]
     | Sym c -> ctrl_char c
     | _ -> ""
   in
-  (if alt then "\027" else "") ^ String.concat "" (List.map key args)
+  let is_arrow = function
+    | Keyword ("Up" | "Down" | "Right" | "Left") -> true
+    | _ -> false
+  in
+  (if alt && not (List.exists is_arrow args) then "\027" else "")
+  ^ String.concat "" (List.map key args)
 
 let modified ~shift = function
   | Keyword "Enter" -> "\r"
