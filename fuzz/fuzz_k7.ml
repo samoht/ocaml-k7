@@ -1467,12 +1467,29 @@ let test_record_term n =
   | Error e -> failf "%a" K7.pp_error e);
   check_eq ~pp:Fmt.Dump.string term (Eio.Path.load Eio.Path.(cwd / "term"))
 
+let test_vhs_path n =
+  with_dir @@ fun env path ->
+  let name = Fmt.str "k7-path-vhs-%d" n in
+  save env (path name) "#!/bin/sh\n/bin/cat > /dev/null\n";
+  let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path name)) in
+  match
+    K7.record ~engine:Vhs ~vhs:name
+      ~env:[ ("PATH", Filename.dirname (path name)) ]
+      ~clock:(Eio.Stdenv.mono_clock env)
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd (render_tape ())
+  with
+  | Ok () -> ()
+  | Error e -> failf "executable %s on supplied PATH: %a" name K7.pp_error e
+
 let with_processes =
   [
     test_case "check rejects directory destinations for outputs and screenshots"
       [ uint8 ] test_check_directory_destination;
     test_case "record respects the explicit terminal environment" [ uint8 ]
       test_record_term;
+    test_case "vhs is found on the supplied environment PATH" [ uint8 ]
+      test_vhs_path;
     test_case "native output paths and positive frame-rate boundaries" [ uint8 ]
       test_native_paths;
     test_case "mixed outputs are refused before playing or writing" [ uint8 ]
