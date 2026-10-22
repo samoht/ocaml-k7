@@ -495,7 +495,7 @@ let test_of_string () =
        (read "Set Shell \"tcsh\"\nOutput a.gif\nType x\n"))
 
 let suite =
-  ( "vhs",
+  ( "k7",
     List.map
       (fun (name, fn) -> Alcotest.test_case name `Quick fn)
       [

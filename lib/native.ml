@@ -472,7 +472,8 @@ let rec read ~source ~at line t =
               match rest with Num n :: _ -> int_value line n | _ -> 1
             in
             Key { speed; count; key = k }
-        | Keyword "Ctrl" :: rest -> Ctrl (List.filter (( <> ) (Sym '+')) rest)
+        | Keyword "Ctrl" :: rest ->
+            Ctrl (List.filter (function Sym '+' -> false | _ -> true) rest)
         | Keyword "Alt" :: Sym '+' :: k :: _ -> Alt k
         | Keyword "Shift" :: Sym '+' :: k :: _ -> Shift k
         | Keyword "Sleep" :: rest -> Sleep (ms line (fst (time line rest)))

@@ -1279,21 +1279,22 @@ let test_run_fast () =
         (screen [ "one"; "two"; "three" ])
         (last (frames s))
 
-let test_run_env () =
+(* [check_run ?vars name argv status lines] checks that [argv] exits with
+   [status] and shows [lines] last. *)
+let check_run ?vars name argv status lines =
   with_dir @@ fun env cwd ->
-  match
-    run
-      ~vars:[ ("VHS_TEST", "caf\xc3\xa9 au lait") ]
-      env cwd
-      [ "sh"; "-c"; {|printf '%s|%s' "$VHS_TEST" "$TERM"|} ]
-  with
-  | Error e -> Alcotest.failf "%a" K7.pp_error e
-  | Ok (s, status) ->
-      Alcotest.(check bool) "status" true (status = `Exited 0);
-      Alcotest.(check string)
-        "environment"
-        (screen [ "caf\xc3\xa9 au lait|xterm-256color" ])
-        (last (frames s))
+  match run ?vars env cwd argv with
+  | Error e -> Alcotest.failf "%s: %a" name K7.pp_error e
+  | Ok (s, got) ->
+      Alcotest.(check bool) (name ^ ": status") true (got = status);
+      Alcotest.(check string) name (screen lines) (last (frames s))
+
+let test_run_env () =
+  check_run "environment"
+    ~vars:[ ("VHS_TEST", "caf\xc3\xa9 au lait") ]
+    [ "sh"; "-c"; {|printf '%s|%s' "$VHS_TEST" "$TERM"|} ]
+    (`Exited 0)
+    [ "caf\xc3\xa9 au lait|xterm-256color" ]
 
 let test_run_errors () =
   with_dir @@ fun env cwd ->
@@ -1326,12 +1327,9 @@ let test_run_errors () =
 
 (* A killed program still gives its image. *)
 let test_run_signal () =
-  with_dir @@ fun env cwd ->
-  match run env cwd [ "sh"; "-c"; "echo bye; kill -TERM $$" ] with
-  | Error e -> Alcotest.failf "%a" K7.pp_error e
-  | Ok (s, status) ->
-      Alcotest.(check bool) "status" true (status = `Signaled Sys.sigterm);
-      Alcotest.(check string) "image" (screen [ "bye" ]) (last (frames s))
+  check_run "killed"
+    [ "sh"; "-c"; "echo bye; kill -TERM $$" ]
+    (`Signaled Sys.sigterm) [ "bye" ]
 
 (* Cancelling [run] stops the program. *)
 let test_run_cancel () =

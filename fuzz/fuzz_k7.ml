@@ -1356,6 +1356,6 @@ let tapes =
   ]
 
 let suite =
-  ( "vhs",
+  ( "k7",
     (if Option.is_some oracle then with_vhs else [])
     @ with_processes @ bounds @ decoding @ tapes )
