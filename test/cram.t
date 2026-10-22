@@ -11,6 +11,11 @@ varies across cmdliner versions.
   $ k7 cram --setup missing.sh --output demo.gif demo.t 2> /dev/null
   [124]
 
+k7 reports its version, which a release substitutes.
+
+  $ k7 --version | wc -l | tr -d ' '
+  1
+
 Numbers are plain decimal digits, as the messages say.
 
   $ k7 cram --print --cols 0x50 --output demo.gif demo.t 2> /dev/null

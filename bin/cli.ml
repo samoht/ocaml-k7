@@ -39,5 +39,5 @@ let man =
 let cmd =
   let doc = "record terminal sessions as animated SVG images" in
   Cmd.group
-    (Cmd.info "k7" ~doc ~man ~exits:Flags.exits)
+    (Cmd.info "k7" ~version:"%%VERSION%%" ~doc ~man ~exits:Flags.exits)
     [ Cram_cmd.cmd; Run_cmd.cmd; Tape_cmd.cmd ]
