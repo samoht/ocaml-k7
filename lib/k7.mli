@@ -15,7 +15,7 @@
     waiting for output. [K7] builds the actions as values and {{!checks}checks}
     them once, when {!val-tape} assembles a tape. It reads and prints tapes in
     the [.tape] syntax and {{!running}runs} them, with [vhs] for a GIF or a
-    video. Only {!record} and {!run} perform I/O.
+    video. Only {!record}, {!check} and {!run} perform I/O.
 
     {[
     let demo =
@@ -396,6 +396,20 @@ val record :
     - [Error (Io _)] if [cwd] is not a directory of the native file system, or
       if the directory of an output cannot be written, before it plays anything,
       and on any other I/O failure. *)
+
+val check :
+  ?engine:engine ->
+  ?env:(string * string) list ->
+  cwd:_ Eio.Path.t ->
+  t ->
+  (unit, error) result
+(** [check ~engine ~env ~cwd t] is the error that [record ~engine ~env ~cwd t]
+    returns before it runs anything, if any, and [Ok ()] otherwise: it checks
+    [env], the outputs and the [Screenshot] paths of [t] against [engine] and
+    their directories, and, for {!constructor-Native}, the [Source] and
+    [Set MarginFill] files of [t]. It starts no shell and no [vhs] and writes
+    nothing, so it does not look for [vhs], the shell or the executable of a
+    [Require] line. *)
 
 val svg :
   ?settings:setting list -> (duration * string) list -> (string, error) result

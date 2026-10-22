@@ -1257,7 +1257,7 @@ let check_has_output t =
     Error (Invalid "no output: the tape names no file to write")
   else Ok ()
 
-let record_vhs ?stop ~vhs ~vars ~clock ~proc ~cwd t =
+let prepare_vhs ~cwd t =
   let* () = check_has_output t in
   let* () = refuse ~by:"by vhs" ~other:"Native" [ "SVG" ] t in
   let* () =
@@ -1278,7 +1278,7 @@ let record_vhs ?stop ~vhs ~vars ~clock ~proc ~cwd t =
       (List.map (fun p -> (creates p, p)) (t.outputs @ raw_outputs t.actions)
       @ List.map (fun p -> (false, p)) (raw_screenshots t.actions))
   in
-  render_vhs ?stop ~vhs ~vars ~clock ~proc ~cwd t
+  Ok ()
 
 (* The [n]th line of [to_string t] is the [k]th of its text there, and so
    in the source of [of_string]: an action's lines keep their text and order. *)
@@ -1362,7 +1362,7 @@ let save dir path contents =
   in
   go 0
 
-let record_native ?stop ~vars ~clock ~proc ~cwd t =
+let prepare_native ~cwd t =
   let* () = check_has_output t in
   let* () =
     refuse ~by:"natively" ~other:"Vhs" [ "GIF"; "MP4"; "WebM"; "frames" ] t
@@ -1388,6 +1388,10 @@ let record_native ?stop ~vars ~clock ~proc ~cwd t =
       (List.map (fun p -> (true, p)) (svgs @ texts)
       @ List.map (fun p -> (false, p)) (Native.stills tape))
   in
+  Ok (dir, tape, svgs, texts)
+
+let record_native ?stop ~vars ~clock ~proc ~cwd t =
+  let* dir, tape, svgs, texts = prepare_native ~cwd t in
   let* { svg; text; stills } =
     Result.map_error
       (native_error ~verb:"recorded" ~tape:t)
@@ -1415,15 +1419,21 @@ let needs_vhs t =
 
 type engine = Native | Vhs
 
+let engine_of engine t =
+  match engine with Some e -> e | None -> if needs_vhs t then Vhs else Native
+
+let check ?engine ?(env = []) ~cwd t =
+  let* () = check_env env in
+  match engine_of engine t with
+  | Vhs -> prepare_vhs ~cwd t
+  | Native -> Result.map ignore (prepare_native ~cwd t)
+
 let record ?engine ?(vhs = "vhs") ?(env = []) ?stop ~clock ~proc ~cwd t =
   let* () = check_env env in
-  let engine =
-    match engine with
-    | Some e -> e
-    | None -> if needs_vhs t then Vhs else Native
-  in
-  match engine with
-  | Vhs -> record_vhs ?stop ~vhs ~vars:env ~clock ~proc ~cwd t
+  match engine_of engine t with
+  | Vhs ->
+      let* () = prepare_vhs ~cwd t in
+      render_vhs ?stop ~vhs ~vars:env ~clock ~proc ~cwd t
   | Native -> record_native ?stop ~vars:env ~clock ~proc ~cwd t
 
 let check_times output =

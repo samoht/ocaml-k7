@@ -20,6 +20,8 @@
   its command line, timed as they arrived, with how the program exited.
   `?show` (`--show`) replaces the command line, or hides it, and the line
   shows alone for `?delay` (`--delay`, 500ms by default), as if typed.
+- `K7.check` returns the error `K7.record` would before it records,
+  without starting a shell or `vhs`.
 - `K7.run` and `K7.record` take `?env`, variables for the environment of
   the program or the shell, which `--env` sets for each subcommand.
 - `K7.run` and `K7.record` take `?stop`, which ends

@@ -1522,6 +1522,32 @@ let test_record_env () =
   | Ok () -> ()
   | Error e -> Alcotest.failf "%a" K7.pp_error e
 
+let test_check () =
+  with_dir @@ fun _ cwd ->
+  let check ?engine name outputs expected =
+    match K7.tape ~settings ~outputs K7.[ type' "touch played\n" ] with
+    | Error e -> Alcotest.failf "%s: %a" name K7.pp_error e
+    | Ok t ->
+        let got =
+          match K7.check ?engine ~cwd t with
+          | Ok () -> "ok"
+          | Error e -> Fmt.str "%a" K7.pp_error e
+        in
+        Alcotest.(check string) name expected got
+  in
+  check "svg" [ "demo.svg"; "demo.txt" ] "ok";
+  check "gif" [ "demo.gif" ] "ok";
+  check "native gif" ~engine:Native [ "demo.gif" ]
+    {|not recorded natively: Output "demo.gif": a GIF, which the Vhs engine records|};
+  check "vhs svg" ~engine:Vhs [ "demo.svg" ]
+    {|not recorded by vhs: Output "demo.svg": an SVG image, which the Native engine records|};
+  check "frames" [ "none/frames/" ] {|none/frames/: no directory none|};
+  Alcotest.(check bool)
+    "nothing written" false
+    (List.exists
+       (fun f -> Eio.Path.is_file Eio.Path.(cwd / f))
+       [ "demo.svg"; "demo.txt"; "played" ])
+
 let test_run_concurrent_terminals () =
   with_dir @@ fun env cwd ->
   script cwd "ttys.sh"
@@ -1604,6 +1630,7 @@ let suite =
            test_run_cancel_descendant );
          ("record refuses Env names", test_record_env_names);
          ("record environment", test_record_env);
+         ("check", test_check);
          ("concurrent runs keep their terminals", test_run_concurrent_terminals);
        ]
       @ known_differences
