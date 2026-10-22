@@ -1182,7 +1182,7 @@ let test_run_path_override () =
   with_dir @@ fun env cwd ->
   script cwd "k7-path-only" "#!/bin/sh\nprintf PATH_OVERRIDE_WORKED\n";
   let path = Eio.Path.native_exn cwd in
-  match run ~vars:[ ("PATH", path) ] env cwd [ "k7-path-only" ] with
+  match run ~vars:[ ("PATH", path) ] ~show:"" env cwd [ "k7-path-only" ] with
   | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok (image, status) ->
       Alcotest.(check bool)
@@ -1199,6 +1199,7 @@ let test_run_sigpipe () =
   @@ fun () ->
   check_run "normal terminal SIGPIPE disposition"
     [ "/bin/sh"; "-c"; "kill -PIPE $$; printf SIGPIPE_WAS_IGNORED" ]
+    ~shown:"$ /bin/sh -c 'kill -PIPE $$; printf SIGPIPE_WAS_IGNORED'"
     (`Signaled Sys.sigpipe) []
 
 let test_record_sigpipe () =
@@ -1261,7 +1262,7 @@ let test_run_inherited_fd () =
      n=$((n+1))\n\
      done\n\
      printf DONE\n";
-  match run env cwd [ "./inspect-fds.sh" ] with
+  match run ~show:"" env cwd [ "./inspect-fds.sh" ] with
   | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok (image, _) ->
       Alcotest.(check string)
@@ -1435,8 +1436,6 @@ let test_run_cancel_descendant () =
   Alcotest.(check bool) "recording was cancelled" true (result = `Cancelled);
   Alcotest.(check bool) "cancelled recording leaves no descendant" false alive
 
-(* A tape [Env] whose name the environment cannot take is an error, before
-   or as the tape plays, never an exception. *)
 let test_record_env_names () =
   with_dir @@ fun env cwd ->
   List.iter
@@ -1453,8 +1452,6 @@ let test_record_env_names () =
           Alcotest.failf "%s: raised %s" line (Printexc.to_string e))
     [ {|Env "A=B" "x"|}; {|Env "" "x"|} ]
 
-(* Two recordings at once: the second program holds no terminal but its
-   own, so the first terminal is not kept open by it. *)
 let test_run_concurrent_terminals () =
   with_dir @@ fun env cwd ->
   script cwd "ttys.sh"
@@ -1468,7 +1465,7 @@ let test_run_concurrent_terminals () =
       (fun () -> run env cwd [ "sleep"; "2" ])
       (fun () ->
         Eio.Time.sleep clock 0.5;
-        run env cwd [ "./ttys.sh" ])
+        run ~show:"" env cwd [ "./ttys.sh" ])
   in
   match second with
   | Error e -> Alcotest.failf "%a" K7.pp_error e

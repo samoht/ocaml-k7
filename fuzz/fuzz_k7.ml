@@ -1209,7 +1209,7 @@ let test_run_large_burst n =
     | Error e -> failf "%s" e
   in
   match
-    ( K7.run ~settings
+    ( K7.run ~settings ~show:""
         ~clock:(Eio.Stdenv.mono_clock env)
         ~proc:(Eio.Stdenv.process_mgr env)
         ~cwd:Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "burst"))
@@ -1277,7 +1277,7 @@ let test_run_cli_status n signaled =
     Eio.Switch.run @@ fun sw ->
     Eio.Process.spawn ~sw ~stdout:sink ~stderr:sink
       (Eio.Stdenv.process_mgr env)
-      [ cli; "run"; "-o"; output; "--"; "/bin/sh"; "-c"; command ]
+      [ cli; "run"; "--show"; ""; "-o"; output; "--"; "/bin/sh"; "-c"; command ]
     |> Eio.Process.await
   in
   check (got = `Exited (if signaled then 143 else status));
@@ -1299,7 +1299,7 @@ let test_run_inherited_fd n =
       token
   in
   match
-    K7.run
+    K7.run ~show:""
       ~clock:(Eio.Stdenv.mono_clock env)
       ~proc:(Eio.Stdenv.process_mgr env)
       ~cwd:(Eio.Stdenv.cwd env)

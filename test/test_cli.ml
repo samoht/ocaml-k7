@@ -547,8 +547,6 @@ let test_run_exec_failure () =
   Alcotest.(check int) "recording failure has documented exit code" 123 code;
   Alcotest.(check bool) "exec error is explained" true (String.trim error <> "")
 
-(* [k7 tape -o] gives its output to a tape that names none, as [vhs -o]
-   does. *)
 let test_tape_output_option () =
   with_files [ ("t.tape", 0o644, "Type \"echo hi\"\nEnter\nSleep 1s\n") ]
   @@ fun env path ->
@@ -560,7 +558,6 @@ let test_tape_output_option () =
   in
   Alcotest.(check (pair int string)) "printed" (0, "") (code, error)
 
-(* A shell killed by a signal is named by the signal's system number. *)
 let test_signal_message () =
   with_files [] @@ fun env path ->
   let code, msg = run_err env path ~wait_timeout_s:30 "  $ kill -9 $$\n" in

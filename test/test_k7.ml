@@ -476,10 +476,6 @@ let test_of_string () =
     (Result.map K7.to_string
        (read "Set Shell \"tcsh\"\nOutput a.gif\nType x\n"))
 
-(* A tape that names no output still reads, so that [with_outputs], as
-   [k7 tape -o] does, can give it one; the printed form of a tape with an
-   [.svg] output is such a tape. An [Output] line after an [Env] line, which
-   VHS reads, is an output too. *)
 let test_of_string_outputs () =
   let pp_error = Fmt.to_to_string K7.pp_error in
   let read ?(outputs = [ "a.txt" ]) src =
