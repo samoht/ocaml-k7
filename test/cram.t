@@ -281,7 +281,7 @@ outputs as a recording would, without recording anything.
   [123]
   $ printf 'Type "x"\n' > outless.tape
   $ k7 play --dry-run outless.tape
-  k7: outless.tape: no output: the tape names no file to write; give it an Output line or -o FILE
+  k7: outless.tape: no output; give it an Output line or -o FILE
   [123]
   $ k7 play --dry-run -o outless.txt outless.tape
   $ printf '  $ touch played\n' > dry.t

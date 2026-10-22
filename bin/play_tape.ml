@@ -8,11 +8,7 @@ let ( let* ) = Result.bind
 let record ?stop ?engine stdenv ~dry_run ~print ~vhs ~settings ~env ~outputs
     input =
   let* src = Flags.load stdenv input in
-  let error = function
-    | K7.Invalid msg when String.starts_with ~prefix:"no output" msg ->
-        Fmt.str "%s: %s; give it an Output line or -o FILE" input msg
-    | e -> Fmt.str "%s: %a" input (Flags.pp_play_error ~vhs) e
-  in
+  let error e = Fmt.str "%s: %a" input (Flags.pp_play_error ~vhs) e in
   let* t = Result.map_error error (K7.of_string src) in
   let* t =
     if settings = [] then Ok t
@@ -22,7 +18,9 @@ let record ?stop ?engine stdenv ~dry_run ~print ~vhs ~settings ~env ~outputs
     if outputs = [] then Ok t
     else Result.map_error error (K7.with_outputs outputs t)
   in
-  if dry_run then
+  if K7.outputs t = [] && not print then
+    Fmt.error "%s: no output; give it an Output line or -o FILE" input
+  else if dry_run then
     K7.check ?engine ~env ~cwd:(Eio.Stdenv.cwd stdenv) t
     |> Result.map_error error
   else if print then Flags.print_tape stdenv t
