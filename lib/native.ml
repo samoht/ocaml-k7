@@ -159,6 +159,16 @@ let float_value line ?(min = -.float max_size) s =
 (* Keeps the animation's times within Go's duration range. *)
 let min_speed = 0.001
 
+(* The shortest a frame plays, in milliseconds, whatever the speed. *)
+let min_frame = 10
+let quantum c = max 1 (1000 / c.framerate)
+
+let playback_speed c =
+  if c.playback_speed <= 0. then 1.
+  else
+    Float.min c.playback_speed
+      (Float.max 1. (float (quantum c) /. float min_frame))
+
 let is_hex_colour s =
   String.length s = 7
   && s.[0] = '#'
@@ -318,7 +328,7 @@ let style c =
       bar;
       blink = c.cursor_blink;
       loop_offset = 0;
-      speed = (if c.playback_speed > 0. then c.playback_speed else 1.);
+      speed = playback_speed c;
     }
 
 type t = {
@@ -516,7 +526,7 @@ let svg t tl ~end_ms =
   let loop_offset = round (c.loop_offset *. float duration) mod duration in
   Svg.image { s with loop_offset } ~duration frames
 
-let timeline c = { quantum = max 1 (1000 / c.framerate); frames = [] }
+let timeline c = { quantum = quantum c; frames = [] }
 
 type recording = {
   svg : string;

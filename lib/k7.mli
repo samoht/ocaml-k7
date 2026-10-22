@@ -590,14 +590,17 @@ val run :
 
     [Set CursorBlink], [Set BorderRadius], [Set PlaybackSpeed] and
     [Set LoopOffset] change the animation, and [Set WindowBar] and
-    [Set WindowBarSize] draw VHS's window bar. For a reader who prefers reduced
-    motion, the image shows its last screen, still, and the cursor does not
-    blink. The image leaves out the format characters and the stray variation
-    selectors that {!pp_error} removes. Its title is "Terminal recording". Its
-    ids, style rules and animations are named after a digest of the image, so
-    that two images inlined in one HTML page keep their own. Unless its last
-    screen is blank, its description, the text alternative, is the text that
-    screen shows, without concealed text.
+    [Set WindowBarSize] draw VHS's window bar. A frame of
+    {!constructor-Framerate} plays for at least 10 milliseconds, so a
+    [Set PlaybackSpeed] above 2 plays as 2 at the default 50 frames a second,
+    and a recording at 100 frames a second or more plays at most in real time.
+    For a reader who prefers reduced motion, the image shows its last screen,
+    still, and the cursor does not blink. The image leaves out the format
+    characters and the stray variation selectors that {!pp_error} removes. Its
+    title is "Terminal recording". Its ids, style rules and animations are named
+    after a digest of the image, so that two images inlined in one HTML page
+    keep their own. Unless its last screen is blank, its description, the text
+    alternative, is the text that screen shows, without concealed text.
 
     The image of a [Set MarginFill], read relative to the [cwd] of {!record}, is
     embedded, stretched to the frame as ffmpeg stretches it. It is a regular
