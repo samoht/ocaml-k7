@@ -44,6 +44,10 @@ val no_extension : string
 (** [no_extension] is the error message for an {!constructor-Output} path
     without an extension or a trailing slash. *)
 
+val env_name_problem : string -> string option
+(** [env_name_problem k] is why [k] cannot name an environment variable, if it
+    is empty or holds [=] or a NUL byte. *)
+
 val extension : string -> string
 (** [extension path] is Go's [filepath.Ext path]: the suffix of [path] from the
     last dot of its last segment, or [""] if that segment has no dot. *)

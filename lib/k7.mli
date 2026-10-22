@@ -441,6 +441,8 @@ val run :
     - a {!raw} line is not exactly one command VHS's parser accepts, ends inside
       a string, a regular expression or a JSON value, or lacks the argument of
       its command;
+    - a {!raw} [Env] names a variable with an empty name or a name with [=],
+      which no environment takes;
     - a {!raw} [Set] has a value its setting cannot parse as a duration, an
       integer, a float or a regular expression in Go's syntax;
     - {!constructor-Rows} or {!constructor-Columns} sizes the frame in the

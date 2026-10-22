@@ -341,6 +341,12 @@ let extension path =
 
 let no_extension = "neither an extension nor a trailing slash"
 
+let env_name_problem k =
+  if k = "" then Some "an empty name"
+  else if String.contains k '=' then Some "a name with ="
+  else if String.contains k '\000' then Some "a NUL byte"
+  else None
+
 let path p ~what =
   if (peek p).kind <> String then fail "Expected path after %s" what;
   next p;

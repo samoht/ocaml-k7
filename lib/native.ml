@@ -437,8 +437,11 @@ let rec read ~source ~at line t =
       { t with config = { t.config with margin_fill = Some fill } }
   | Keyword "Set" :: Keyword name :: args ->
       { t with config = set line t.config name args }
-  | Keyword "Env" :: k :: v :: _ ->
-      { t with env = (lit k, lit v) :: t.env; actions = Env :: t.actions }
+  | Keyword "Env" :: k :: v :: _ -> (
+      match Tape_syntax.env_name_problem (lit k) with
+      | Some why -> stop (Invalid (line ^ ": " ^ why))
+      | None ->
+          { t with env = (lit k, lit v) :: t.env; actions = Env :: t.actions })
   | Keyword "Require" :: p :: _ -> { t with requires = lit p :: t.requires }
   | tokens ->
       let action =

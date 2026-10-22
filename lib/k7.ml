@@ -309,7 +309,14 @@ let check_raw ~started line =
         Fmt.error "raw line %a: use the setting %s instead" Quote.pp line
           (List.assoc name constructors)
     | Ok (Set _ | Require) -> Ok false
-    | Ok (Screenshot _ | Other) -> Ok true
+    | Ok Other -> (
+        match Tape_syntax.tokens line with
+        | Keyword "Env" :: (Str k | Keyword k) :: _ -> (
+            match Tape_syntax.env_name_problem k with
+            | Some why -> Fmt.error "raw line %a: %s" Quote.pp line why
+            | None -> Ok true)
+        | _ -> Ok true)
+    | Ok (Screenshot _) -> Ok true
 
 let rec is_empty = function
   | Hidden actions -> List.for_all is_empty actions
@@ -1324,11 +1331,10 @@ let svg ?(settings = []) output =
 
 let check_env env =
   let bad (k, v) =
-    if k = "" then Some "an empty name"
-    else if String.contains k '=' then Some "a name with ="
-    else if String.contains k '\000' || String.contains v '\000' then
-      Some "a NUL byte"
-    else None
+    match Tape_syntax.env_name_problem k with
+    | Some why -> Some why
+    | None when String.contains v '\000' -> Some "a NUL byte"
+    | None -> None
   in
   match
     List.find_map (fun kv -> Option.map (fun why -> (kv, why)) (bad kv)) env
