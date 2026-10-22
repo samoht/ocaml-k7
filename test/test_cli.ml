@@ -43,7 +43,7 @@ Sleep 1000ms
     Alcotest.(check (result string string))
       name (Error expected) (tape ~setup ~output src)
   in
-  error "no command" {|input.t: no command, a line that starts with "  $ "|}
+  error "no command" {|input.t: no command: no line starts with "  $ "|}
     "prose only" ~setup:[] ~output:"x.gif";
   error "control" {|input.t: line 1: "echo \x01" holds a control character|}
     "  $ echo \001\n" ~setup:[] ~output:"x.gif";

@@ -10,7 +10,7 @@ let tape ~setup ~output ?wait_timeout_s ~name src =
   match
     (Cram.is_empty cram, List.find_opt (Fun.negate Cram.is_typeable) setup)
   with
-  | true, _ -> Fmt.error "%s: no command, a line that starts with \"  $ \"" name
+  | true, _ -> Fmt.error "%s: no command: no line starts with \"  $ \"" name
   | false, Some path ->
       Fmt.error "setup path %s: holds invalid UTF-8 or a control character"
         (Cram.quote path)
