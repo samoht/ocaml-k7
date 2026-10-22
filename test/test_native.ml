@@ -1201,6 +1201,19 @@ let test_run_sigpipe () =
     [ "/bin/sh"; "-c"; "kill -PIPE $$; printf SIGPIPE_WAS_IGNORED" ]
     (`Signaled Sys.sigpipe) []
 
+let test_record_sigpipe () =
+  let previous = Sys.signal Sys.sigpipe Sys.Signal_ignore in
+  Fun.protect ~finally:(fun () -> Sys.set_signal Sys.sigpipe previous)
+  @@ fun () ->
+  with_dir @@ fun env cwd ->
+  let t = tape K7.[ type' "yes | head -1\n"; wait Prompt; sleep (Ms 100) ] in
+  match record env cwd t with
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+  | Ok image ->
+      Alcotest.(check bool)
+        "a normal pipeline has no broken-pipe diagnostic" false
+        (contains ~sub:"Broken pipe" image)
+
 let test_run_errors () =
   with_dir @@ fun env cwd ->
   let error name ?vars argv check =
@@ -1380,6 +1393,7 @@ let suite =
          ("run environment", test_run_env);
          ("run searches the overridden PATH", test_run_path_override);
          ("run restores SIGPIPE", test_run_sigpipe);
+         ("record restores SIGPIPE", test_record_sigpipe);
          ("run errors", test_run_errors);
          ("run a killed program", test_run_signal);
          ("run shows the command line", test_run_command_line);
