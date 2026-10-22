@@ -285,7 +285,12 @@ let test_pp_error_names () =
   expect "shell killed"
     "the shell was killed by signal 9 while waiting for line 3, Wait; last \
      value was: >"
-    (pp (Exited { status = `Signaled 9; wait = "Wait"; line = 3; last = ">" }))
+    (pp (Exited { status = `Signaled 9; wait = "Wait"; line = 3; last = ">" }));
+  expect "OCaml's signal"
+    "the shell was killed by signal 9 while waiting for line 3, Wait"
+    (pp
+       (Exited
+          { status = `Signaled Sys.sigkill; wait = "Wait"; line = 3; last = "" }))
 
 let test_spawn_errors () =
   Eio_mock.Backend.run @@ fun () ->

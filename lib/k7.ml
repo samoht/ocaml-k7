@@ -982,7 +982,8 @@ let pp_error ppf = function
       let vhs = one_line vhs in
       (match status with
       | `Exited n -> Fmt.pf ppf "%s exited with code %d" vhs n
-      | `Signaled n -> Fmt.pf ppf "%s was killed by signal %d" vhs n);
+      | `Signaled n ->
+          Fmt.pf ppf "%s was killed by signal %d" vhs (Sys.signal_to_int n));
       let lines =
         String.split_on_char '\n' (printable output)
         |> List.map String.trim
@@ -1000,7 +1001,8 @@ let pp_error ppf = function
   | Exited { status; wait; line; last } ->
       (match status with
       | `Exited n -> Fmt.pf ppf "the shell exited (status %d)" n
-      | `Signaled n -> Fmt.pf ppf "the shell was killed by signal %d" n);
+      | `Signaled n ->
+          Fmt.pf ppf "the shell was killed by signal %d" (Sys.signal_to_int n));
       Fmt.pf ppf " while waiting for line %d, %s%a" line (one_line wait) pp_last
         last
   | Invalid msg -> Fmt.string ppf (one_line msg)
