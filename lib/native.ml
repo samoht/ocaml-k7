@@ -763,6 +763,7 @@ let rec reader st buf =
       if not (exited st) then (
         Eio.Fiber.first (fun () -> Eio_unix.await_readable (fd st)) poll;
         reader st buf)
+      else drain st buf
   | exception Unix.Unix_error _ -> ended st buf
 
 and ended st buf =
