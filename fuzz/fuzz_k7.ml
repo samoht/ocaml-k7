@@ -2109,8 +2109,40 @@ let test_source_wait_line n =
   | Error e -> failf "%a" K7.pp_error e
   | Ok () -> fail "an impossible sourced wait succeeded"
 
+let test_fractional_sleep_units n seconds =
+  let count = 1 + (n mod 16) in
+  let microseconds = if n land 16 = 0 then 500 else 1500 in
+  let duration =
+    if seconds then Fmt.str "0.%06ds" microseconds
+    else Fmt.str "%d.5ms" (microseconds / 1000)
+  in
+  Native_test.with_dir @@ fun env cwd ->
+  let tape =
+    match
+      K7.tape ~outputs:[ "out.svg" ]
+        (List.init count (fun _ -> K7.raw ("Sleep " ^ duration)))
+    with
+    | Ok t -> t
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  let result, sleeps =
+    Native_test.with_sleep_log @@ fun clock ->
+    K7.record ~engine:Native ~env:Native_test.no_job_control ~clock
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd tape
+  in
+  (match result with Ok () -> () | Error e -> failf "%a" K7.pp_error e);
+  (* Exclude startup's timeout and cleanup's 10ms polling intervals. *)
+  let total =
+    List.filter (fun ns -> ns >= 0L && ns < 2_000_000L) sleeps
+    |> List.fold_left Int64.add 0L
+  in
+  check_eq ~pp:Fmt.int64 (Int64.of_int (count * microseconds * 1000)) total
+
 let with_processes =
   [
+    test_case "fractional VHS sleeps preserve their sum in either unit"
+      [ uint8; bool ] test_fractional_sleep_units;
     test_case "sourced waits name their file and count its lines" [ uint8 ]
       test_source_wait_line;
     test_case "stuck callbacks receive only the last 64 KiB" [ uint8 ]
