@@ -192,6 +192,21 @@ let test_exit () =
     (svg ~settings:K7.[ Columns 8; Rows 2 ] K7.[ (Ms 100, "a"); (Ms 3600, "") ])
     (cast src)
 
+let test_resize_last () =
+  let src =
+    {|{"version": 2, "width": 53, "height": 7, "title": "t"}
+[0.313261, "o", "+;"]
+[0.349305, "r", "53x7"]
+|}
+  in
+  let settings = K7.[ Font_size 10 ] in
+  Alcotest.(check string)
+    "the last screen holds from the resize"
+    (svg
+       ~settings:K7.[ Columns 53; Rows 7; Font_size 10 ]
+       K7.[ (Ms 313, "+;"); (Ms 1349, "") ])
+    (cast ~settings src)
+
 let test_idle () =
   let v2 =
     {|{"version": 2, "width": 8, "height": 2, "idle_time_limit": 0.5}
@@ -439,6 +454,7 @@ let suite =
         ("size", test_size);
         ("resize", test_resize);
         ("exit", test_exit);
+        ("a resize that ends a recording", test_resize_last);
         ("idle time limit", test_idle);
         ("theme", test_theme);
         ("errors", test_errors);
