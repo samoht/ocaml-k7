@@ -76,6 +76,10 @@ val row_text : row -> string
     JavaScript's [trimEnd] give it: without its trailing white space, such as
     spaces and no-break spaces. *)
 
+val shown_text : row -> string
+(** [shown_text r] is {!row_text}[ r] with a space for each column of a cell
+    that SGR 8 conceals. *)
+
 val row_equal : row -> row -> bool
 (** [row_equal r0 r1] is [true] iff [r0] and [r1] have equal cells. *)
 

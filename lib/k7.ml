@@ -1688,7 +1688,9 @@ let svg_of_casts ?(settings = []) ?show ?(delay = Ms 500) casts =
 
 let text_of_casts ?(settings = []) ?show casts =
   let* _, screen = replay ~settings ?show ~delay:(Ms 500) casts in
-  let lines = Array.to_list (Array.map Screen.row_text (Screen.rows screen)) in
+  let lines =
+    Array.to_list (Array.map Screen.shown_text (Screen.rows screen))
+  in
   let rec drop_blank = function "" :: rest -> drop_blank rest | l -> l in
   Ok
     (String.concat ""

@@ -536,9 +536,10 @@ val text_of_casts :
   cast list ->
   (string, error) result
 (** [text_of_casts ~settings ~show casts] is the text of the last screen of
-    [svg_of_casts ~settings ~show casts]: each row without its trailing white
-    space, as {!svg} reads it, followed by a newline, up to the last row that is
-    not blank. It is the error of {!svg_of_casts} otherwise. *)
+    [svg_of_casts ~settings ~show casts]: each row with a space for each column
+    that SGR 8 conceals and without its trailing white space, as {!svg} reads
+    it, followed by a newline, up to the last row that is not blank. It is the
+    error of {!svg_of_casts} otherwise. *)
 
 val run :
   ?settings:setting list ->

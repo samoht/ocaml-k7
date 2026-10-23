@@ -182,6 +182,18 @@ let of_terminal ?previous ?(offset = 0) term =
   in
   { rows = rows'; cursor }
 
+let shown_text r =
+  let hidden (c : cell) = Ansi.Attr.mem Hidden c.attrs in
+  if not (Array.exists hidden r.cells) then r.text
+  else
+    let b = Buffer.create (Array.length r.cells) in
+    Array.iter
+      (fun c ->
+        Buffer.add_string b
+          (if hidden c then String.make c.width ' ' else c.text))
+      r.cells;
+    trim_end (Buffer.contents b)
+
 let buffer term t =
   let older = List.map trim_end (Vte.scrollback_lines term.vte) in
   Array.append (Array.of_list older) (Array.map (fun r -> r.text) t.rows)
