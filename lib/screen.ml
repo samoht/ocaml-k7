@@ -190,7 +190,9 @@ let step t c u =
 
 (* matrix ignores DEC mode 2026 and the OSC 4 and 104 palette sequences, so the
    characters are scanned here too. A character that [s] cuts is scanned with
-   the next [s]. *)
+   the next [s]. matrix also reads an OSC on through CAN and SUB, which cancel
+   it in xterm.js, so BEL ends it in their place: matrix then applies at most a
+   title or a hyperlink, which k7 does not draw. *)
 let feed ?(sync = ignore) t s =
   let fed = String.length t.partial in
   let s = t.partial ^ s in
@@ -213,6 +215,11 @@ let feed ?(sync = ignore) t s =
             t.scan <- Ground;
             feed_to start (i + 1);
             sync (c = 'h');
+            go (i + 1) (i + 1)
+        | Osc _, ('\x18' | '\x1a') ->
+            t.scan <- Ground;
+            feed_to start i;
+            Vte.feed_string t.vte "\007";
             go (i + 1) (i + 1)
         | _, c ->
             step t c u;
