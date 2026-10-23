@@ -188,9 +188,60 @@ let test_cram_nul_argument prefix suffix =
   | Error e -> failf "unexpected error: %a" K7.pp_error e
   | Ok _ -> failf "executed an argv containing NUL: %S" argument
 
+let test_cram_argument_bytes scalars =
+  Native_test.with_dir @@ fun env cwd ->
+  let alphabet =
+    [|
+      0x1;
+      0x9;
+      0xa;
+      0xd;
+      0x1b;
+      0x7f;
+      0x85;
+      0xe9;
+      0x2028;
+      0x4e2d;
+      0x1f44d;
+      0x27;
+      0x22;
+      0x5c;
+      0x24;
+      0x60;
+      0x20;
+      0x61;
+    |]
+  in
+  let buffer = Buffer.create 128 in
+  List.iter
+    (fun n ->
+      Buffer.add_utf_8_uchar buffer
+        (Uchar.of_int alphabet.(n mod Array.length alphabet)))
+    scalars;
+  let argument = Buffer.contents buffer in
+  let _, status =
+    match
+      K7.cram
+        ~clock:(Eio_mock.Clock.Mono.make ())
+        ~proc:(Eio.Stdenv.process_mgr env)
+        ~cwd
+        [
+          "/bin/sh"; "-c"; "printf '%s' \"$1\" > received"; "k7-argv"; argument;
+        ]
+    with
+    | Ok result -> result
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  check (status = `Exited 0);
+  check_eq ~pp:Fmt.Dump.string argument
+    (Eio.Path.load Eio.Path.(cwd / "received"))
+
 let suite =
   ( "cram",
     [
+      test_case "cram preserves non-NUL Unicode and control arguments"
+        [ list uint8 ]
+        test_cram_argument_bytes;
       test_case "cram rejects NUL anywhere in an argument before execution"
         [ bytes; bytes ] test_cram_nul_argument;
       test_case "cram drains output from descendants during group cleanup"
