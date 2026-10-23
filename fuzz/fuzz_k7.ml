@@ -198,6 +198,22 @@ let check_reads t =
       if printed' <> printed then failf "%S read back as %S" printed printed'
   | Error e -> failf "%S not read back: %a" printed K7.pp_error e
 
+let test_screenshot_alias n output =
+  let path = Fmt.str "shot-%d.svg" n in
+  let alias =
+    String.concat "" (List.init (1 + (n mod 5)) (fun _ -> "./")) ^ path
+  in
+  let outputs, actions =
+    if output then ([ path ], [ K7.raw ("Screenshot " ^ alias) ])
+    else
+      ( [ "animation.svg" ],
+        [ K7.raw ("Screenshot " ^ path); K7.raw ("Screenshot " ^ alias) ] )
+  in
+  match K7.tape ~outputs (actions @ [ K7.sleep (Ms 100) ]) with
+  | Error (Invalid _) -> ()
+  | Error e -> failf "%a" K7.pp_error e
+  | Ok _ -> failf "%S and %S name the same destination" path alias
+
 let test_final_hidden_roundtrip n comment =
   let text = List.nth [ "secret"; "café"; "漢字"; "👍" ] (n mod 4) in
   let action = if comment then K7.raw ("# " ^ text) else K7.type' text in
@@ -2320,6 +2336,8 @@ let decoding =
 
 let tapes =
   [
+    test_case "equivalent screenshot paths cannot overwrite another image"
+      [ uint8; bool ] test_screenshot_alias;
     test_case "final hidden actions preserve tape serialization" [ uint8; bool ]
       test_final_hidden_roundtrip;
     test_case "tape is total" [ bytes; bytes; int ] test_total;
