@@ -554,5 +554,5 @@ let image t ~duration frames =
   Buffer.add_buffer b strip;
   Buffer.add_string b "</g></svg></svg>\n";
   let s = Buffer.contents b in
-  let prefix = "k" ^ String.sub (Digest.to_hex (Digest.string s)) 0 6 ^ "-" in
+  let prefix = "k" ^ String.sub (Digest.to_hex (Digest.string s)) 0 16 ^ "-" in
   String.concat prefix (String.split_on_char ns.[0] s)
