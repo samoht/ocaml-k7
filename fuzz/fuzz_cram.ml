@@ -145,9 +145,38 @@ let test_recorded_output_is_data n continuation =
   let header = List.hd (String.split_on_char '\n' source) ^ "\n" in
   check_eq ~pp:Fmt.(Dump.list string) (commands header) (commands source)
 
+(* The readiness file is written after installing the trap. No clock moves:
+   the child's SIGTERM output must drain before cram returns. *)
+let test_cleanup_output n =
+  Native_test.with_dir @@ fun env cwd ->
+  let token = Fmt.str "TERM_SEEN_%d" n in
+  let child =
+    "trap 'printf " ^ token ^ "; exit 0' TERM; : > ready; while :; do :; done"
+  in
+  let command =
+    "/bin/sh -c " ^ Filename.quote child
+    ^ " & while [ ! -e ready ]; do :; done; exit 0"
+  in
+  match
+    K7.cram
+      ~clock:(Eio_mock.Clock.Mono.make ())
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd
+      [ "/bin/sh"; "-c"; command ]
+  with
+  | Error e -> failf "%a" K7.pp_error e
+  | Ok (source, status) -> (
+      check (status = `Exited 0);
+      match String.split_on_char '\n' source with
+      | _command :: output ->
+          check_eq ~pp:Fmt.(Dump.list string) [ "  " ^ token; "" ] output
+      | [] -> fail "no recorded command")
+
 let suite =
   ( "cram",
     [
+      test_case "cram drains output from descendants during group cleanup"
+        [ uint8 ] test_cleanup_output;
       test_case "recorded output stays out of cram commands" [ uint8; bool ]
         test_recorded_output_is_data;
       test_case "parse"
