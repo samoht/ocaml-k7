@@ -10,18 +10,18 @@ module Ints = Map.Make (Int)
 type osc = Code of int | Payload of int | Ignored
 
 (* Where a [CSI ? Pm h] or [CSI ? Pm l] is read: [n] is the parameter read so
-   far, and [sync] whether an earlier one is 2026. [c2] is whether the last
-   byte of an OSC is 0xC2, which starts U+009C, the C1 ST. *)
+   far, and [sync] whether an earlier one is 2026. *)
 type scan =
   | Ground
   | Esc
   | Csi
   | Private of { n : int; sync : bool }
-  | Osc of { osc : osc; c2 : bool }
+  | Osc of osc
 
 type terminal = {
   vte : Vte.t;
   mutable scan : scan;
+  mutable partial : string;
   payload : Buffer.t;
   mutable colours : int Ints.t;
   mutable recoloured : bool;
@@ -36,6 +36,7 @@ let terminal ~rows ~cols =
         ~default_fg:Ansi.Color.default ~default_bg:Ansi.Color.default
         ~da2:"\027[>0;276;0c" ~rows ~cols ();
     scan = Ground;
+    partial = "";
     payload = Buffer.create 64;
     colours = Ints.empty;
     recoloured = false;
@@ -45,7 +46,7 @@ let next scan c =
   match (scan, c) with
   | _, '\027' -> Esc
   | Esc, '[' -> Csi
-  | Esc, ']' -> Osc { osc = Code (-1); c2 = false }
+  | _, '\x9d' | Esc, ']' -> Osc (Code (-1))
   | Csi, '?' -> Private { n = 0; sync = false }
   | Private p, '0' .. '9' ->
       Private { p with n = min 10_000 ((p.n * 10) + Char.code c - 48) }
@@ -151,7 +152,7 @@ let end_osc t = function
 (* xterm.js's limit, past which it drops an OSC. *)
 let payload_limit = 10_000_000
 
-let put t osc c =
+let put t osc c u =
   match (osc, c) with
   | Code n, '0' .. '9' -> Code (min 1000 ((max n 0 * 10) + Char.code c - 48))
   | Code ((4 | 104) as n), ';' ->
@@ -159,58 +160,65 @@ let put t osc c =
       Payload n
   | Code _, _ -> Ignored
   | Payload _, _ when Buffer.length t.payload >= payload_limit -> Ignored
-  | Payload _, c ->
-      Buffer.add_char t.payload c;
+  | Payload _, _ ->
+      Buffer.add_utf_8_uchar t.payload u;
       osc
   | Ignored, _ -> Ignored
 
-(* As xterm.js: BEL, ESC and ST end an OSC, CAN and SUB cancel it, and it
-   ignores the other C0 controls. *)
-let scan_osc t osc ~c2 c =
+(* As xterm.js: BEL, ESC and ST end an OSC, CAN and SUB cancel it, another C1
+   control leaves it, and it ignores the other C0 controls. *)
+let scan_osc t osc c u =
   match c with
-  | '\x9c' when c2 ->
+  | '\007' | '\x9c' ->
       end_osc t osc;
       Ground
-  | _ -> (
-      let osc = if c2 then put t osc '\xc2' else osc in
-      match c with
-      | '\007' ->
-          end_osc t osc;
-          Ground
-      | '\027' ->
-          end_osc t osc;
-          Esc
-      | '\x18' | '\x1a' -> Ground
-      | '\000' .. '\031' -> Osc { osc; c2 = false }
-      | '\xc2' -> Osc { osc; c2 = true }
-      | c -> Osc { osc = put t osc c; c2 = false })
+  | '\027' ->
+      end_osc t osc;
+      Esc
+  | '\x18' | '\x1a' -> Ground
+  | '\000' .. '\031' -> Osc osc
+  | '\x80' .. '\x9f' -> next Ground c
+  | c -> Osc (put t osc c u)
 
-let step t c =
+(* xterm.js reads characters, not bytes. Those above U+00FF are all printable,
+   as U+00A0 is. *)
+let latin_1 u = if Uchar.is_char u then Uchar.to_char u else '\xa0'
+
+let step t c u =
   t.scan <-
-    (match t.scan with
-    | Osc { osc; c2 } -> scan_osc t osc ~c2 c
-    | scan -> next scan c)
+    (match t.scan with Osc osc -> scan_osc t osc c u | scan -> next scan c)
 
 (* matrix ignores DEC mode 2026 and the OSC 4 and 104 palette sequences, so the
-   bytes are scanned here too. *)
+   characters are scanned here too. A character that [s] cuts is scanned with
+   the next [s]. *)
 let feed ?(sync = ignore) t s =
+  let fed = String.length t.partial in
+  let s = t.partial ^ s in
+  t.partial <- "";
   let feed_to start i =
     Vte.feed t.vte (Bytes.unsafe_of_string s) start (i - start)
   in
   let rec go start i =
     if i = String.length s then feed_to start i
     else
-      match (t.scan, s.[i]) with
-      | Private p, (('h' | 'l') as c) when p.sync || p.n = 2026 ->
-          t.scan <- Ground;
-          feed_to start (i + 1);
-          sync (c = 'h');
-          go (i + 1) (i + 1)
-      | _, c ->
-          step t c;
-          go start (i + 1)
+      let d = String.get_utf_8_uchar s i in
+      let n = Uchar.utf_decode_length d in
+      let u = Uchar.utf_decode_uchar d in
+      if i + n = String.length s && not (Uchar.utf_decode_is_valid d) then (
+        t.partial <- String.sub s i n;
+        feed_to start (String.length s))
+      else
+        match (t.scan, latin_1 u) with
+        | Private p, (('h' | 'l') as c) when p.sync || p.n = 2026 ->
+            t.scan <- Ground;
+            feed_to start (i + 1);
+            sync (c = 'h');
+            go (i + 1) (i + 1)
+        | _, c ->
+            step t c u;
+            go start (i + n)
   in
-  go 0 0
+  go fed 0
 
 let take_replies t = Vte.take_replies t.vte
 let is_dirty t = t.recoloured || Vte.is_dirty t.vte
