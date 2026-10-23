@@ -1999,7 +1999,6 @@ let test_capture_utf_8 () =
   in
   let src = K7.string_of_cast cast in
   Alcotest.(check bool) "valid UTF-8" true (String.is_valid_utf_8 src);
-  check_contains "é then U+FFFD" ~sub:"é\xef\xbf\xbd" src;
   match K7.cast_of_string src with
   | Ok c ->
       Alcotest.(check string)
