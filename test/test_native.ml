@@ -2126,7 +2126,7 @@ let test_run_command_format_argument () =
       run
         ~clock:(Eio_mock.Clock.Mono.make ())
         env cwd
-        [ "/usr/bin/printf"; "%s"; argument ]
+        [ "printf"; "%s"; argument ]
     with
     | Ok result -> result
     | Error e -> Alcotest.failf "%a" K7.pp_error e
