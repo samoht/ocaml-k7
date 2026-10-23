@@ -7,8 +7,9 @@
 
     [K7] draws a terminal session as an SVG image animated with CSS alone,
     without a browser. {!record} plays a tape in a shell on a pseudo-terminal,
-    {!run} runs a program there, {!svg} draws output given with its times and
-    {!svg_of_casts} draws asciicast recordings.
+    {!run} runs a program there, {!capture} records a program there as an
+    asciicast recording, {!cram} gives the cram test of a command, {!svg} draws
+    output given with its times and {!svg_of_casts} draws asciicast recordings.
 
     A tape is the script of {{:https://github.com/charmbracelet/vhs}VHS}, by
     {{:https://charm.land/}Charm}, which records a terminal session as a GIF or
@@ -16,7 +17,7 @@
     waiting for output. [K7] builds the actions as values and {{!checks}checks}
     them once, when {!val-tape} assembles a tape. It reads and prints tapes in
     the [.tape] syntax and {{!running}runs} them, with [vhs] for a GIF or a
-    video. Only {!record}, {!check} and {!run} perform I/O.
+    video. Only {!record}, {!check}, {!run}, {!capture} and {!cram} perform I/O.
 
     {[
     let demo =
