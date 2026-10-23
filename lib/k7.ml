@@ -947,15 +947,13 @@ let of_string src =
         let* () = read_line r n line in
         go (n + 1) rest
   in
-  match go 1 (lines src) with
+  let read = match List.rev (lines src) with "" :: l | l -> List.rev l in
+  match go 1 read with
   | Error msg -> Error (Invalid msg)
   | Ok () ->
       show r;
-      let actions =
-        match r.read_actions with Raw "" :: rest -> rest | actions -> actions
-      in
       tape ~settings:(List.rev r.read_settings)
-        ~outputs:(List.rev r.read_outputs) (List.rev actions)
+        ~outputs:(List.rev r.read_outputs) (List.rev r.read_actions)
       |> Result.map (fun t -> { t with source = Some (lines src) })
 
 let replaces s s' =
