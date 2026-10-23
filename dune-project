@@ -13,14 +13,16 @@
 (package
  (name k7)
  (synopsis
-  "Record terminal sessions as animated SVG images, and write tapes for VHS")
+  "Record terminal sessions and draw them as animated SVG images")
  (tags (command-line-utilities format eio))
  (description
-  "k7 records a cram test, any program or a tape on a pseudo-terminal and \
+  "k7 records any program, a cram test or a tape on a pseudo-terminal and \
    draws it as an SVG image animated with CSS alone, with no browser or \
-   ffmpeg. It also builds tapes for Charm's VHS as OCaml values, checks them \
-   against VHS's own parser rules and runs vhs on them to record a GIF or a \
-   video.")
+   ffmpeg. It writes a program's recording in asciinema's asciicast format, \
+   the text of its last screen or a cram test of it, and draws asciicast v2 \
+   and v3 recordings, such as asciinema's. It also builds tapes for Charm's \
+   VHS as OCaml values, checks them against VHS's own parser rules and runs \
+   vhs on them to record a GIF or a video.")
  (depends
   (ocaml (>= 5.4))
   (eio (>= 1.6))

@@ -9,8 +9,12 @@ let man =
   [
     `S Manpage.s_description;
     `P
-      "$(tool) records terminal sessions as animated SVG images, without a \
-       browser. For a GIF or a video, $(b,k7 play) runs Charm's $(b,vhs).";
+      "$(tool) records terminal sessions and draws them as animated SVG \
+       images, without a browser. $(b,k7 rec) records any program, as an \
+       image, an asciicast recording, the text of its last screen or a cram \
+       test. $(b,k7 play) draws asciicast recordings, its own or asciinema's, \
+       and plays cram tests and the tapes of Charm's VHS; for a GIF or a video \
+       it runs $(b,vhs).";
     `P
       "Both subcommands take $(b,--columns), $(b,--rows), $(b,--font-size), \
        $(b,--theme) and $(b,--framerate), and $(b,--env) for what they run. \
@@ -33,9 +37,12 @@ let man =
     `P
       "$(b,k7 rec) $(b,-o) $(i,FILE.svg) $(b,--) $(i,COMMAND) runs \
        $(i,COMMAND) on a pseudo-terminal, with no shell and nothing typed, and \
-       writes its screens to $(i,FILE.svg), each at the time it arrived. It \
-       exits with the exit code of $(i,COMMAND); an error of k7 itself prints \
-       $(b,k7:) and the reason on standard error.";
+       writes its screens to $(i,FILE.svg), each at the time it arrived. A \
+       $(b,.cast) output keeps the recording, for $(b,k7 play) to draw later, \
+       a $(b,.txt) output is the text of the last screen, and a $(b,.t) output \
+       is a cram test of $(i,COMMAND) as dune runs it. It exits with the exit \
+       code of $(i,COMMAND); an error of k7 itself prints $(b,k7:) and the \
+       reason on standard error.";
   ]
 
 let exits =
@@ -54,7 +61,7 @@ let exits =
     ]
 
 let cmd =
-  let doc = "record terminal sessions as animated SVG images" in
+  let doc = "record terminal sessions and draw them as animated SVG images" in
   Cmd.group
     (Cmd.info "k7" ~version:"%%VERSION%%" ~doc ~man ~exits)
     [ Play_cmd.cmd; Rec_cmd.cmd ]

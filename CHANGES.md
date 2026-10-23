@@ -11,12 +11,12 @@
   screenshot only the other writes, or one whose directory it cannot write.
   `K7.svg` draws the image of timed output, with the settings `K7.tape`
   checks.
-- The `k7` command has two subcommands. `k7 play FILE` plays a tape
-  (`.tape`) or a cram test (`.t`), or draws an asciicast recording
-  (`.cast`), by the extension of `FILE` in any case, and refuses an
-  option that does not apply to that kind; `k7 rec` records any program.
-  Each writes an animated SVG image, and `k7 play` runs `vhs` for the
-  other outputs of a tape or a cram test, or when `--engine vhs` says so.
+- The `k7` command has two subcommands. `k7 rec` records any program, and
+  `k7 play FILE` plays a tape (`.tape`) or a cram test (`.t`), or draws
+  asciicast recordings (`.cast`), by the extension of `FILE` in any case,
+  and refuses an option that does not apply to that kind. Each writes an
+  animated SVG image, and `k7 play` runs `vhs` for the other outputs of a
+  tape or a cram test, or when `--engine vhs` says so.
   `--columns`, `--rows`, `--font-size`, `--theme` and `--framerate` set
   the terminal of each, and `--env` the environment of the program or the
   shell.
@@ -109,5 +109,7 @@
   terminal does not handle yet, a rare `setpgid` error from macOS's bash 3.2
   under load, the timed-out wait the `Vhs` engine reports as
   `Vhs_failed`, and the JSON themes with invalid UTF-8 or unpaired
-  surrogates that jsont refuses and Go reads, and the input and background
-  output `k7 rec` does not record.
+  surrogates that jsont refuses and Go reads, the input and background
+  output `k7 rec` does not record, the cram test of a command killed by a
+  signal, whose line from dune's shell changes on each run, and the normal
+  screen that a resize clears behind the alternate screen.
