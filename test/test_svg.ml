@@ -131,6 +131,20 @@ let test_ids () =
   let shared = List.filter (fun n -> List.mem n (names b)) (names a) in
   Alcotest.(check (list string)) "one page, nothing shared" [] shared
 
+let test_namespace_collision () =
+  let settings = K7.[ Columns 8; Rows 2 ] in
+  let draw text =
+    match K7.svg ~settings K7.[ (Ms 0, text) ] with
+    | Ok s -> s
+    | Error e -> Alcotest.failf "%a" K7.pp_error e
+  in
+  let a = draw "screen-2623" and b = draw "screen-3903" in
+  Alcotest.(check bool) "different images" true (a <> b);
+  let ids image = values ~key:" id=\"" image in
+  let shared = List.filter (fun id -> List.mem id (ids b)) (ids a) in
+  Alcotest.(check (list string))
+    "different inline images must not share IDs" [] shared
+
 let test_no_ids () =
   let s = without_ids (raw styled) in
   let p = Option.get (prefix (raw styled)) in
@@ -446,6 +460,8 @@ let suite =
         ("positive frame rate above the pixel limit", test_framerate_limit);
         ("row dedup", test_dedup);
         ("ids", test_ids);
+        ( "distinct images do not collide in one HTML page",
+          test_namespace_collision );
         ("styled without ids", test_no_ids);
         ("readable without style", test_no_style);
         ("keyframes", test_keyframes);
