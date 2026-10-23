@@ -188,30 +188,30 @@ let test_cram_nul_argument prefix suffix =
   | Error e -> failf "unexpected error: %a" K7.pp_error e
   | Ok _ -> failf "executed an argv containing NUL: %S" argument
 
+let alphabet =
+  [|
+    0x1;
+    0x9;
+    0xa;
+    0xd;
+    0x1b;
+    0x7f;
+    0x85;
+    0xe9;
+    0x2028;
+    0x4e2d;
+    0x1f44d;
+    0x27;
+    0x22;
+    0x5c;
+    0x24;
+    0x60;
+    0x20;
+    0x61;
+  |]
+
 let test_cram_argument_bytes scalars =
   Native_test.with_dir @@ fun env cwd ->
-  let alphabet =
-    [|
-      0x1;
-      0x9;
-      0xa;
-      0xd;
-      0x1b;
-      0x7f;
-      0x85;
-      0xe9;
-      0x2028;
-      0x4e2d;
-      0x1f44d;
-      0x27;
-      0x22;
-      0x5c;
-      0x24;
-      0x60;
-      0x20;
-      0x61;
-    |]
-  in
   let buffer = Buffer.create 128 in
   List.iter
     (fun n ->
@@ -219,22 +219,28 @@ let test_cram_argument_bytes scalars =
         (Uchar.of_int alphabet.(n mod Array.length alphabet)))
     scalars;
   let argument = Buffer.contents buffer in
-  let _, status =
-    match
-      K7.cram
-        ~clock:(Eio_mock.Clock.Mono.make ())
-        ~proc:(Eio.Stdenv.process_mgr env)
-        ~cwd
-        [
-          "/bin/sh"; "-c"; "printf '%s' \"$1\" > received"; "k7-argv"; argument;
-        ]
-    with
-    | Ok result -> result
-    | Error e -> failf "%a" K7.pp_error e
-  in
-  check (status = `Exited 0);
-  check_eq ~pp:Fmt.Dump.string argument
-    (Eio.Path.load Eio.Path.(cwd / "received"))
+  let proc = Eio.Stdenv.process_mgr env in
+  let received = Eio.Path.(cwd / "received") in
+  match
+    K7.cram
+      ~clock:(Eio_mock.Clock.Mono.make ())
+      ~proc ~cwd
+      [ "/bin/sh"; "-c"; "printf '%s' \"$1\" > received"; "k7-argv"; argument ]
+  with
+  | Error (Invalid _) when String.ends_with ~suffix:"\n" argument ->
+      check (not (Eio.Path.is_file received))
+  | Error e -> failf "%a" K7.pp_error e
+  | Ok (source, status) ->
+      check (status = `Exited 0);
+      check_eq ~pp:Fmt.Dump.string argument (Eio.Path.load received);
+      let line = List.hd (String.split_on_char '\n' source) in
+      let line = String.sub line 4 (String.length line - 4) in
+      List.iter
+        (fun shell ->
+          Eio.Path.unlink received;
+          Eio.Process.run proc ~cwd [ shell; "-c"; line ];
+          check_eq ~pp:Fmt.Dump.string argument (Eio.Path.load received))
+        (List.filter Sys.file_exists [ "/bin/sh"; "/bin/dash"; "/bin/bash" ])
 
 let suite =
   ( "cram",

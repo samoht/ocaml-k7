@@ -2051,6 +2051,44 @@ let test_cram_nul_argument () =
       Alcotest.failf "ran an argv containing NUL: %a\n%s" Eio.Process.pp_status
         status source
 
+(* dune runs a cram test with sh, which is dash on Debian. *)
+let test_cram_control_argument () =
+  with_dir @@ fun env cwd ->
+  let proc = Eio.Stdenv.process_mgr env in
+  let received = Eio.Path.(cwd / "received") in
+  let recorded argument =
+    K7.cram
+      ~clock:(Eio_mock.Clock.Mono.make ())
+      ~proc ~cwd
+      [ "/bin/sh"; "-c"; "printf '%s' \"$1\" > received"; "k7-argv"; argument ]
+  in
+  List.iter
+    (fun argument ->
+      let source, status =
+        match recorded argument with
+        | Ok r -> r
+        | Error e -> Alcotest.failf "%S: %a" argument K7.pp_error e
+      in
+      exited "status" 0 status;
+      let line = List.hd (String.split_on_char '\n' source) in
+      let line = String.sub line 4 (String.length line - 4) in
+      List.iter
+        (fun shell ->
+          Eio.Path.unlink received;
+          Eio.Process.run proc ~cwd [ shell; "-c"; line ];
+          Alcotest.(check string)
+            (Fmt.str "%s reads %S" shell line)
+            argument (Eio.Path.load received))
+        (List.filter Sys.file_exists
+           [ "/bin/sh"; "/bin/dash"; "/bin/bash"; "/bin/zsh" ]))
+    [ "\r\r"; "a\nb"; "-\x1b%s\\'\"$`\xc2\x9b\xff caf\xc3\xa9" ];
+  Eio.Path.unlink received;
+  match recorded "a\n" with
+  | Error (Invalid _) ->
+      Alcotest.(check bool) "nothing ran" false (Eio.Path.is_file received)
+  | Error e -> Alcotest.failf "trailing newline: %a" K7.pp_error e
+  | Ok (source, _) -> Alcotest.failf "trailing newline: recorded %S" source
+
 (* The background loop prints once the shell has gone, so it prints nothing
    if it stops with the shell. *)
 let test_cram_stop () =
@@ -2241,6 +2279,8 @@ let suite =
          ("capture keeps a theme's cursor colours", test_capture_theme_cursor);
          ("cram", test_cram);
          ("cram refuses NUL in argv", test_cram_nul_argument);
+         ( "cram quotes control characters for any sh",
+           test_cram_control_argument );
          ("cram stops the command's process group", test_cram_stop);
          ("cram kills what ignores SIGTERM", test_cram_kill);
          ("cram ends the command's background jobs", test_cram_background);
