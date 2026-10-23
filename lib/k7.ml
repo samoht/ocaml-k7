@@ -1759,8 +1759,18 @@ let transcript ~line output code =
     if String.ends_with ~suffix:"\r" l then String.sub l 0 (String.length l - 1)
     else l
   in
+  (* dune reads [  $ ] as a command, and [  > ] or [  >] right after one as
+     more of it. *)
+  let output i l =
+    let l = crlf l in
+    let command =
+      String.starts_with ~prefix:"$ " l
+      || (i = 0 && (l = ">" || String.starts_with ~prefix:"> " l))
+    in
+    (if command then "   " else "  ") ^ l ^ "\n"
+  in
   String.concat ""
-    ((("  $ " ^ line ^ "\n") :: List.map (fun l -> "  " ^ crlf l ^ "\n") lines)
+    ((("  $ " ^ line ^ "\n") :: List.mapi output lines)
     @ if code = 0 then [] else [ Fmt.str "  [%d]\n" code ])
 
 let cram ?(env = []) ?stop ~clock ~proc ~cwd argv =

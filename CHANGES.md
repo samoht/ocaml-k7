@@ -30,7 +30,8 @@
   as the same image byte for byte, with other options if need be, `.txt`
   for the text of the last screen, and `.t` for a cram test of the command,
   run with `sh -c` on pipes as dune runs it, with its output and its exit
-  code as dune writes them. `K7.capture` records a program as an asciicast
+  code as dune writes them, but for an output line dune would read as a
+  command, which gets one more space of indentation. `K7.capture` records a program as an asciicast
   recording, and `K7.run` draws it with `K7.svg_of_casts`; `K7.cram` runs a
   command and gives its cram test. Each starts the program in a process
   group of its own, which gets SIGTERM when the program exits or `?stop`

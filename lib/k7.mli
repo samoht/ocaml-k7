@@ -634,9 +634,12 @@ val cram :
     carriage return before a line feed, and with a last line that does not end
     with a line feed; then [  [N]] if the exit code [N], or [128] plus the
     number of the signal that killed the command, is not [0]. dune then reads
-    the test back unchanged. It is [Error (Invalid _)] if [argv] is empty or a
-    name of [env] is one {!run} refuses, and [Error (Io _)] on an I/O failure.
-*)
+    the test back unchanged, but for a line dune would read as a command: one
+    that starts with [$ ], or a first line that is [>] or starts with [> ]. dune
+    writes it as it is, and runs it; [cram] indents it by one more space, so
+    that it stays output, which dune reports as a difference. It is
+    [Error (Invalid _)] if [argv] is empty or a name of [env] is one {!run}
+    refuses, and [Error (Io _)] on an I/O failure. *)
 
 (** {1:checks Checks}
 

@@ -224,6 +224,10 @@ Other limitations:
   `k7` is interrupted, and then writes what it recorded. Recording stops
   when the program exits, so what a background process prints after that
   is not in the image.
+- A cram test cannot hold an output line that starts with `$ `, or a first
+  one that is `>` or starts with `> `: dune reads it as a command. `k7 rec`
+  indents such a line by one more space, so the test runs no command it
+  did not record, but does not pass under dune.
 - A cram test that `k7 rec` writes of a command killed by a signal does not
   pass under dune: dune's shell then prints a line with the process ID,
   which changes on each run.
