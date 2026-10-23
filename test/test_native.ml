@@ -56,6 +56,39 @@ let test_zero_speed_prompt () =
     ~sub:"\nREADY\n>"
     (last_screen (Eio.Path.load Eio.Path.(cwd / "demo.txt")))
 
+let test_stuck_output_bound () =
+  with_dir @@ fun env cwd ->
+  let complete = ref false and largest = ref 0 in
+  let stuck output =
+    largest := max !largest (String.length output);
+    if contains ~sub:"OUTPUT_COMPLETE\r\n" output then complete := true;
+    !complete
+  in
+  let t =
+    tape
+      K7.
+        [
+          type'
+            "head -c 70000 /dev/zero | tr '\\000' x; printf \
+             \"\\nOUTPUT_COMPLETE\\n\"; read ignored\n";
+          wait (Line "NEVER_READY");
+        ]
+  in
+  with_clock ~release:(fun () -> !complete) @@ fun clock ->
+  (match
+     K7.record ~engine:Native ~env:no_job_control ~stuck ~clock
+       ~proc:(Eio.Stdenv.process_mgr env)
+       ~cwd t
+   with
+  | Error (Stuck _) -> ()
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+  | Ok () -> Alcotest.fail "the callback did not stop the wait");
+  Alcotest.(check bool)
+    "the complete fixed-size output reached the callback" true !complete;
+  Alcotest.(check bool)
+    (Fmt.str "callback gets at most the last 64 KiB, got %d bytes" !largest)
+    true (!largest <= 65536)
+
 let test_screenshot_clash () =
   with_dir @@ fun env cwd ->
   let t =
@@ -2142,6 +2175,7 @@ let suite =
          ( "capture with closed standard descriptors",
            test_capture_closed_standard_fds );
          ("record", test_record);
+         ("stuck callback receives at most 64 KiB", test_stuck_output_bound);
          ("zero-speed prompt wait", test_zero_speed_prompt);
          ("screenshot over the recording", test_screenshot_clash);
          ("timeout", test_timeout);
