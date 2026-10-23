@@ -475,7 +475,12 @@ let rec read ~source ?file ~at line t =
         | Keyword k :: rest when List.mem k keys ->
             let speed, rest = speed line rest in
             let count =
-              match rest with Num n :: _ -> int_value line n | _ -> 1
+              match rest with
+              | Num n :: _ -> (
+                  match int_of_string_opt n with
+                  | Some n when n >= 0 -> n
+                  | _ -> unsupported line "%s is not a repeat count" n)
+              | _ -> 1
             in
             Key { speed; count; key = k }
         | Keyword "Ctrl" :: rest ->
@@ -1133,7 +1138,15 @@ let start ~env ~vars ~cwd t ~requires prog args =
     | None -> stop (Executable_not_found exe)
   in
   let path = find prog in
-  List.iter (fun exe -> ignore (find exe)) requires;
+  List.iter
+    (fun exe ->
+      match resolve ~cwd env exe with
+      | Some p
+        when is_executable
+               (if Filename.is_relative p then Filename.concat cwd p else p) ->
+          ()
+      | _ -> stop (Executable_not_found exe))
+    requires;
   let s = t.look in
   match
     open_terminal ~env ~cwd
