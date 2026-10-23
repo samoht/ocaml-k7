@@ -64,7 +64,14 @@ let keys =
     "Down"; "Left"; "Right"; "PageUp"; "PageDown"; "ScrollUp"; "ScrollDown" ]
 [@@ocamlformat "disable"]
 
-let ms_of_ns ns = Int64.to_int (Int64.div ns 1_000_000L)
+let ms_of_ns ns = ns / 1_000_000
+
+let int_of_ns ns =
+  if Int64.unsigned_compare ns (Int64.of_int max_int) > 0 then max_int
+  else Int64.to_int ns
+
+let span ns = Mtime.Span.of_uint64_ns (Int64.of_int ns)
+let ( +! ) a b = if a > max_int - b then max_int else a + b
 
 (* VHS's parseTime: seconds without a unit. *)
 let time line = function
@@ -72,15 +79,15 @@ let time line = function
   | Num n :: rest -> (n ^ "s", rest)
   | _ -> unsupported line "expected a duration"
 
-let ms line s =
+let ns line s =
   match duration s with
-  | Some ns -> ms_of_ns ns
+  | Some ns -> int_of_ns ns
   | None -> unsupported line "%s is not a duration" s
 
 let speed line = function
   | Sym '@' :: rest ->
       let t, rest = time line rest in
-      (Some (ms line t), rest)
+      (Some (ns line t), rest)
   | rest -> (None, rest)
 
 let strings tokens =
@@ -140,11 +147,11 @@ let default_config () =
     rows = 0;
     columns = 0;
     palette = Palette.default;
-    typing_speed = 50;
+    typing_speed = 50_000_000;
     framerate = 50;
     playback_speed = 1.;
     loop_offset = 0.;
-    wait_timeout = 15_000;
+    wait_timeout = 15_000_000_000;
     wait_pattern = Regexp_match.compile ">$";
     cursor_blink = true;
   }
@@ -226,7 +233,7 @@ let set line c name args =
       let u =
         match rest with Keyword (("ms" | "s") as u) :: _ -> u | _ -> "s"
       in
-      { c with typing_speed = ms line (n ^ u) }
+      { c with typing_speed = ns line (n ^ u) }
   | "Framerate", _ -> (
       match int_of_string_opt (value ()) with
       | Some n when n >= 0 -> { c with framerate = max 1 n }
@@ -243,7 +250,7 @@ let set line c name args =
           let f = Float.rem (f /. 100.) 1. in
           { c with loop_offset = (if f < 0. then f +. 1. else f) }
       | _ -> unsupported line "%s is not a number" (value ()))
-  | "WaitTimeout", _ -> { c with wait_timeout = ms line (fst (time line args)) }
+  | "WaitTimeout", _ -> { c with wait_timeout = ns line (fst (time line args)) }
   | "WaitPattern", _ ->
       { c with wait_pattern = Regexp_match.compile (value ()) }
   | "CursorBlink", _ -> { c with cursor_blink = value () = "true" }
@@ -474,7 +481,7 @@ let rec read ~source ?file ~at line t =
             Ctrl (List.filter (function Sym '+' -> false | _ -> true) rest)
         | Keyword "Alt" :: Sym '+' :: k :: _ -> Alt k
         | Keyword "Shift" :: Sym '+' :: k :: _ -> Shift k
-        | Keyword "Sleep" :: rest -> Sleep (ms line (fst (time line rest)))
+        | Keyword "Sleep" :: rest -> Sleep (ns line (fst (time line rest)))
         | Keyword "Wait" :: rest -> wait_command ~at ~file line rest
         | [ Keyword "Hide" ] -> Hide
         | [ Keyword "Show" ] -> Show
@@ -553,6 +560,7 @@ let palette t = t.look.palette
 
 (* As terminals, synchronized output ends after 150ms. *)
 let sync_timeout = 150
+let sync_timeout_ns = sync_timeout * 1_000_000
 
 let replay t events =
   let s = t.look in
@@ -698,18 +706,17 @@ type state = {
 let now st = Eio.Time.Mono.now st.clock
 
 let elapsed st =
-  Int64.to_int
-    (Int64.div
-       (Mtime.Span.to_uint64_ns (Mtime.span st.started (now st)))
-       1_000_000L)
+  int_of_ns (Mtime.Span.to_uint64_ns (Mtime.span st.started (now st)))
 
 let stamp st =
   st.logical
-  + match st.cap with Some c -> min c (elapsed st) | None -> elapsed st
+  +! match st.cap with Some c -> min c (elapsed st) | None -> elapsed st
 
 let record ?at st =
   if not st.hidden then (
-    add st.tl (match at with Some ms -> ms | None -> stamp st) st.shown;
+    add st.tl
+      (ms_of_ns (match at with Some ns -> ns | None -> stamp st))
+      st.shown;
     Option.iter
       (fun path ->
         st.stills <- (path, st.shown) :: List.remove_assoc path st.stills;
@@ -735,9 +742,9 @@ let refresh st =
 
 let expire st =
   match st.sync with
-  | Some since when stamp st >= since + sync_timeout ->
+  | Some since when stamp st >= since +! sync_timeout_ns ->
       st.sync <- None;
-      if st.pending then show ~at:(since + sync_timeout) st
+      if st.pending then show ~at:(since +! sync_timeout_ns) st
   | _ -> ()
 
 let synchronize st on =
@@ -806,7 +813,7 @@ let last_output st =
 let feed st buf n =
   let output = Bytes.sub_string buf 0 n in
   Option.iter
-    (fun c -> st.captured <- Some ((stamp st, output) :: c))
+    (fun c -> st.captured <- Some ((ms_of_ns (stamp st), output) :: c))
     st.captured;
   since st output;
   expire st;
@@ -835,11 +842,11 @@ let write st s =
     st.submitted <- Some (Screen.cursor_row st.term);
   send st s
 
-let step st ms =
+let step st ns =
   st.started <- now st;
-  st.cap <- Some ms;
-  Eio.Time.Mono.sleep st.clock (float ms /. 1000.);
-  if not st.hidden then st.logical <- st.logical + ms;
+  st.cap <- Some ns;
+  Eio.Time.Mono.sleep_span st.clock (span ns);
+  if not st.hidden then st.logical <- st.logical +! ns;
   st.started <- now st;
   st.cap <- Some 0
 
@@ -863,13 +870,13 @@ let scroll st ?speed ~count dir =
     step st (Option.value speed ~default:st.typing_speed)
   done
 
-let within st seconds f =
+let within st ns f =
   Eio.Fiber.first
     (fun () ->
       f ();
       true)
     (fun () ->
-      Eio.Time.Mono.sleep st.clock seconds;
+      Eio.Time.Mono.sleep_span st.clock (span ns);
       false)
 
 (* VHS reads as many lines as the screen has rows, from the buffer's top. *)
@@ -923,10 +930,10 @@ let wait st c ~line ~at ~file ~scope ~timeout ~pattern =
           Eio.Condition.await_no_mutex st.changed;
           loop ()
   in
-  if not (within st (float timeout /. 1000.) loop) then
+  if not (within st timeout loop) then
     stop (Timeout { wait = line; line = at; file; last = wait_text st scope });
   Buffer.clear st.since;
-  if not st.hidden then st.logical <- st.logical + elapsed st;
+  if not st.hidden then st.logical <- st.logical +! elapsed st;
   st.started <- now st;
   st.cap <- Some 0
 
@@ -955,14 +962,14 @@ let run_command st c = function
   | Ctrl args -> press st (ctrl_bytes args)
   | Alt k -> press st ("\027" ^ modified ~shift:false k)
   | Shift k -> press st (modified ~shift:true k)
-  | Sleep ms -> step st ms
+  | Sleep ns -> step st ns
   | Wait { line; at; file; scope; timeout; pattern } ->
       wait st c ~line ~at ~file ~scope ~timeout ~pattern
   | Hide -> st.hidden <- true
   | Show ->
       st.hidden <- false;
       record st
-  | Set_typing_speed ms -> st.typing_speed <- ms
+  | Set_typing_speed ns -> st.typing_speed <- ns
   | Copy s -> st.clipboard <- s
   | Paste -> write st st.clipboard
   | Screenshot path ->
@@ -1162,7 +1169,7 @@ let await_prompt st c =
         loop ()
     | None -> ()
   in
-  if not (within st (float c.wait_timeout /. 1000.) loop) then
+  if not (within st c.wait_timeout loop) then
     stop (Timeout { wait = first_prompt; line = 0; file = None; last = "" });
   Buffer.clear st.since
 
@@ -1208,7 +1215,7 @@ let recording t st =
         [ (0, screen) ] )
   in
   {
-    svg = svg t st.tl ~end_ms:st.logical;
+    svg = svg t st.tl ~end_ms:(ms_of_ns st.logical);
     text = Buffer.contents st.text;
     stills = List.rev_map still st.stills;
   }
@@ -1285,7 +1292,7 @@ let capture ?interrupt ~clock ~env ~vars ~cwd ~line t argv =
             terminate clock terminal);
     let output = List.rev (Option.value st.captured ~default:[]) in
     match st.exited with
-    | Some status -> (output, stamp st, status)
+    | Some status -> (output, ms_of_ns (stamp st), status)
     | None -> stop (Io "the program's exit status is lost")
   with
   | r -> Ok r
