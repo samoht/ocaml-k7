@@ -500,7 +500,18 @@ let test_cancelled_osc palette sub glyph =
     (image ("A\027]" ^ body ^ cancel ^ suffix))
 
 let test_cancelled_string_control kind sub glyph split =
-  let prefix = [| "\027Pq"; "\027_"; "\027^"; "\027X" |].(kind mod 4) in
+  let prefix =
+    [|
+      "\027Pq";
+      "\027_";
+      "\027^";
+      "\027X";
+      "\xc2\x90q";
+      "\xc2\x9f";
+      "\xc2\x9e";
+      "\xc2\x98";
+    |].(kind mod 8)
+  in
   let cancel = if sub then "\026" else "\024" in
   let suffix = [| "B"; "é"; "中"; "🙂"; "é" |].(glyph mod 5) in
   let draw chunks =

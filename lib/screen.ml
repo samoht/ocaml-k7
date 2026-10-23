@@ -17,6 +17,7 @@ type scan =
   | Csi
   | Private of { n : int; sync : bool }
   | Osc of osc
+  | String
 
 type terminal = {
   vte : Vte.t;
@@ -47,6 +48,8 @@ let next scan c =
   | _, '\027' -> Esc
   | Esc, '[' -> Csi
   | _, '\x9d' | Esc, ']' -> Osc (Code (-1))
+  | _, ('\x90' | '\x98' | '\x9e' | '\x9f') | Esc, ('P' | 'X' | '^' | '_') ->
+      String
   | Csi, '?' -> Private { n = 0; sync = false }
   | Private p, '0' .. '9' ->
       Private { p with n = min 10_000 ((p.n * 10) + Char.code c - 48) }
@@ -184,15 +187,25 @@ let scan_osc t osc c u =
    as U+00A0 is. *)
 let latin_1 u = if Uchar.is_char u then Uchar.to_char u else '\xa0'
 
+(* A DCS, SOS, PM or APC string: as xterm.js, ESC, CAN, SUB and the C1 controls
+   end it. *)
+let scan_string c =
+  match c with
+  | '\027' | '\x18' | '\x1a' | '\x80' .. '\x9f' -> next Ground c
+  | _ -> String
+
 let step t c u =
   t.scan <-
-    (match t.scan with Osc osc -> scan_osc t osc c u | scan -> next scan c)
+    (match t.scan with
+    | Osc osc -> scan_osc t osc c u
+    | String -> scan_string c
+    | scan -> next scan c)
 
 (* matrix ignores DEC mode 2026 and the OSC 4 and 104 palette sequences, so the
    characters are scanned here too. A character that [s] cuts is scanned with
-   the next [s]. matrix also reads an OSC on through CAN and SUB, which cancel
-   it in xterm.js, so BEL ends it in their place: matrix then applies at most a
-   title or a hyperlink, which k7 does not draw. *)
+   the next [s]. matrix also reads an OSC, DCS, SOS, PM or APC string on through
+   CAN and SUB, which cancel it in xterm.js, so ST ends it in their place:
+   matrix then applies at most a title or a hyperlink, which k7 does not draw. *)
 let feed ?(sync = ignore) t s =
   let fed = String.length t.partial in
   let s = t.partial ^ s in
@@ -216,10 +229,10 @@ let feed ?(sync = ignore) t s =
             feed_to start (i + 1);
             sync (c = 'h');
             go (i + 1) (i + 1)
-        | Osc _, ('\x18' | '\x1a') ->
+        | (Osc _ | String), ('\x18' | '\x1a') ->
             t.scan <- Ground;
             feed_to start i;
-            Vte.feed_string t.vte "\007";
+            Vte.feed_string t.vte "\027\\";
             go (i + 1) (i + 1)
         | _, c ->
             step t c u;
