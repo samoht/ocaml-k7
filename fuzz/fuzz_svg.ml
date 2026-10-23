@@ -403,6 +403,46 @@ let test_osc_palette colour index st =
       if not (contains ~sub:colour image) then
         failf "OSC 4 palette entry %d lost colour %s" index colour
 
+let test_c1_palette index colour reset split =
+  let scalar n =
+    let b = Buffer.create 4 in
+    Buffer.add_utf_8_uchar b (Uchar.of_int n);
+    Buffer.contents b
+  in
+  let colour = Fmt.str "#12%04x" colour in
+  let prefix = Fmt.str "\027]4;%d;%s\007" index colour in
+  let body =
+    if reset then Fmt.str "104;%d" index else Fmt.str "4;%d;%s" index colour
+  in
+  let suffix = Fmt.str "\027[38;5;%dmX\027[?25l" index in
+  let c1 =
+    (if reset then prefix else "") ^ scalar 0x9d ^ body ^ scalar 0x9c ^ suffix
+  in
+  let expected =
+    (if reset then prefix else "") ^ "\027]" ^ body ^ "\027\\" ^ suffix
+  in
+  let rec boundaries i acc =
+    if i = String.length c1 then List.rev (i :: acc)
+    else
+      let d = String.get_utf_8_uchar c1 i in
+      boundaries (i + Uchar.utf_decode_length d) (i :: acc)
+  in
+  let boundaries = boundaries 0 [] in
+  let cut = List.nth boundaries (split mod List.length boundaries) in
+  let image output =
+    match K7.svg ~settings output with
+    | Ok s -> s
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  check_eq ~pp:pp_string
+    (image K7.[ (Ms 0, expected) ])
+    (image
+       K7.
+         [
+           (Ms 0, String.sub c1 0 cut);
+           (Ms 0, String.sub c1 cut (String.length c1 - cut));
+         ])
+
 let test_theme_xml output theme =
   let settings = K7.Theme theme :: settings in
   match K7.tape ~settings ~outputs:[ "a.svg" ] [ K7.sleep (Ms 100) ] with
@@ -948,6 +988,10 @@ let suite =
             [ int; const 0; const 9_223_372_036_854; const 9_223_372_036_855 ];
         ]
         test_time_bounds;
+      test_case
+        "C1 OSC sets and resets all palette entries across scalar boundaries"
+        [ uint8; uint16; bool; uint8 ]
+        test_c1_palette;
       test_case "OSC palette changes survive output boundaries"
         [ uint8; uint8; bool ] test_osc_palette;
       test_case "arbitrary output and themes produce XML" [ bytes; theme ]
