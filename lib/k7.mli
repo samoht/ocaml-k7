@@ -500,12 +500,13 @@ val svg_of_casts :
     recordings [casts], one after the other on one terminal, as {!svg} draws the
     data of their output events at their times. A recording's first line is [$ ]
     then its command, as for {!run}, and its output shows [delay] (defaults to
-    [Ms 500]) later. Its command is the string of [show] (defaults to [[]]) if
-    it has one, its [n]th string for the [n]th recording if it has one per
-    recording, and otherwise the [command] of its header, if any, its control
-    characters shown as spaces. An empty command shows no line and no delay. The
-    last screen of each recording holds for a second after its last event, an
-    exit included, and the next recording starts then.
+    [Ms 500]) later. If [show] (defaults to [[]]) holds one string, that string
+    is the command of every recording; if it holds one string per recording, its
+    [n]th string is the command of the [n]th recording. Otherwise a recording's
+    command is the [command] of its header, if any, its control characters shown
+    as spaces. An empty command shows no line and no delay. The last screen of
+    each recording holds for a second after its last event, an exit included,
+    and the next recording starts then.
 
     The terminal has the size of the header of each recording from its start,
     and of each resize, on an image of the largest of them, unless [settings]
