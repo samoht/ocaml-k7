@@ -1248,6 +1248,24 @@ let terminal =
       test_zero_width;
   ]
 
+let test_arbitrary_byte_split input cut =
+  let input = input ^ "END" in
+  let cut = cut mod (String.length input + 1) in
+  let draw chunks =
+    match
+      K7.svg
+        ~settings:K7.[ Columns 20; Rows 3 ]
+        (List.map (fun s -> (K7.Ms 0, s)) chunks)
+    with
+    | Ok image -> image
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  check_eq ~pp:pp_string (draw [ input ])
+    (draw
+       [
+         String.sub input 0 cut; String.sub input cut (String.length input - cut);
+       ])
+
 let test_submicrosecond_time_order microsecond ignored =
   let code = if ignored then "i" else "o" in
   let source =
@@ -1317,6 +1335,8 @@ let casts =
 let suite =
   ( "svg",
     [
+      test_case "arbitrary PTY byte splits preserve the public SVG"
+        [ bytes; uint16 ] test_arbitrary_byte_split;
       test_case "hiding a cast command removes its line and any delay"
         [ uint16 ] test_hidden_cast_delay;
       test_case
