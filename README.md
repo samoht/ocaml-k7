@@ -45,9 +45,11 @@ for half a second, as if typed, or for `--delay` milliseconds, and each
 screen then shows at the time the program printed it. A `.cast` output is
 the recording in asciicast v3, a `.txt` output the text of the last
 screen, and a `.t` output a cram test of the command, run with `sh -c` on
-pipes as dune runs it, so that dune reads it back unchanged. `k7 rec` exits
-with the program's exit code; an error of k7 itself prints `k7:` and the
-reason on standard error, and exits 123.
+pipes as dune runs it, so that dune reads it back unchanged. With another
+output beside it, the command runs twice: once on the terminal and once on
+pipes for the cram test. `k7 rec` exits with the program's exit code; an
+error of k7 itself prints `k7:` and the reason on standard error, and exits
+123.
 
 ```sh
 $ k7 rec --output ls.svg -- ls -l
