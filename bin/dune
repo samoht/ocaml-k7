@@ -2,7 +2,16 @@
 
 (library
  (name k7_cli)
- (modules cram flags play_cram play_tape play_cmd rec_cmd cast_cmd cli quote)
+ (modules
+  cram
+  flags
+  play_cram
+  play_tape
+  play_cast
+  play_cmd
+  rec_cmd
+  cli
+  quote)
  (libraries k7 cmdliner eio eio.unix eio_main fmt unix))
 
 (executable

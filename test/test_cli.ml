@@ -299,7 +299,16 @@ let test_command () =
   List.iter
     (fun s ->
       if not (contains ~sub:s man) then Alcotest.failf "manual lacks %S" s)
-    [ "--print"; "123"; "PS1"; "U+200B"; "cannot be written"; "--wait-timeout" ]
+    [
+      "--print";
+      "123";
+      "PS1";
+      "U+200B";
+      "cannot be written";
+      "--wait-timeout";
+      ".cast";
+      "--show";
+    ]
 
 (* Set by the oracle alias only. *)
 let oracle = Sys.getenv_opt "VHS_ORACLE"
@@ -756,6 +765,56 @@ let test_engine () =
            ~outputs:[ path "out.gif" ]
            ~setup:[] ~dir:None ~wait_timeout:None (path "pwsh.tape") ))
 
+(* k7 play draws a .cast, in any case, as K7.svg_of_cast does, byte for
+   byte; --dry-run writes nothing and the options of a shell are refused. *)
+let test_cast () =
+  let cast =
+    "{\"version\": 2, \"width\": 20, \"height\": 3}\n\
+     [0.1, \"o\", \"hello\\r\\n\"]\n\
+     [0.25, \"o\", \"world\"]\n"
+  in
+  with_files [ ("hello.CAST", 0o644, cast); ("err", 0o644, "") ]
+  @@ fun env path ->
+  let play ?engine ?(dry_run = false) ?(env_vars = []) ?(setup = []) ?show
+      ?delay output =
+    captured path @@ fun () ->
+    Play_cmd.run env ?engine ~dry_run ~print:false ~settings:[] ~env:env_vars
+      ~outputs:[ path output ]
+      ~setup ~dir:None ~wait_timeout:None ?show ?delay (path "hello.CAST")
+  in
+  let read file = In_channel.with_open_bin (path file) In_channel.input_all in
+  Alcotest.(check (pair int string)) "drawn" (0, "") (play "a.svg");
+  Alcotest.(check (pair int string))
+    "drawn with a command line" (0, "")
+    (play ~show:"make" ~delay:(Ms 250) "b.svg");
+  expect "as K7.svg_of_cast"
+    (Result.get_ok (K7.svg_of_cast cast))
+    (read "a.svg");
+  expect "with --show and --delay"
+    (Result.get_ok (K7.svg_of_cast ~show:"make" ~delay:(Ms 250) cast))
+    (read "b.svg");
+  Alcotest.(check (pair int string))
+    "dry run" (0, "")
+    (play ~dry_run:true "c.svg");
+  Alcotest.(check bool)
+    "dry run writes nothing" false
+    (Sys.file_exists (path "c.svg"));
+  let refused name ~sub (code, error) =
+    Alcotest.(check int) name 123 code;
+    Native_test.check_contains name ~sub error
+  in
+  refused "--engine" ~sub:"--engine applies to a tape or a cram test"
+    (play ~engine:K7.Native "d.svg");
+  refused "--env" ~sub:"--env applies to a tape or a cram test"
+    (play ~env_vars:[ ("A", "1") ] "d.svg");
+  refused "--setup" ~sub:"--setup applies to a cram test (.t)"
+    (play ~setup:[ path "err" ] "d.svg");
+  refused "a GIF" ~sub:"not .svg, the only output of an asciicast recording"
+    (play "d.gif");
+  Alcotest.(check bool)
+    "refused, nothing written" false
+    (Sys.file_exists (path "d.svg"))
+
 let suite =
   ( "cli",
     List.map
@@ -781,6 +840,7 @@ let suite =
            test_output_option_replaces_late_output );
          ("rec creates the output directory", test_rec_creates_output_directory);
          ("engine", test_engine);
+         ("asciicast recordings", test_cast);
        ]
       @ readiness ~native:true
       @ if Option.is_some oracle then readiness ~native:false else []) )

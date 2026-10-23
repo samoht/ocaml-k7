@@ -26,8 +26,8 @@ val milliseconds : int Cmdliner.Arg.conv
 (** [milliseconds] reads a decimal number of milliseconds from [0] to Go's
     longest duration. *)
 
-val vhs : string Cmdliner.Term.t
-(** [vhs] is the [vhs] executable of [--vhs] (defaults to ["vhs"]). *)
+val vhs : string option Cmdliner.Term.t
+(** [vhs] is the [vhs] executable of [--vhs], if given. *)
 
 val print : bool Cmdliner.Term.t
 (** [print] is [true] iff [--print] is given. *)

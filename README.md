@@ -22,7 +22,9 @@ GIF and video outputs also need [VHS](https://github.com/charmbracelet/vhs#insta
 
 ## Command line
 
-`k7 play` plays a tape or a cram test and records it. A cram test, the
+`k7 play FILE` plays a tape (`.tape`), a cram test (`.t`) or an
+asciicast recording (`.cast`), by the extension of `FILE` in any case,
+and refuses an option that does not apply to that kind. A cram test, the
 `.t` format that dune runs, gives the commands to type into bash, in a
 new empty temporary directory as dune does; `k7 play` waits for the
 prompt before it types the next. `--setup`, `--dir` and
@@ -42,6 +44,20 @@ $ printf 'Output hello.svg\nType "echo hello"\nEnter\nSleep 1s\n' > hello.tape
 $ k7 play hello.tape
 ```
 
+On a `.cast` file, `k7 play` draws a recording in asciinema's
+[asciicast v2](https://docs.asciinema.org/manual/asciicast/v2/) format,
+such as console writes under its virtual clock with
+`CONSOLE_DETERMINISTIC_CLOCK=1 CONSOLE_CAST=FILE`, to `.svg` outputs
+only. It runs nothing, so the same recording gives the same image, byte
+for byte; `--show` and `--delay` add a command line, as for `k7 rec`
+below, and apply to a recording only. `--dry-run` reads and draws it without
+writing the image.
+
+```sh
+$ printf '{"version": 2, "width": 40, "height": 4}\n[0.5, "o", "hello\\r\\n"]\n' > hello.cast
+$ k7 play --show 'echo hello' --output hello.svg hello.cast
+```
+
 `k7 rec` records a program, with no shell and nothing typed. The image's
 first line is `$ ` and the command, which `--show` replaces or, empty,
 hides; it shows alone for half a second, as if typed, or for `--delay`
@@ -53,24 +69,12 @@ prints `k7:` and the reason on standard error, and exits 123.
 $ k7 rec --output ls.svg -- ls -l
 ```
 
-`k7 cast` draws a recording in asciinema's
-[asciicast v2](https://docs.asciinema.org/manual/asciicast/v2/) format,
-such as console writes under its virtual clock with
-`CONSOLE_DETERMINISTIC_CLOCK=1 CONSOLE_CAST=FILE`. It runs nothing, so
-the same recording gives the same image, byte for byte; `--show` and
-`--delay` add the command line as for `k7 rec`.
-
-```sh
-$ printf '{"version": 2, "width": 40, "height": 4}\n[0.5, "o", "hello\\r\\n"]\n' > hello.cast
-$ k7 cast --show 'echo hello' --output hello.svg hello.cast
-```
-
-The three subcommands take `--columns`, `--rows`, `--font-size`,
-`--theme` and `--framerate`, and `k7 play` and `k7 rec` take
-`--env VAR=VALUE`. k7 writes `.svg` outputs and the text outputs
-(`.txt`, `.ascii` and `.test`) itself, and `k7 play` runs `vhs` for the
-others. `k7 play` calls `K7.record`, `k7 rec` calls `K7.run` and
-`k7 cast` calls `K7.svg_of_cast`.
+Both subcommands take `--columns`, `--rows`, `--font-size`, `--theme`
+and `--framerate`, and `--env VAR=VALUE` for the program of `k7 rec` or
+the shell of a tape or a cram test. k7 writes `.svg` outputs and the
+text outputs (`.txt`, `.ascii` and `.test`) itself, and `k7 play` runs
+`vhs` for the others. `k7 play` calls `K7.record` on a tape or a cram
+test and `K7.svg_of_cast` on a recording, and `k7 rec` calls `K7.run`.
 `k7 COMMAND --help` gives the details.
 
 ## OCaml

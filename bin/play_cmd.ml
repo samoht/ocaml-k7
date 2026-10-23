@@ -3,43 +3,76 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-type kind = Tape | Cram
+type kind = Tape | Cram | Cast
 
 (* Ignoring case, as macOS's disk does. *)
 let kind input =
   match String.lowercase_ascii (Filename.extension input) with
   | ".tape" -> Ok Tape
   | ".t" -> Ok Cram
-  | _ -> Fmt.error "%s: neither a tape (.tape) nor a cram test (.t)" input
+  | ".cast" -> Ok Cast
+  | _ ->
+      Fmt.error
+        "%s: not a tape (.tape), a cram test (.t) or an asciicast recording \
+         (.cast)"
+        input
 
-let cram_only ~setup ~dir ~wait_timeout =
+let name = function
+  | Tape -> "a tape"
+  | Cram -> "a cram test"
+  | Cast -> "an asciicast recording"
+
+let names = function
+  | [ Cram ] -> "a cram test (.t)"
+  | [ Cast ] -> "an asciicast recording (.cast)"
+  | _ -> "a tape or a cram test"
+
+let misplaced kind ~engine ~print ~vhs ~env ~setup ~dir ~wait_timeout ~show
+    ~delay =
   List.find_map
-    (fun (given, flag) -> if given then Some flag else None)
+    (fun (given, flag, kinds) ->
+      if given && not (List.mem kind kinds) then Some (flag, kinds) else None)
     [
-      (setup <> [], "--setup");
-      (Option.is_some dir, "--dir");
-      (Option.is_some wait_timeout, "--wait-timeout");
+      (Option.is_some engine, "--engine", [ Tape; Cram ]);
+      (env <> [], "--env", [ Tape; Cram ]);
+      (print, "--print", [ Tape; Cram ]);
+      (Option.is_some vhs, "--vhs", [ Tape; Cram ]);
+      (setup <> [], "--setup", [ Cram ]);
+      (Option.is_some dir, "--dir", [ Cram ]);
+      (Option.is_some wait_timeout, "--wait-timeout", [ Cram ]);
+      (Option.is_some show, "--show", [ Cast ]);
+      (Option.is_some delay, "--delay", [ Cast ]);
     ]
 
-let run stdenv ?engine ~dry_run ~print ~vhs ~settings ~env ~outputs ~setup ~dir
-    ~wait_timeout input =
+let run stdenv ?engine ~dry_run ~print ?vhs ~settings ~env ~outputs ~setup ~dir
+    ~wait_timeout ?show ?delay input =
+  let play = function
+    | Cram ->
+        Play_cram.run stdenv ?engine ~dry_run ~print
+          ~vhs:(Option.value vhs ~default:"vhs")
+          ~setup ?dir ~settings ~env ?wait_timeout_s:wait_timeout ~outputs input
+    | Tape ->
+        Play_tape.run stdenv ?engine ~dry_run ~print
+          ~vhs:(Option.value vhs ~default:"vhs")
+          ~settings ~env ~outputs input
+    | Cast ->
+        Play_cast.run stdenv ~dry_run ~settings ?show ?delay ~outputs input
+  in
   match kind input with
   | Error msg -> Flags.fail stdenv msg
   | Ok _ when dry_run && print ->
       Flags.fail stdenv
         "--dry-run checks a file and --print prints its tape; give one"
-  | Ok Cram ->
-      Play_cram.run stdenv ?engine ~dry_run ~print ~vhs ~setup ?dir ~settings
-        ~env ?wait_timeout_s:wait_timeout ~outputs input
-  | Ok Tape -> (
-      match cram_only ~setup ~dir ~wait_timeout with
-      | Some flag ->
+  | Ok kind -> (
+      match
+        misplaced kind ~engine ~print ~vhs ~env ~setup ~dir ~wait_timeout ~show
+          ~delay
+      with
+      | Some (flag, kinds) ->
           Flags.fail stdenv
-            (Fmt.str "%s: %s applies to a cram test (.t), not to a tape" input
-               flag)
-      | None ->
-          Play_tape.run stdenv ?engine ~dry_run ~print ~vhs ~settings ~env
-            ~outputs input)
+            (Fmt.str "%s: %s applies to %s, not to %s" input flag (names kinds)
+               (name kind))
+      | None -> play kind)
 
 open Cmdliner
 
@@ -48,7 +81,8 @@ let outputs =
     "Write the recording to $(docv), in the format of its extension, in place \
      of the $(b,Output) lines of a tape. Repeatable. $(cmd) itself records an \
      $(b,.svg) image and the text outputs $(b,.txt), $(b,.ascii) and \
-     $(b,.test), and $(b,vhs) records the others."
+     $(b,.test), and $(b,vhs) records the others. An asciicast recording takes \
+     $(b,.svg) images only."
   in
   Arg.(value & opt_all string [] & info [ "o"; "output" ] ~docv:"FILE" ~doc)
 
@@ -66,8 +100,8 @@ let engine =
 let dry_run =
   let doc =
     "Check $(i,FILE), the options and the outputs as a recording would, \
-     without recording anything, and without starting a shell or $(b,vhs). It \
-     does not go with $(b,--print)."
+     without recording or writing anything, and without starting a shell or \
+     $(b,vhs). It does not go with $(b,--print)."
   in
   Arg.(value & flag & info [ "dry-run" ] ~doc)
 
@@ -85,10 +119,39 @@ let dir =
   in
   Arg.(value & opt (some dir) None & info [ "dir" ] ~docv:"DIR" ~doc)
 
+let show =
+  let doc =
+    "Show a first line with $(b,\\$) and $(docv), as $(b,k7 rec) does, before \
+     an asciicast recording."
+  in
+  Arg.(value & opt (some string) None & info [ "show" ] ~docv:"TEXT" ~doc)
+
+let delay =
+  let doc =
+    "Show the line of $(b,--show) alone for $(docv) milliseconds (defaults to \
+     500), as if typed, before an asciicast recording; 0 starts the recording \
+     at once."
+  in
+  Arg.(
+    value
+    & opt (some Flags.milliseconds) None
+    & info [ "delay" ] ~docv:"MS" ~doc)
+
+let settings =
+  Flags.settings_for
+    ~columns:
+      "the $(b,width) of the header of an asciicast recording, and otherwise \
+       as many as a frame of 1200 pixels holds, as in VHS: 75 at the default \
+       font size"
+    ~rows:
+      "the $(b,height) of the header of an asciicast recording, and otherwise \
+       as many as a frame of 600 pixels holds, as in VHS: 16 at the default \
+       font size"
+
 let input =
   let doc =
-    "The file to play: a tape in VHS's $(b,.tape) syntax, or a cram test, a \
-     $(b,.t) file."
+    "The file to play: a tape ($(b,.tape)), a cram test ($(b,.t)) or an \
+     asciicast recording ($(b,.cast))."
   in
   Arg.(required & pos 0 (some non_dir_file) None & info [] ~docv:"FILE" ~doc)
 
@@ -96,23 +159,28 @@ let man =
   [
     `S Manpage.s_description;
     `P
-      "$(cmd) plays $(i,FILE) and records it: a tape in VHS's $(b,.tape) \
-       syntax, or a cram test, the $(b,.t) format that dune runs, whose \
-       commands it types into bash.";
+      "$(cmd) plays $(i,FILE) by the kind its extension names, in any case. A \
+       tape ($(b,.tape)), in VHS's syntax, plays in a shell and is recorded; \
+       so does a cram test ($(b,.t)), the format that dune runs, whose \
+       commands $(cmd) types into bash. An asciicast recording ($(b,.cast)), \
+       in asciinema's v2 format, is output already recorded: $(cmd) runs \
+       nothing and draws it as an $(b,.svg) image. An option that does not \
+       apply to the kind of $(i,FILE) is an error.";
     `P
-      "When every output is an $(b,.svg) image or a text output ($(b,.txt), \
-       $(b,.ascii) or $(b,.test)), $(cmd) plays $(i,FILE) itself, in a shell \
-       on a pseudo-terminal, and draws its screens as an animated SVG image, \
-       which plays in an HTML $(i,img) element, or writes their text as VHS \
-       does. Otherwise $(b,vhs), which needs $(b,ttyd), $(b,ffmpeg) and a \
-       browser, records it. A file cannot ask for both an $(b,.svg) image and \
-       an output only $(b,vhs) writes. $(b,--engine) picks the recorder \
-       instead, such as $(b,vhs) for a text output of a tape whose shell \
-       $(cmd) does not start itself.";
+      "When every output of a tape or a cram test is an $(b,.svg) image or a \
+       text output ($(b,.txt), $(b,.ascii) or $(b,.test)), $(cmd) plays \
+       $(i,FILE) itself, in a shell on a pseudo-terminal, and draws its \
+       screens as an animated SVG image, which plays in an HTML $(i,img) \
+       element, or writes their text as VHS does. Otherwise $(b,vhs), which \
+       needs $(b,ttyd), $(b,ffmpeg) and a browser, records it. A file cannot \
+       ask for both an $(b,.svg) image and an output only $(b,vhs) writes. \
+       $(b,--engine) picks the recorder instead, such as $(b,vhs) for a text \
+       output of a tape whose shell $(cmd) does not start itself.";
     `P
       "$(b,--dry-run) checks $(i,FILE) as $(b,vhs validate) does, and also \
        that the chosen recorder writes the outputs, with the other options \
-       applied, in directories it can write in; it exits 0 when they pass.";
+       applied, in directories it can write in; it exits 0 when they pass. On \
+       an asciicast recording, it draws the image and writes nothing.";
     `P
       "On SIGINT or SIGTERM, $(cmd) plays no more actions, writes what it \
        recorded so far, and exits 130 or 143.";
@@ -149,25 +217,43 @@ let man =
        It tells the prompt from output, even output that ends with $(b,>) or \
        with a zero-width space, and does not show in a GIF or a video. The \
        text outputs hold it after each prompt.";
+    `S "ASCIICAST RECORDINGS";
+    `P
+      "Each output event of an asciicast recording shows at its time, rounded \
+       to the millisecond, so the same recording gives the same image, byte \
+       for byte, and the last screen holds for a second. The terminal has the \
+       $(b,width) and $(b,height) of the header, which $(b,--columns) and \
+       $(b,--rows) replace. $(cmd) ignores the input events, the markers and \
+       the resizes, and the other members of the header. A recording needs \
+       $(b,-o) and an $(b,.svg) output; $(b,--show) and $(b,--delay) add a \
+       command line, and apply to asciicast recordings only.";
+    `P
+      "A program that uses console writes such a recording, at the times of \
+       its virtual clock, with $(b,CONSOLE_DETERMINISTIC_CLOCK=1) and \
+       $(b,CONSOLE_CAST=)$(i,FILE).";
     `S Manpage.s_examples;
     `Pre
       "$(cmd) demo.tape\n\
        $(cmd) --columns 100 -o demo.svg demo.tape\n\
        $(cmd) -o demo.svg demo.t\n\
        $(cmd) -o demo.gif demo.t\n\
-       $(cmd) --print -o demo.gif demo.t   # show the tape";
+       $(cmd) --print -o demo.gif demo.t   # show the tape\n\
+       $(cmd) --show 'dune exec -- ./main.exe' -o main.svg main.cast";
   ]
 
 let cmd =
-  let doc = "play a tape or a cram test and record it" in
+  let doc = "play a tape, a cram test or an asciicast recording" in
   let run engine dry_run print vhs settings env outputs setup dir wait_timeout
-      input =
+      show delay input =
     Eio_main.run @@ fun stdenv ->
-    run stdenv ?engine ~dry_run ~print ~vhs ~settings ~env ~outputs ~setup ~dir
-      ~wait_timeout input
+    run stdenv ?engine ~dry_run ~print ?vhs ~settings ~env ~outputs ~setup ~dir
+      ~wait_timeout ?show
+      ?delay:(Option.map (fun ms -> K7.Ms ms) delay)
+      input
   in
   Cmd.make
     (Cmd.info "play" ~doc ~man ~exits:Flags.exits)
     Term.(
-      const run $ engine $ dry_run $ Flags.print $ Flags.vhs $ Flags.settings
-      $ Flags.env $ outputs $ setup $ dir $ Flags.wait_timeout $ input)
+      const run $ engine $ dry_run $ Flags.print $ Flags.vhs $ settings
+      $ Flags.env $ outputs $ setup $ dir $ Flags.wait_timeout $ show $ delay
+      $ input)

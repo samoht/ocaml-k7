@@ -94,7 +94,7 @@ let binding s =
 let env =
   let doc =
     "Set the variable $(i,VAR) to $(i,VALUE) in the environment of what k7 \
-     records: the shell of $(b,k7 play), the program of $(b,k7 rec). \
+     records: the shell of a tape or a cram test, the program of $(b,k7 rec). \
      Repeatable."
   in
   let pp ppf (k, v) = Fmt.pf ppf "%s=%s" k v in
@@ -144,8 +144,8 @@ let milliseconds =
   Arg.Conv.make ~docv:"MS" ~parser ~pp:Fmt.int ()
 
 let vhs =
-  let doc = "The $(b,vhs) executable to run." in
-  Arg.(value & opt string "vhs" & info [ "vhs" ] ~docv:"PATH" ~doc)
+  let doc = "The $(b,vhs) executable to run (defaults to $(b,vhs))." in
+  Arg.(value & opt (some string) None & info [ "vhs" ] ~docv:"PATH" ~doc)
 
 let print =
   let doc =
@@ -163,8 +163,9 @@ let exits =
            early.";
       info some_error
         ~doc:
-          "when the recording fails, when $(b,vhs) cannot run or fails, or \
-           when the tape of $(b,--print) cannot be written; the reason is on \
+          "when the recording fails, when an asciicast recording cannot be \
+           drawn, when $(b,vhs) cannot run or fails, or when the tape of \
+           $(b,--print) or the image cannot be written; the reason is on \
            standard error.";
       info 130
         ~doc:"when interrupted by SIGINT, once what was recorded is written.";

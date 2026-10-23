@@ -23,12 +23,12 @@ An input is a file of at most 10 MiB, not a stream.
   k7: zero.t: larger than 10 MiB
   [123]
 
-k7 play takes a tape (.tape) or a cram test (.t), and a cram test needs
-an output.
+k7 play takes a tape (.tape), a cram test (.t) or an asciicast
+recording (.cast), and a cram test needs an output.
 
   $ touch demo.txt
   $ k7 play demo.txt
-  k7: demo.txt: neither a tape (.tape) nor a cram test (.t)
+  k7: demo.txt: not a tape (.tape), a cram test (.t) or an asciicast recording (.cast)
   [123]
   $ cp demo.t upper.T
   $ k7 play --dry-run -o upper.svg upper.T
@@ -56,6 +56,8 @@ Numbers are plain decimal digits, as the messages say.
   $ k7 rec --delay -5 -o delay.svg -- true 2> /dev/null
   [124]
   $ k7 rec --delay 9223372036855 -o delay.svg -- true 2> /dev/null
+  [124]
+  $ k7 play --delay -5 -o delay.svg demo.t 2> /dev/null
   [124]
 
 --print shows the tape instead of running vhs.
@@ -308,9 +310,9 @@ outputs as a recording would, without recording anything.
   $ test -e dry.svg || test -e outless.txt || test -e played || echo nothing written
   nothing written
 
-k7 cast draws an asciicast v2 recording, at the times of its output
-events, on a terminal of the size of its header. It runs nothing, so it
-writes the same image each time.
+k7 play draws an asciicast v2 recording (.cast), at the times of its
+output events, on a terminal of the size of its header. It runs nothing,
+so it writes the same image each time.
 
   $ cat > hello.cast <<'EOF'
   > {"version": 2, "width": 20, "height": 3, "title": "hello"}
@@ -318,27 +320,80 @@ writes the same image each time.
   > [0.2, "i", "q"]
   > [0.25, "o", "\u001b[1mworld\u001b[0m"]
   > EOF
-  $ k7 cast -o hello.svg hello.cast
-  $ k7 cast -o again.svg hello.cast
+  $ k7 play -o hello.svg hello.cast
+  $ k7 play -o again.svg hello.cast
   $ cmp hello.svg again.svg
   $ grep -o '<desc id="k[0-9a-f]*d">[^<]*' hello.svg | sed 's/id="[^"]*"//'
   <desc >hello
   $ grep -o 'animation:k[0-9a-f]*s [0-9]*ms' hello.svg | sed 's/k[0-9a-f]*s/s/'
   animation:s 1260ms
-  $ k7 cast --show 'make hello' --delay 250 -o show.svg hello.cast
+  $ cp hello.cast upper.CAST
+  $ k7 play -o upper.svg upper.CAST
+  $ cmp hello.svg upper.svg
+  $ k7 play --show 'make hello' --delay 250 -o show.svg hello.cast
   $ grep -o '<desc id="k[0-9a-f]*d">[^<]*' show.svg | sed 's/id="[^"]*"//'
   <desc >$ make hello
   $ grep -o 'animation:k[0-9a-f]*s [0-9]*ms' show.svg | sed 's/k[0-9a-f]*s/s/'
   animation:s 1500ms
-  $ k7 cast -o hello.gif hello.cast
-  k7: "hello.gif": not .svg, the animated SVG image k7 cast writes
+
+A recording takes one or more .svg outputs, and refuses the options of
+a tape or a cram test. --show and --delay apply to a recording only.
+
+  $ k7 play hello.cast
+  k7: hello.cast: no output; give it -o FILE.svg
+  [123]
+  $ k7 play -o hello.gif hello.cast
+  k7: hello.cast: "hello.gif": not .svg, the only output of an asciicast recording
+  [123]
+  $ k7 play -o one.svg -o two.svg hello.cast
+  $ cmp hello.svg one.svg && cmp hello.svg two.svg
+  $ k7 play --engine native -o e.svg hello.cast
+  k7: hello.cast: --engine applies to a tape or a cram test, not to an asciicast recording
+  [123]
+  $ k7 play --env A=1 -o e.svg hello.cast
+  k7: hello.cast: --env applies to a tape or a cram test, not to an asciicast recording
+  [123]
+  $ k7 play --print -o e.svg hello.cast
+  k7: hello.cast: --print applies to a tape or a cram test, not to an asciicast recording
+  [123]
+  $ k7 play --vhs vhs -o e.svg hello.cast
+  k7: hello.cast: --vhs applies to a tape or a cram test, not to an asciicast recording
+  [123]
+  $ k7 play --setup demo.t -o e.svg hello.cast
+  k7: hello.cast: --setup applies to a cram test (.t), not to an asciicast recording
+  [123]
+  $ k7 play --dir . -o e.svg hello.cast
+  k7: hello.cast: --dir applies to a cram test (.t), not to an asciicast recording
+  [123]
+  $ k7 play --wait-timeout 5 -o e.svg hello.cast
+  k7: hello.cast: --wait-timeout applies to a cram test (.t), not to an asciicast recording
+  [123]
+  $ k7 play --show x -o e.svg demo.t
+  k7: demo.t: --show applies to an asciicast recording (.cast), not to a cram test
+  [123]
+  $ k7 play --delay 0 dry.tape
+  k7: dry.tape: --delay applies to an asciicast recording (.cast), not to a tape
+  [123]
+  $ test -e e.svg || echo nothing written
+  nothing written
+
+--dry-run reads and draws a recording without writing the image.
+
+  $ k7 play --dry-run -o dry-cast.svg hello.cast
+  $ test -e dry-cast.svg || echo nothing written
+  nothing written
+  $ k7 play --dry-run -o dry-cast.gif hello.cast
+  k7: hello.cast: "dry-cast.gif": not .svg, the only output of an asciicast recording
   [123]
   $ printf '{"version": 3, "term": {"cols": 80, "rows": 24}}\n' > v3.cast
-  $ k7 cast -o v3.svg v3.cast
+  $ k7 play --dry-run -o v3.svg v3.cast
+  k7: v3.cast: line 1: asciicast version 3, not 2
+  [123]
+  $ k7 play -o v3.svg v3.cast
   k7: v3.cast: line 1: asciicast version 3, not 2
   [123]
   $ printf '{"version": 2, "width": 20, "height": 3}\n[1, "o", "a"]\n[0.5, "o", "b"]\n' > late.cast
-  $ k7 cast -o late.svg late.cast
+  $ k7 play -o late.svg late.cast
   k7: late.cast: line 3: time 0.5s is before 1s
   [123]
   $ test -e v3.svg || test -e late.svg || echo nothing written
