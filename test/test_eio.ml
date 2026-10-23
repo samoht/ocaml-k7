@@ -70,7 +70,7 @@ module Child = struct
     on_signal : int -> unit;
   }
 
-  type tag = [ `Generic ]
+  type tag = [ `Generic | `Unix ]
 
   let pid _ = 1
   let await t = Eio.Promise.await t.status
@@ -86,7 +86,7 @@ type body = {
 }
 
 module Manager = struct
-  type tag = [ `Generic ]
+  type tag = [ `Generic | `Unix ]
 
   type t = {
     sw : Eio.Switch.t;
@@ -128,6 +128,10 @@ module Manager = struct
         Eio.Promise.resolve resolve (body.run ~stdin:(Option.get stdin) ~output));
     let child = Child.{ status; on_signal = body.on_signal } in
     Eio.Resource.T (child, Eio.Process.Pi.process (module Child))
+
+  let spawn_unix _ ~sw:_ ?cwd:_ ?pgid:_ ?uid:_ ?gid:_ ?login_tty:_ ~env:_ ~fds:_
+      ~executable:_ _ =
+    Alcotest.fail "spawn_unix: not mocked"
 end
 
 let manager ?(inherited = [||])
@@ -137,7 +141,7 @@ let manager ?(inherited = [||])
     start =
   Eio.Resource.T
     ( Manager.{ sw; start; inherited; inspect_env },
-      Eio.Process.Pi.mgr (module Manager) )
+      Eio_unix.Process.Pi.mgr_unix (module Manager) )
 
 let cwd = (Eio.Resource.T ((), Eio.Resource.handler []), "mock-cwd")
 let read_all flow = Eio.Buf_read.(take_all (of_flow flow ~max_size:1_000_000))

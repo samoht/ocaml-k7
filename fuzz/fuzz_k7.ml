@@ -573,10 +573,10 @@ let save _env path contents =
 let render_tape () = Result.get_ok (K7.tape ~outputs:[ "demo.gif" ] [ last ])
 
 module Inherited = struct
-  type tag = [ `Generic ]
+  type tag = [ `Generic | `Unix ]
 
   type t = {
-    base : [ `Generic ] Eio.Process.mgr_ty Eio.Resource.t;
+    base : Eio_unix.Process.mgr_ty Eio.Resource.t;
     inherited : string array;
   }
 
@@ -599,6 +599,11 @@ module Inherited = struct
     let env = Option.value ~default:t.inherited env in
     Eio.Process.spawn ~sw ?cwd ?stdin ?stdout ?stderr ~env ?executable t.base
       args
+
+  let spawn_unix t ~sw ?cwd ?pgid ?uid ?gid ?login_tty ~env ~fds ~executable
+      args =
+    Eio_unix.Process.spawn_unix ~sw t.base ?cwd ?pgid ?uid ?gid ?login_tty ~fds
+      ~env ~executable args
 end
 
 let test_no_publication term =
@@ -607,8 +612,7 @@ let test_no_publication term =
   save env executable
     "#!/bin/sh\ncat > /dev/null\n[ \"$VHS_PUBLISH\" != true ]\n";
   let base =
-    (Eio.Stdenv.process_mgr env
-      :> [ `Generic ] Eio.Process.mgr_ty Eio.Resource.t)
+    (Eio.Stdenv.process_mgr env :> Eio_unix.Process.mgr_ty Eio.Resource.t)
   in
   let inherited =
     Eio.Process.environment base
@@ -623,7 +627,8 @@ let test_no_publication term =
   in
   let proc =
     Eio.Resource.T
-      (Inherited.{ base; inherited }, Eio.Process.Pi.mgr (module Inherited))
+      ( Inherited.{ base; inherited },
+        Eio_unix.Process.Pi.mgr_unix (module Inherited) )
   in
   match
     K7.record ~engine:Vhs ~vhs:executable
@@ -646,8 +651,7 @@ let test_environment_isolation n =
         >/dev/null && [ \"$VHS_TEST_KEEP\" = '%s' ]\n"
        value);
   let base =
-    (Eio.Stdenv.process_mgr env
-      :> [ `Generic ] Eio.Process.mgr_ty Eio.Resource.t)
+    (Eio.Stdenv.process_mgr env :> Eio_unix.Process.mgr_ty Eio.Resource.t)
   in
   let cleared = [ "VHS_PUBLISH"; "rod"; "PS1"; "PROMPT"; "PROMPT_COMMAND" ] in
   let inherited =
@@ -667,7 +671,8 @@ let test_environment_isolation n =
   in
   let proc =
     Eio.Resource.T
-      (Inherited.{ base; inherited }, Eio.Process.Pi.mgr (module Inherited))
+      ( Inherited.{ base; inherited },
+        Eio_unix.Process.Pi.mgr_unix (module Inherited) )
   in
   match
     K7.record ~engine:Vhs ~vhs:executable

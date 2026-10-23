@@ -362,7 +362,7 @@ val record :
   ?stop:unit Eio.Promise.t ->
   ?stuck:(string -> bool) ->
   clock:_ Eio.Time.Mono.t ->
-  proc:_ Eio.Process.mgr ->
+  proc:_ Eio_unix.Process.mgr ->
   cwd:_ Eio.Path.t ->
   t ->
   (unit, error) result
@@ -568,7 +568,7 @@ val run :
   ?delay:duration ->
   ?stop:unit Eio.Promise.t ->
   clock:_ Eio.Time.Mono.t ->
-  proc:_ Eio.Process.mgr ->
+  proc:_ Eio_unix.Process.mgr ->
   cwd:_ Eio.Path.t ->
   string list ->
   (string * Eio.Process.exit_status, error) result
@@ -618,7 +618,7 @@ val capture :
   ?show:string ->
   ?stop:unit Eio.Promise.t ->
   clock:_ Eio.Time.Mono.t ->
-  proc:_ Eio.Process.mgr ->
+  proc:_ Eio_unix.Process.mgr ->
   cwd:_ Eio.Path.t ->
   string list ->
   (cast * Eio.Process.exit_status, error) result

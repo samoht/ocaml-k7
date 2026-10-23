@@ -64,6 +64,9 @@
 - `K7.run`, `K7.capture`, `K7.cram` and `K7.record` take `?stop`, which
   ends a recording and keeps what it recorded; `k7 play` and `k7 rec`
   resolve it on SIGINT or SIGTERM, then exit 130 or 143.
+- `K7.record`, `K7.run`, `K7.capture` and `K7.cram` take an
+  `Eio_unix.Process.mgr`, such as the `Eio.Stdenv.process_mgr` of the
+  environment that `Eio_main.run` gives.
 - `K7.record` takes `?stuck`, a test of what the shell wrote since the
   last wait, which fails a native recording at once with `K7.Stuck`;
   `k7 play` reports a cram command that leaves bash at its continuation
