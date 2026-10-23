@@ -1551,6 +1551,33 @@ let test_capture_valid_roundtrip status glyph =
           check_eq ~pp:Fmt.Dump.string (image cast) (image restored);
           check_eq ~pp:Fmt.Dump.string (text cast) (text restored))
 
+let test_capture_script_fallback n =
+  Native_test.with_dir @@ fun env cwd ->
+  Native_test.executable
+    (Eio.Path.native_exn Eio.Path.(cwd / "plain-script"))
+    "printf '%s' \"$1\"; exit \"$2\"\n";
+  let argument =
+    List.nth
+      [ ""; "two words"; "'\"$`\\"; "café"; "漢字👍"; "line\nbreak" ]
+      (n mod 6)
+  in
+  let expected = "arg:" ^ argument ^ ":end\n" in
+  match
+    K7.capture ~show:""
+      ~settings:K7.[ Columns 80; Rows 4 ]
+      ~clock:(Eio_mock.Clock.Mono.make ())
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd
+      [
+        "./plain-script"; "arg:" ^ argument ^ ":end"; string_of_int (n mod 128);
+      ]
+  with
+  | Error e -> failf "%a" K7.pp_error e
+  | Ok (cast, status) ->
+      check (status = `Exited (n mod 128));
+      check_eq ~pp:Fmt.Dump.string expected
+        (Result.get_ok (K7.text_of_casts [ cast ]))
+
 let test_capture_signal_mask n =
   Native_test.with_dir @@ fun env cwd ->
   let signal, name =
@@ -1625,6 +1652,8 @@ let test_capture_standard_fds mask =
 
 let with_programs =
   [
+    test_case "executable text without a shebang preserves arguments and status"
+      [ uint8 ] test_capture_script_fallback;
     test_case "capture resets child signal masks and preserves the caller mask"
       [ uint8 ] test_capture_signal_mask;
     test_case "empty PATH components search the supplied cwd" [ uint8 ]
