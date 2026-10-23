@@ -401,6 +401,22 @@ let test_round_trip () =
    ^ "\n")
     (K7.string_of_cast c)
 
+let test_cancelled_osc () =
+  let src =
+    {|{"version":2,"width":20,"height":3}
+[0,"o","A\u001b]4;1;#123456\u0018B"]
+|}
+  in
+  Alcotest.(check string)
+    "CAN ends OSC before the next printable character" "AB\n" (text [ src ]);
+  let src =
+    {|{"version":2,"width":20,"height":3}
+[0,"o","A\u001b]0;title\u001aB"]
+|}
+  in
+  Alcotest.(check string)
+    "SUB ends OSC before the next printable character" "AB\n" (text [ src ])
+
 let test_text_conceal () =
   let src =
     header3 ^ "\n" ^ {|[0, "o", "a\u001b[8msecret\u001b[0mz"]|} ^ "\n"
@@ -417,6 +433,7 @@ let suite =
       (fun (name, fn) -> Alcotest.test_case name `Quick fn)
       [
         ("times", test_times);
+        ("cancelled OSC preserves following text", test_cancelled_osc);
         ("v3", test_v3);
         ("show", test_show);
         ("size", test_size);
