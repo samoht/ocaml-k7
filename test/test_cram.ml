@@ -184,6 +184,41 @@ let test_unfinished () =
   check "mark before the last value" None
     ("\x20" ^ mark ^ tally ^ "\nlast value was: >\n")
 
+(* While the recording waits, k7 reads what bash wrote. *)
+let test_waiting () =
+  let src = "  $ cat <<EOF\n  > a\n  $ echo b\n" in
+  let t = Result.get_ok (Cram.parse src) in
+  let wait =
+    String.split_on_char '\n' (printed src)
+    |> List.find (String.starts_with ~prefix:"Wait+Line")
+  in
+  let zwsp = "\xe2\x80\x8b" and wj = "\xe2\x81\xa0" in
+  let mark =
+    wait
+    |> replace ~sub:{|\x{200B}|} ~by:zwsp
+    |> replace ~sub:{|\x{2060}|} ~by:wj
+    |> replace ~sub:"Wait+Line /" ~by:""
+    |> replace ~sub:"$/" ~by:""
+  in
+  let tally = if String.ends_with ~suffix:zwsp mark then wj else zwsp in
+  let ps1 = "> " ^ mark ^ "\027[0m"
+  and ps2 k = "> " ^ mark ^ String.concat "" (List.init k (fun _ -> tally)) in
+  let check name expected out =
+    Alcotest.(check (option (pair int string)))
+      name expected
+      (Cram.waiting ~setup:[] t out)
+  in
+  let first = "cat <<EOF\r\n" ^ ps2 1 in
+  check "unfinished" (Some (1, "cat <<EOF")) (first ^ "a\r\n" ^ ps2 1);
+  check "a line to come" None first;
+  check "a line typed" None (first ^ "a");
+  check "finished" None (first ^ "a\r\nx\r\n" ^ ps1);
+  check "one line" (Some (2, "echo b")) ("echo b\r\n" ^ ps2 2);
+  check "readline's delimiter and erase"
+    (Some (2, "echo b"))
+    ("echo b\r\n" ^ ps2 2 ^ "\002\027[K");
+  check "primary prompt" None ("echo b\r\nb\r\n" ^ ps1)
+
 let suite =
   ( "cram",
     List.map
@@ -197,4 +232,5 @@ let suite =
         ("setup", test_setup);
         ("mark", test_mark);
         ("unfinished", test_unfinished);
+        ("waiting", test_waiting);
       ] )

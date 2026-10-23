@@ -10,6 +10,7 @@ type error =
   | Io of string
   | Unsupported of string
   | Timeout of { wait : string; line : int; last : string }
+  | Stuck of { wait : string; line : int; last : string }
   | Exited of {
       status : Eio.Process.exit_status;
       wait : string;
@@ -649,6 +650,8 @@ type state = {
   mutable stills : (string * Screen.t) list;
   mutable submitted : int option;
   mutable exited : Eio.Process.exit_status option;
+  stuck : string -> bool;
+  since : Buffer.t;
 }
 
 let now st = Eio.Time.Mono.now st.clock
@@ -724,8 +727,17 @@ let closed st =
   Eio.Condition.broadcast st.changed;
   Eio.Fiber.await_cancel ()
 
+(* What the shell wrote since the last wait held, its last 64 KiB. *)
+let since st output =
+  if Buffer.length st.since > 131072 then (
+    let tail = Buffer.sub st.since (Buffer.length st.since - 65536) 65536 in
+    Buffer.clear st.since;
+    Buffer.add_string st.since tail);
+  Buffer.add_string st.since output
+
 let feed st buf n =
   let output = Bytes.sub_string buf 0 n in
+  since st output;
   Screen.feed st.term output;
   settle st output;
   send st (Screen.take_replies st.term);
@@ -830,12 +842,15 @@ let wait st c ~line ~at ~scope ~timeout ~pattern =
           stop
             (Exited
                { status; wait = line; line = at; last = wait_text st scope })
+      | None when st.stuck (Buffer.contents st.since) ->
+          stop (Stuck { wait = line; line = at; last = wait_text st scope })
       | None ->
           Eio.Condition.await_no_mutex st.changed;
           loop ()
   in
   if not (within st (float timeout /. 1000.) loop) then
     stop (Timeout { wait = line; line = at; last = wait_text st scope });
+  Buffer.clear st.since;
   if not st.hidden then st.logical <- st.logical + elapsed st;
   st.started <- now st;
   st.cap <- Some 0
@@ -1113,9 +1128,10 @@ let await_prompt st c =
     | None -> ()
   in
   if not (within st (float c.wait_timeout /. 1000.) loop) then
-    stop (Timeout { wait = first_prompt; line = 0; last = "" })
+    stop (Timeout { wait = first_prompt; line = 0; last = "" });
+  Buffer.clear st.since
 
-let state t ~clock ({ pty; pid; _ } : terminal) =
+let state ?(stuck = fun _ -> false) t ~clock ({ pty; pid; _ } : terminal) =
   let s = t.look in
   let term = Screen.terminal ~rows:s.rows ~cols:s.cols in
   let screen = Screen.of_terminal term in
@@ -1141,6 +1157,8 @@ let state t ~clock ({ pty; pid; _ } : terminal) =
     stills = [];
     submitted = None;
     exited = None;
+    stuck;
+    since = Buffer.create 4096;
   }
 
 let recording t st =
@@ -1157,8 +1175,8 @@ let recording t st =
     stills = List.rev_map still st.stills;
   }
 
-let with_terminal ~clock t (terminal : terminal) f =
-  let st = state t ~clock terminal in
+let with_terminal ?stuck ~clock t (terminal : terminal) f =
+  let st = state ?stuck t ~clock terminal in
   let finally () =
     stop_terminal clock ~reaped:(Option.is_some st.exited) terminal
   in
@@ -1171,10 +1189,10 @@ let until interrupt f =
   | None -> f ()
   | Some p -> Eio.Fiber.first f (fun () -> Eio.Promise.await p)
 
-let play ?interrupt ~clock ~env ~vars ~cwd t =
+let play ?interrupt ?stuck ~clock ~env ~vars ~cwd t =
   let clock = (clock :> Eio.Time.Mono.ty Eio.Resource.t) in
   match
-    with_terminal ~clock t (spawn ~env ~vars ~cwd t) @@ fun st ->
+    with_terminal ?stuck ~clock t (spawn ~env ~vars ~cwd t) @@ fun st ->
     Eio.Fiber.first
       (fun () ->
         reader st (Bytes.create 65536);

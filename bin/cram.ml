@@ -152,3 +152,47 @@ let unfinished ~setup t output =
       match if k >= 1 && ends then List.nth_opt t (k - 1) else None with
       | Some (line :: _) -> Some (k, line)
       | _ -> None)
+
+(* Readline's prompt delimiters, and the CSI sequences it writes after a
+   prompt, such as erase in line. *)
+let rec invisible s i =
+  let n = String.length s in
+  if i >= n then true
+  else
+    match s.[i] with
+    | '\001' | '\002' -> invisible s (i + 1)
+    | '\027' when i + 1 < n && s.[i + 1] = '[' ->
+        let rec final j =
+          if j >= n then false
+          else if s.[j] >= '\x40' && s.[j] <= '\x7e' then invisible s (j + 1)
+          else final (j + 1)
+        in
+        final (i + 2)
+    | _ -> false
+
+(* Bash shows [PS2] after each line of a command but the last, unless the
+   command is unfinished; each [PS2] counts the prompts before it. *)
+let waiting ~setup t output =
+  let mark = mark ~setup t in
+  let marks = concat_map utf_8 mark and tally = utf_8 (tally mark) in
+  let n = String.length output in
+  let rec tallies k i =
+    if i + 3 <= n && String.sub output i 3 = tally then tallies (k + 1) (i + 3)
+    else (k, i)
+  in
+  let rec prompts acc from =
+    match find marks output ~from with
+    | None -> acc
+    | Some i ->
+        let k, j = tallies 0 (i + String.length marks) in
+        prompts ((k, j) :: acc) j
+  in
+  match prompts [] 0 with
+  | (k, j) :: _ as all when k >= 1 && invisible output j -> (
+      match List.nth_opt t (k - 1) with
+      | Some (line :: _ as lines)
+        when List.length (List.filter (fun (k', _) -> k' = k) all)
+             >= List.length lines ->
+          Some (k, line)
+      | _ -> None)
+  | _ -> None

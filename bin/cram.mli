@@ -59,3 +59,10 @@ val unfinished : setup:string list -> t -> string -> (int * string) option
     counted from [1], whose first line is [line]: an unterminated quote or
     here-document, or a line that ends with a backslash, leaves bash at its
     continuation prompt [PS2], where no wait can end. It is [None] otherwise. *)
+
+val waiting : setup:string list -> t -> string -> (int * string) option
+(** [waiting ~setup t output] is [Some (n, line)] if [output], what bash wrote
+    while a recording of [actions ~setup t] waits after command [n], counted
+    from [1], whose first line is [line], ends with the [PS2] that bash shows
+    after the last line of the command: bash waits for more of it, as for
+    {!unfinished}. It is [None] otherwise. *)

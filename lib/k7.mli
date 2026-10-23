@@ -141,6 +141,10 @@ type error =
           says so. Only the {!constructor-Native} engine returns it, and the
           {!constructor-Vhs} engine reports a wait that times out as
           {!constructor-Vhs_failed}, with the message of [vhs] in [output]. *)
+  | Stuck of { wait : string; line : int; last : string }
+      (** The [stuck] of {!record} held while the wait [wait] on line [line], as
+          for {!constructor-Timeout}, did not hold, so {!record} failed at once
+          rather than when the wait would time out. *)
   | Exited of {
       status : Eio.Process.exit_status;
       wait : string;
@@ -340,14 +344,15 @@ val record :
   ?vhs:string ->
   ?env:(string * string) list ->
   ?stop:unit Eio.Promise.t ->
+  ?stuck:(string -> bool) ->
   clock:_ Eio.Time.Mono.t ->
   proc:_ Eio.Process.mgr ->
   cwd:_ Eio.Path.t ->
   t ->
   (unit, error) result
-(** [record ~engine ~vhs ~env ~stop ~clock ~proc ~cwd t] writes the outputs of
-    [t] with [engine], which defaults to {!constructor-Vhs} if [t] has an output
-    or a [Screenshot] that only {!constructor-Vhs} writes, and to
+(** [record ~engine ~vhs ~env ~stop ~stuck ~clock ~proc ~cwd t] writes the
+    outputs of [t] with [engine], which defaults to {!constructor-Vhs} if [t]
+    has an output or a [Screenshot] that only {!constructor-Vhs} writes, and to
     {!constructor-Native} otherwise, which needs no [vhs]. It is
     [Error (Invalid _)], before it runs anything, if a name of [env] is empty or
     holds [=], or a name or a value holds a NUL byte.
@@ -390,11 +395,14 @@ val record :
     [.txt], [.ascii] or [.test] output is the {{!native_details}text output},
     and the {{!native_details}screenshots} are written too. Once [stop]
     resolves, [record] runs no more actions and writes the outputs of what it
-    recorded so far. The waits of [t] time out by [clock]. When the recording
-    ends or fails, or the calling fiber is cancelled, [record] sends the shell
-    and its process group [SIGTERM], hangs up its terminal, sends them [SIGKILL]
-    if one still runs a second later by [clock], and waits for the shell to
-    exit. It is:
+    recorded so far. The waits of [t] time out by [clock]. While a wait does not
+    hold, [stuck out] (defaults to [false]), with [out] the last 64 KiB the
+    shell wrote since the previous wait held, escape sequences included, fails
+    the recording at once with {!constructor-Stuck}; {!constructor-Vhs} ignores
+    [stuck]. When the recording ends or fails, or the calling fiber is
+    cancelled, [record] sends the shell and its process group [SIGTERM], hangs
+    up its terminal, sends them [SIGKILL] if one still runs a second later by
+    [clock], and waits for the shell to exit. It is:
     - [Error (Unsupported _)] on a [.gif], [.mp4], [.webm] or PNG frames output,
       or a [Screenshot] of a [.png] image, which {!constructor-Vhs} writes, and
       on what the {{!native_details}native recorder} does not play, before it

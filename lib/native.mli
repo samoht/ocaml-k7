@@ -20,6 +20,9 @@ type error =
   | Timeout of { wait : string; line : int; last : string }
       (** The wait line [wait], line [line] of the tape from 1, did not hold in
           time; [last] is what it last read. *)
+  | Stuck of { wait : string; line : int; last : string }
+      (** The [stuck] of {!play} held while the wait line [wait], line [line],
+          did not; [last] is what it last read. *)
   | Exited of {
       status : Eio.Process.exit_status;
       wait : string;
@@ -65,16 +68,19 @@ type recording = {
 
 val play :
   ?interrupt:unit Eio.Promise.t ->
+  ?stuck:(string -> bool) ->
   clock:_ Eio.Time.Mono.t ->
   env:Eio.Process.Env.t ->
   vars:(string * string) list ->
   cwd:string ->
   t ->
   (recording, error) result
-(** [play ~interrupt ~clock ~env ~vars ~cwd t] runs [t] in its shell in the
-    directory [cwd] and is what it recorded, until the last action or until
-    [interrupt] resolves. The text of {!text_output} is in VHS's format: the
-    first lines of the buffer, as many as the screen has rows, after each
+(** [play ~interrupt ~stuck ~clock ~env ~vars ~cwd t] runs [t] in its shell in
+    the directory [cwd] and is what it recorded, until the last action or until
+    [interrupt] resolves. While a wait does not hold, [stuck out], with [out]
+    the last 64 KiB the shell wrote since the previous wait held (defaults to
+    [false]), fails it at once. The text of {!text_output} is in VHS's format:
+    the first lines of the buffer, as many as the screen has rows, after each
     command that runs while recording, from the first action, each screen
     followed by a line of 80 U+2500 characters. A [Screenshot] of [shot.svg] is
     a still SVG image of the next frame it records, without the cursor blinking.

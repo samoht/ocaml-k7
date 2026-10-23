@@ -62,15 +62,11 @@ Sleep 1000ms
       | Ok s -> Alcotest.failf "accepted %S" s)
     [ "bad\000setup"; "a\tb.sh"; "a\nb.sh"; "a\xc2\x85b.sh"; "\xff.sh" ]
 
-(* The commands run on a {!Native_test.with_clock} clock, or on the real one
-   with [~real_time:true]. *)
-let with_files ?(real_time = false) files fn =
+(* The commands run on a {!Native_test.with_clock} clock. *)
+let with_files files fn =
   Eio_main.run @@ fun env ->
-  (if real_time then fun f -> f env
-   else fun f ->
-     Native_test.with_clock @@ fun clock ->
-     f (Eio_unix.Stdenv.override env ~mono_clock:clock))
-  @@ fun env ->
+  Native_test.with_clock @@ fun clock ->
+  let env = Eio_unix.Stdenv.override env ~mono_clock:clock in
   let dir = Filename.temp_dir "k7-cli" "" in
   let path name = Filename.concat dir name in
   List.iter
@@ -441,10 +437,8 @@ let test_wrapped_prompt ~native () =
   if not (contains ~sub:"\nafter" screen) then
     Alcotest.failf "the prompt after a full line was missed: %s" screen
 
-(* Its wait times out once bash shows its continuation prompt, which no clock
-   can tell, so it runs in real time. *)
 let test_unfinished ~native () =
-  with_files ~real_time:true
+  with_files
     [
       ("demo.t", 0o644, "  $ cat <<EOF\n  > a\n  $ echo after\n");
       ("err", 0o644, "");

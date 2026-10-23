@@ -30,6 +30,10 @@
 - `K7.run` and `K7.record` take `?stop`, which ends a recording and keeps
   what it recorded; `k7 play` and `k7 rec` resolve it on SIGINT or
   SIGTERM, then exit 130 or 143.
+- `K7.record` takes `?stuck`, a test of what the shell wrote since the
+  last wait, which fails a native recording at once with `K7.Stuck`;
+  `k7 play` reports a cram command that leaves bash at its continuation
+  prompt as soon as bash shows it, rather than when the wait times out.
 - `k7 play --dry-run` checks a tape or a cram test, with the options and
   outputs given, without recording it.
 - `k7 play` runs the commands of a cram test in a new empty temporary

@@ -78,6 +78,7 @@ type error =
   | Io of string
   | Unsupported of string
   | Timeout of { wait : string; line : int; last : string }
+  | Stuck of { wait : string; line : int; last : string }
   | Exited of {
       status : Eio.Process.exit_status;
       wait : string;
@@ -1028,6 +1029,9 @@ let pp_error ppf = function
         "timed out waiting for line %d, %s%a; give the wait a longer ~timeout \
          or the tape a longer Wait_timeout"
         line (one_line wait) pp_last last
+  | Stuck { wait; line; last } ->
+      Fmt.pf ppf "the shell is stuck at line %d, %s%a" line (one_line wait)
+        pp_last last
   | Exited { status; wait; line; last } ->
       (match status with
       | `Exited n -> Fmt.pf ppf "the shell exited (status %d)" n
@@ -1305,6 +1309,8 @@ let native_error ?(verb = "recorded") ?tape : Native.error -> error = function
   | Unsupported why -> Unsupported ("not " ^ verb ^ " natively: " ^ why)
   | Timeout { wait; line; last } ->
       Timeout { wait; line = source_line tape line; last }
+  | Stuck { wait; line; last } ->
+      Stuck { wait; line = source_line tape line; last }
   | Exited { status; wait; line; last } ->
       Exited { status; wait; line = source_line tape line; last }
   | Executable_not_found exe -> Executable_not_found exe
@@ -1390,13 +1396,13 @@ let prepare_native ~cwd t =
   in
   Ok (dir, tape, svgs, texts)
 
-let record_native ?stop ~vars ~clock ~proc ~cwd t =
+let record_native ?stop ?stuck ~vars ~clock ~proc ~cwd t =
   let* dir, tape, svgs, texts = prepare_native ~cwd t in
   let* { svg; text; stills } =
     Result.map_error
       (native_error ~verb:"recorded" ~tape:t)
-      (Native.play ?interrupt:stop ~clock ~env:(environment proc) ~vars ~cwd:dir
-         tape)
+      (Native.play ?interrupt:stop ?stuck ~clock ~env:(environment proc) ~vars
+         ~cwd:dir tape)
   in
   let save ?(create = false) contents path =
     match if create then mkdirs dir path with
@@ -1428,13 +1434,13 @@ let check ?engine ?(env = []) ~cwd t =
   | Vhs -> prepare_vhs ~cwd t
   | Native -> Result.map ignore (prepare_native ~cwd t)
 
-let record ?engine ?(vhs = "vhs") ?(env = []) ?stop ~clock ~proc ~cwd t =
+let record ?engine ?(vhs = "vhs") ?(env = []) ?stop ?stuck ~clock ~proc ~cwd t =
   let* () = check_env env in
   match engine_of engine t with
   | Vhs ->
       let* () = prepare_vhs ~cwd t in
       render_vhs ?stop ~vhs ~vars:env ~clock ~proc ~cwd t
-  | Native -> record_native ?stop ~vars:env ~clock ~proc ~cwd t
+  | Native -> record_native ?stop ?stuck ~vars:env ~clock ~proc ~cwd t
 
 let check_times output =
   let rec go prev = function

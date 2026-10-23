@@ -68,6 +68,12 @@ let vhs_timeout output =
 
 let seconds_of n = Fmt.str "%d second%s" n (if n = 1 then "" else "s")
 
+let unfinished_message name n line =
+  Fmt.str
+    "%s: command %d, %a, left bash waiting for more input, such as the end of \
+     a quote or of a here-document"
+    name n Quote.pp line
+
 (* A command left at bash's continuation prompt times the next wait out. *)
 let render_error ~vhs ~setup ~wait ~name ~tape src e =
   let cram = Result.to_option (Cram.parse src) in
@@ -83,11 +89,7 @@ let render_error ~vhs ~setup ~wait ~name ~tape src e =
     | _ -> None
   in
   match (Option.bind output unfinished, e, cram) with
-  | Some (n, line), _, _ ->
-      Fmt.str
-        "%s: command %d, %a, left bash waiting for more input, such as the end \
-         of a quote or of a here-document"
-        name n Quote.pp line
+  | Some (n, line), _, _ -> unfinished_message name n line
   | None, Timeout { line; last; _ }, Some cram ->
       Fmt.str "%s: timed out after %s waiting for %s%s%s" name (seconds_of wait)
         (after cram tape line) (last_value last) longer
@@ -155,15 +157,26 @@ let record ?stop ?engine env ~dry_run ~print ~vhs ~setup ?dir ?settings
           K7.Executable_not_found vhs
       | e -> e
     in
+    let cram = Result.to_option (Cram.parse src) in
+    let unfinished = ref None in
+    let stuck out =
+      unfinished :=
+        Option.bind cram (fun t ->
+            Cram.waiting ~setup:(List.map absolute setup) t out);
+      Option.is_some !unfinished
+    in
     in_dir env dir @@ fun cwd ->
-    K7.record ?engine ?stop ~vhs:run_vhs ?env:vars
+    K7.record ?engine ?stop ~stuck ~vhs:run_vhs ?env:vars
       ~clock:(Eio.Stdenv.mono_clock env)
       ~proc:(Eio.Stdenv.process_mgr env)
       ~cwd tape
     |> Result.map_error (fun e ->
-        render_error ~vhs ~setup
-          ~wait:(Option.value wait_timeout_s ~default:15)
-          ~name:input ~tape:given src (named e))
+        match (e, !unfinished) with
+        | K7.Stuck _, Some (n, line) -> unfinished_message input n line
+        | e, _ ->
+            render_error ~vhs ~setup
+              ~wait:(Option.value wait_timeout_s ~default:15)
+              ~name:input ~tape:given src (named e))
 
 let run env ?engine ~dry_run ~print ~vhs ~setup ?dir ?settings ?env:vars
     ?wait_timeout_s ~outputs input =
