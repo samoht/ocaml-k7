@@ -2210,8 +2210,37 @@ let test_typing_duration_units n surface =
   in
   check_eq ~pp:Fmt.int64 (Int64.of_int (nanoseconds * (count + 1))) total
 
+let test_replace_fractional_speed n replacement =
+  Native_test.with_dir @@ fun env cwd ->
+  let milliseconds = replacement mod 5 in
+  let source =
+    Fmt.str "Output typing.svg\nSet TypingSpeed 0.%03dms\nType abc\n" (n + 1)
+  in
+  let tape =
+    match
+      Result.bind (K7.of_string source)
+        (K7.with_settings K7.[ Typing_speed (Ms milliseconds) ])
+    with
+    | Ok t -> t
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  let result, sleeps =
+    Native_test.with_sleep_log @@ fun clock ->
+    K7.record ~engine:Native ~env:Native_test.no_job_control ~clock
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd tape
+  in
+  (match result with Ok () -> () | Error e -> failf "%a" K7.pp_error e);
+  let total =
+    List.filter (fun ns -> ns >= 0L && ns < 10_000_000L) sleeps
+    |> List.fold_left Int64.add 0L
+  in
+  check_eq ~pp:Fmt.int64 (Int64.of_int (3 * milliseconds * 1_000_000)) total
+
 let with_processes =
   [
+    test_case "with_settings replaces parsed fractional typing speeds"
+      [ uint8; uint8 ] test_replace_fractional_speed;
     test_case "tiny and zero typing durations count Unicode scalars and keys"
       [ choose [ const 0; const 1; uint16 ]; uint8 ]
       test_typing_duration_units;
