@@ -586,9 +586,10 @@ val run :
       name or a value holds a NUL byte;
     - [Error (Unsupported _)] on what {!svg} refuses;
     - [Error (Executable_not_found _)] if the executable is not found;
-    - [Error (Io _)] if [cwd] is not a directory of the native file system or
-      cannot be entered, if the executable cannot run, with the reason, and on
-      any other I/O failure. *)
+    - [Error (Io _)] if an argument of [argv] holds a NUL byte, which [execve]
+      refuses, if [cwd] is not a directory of the native file system or cannot
+      be entered, if the executable cannot run, with the reason, and on any
+      other I/O failure. *)
 
 val capture :
   ?settings:setting list ->
@@ -643,7 +644,8 @@ val cram :
     writes it as it is, and runs it; [cram] indents it by one more space, so
     that it stays output, which dune reports as a difference. It is
     [Error (Invalid _)] if [argv] is empty or a name of [env] is one {!run}
-    refuses, and [Error (Io _)] on an I/O failure. *)
+    refuses, and [Error (Io _)] if an argument of [argv] holds a NUL byte, as
+    for {!run}, before anything runs, or on an I/O failure. *)
 
 (** {1:checks Checks}
 

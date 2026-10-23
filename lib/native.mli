@@ -87,6 +87,10 @@ val play :
     The shell gets [env] with [TERM=xterm-256color], then [vars], the prompt VHS
     gives it and the [Env] lines of [t]. *)
 
+val check_argv : string list -> (unit, error) result
+(** [check_argv argv] is [Error (Io _)], the error [execve] gives, if an
+    argument of [argv] holds a NUL byte, and [Ok ()] otherwise. *)
+
 val resolve : cwd:string -> Eio.Process.Env.t -> string -> string option
 (** [resolve ~cwd env exe] is the file [exe] names, as [execvp] finds it: [exe]
     itself if it holds a slash, and otherwise the first executable file named

@@ -1030,6 +1030,12 @@ external spawn :
   (int, Unix.error * string) result = "native_spawn"
 
 let lower e = String.uncapitalize_ascii (Unix.error_message e)
+let unix_error e f = Fmt.kstr (fun s -> Io s) "%s: %s" f (Unix.error_message e)
+
+let check_argv argv =
+  if List.exists (fun a -> String.contains a '\000') argv then
+    Error (unix_error EINVAL "execve")
+  else Ok ()
 
 let child_error ~cwd ~path ~prog e f =
   match (e, f) with
@@ -1104,8 +1110,7 @@ let start ~env ~vars ~cwd t ~requires prog args =
       ~path prog args
   with
   | terminal -> terminal
-  | exception Unix.Unix_error (e, f, _) ->
-      Fmt.kstr (fun msg -> stop (Io msg)) "%s: %s" f (Unix.error_message e)
+  | exception Unix.Unix_error (e, f, _) -> stop (unix_error e f)
 
 let spawn ~env ~vars ~cwd t =
   let prog = t.config.shell in

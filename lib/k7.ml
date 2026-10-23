@@ -1706,8 +1706,12 @@ let native_dir cwd =
 
 let quoted argv = String.concat " " (List.map shell_word argv)
 
+let check_argv = function
+  | [] -> Error (Invalid "no command to run")
+  | argv -> Result.map_error native_error (Native.check_argv argv)
+
 let capture ?(settings = []) ?(env = []) ?show ?stop ~clock ~proc ~cwd argv =
-  let* () = if argv = [] then Error (Invalid "no command to run") else Ok () in
+  let* () = check_argv argv in
   let command = Option.value show ~default:(quoted argv) in
   let* line, _ = shown ~show:command ~delay:(Ms 0) in
   let* () = check_env env in
@@ -1776,7 +1780,7 @@ let transcript ~line output code =
     @ if code = 0 then [] else [ Fmt.str "  [%d]\n" code ])
 
 let cram ?(env = []) ?stop ~clock ~proc ~cwd argv =
-  let* () = if argv = [] then Error (Invalid "no command to run") else Ok () in
+  let* () = check_argv argv in
   let* () = check_env env in
   let line = quoted argv in
   let out = Buffer.create 4096 in
