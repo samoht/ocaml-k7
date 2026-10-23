@@ -201,13 +201,19 @@ let step t c u =
     | String -> scan_string c
     | scan -> next scan c)
 
+(* [s] ends at [i] with the first [n] bytes of a character. *)
+let truncated s i n =
+  i + n = String.length s
+  && (n > 1 || match s.[i] with '\xc2' .. '\xf4' -> true | _ -> false)
+
 (* matrix ignores DEC mode 2026 and the OSC 4 and 104 palette sequences, so the
-   characters are scanned here too. A character that [s] cuts is scanned with
-   the next [s]. matrix also reads an OSC, DCS, SOS, PM or APC string on through
-   CAN and SUB, which cancel it in xterm.js, so ST ends it in their place:
-   matrix then applies at most a title or a hyperlink, which k7 does not draw. *)
+   characters are scanned here too. A character that [s] cuts is scanned and
+   fed with the next [s]. matrix also reads an OSC, DCS, SOS, PM or APC string
+   on through CAN and SUB, which cancel it in xterm.js, so ST ends it in their
+   place: matrix then applies at most a title or a hyperlink, which k7 does not
+   draw. And matrix draws a U+FFFD for each byte of an ill-formed sequence, so
+   it is fed one U+FFFD for each maximal subpart, as Stdlib decodes it. *)
 let feed ?(sync = ignore) t s =
-  let fed = String.length t.partial in
   let s = t.partial ^ s in
   t.partial <- "";
   let feed_to start i =
@@ -219,9 +225,15 @@ let feed ?(sync = ignore) t s =
       let d = String.get_utf_8_uchar s i in
       let n = Uchar.utf_decode_length d in
       let u = Uchar.utf_decode_uchar d in
-      if i + n = String.length s && not (Uchar.utf_decode_is_valid d) then (
+      let valid = Uchar.utf_decode_is_valid d in
+      if (not valid) && truncated s i n then (
         t.partial <- String.sub s i n;
-        feed_to start (String.length s))
+        feed_to start i)
+      else if not valid then (
+        feed_to start i;
+        Vte.feed_string t.vte "\xef\xbf\xbd";
+        step t (latin_1 u) u;
+        go (i + n) (i + n))
       else
         match (t.scan, latin_1 u) with
         | Private p, (('h' | 'l') as c) when p.sync || p.n = 2026 ->
@@ -238,7 +250,7 @@ let feed ?(sync = ignore) t s =
             step t c u;
             go start (i + n)
   in
-  go fed 0
+  go 0 0
 
 let take_replies t = Vte.take_replies t.vte
 let is_dirty t = t.recoloured || Vte.is_dirty t.vte

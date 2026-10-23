@@ -524,7 +524,7 @@ let test_cancelled_string_control kind sub glyph split =
   let chunks = if split then chunks else [ String.concat "" chunks ] in
   check_eq ~pp:pp_string (draw [ "A" ^ suffix ]) (draw chunks)
 
-let test_invalid_utf_8_prefix prefix glyph =
+let test_invalid_utf_8_prefix prefix glyph cut =
   let input =
     [| "\xe2\x82"; "\xf0\x9f\x91"; "\xe1\x80"; "\xf1\x80\x80" |].(prefix mod 4)
     ^ [| "A"; "é"; "中"; "🙂" |].(glyph mod 4)
@@ -537,12 +537,18 @@ let test_invalid_utf_8_prefix prefix glyph =
       normalize (i + Uchar.utf_decode_length d))
   in
   normalize 0;
-  let draw s =
-    match K7.svg ~settings K7.[ (Ms 0, s) ] with
+  let draw chunks =
+    match K7.svg ~settings (List.map (fun s -> (K7.Ms 0, s)) chunks) with
     | Ok image -> image
     | Error e -> failf "%a" K7.pp_error e
   in
-  check_eq ~pp:pp_string (draw (Buffer.contents normalized)) (draw input)
+  let cut = cut mod (String.length input + 1) in
+  check_eq ~pp:pp_string
+    (draw [ Buffer.contents normalized ])
+    (draw
+       [
+         String.sub input 0 cut; String.sub input cut (String.length input - cut);
+       ])
 
 let test_theme_xml output theme =
   let settings = K7.Theme theme :: settings in
@@ -1245,7 +1251,7 @@ let terminal =
 let casts =
   [
     test_case "malformed UTF-8 prefixes use Stdlib replacement grouping"
-      [ uint8; uint8 ] test_invalid_utf_8_prefix;
+      [ uint8; uint8; uint8 ] test_invalid_utf_8_prefix;
     test_case "CAN and SUB cancel string controls before following text"
       [ uint8; bool; uint8; bool ]
       test_cancelled_string_control;
