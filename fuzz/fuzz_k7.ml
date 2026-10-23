@@ -1650,8 +1650,39 @@ let test_capture_standard_fds mask =
       check_eq ~pp:Fmt.Dump.string "OUTERR\n"
         (Result.get_ok (K7.text_of_casts [ cast ]))
 
+let test_capture_theme_roundtrip n =
+  Native_test.with_dir @@ fun env cwd ->
+  let theme = List.nth [ "Dracula"; "Catppuccin Latte" ] (n mod 2) in
+  let cast, status =
+    match
+      K7.capture ~show:""
+        ~settings:K7.[ Columns 20; Rows 3; Theme theme ]
+        ~clock:(Eio_mock.Clock.Mono.make ())
+        ~proc:(Eio.Stdenv.process_mgr env)
+        ~cwd
+        [ "printf"; "\027[31mred\027[0m" ]
+    with
+    | Ok result -> result
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  check (status = `Exited 0);
+  let restored =
+    match K7.cast_of_string (K7.string_of_cast cast) with
+    | Ok c -> c
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  let draw settings c =
+    match K7.svg_of_casts ~settings [ c ] with
+    | Ok image -> image
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  if draw K7.[ Theme theme ] cast <> draw [] restored then
+    failf "the saved capture lost the %s theme" theme
+
 let with_programs =
   [
+    test_case "saved captures retain their selected theme" [ uint8 ]
+      test_capture_theme_roundtrip;
     test_case "executable text without a shebang preserves arguments and status"
       [ uint8 ] test_capture_script_fallback;
     test_case "capture resets child signal masks and preserves the caller mask"
