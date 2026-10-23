@@ -373,7 +373,7 @@ let test_concealed_cursor n =
   let _, output = concealed n in
   match K7.svg ~settings [ (Ms 0, output) ] with
   | Error e -> failf "%a" K7.pp_error e
-  | Ok image -> check (not (contains ~sub:{|<text class="ka k"|} image))
+  | Ok image -> check (not (contains ~sub:{|<text class=|} image))
 
 let test_concealed_description n =
   let _, output = concealed n in
@@ -527,8 +527,10 @@ let test_visible_format n =
       check (contains ~sub:(">a" ^ mark ^ "</tspan>") image);
       check
         (contains
-           ~sub:("<text class=\"ka k\" x=\"0\" y=\"10\">a" ^ mark ^ "</text>")
-           image)
+           ~sub:
+             ("<text class=\"k\" x=\"0\" y=\"10\" fill=\"#171717\">a" ^ mark
+            ^ "</text>")
+           (Native_test.unprefixed image))
 
 (* xterm's wcwidth gives each regional indicator one cell. *)
 let test_regional_splits n =

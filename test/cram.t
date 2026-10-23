@@ -237,16 +237,16 @@ The image shows the command line first, shell-quoted where needed, then
 the program's output. --show replaces the line and --show "" hides it.
 
   $ k7 rec -o cmd.svg --columns 40 --rows 3 -- printf '%s\n' 'hello world'
-  $ grep -o '<desc id="k[0-9a-f]*d">.*' cmd.svg | sed 's/id="[^"]*"//'
-  <desc >$ printf '%s\n' 'hello world'
+  $ grep -o '<desc id="k[0-9a-f]*-d">.*' cmd.svg | sed 's/ id="[^"]*"//'
+  <desc>$ printf '%s\n' 'hello world'
   $ grep -o '^[^<]*</desc>' cmd.svg
   hello world</desc>
   $ k7 rec -o show.svg --columns 40 --rows 3 --show 'dune exec -- ./main.exe' -- printf 'hi\n'
-  $ grep -o '<desc id="k[0-9a-f]*d">.*' show.svg | sed 's/id="[^"]*"//'
-  <desc >$ dune exec -- ./main.exe
+  $ grep -o '<desc id="k[0-9a-f]*-d">.*' show.svg | sed 's/ id="[^"]*"//'
+  <desc>$ dune exec -- ./main.exe
   $ k7 rec -o hide.svg --columns 40 --rows 3 --show '' -- printf 'hi\n'
-  $ grep -o '<desc id="k[0-9a-f]*d">[^<]*</desc>' hide.svg | sed 's/id="[^"]*"//'
-  <desc >hi</desc>
+  $ grep -o '<desc id="k[0-9a-f]*-d">[^<]*</desc>' hide.svg | sed 's/ id="[^"]*"//'
+  <desc>hi</desc>
 
 k7 play reads a tape in VHS's syntax; the command line replaces its
 settings and outputs.
@@ -323,17 +323,17 @@ so it writes the same image each time.
   $ k7 play -o hello.svg hello.cast
   $ k7 play -o again.svg hello.cast
   $ cmp hello.svg again.svg
-  $ grep -o '<desc id="k[0-9a-f]*d">[^<]*' hello.svg | sed 's/id="[^"]*"//'
-  <desc >hello
-  $ grep -o 'animation:k[0-9a-f]*s [0-9]*ms' hello.svg | sed 's/k[0-9a-f]*s/s/'
+  $ grep -o '<desc id="k[0-9a-f]*-d">[^<]*' hello.svg | sed 's/ id="[^"]*"//'
+  <desc>hello
+  $ grep -o 'animation:k[0-9a-f]*-s [0-9]*ms' hello.svg | sed 's/k[0-9a-f]*-s/s/'
   animation:s 1260ms
   $ cp hello.cast upper.CAST
   $ k7 play -o upper.svg upper.CAST
   $ cmp hello.svg upper.svg
   $ k7 play --show 'make hello' --delay 250 -o show.svg hello.cast
-  $ grep -o '<desc id="k[0-9a-f]*d">[^<]*' show.svg | sed 's/id="[^"]*"//'
-  <desc >$ make hello
-  $ grep -o 'animation:k[0-9a-f]*s [0-9]*ms' show.svg | sed 's/k[0-9a-f]*s/s/'
+  $ grep -o '<desc id="k[0-9a-f]*-d">[^<]*' show.svg | sed 's/ id="[^"]*"//'
+  <desc>$ make hello
+  $ grep -o 'animation:k[0-9a-f]*-s [0-9]*ms' show.svg | sed 's/k[0-9a-f]*-s/s/'
   animation:s 1500ms
 
 A recording takes one or more .svg outputs, and refuses the options of

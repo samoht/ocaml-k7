@@ -649,10 +649,13 @@ val run :
     For a reader who prefers reduced motion, the image shows its last screen,
     still, and the cursor does not blink. The image leaves out the format
     characters and the stray variation selectors that {!pp_error} removes. Its
-    title is "Terminal recording". Its ids, style rules and animations are named
+    title is "Terminal recording". Its ids, classes and animations are named
     after a digest of the image, so that two images inlined in one HTML page
-    keep their own. Unless its last screen is blank, its description, the text
-    alternative, is the text that screen shows, without concealed text.
+    keep their own, and each style rule selects one class, never an id. The
+    default foreground, the background and the cursor are attributes, so its
+    text stays readable where its style sheet is dropped. Unless its last screen
+    is blank, its description, the text alternative, is the text that screen
+    shows, without concealed text.
 
     The image of a [Set MarginFill], read relative to the [cwd] of {!record}, is
     embedded, stretched to the frame as ffmpeg stretches it. It is a regular

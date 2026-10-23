@@ -115,7 +115,11 @@ let frames ~cell_width ~cell_height ~rows svg =
       in
       let strip =
         find_all
-          (function El ("g", a, _) -> attr "class" a = "s" | _ -> false)
+          (function
+            | El ("g", a, _) ->
+                let c = attr "class" a in
+                c = "s" || String.ends_with ~suffix:"-s" c
+            | _ -> false)
           root
       in
       let frame = function

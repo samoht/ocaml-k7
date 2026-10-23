@@ -37,32 +37,147 @@ let values ~key s =
   in
   go 0 []
 
-let test_ids () =
-  let raw output =
-    match K7.svg ~settings output with
-    | Ok s -> s
-    | Error e -> Alcotest.failf "%a" K7.pp_error e
+let index ~sub s =
+  let n = String.length sub in
+  let rec go i =
+    if i + n > String.length s then None
+    else if String.sub s i n = sub then Some i
+    else go (i + 1)
   in
-  let a = raw [ (Ms 0, "a"); (Ms 500, "\r\nb") ]
-  and b = raw [ (Ms 0, "c"); (Ms 300, "\r\nd") ] in
+  go 0
+
+let raw output =
+  match K7.svg ~settings output with
+  | Ok s -> s
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+
+let between ~start ~stop s =
+  let i = String.length start + Option.get (index ~sub:start s) in
+  let j =
+    i + Option.get (index ~sub:stop (String.sub s i (String.length s - i)))
+  in
+  String.sub s i (j - i)
+
+let style s = between ~start:"<style>" ~stop:"</style>" s
+
+(* The selectors of the rules of [css], and the names of its keyframes. *)
+let rules css =
+  let n = String.length css in
+  let rec block i depth =
+    if depth = 0 then i
+    else
+      match css.[i] with
+      | '{' -> block (i + 1) (depth + 1)
+      | '}' -> block (i + 1) (depth - 1)
+      | _ -> block (i + 1) depth
+  in
+  let rec go i (selectors, keyframes) =
+    if i >= n || css.[i] = '}' then (i + 1, (selectors, keyframes))
+    else
+      let j = String.index_from css i '{' in
+      let prelude = String.sub css i (j - i) in
+      if String.starts_with ~prefix:"@media" prelude then
+        let i, acc = go (j + 1) (selectors, keyframes) in
+        go i acc
+      else if String.starts_with ~prefix:"@keyframes " prelude then
+        go
+          (block (j + 1) 1)
+          (selectors, String.sub prelude 11 (j - i - 11) :: keyframes)
+      else go (block (j + 1) 1) (prelude :: selectors, keyframes)
+  in
+  snd (go 0 ([], []))
+
+let classes s =
+  List.concat_map (String.split_on_char ' ') (values ~key:" class=\"" s)
+
+let without_ids s =
+  let b = Buffer.create (String.length s) in
+  let rec go i =
+    match index ~sub:" id=\"" (String.sub s i (String.length s - i)) with
+    | None -> Buffer.add_substring b s i (String.length s - i)
+    | Some k ->
+        Buffer.add_substring b s i k;
+        go (String.index_from s (i + k + 5) '"' + 1)
+  in
+  go 0;
+  Buffer.contents b
+
+(* Every attribute and colour, two screens and a blinking cursor on a glyph. *)
+let styled =
+  [
+    ( K7.Ms 0,
+      "\027[1ma\027[0;2mb\027[0;3mc\027[0;4md\027[0;9me\027[0;53mf\027[0m \
+       \027[4;9mg\027[0;4;53mh\027[0;9;53mi\027[0;4;9;53mj\027[0;7mk\027[0;31;42ml\027[0;38;5;99mm\027[0;48;2;1;2;3mn\027[0m"
+    );
+    (Ms 500, "\r\nx\r");
+  ]
+
+let test_ids () =
+  let a = raw styled and b = raw [ (Ms 0, "c"); (Ms 300, "\r\nd") ] in
   let pa = Option.get (prefix a) and pb = Option.get (prefix b) in
   Alcotest.(check bool) "distinct prefixes" true (pa <> pb);
-  Alcotest.(check string)
-    "same content, same prefix" a
-    (raw [ (Ms 0, "a"); (Ms 500, "\r\nb") ]);
+  Alcotest.(check string) "same content, same prefix" a (raw styled);
+  let names s = values ~key:" id=\"" s @ classes s @ snd (rules (style s)) in
   List.iter
     (fun (p, s) ->
-      let ids = values ~key:" id=\"" s and refs = values ~key:"href=\"#" s in
+      let refs = values ~key:"href=\"#" s in
       List.iter
-        (fun id ->
-          if not (String.starts_with ~prefix:p id) then
-            Alcotest.failf "id %S lacks %S" id p)
-        (ids @ refs);
-      Alcotest.(check bool) "references" true (refs <> []);
-      check_contains "scoped style" ~sub:("<style>#" ^ p ^ " text{") s;
-      check_contains "own animation" ~sub:("{animation:" ^ p ^ "s ") s;
-      check_contains "own keyframes" ~sub:("@keyframes " ^ p ^ "s{") s)
-    [ (pa, a); (pb, b) ]
+        (fun name ->
+          if not (String.starts_with ~prefix:p name) then
+            Alcotest.failf "%S lacks %S" name p)
+        (names s @ refs);
+      Alcotest.(check bool) "references" true (refs <> []))
+    [ (pa, a); (pb, b) ];
+  let shared = List.filter (fun n -> List.mem n (names b)) (names a) in
+  Alcotest.(check (list string)) "one page, nothing shared" [] shared
+
+let test_no_ids () =
+  let s = without_ids (raw styled) in
+  let p = Option.get (prefix (raw styled)) in
+  Alcotest.(check bool) "ids removed" false (contains ~sub:" id=" s);
+  let selectors, keyframes = rules (style s) in
+  List.iter
+    (fun sel ->
+      let name = String.sub sel 1 (String.length sel - 1) in
+      if
+        sel.[0] <> '.'
+        || (not (String.starts_with ~prefix:p name))
+        || String.exists
+             (fun c -> not (Char.equal c '-' || Char.Ascii.is_alphanum c))
+             name
+      then Alcotest.failf "selector %S is not one class" sel)
+    selectors;
+  let used = List.sort_uniq String.compare (classes s) in
+  let selected =
+    List.map (fun sel -> String.sub sel 1 (String.length sel - 1)) selectors
+  in
+  List.iter
+    (fun c ->
+      if not (List.mem c selected) then Alcotest.failf "class %S has no rule" c)
+    used;
+  List.iter
+    (fun c ->
+      if (not (List.mem c used)) && not (String.starts_with ~prefix:(p ^ "p") c)
+      then Alcotest.failf "rule .%s selects nothing" c)
+    selected;
+  Alcotest.(check (list string))
+    "keyframes"
+    [ p ^ "b"; p ^ "s" ]
+    (List.sort String.compare keyframes);
+  List.iter
+    (fun k -> check_contains "animated" ~sub:("{animation:" ^ k ^ " ") s)
+    keyframes
+
+let test_no_style () =
+  let s = raw styled in
+  let style = "<style>" ^ style s ^ "</style>" in
+  let s = replace ~sub:style ~by:"" s in
+  Alcotest.(check bool) "style removed" false (contains ~sub:"<style" s);
+  check_contains "default foreground"
+    ~sub:{|viewBox="0 0 800 400" fill="#dddddd" |} s;
+  check_contains "background" ~sub:{|rx="0" fill="#171717"/>|} s;
+  check_contains "inverse text" ~sub:{| fill="#171717">k</tspan>|} s;
+  check_contains "coloured background" ~sub:{|fill="#31bb71"/>|} s
 
 let test_keyframes () =
   let s =
@@ -247,7 +362,7 @@ let test_cursor_format () =
   check_contains "row text" ~sub:">ab</tspan>" s;
   check_contains "description" ~sub:"<desc id=\"d\">ab</desc>" s;
   check_contains "cursor glyph"
-    ~sub:{|<text class="ka k" x="0" y="22">a</text>|} s;
+    ~sub:{|<text class="k" x="0" y="22" fill="#171717">a</text>|} s;
   Alcotest.(check bool)
     "zero-width space removed everywhere" false
     (contains ~sub:"\u{200B}" s);
@@ -260,14 +375,14 @@ let test_cursor_wide_right () =
   check_contains "wide cursor on the glyph"
     ~sub:{|<use href="#w" class="k" x="0" y="0"/>|} s;
   check_contains "glyph under the cursor"
-    ~sub:"<text class=\"ka k\" x=\"0\" y=\"22\">\u{4e2d}</text>" s
+    ~sub:"<text class=\"k\" x=\"0\" y=\"22\" fill=\"#171717\">\u{4e2d}</text>" s
 
 let test_double_underline () =
   let s = svg [ (Ms 0, "\027[21md\027[0m \027[4ms\027[0m") ] in
   (* A 14-pixel cell with its baseline at 22. *)
   check_contains "double"
     ~sub:
-      {|<rect x="0" y="24" width="14" height="1" class="d"/><rect x="0" y="26" width="14" height="1" class="d"/>|}
+      {|<rect x="0" y="24" width="14" height="1"/><rect x="0" y="26" width="14" height="1"/>|}
     s;
   check_contains "no single line" ~sub:{|<tspan x="0">d</tspan>|} s;
   check_contains "single" ~sub:{|<tspan x="28" class="xu">s</tspan>|} s
@@ -275,10 +390,10 @@ let test_double_underline () =
 let test_inverse_wide () =
   let s = svg [ (Ms 0, "\027[7;31m\u{4e2d}\027[0m") ] in
   check_contains "both halves"
-    ~sub:{|<rect x="0" width="28" height="29" class="p1"/>|} s;
+    ~sub:{|<rect x="0" width="28" height="29" fill="#d74e6f"/>|} s;
   Alcotest.(check int)
     "no default-foreground half" 0
-    (count ~sub:{|height="29" class="d"/>|} s)
+    (count ~sub:{|height="29"/>|} s)
 
 let test_tag_flag () =
   let flag =
@@ -311,6 +426,8 @@ let suite =
         ("positive frame rate above the pixel limit", test_framerate_limit);
         ("row dedup", test_dedup);
         ("ids", test_ids);
+        ("styled without ids", test_no_ids);
+        ("readable without style", test_no_style);
         ("keyframes", test_keyframes);
         ("accessible", test_accessible);
         ("concealed text alternative", test_concealed_description);

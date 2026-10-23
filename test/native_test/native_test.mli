@@ -20,13 +20,17 @@ val cell_height : int
 val rows : int
 (** [rows] is the number of rows of the terminal of {!settings}. *)
 
+val replace : sub:string -> by:string -> string -> string
+(** [replace ~sub ~by s] is [s] with each disjoint occurrence of [sub] replaced
+    by [by]. *)
+
 val prefix : string -> string option
-(** [prefix svg] is the id of the root element of [svg], which prefixes its
-    other ids. *)
+(** [prefix svg] is the prefix of the names in [svg], read from the id of its
+    title. *)
 
 val unprefixed : string -> string
 (** [unprefixed svg] is [svg] without its {!prefix}: in its ids, its references,
-    its animation names and its scoped style rules. *)
+    its classes and its animation names. *)
 
 val svg : ?settings:K7.setting list -> (K7.duration * string) list -> string
 (** [svg ~settings output] is [K7.svg ~settings output] (defaults to

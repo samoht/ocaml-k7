@@ -25,20 +25,18 @@ let replace ~sub ~by s =
   Buffer.contents b
 
 let prefix svg =
-  let key = "<svg xmlns=\"http://www.w3.org/2000/svg\" id=\"" in
+  let key = "<title id=\"" in
   let rec find i =
     if i + String.length key > String.length svg then None
     else if String.sub svg i (String.length key) = key then
       let j = i + String.length key in
-      Some (String.sub svg j (String.index_from svg j '"' - j))
+      Some (String.sub svg j (String.index_from svg j '-' + 1 - j))
     else find (i + 1)
   in
   find 0
 
 let unprefixed svg =
-  match prefix svg with
-  | None -> svg
-  | Some p -> replace ~sub:p ~by:"" (replace ~sub:("#" ^ p ^ " ") ~by:"" svg)
+  match prefix svg with None -> svg | Some p -> replace ~sub:p ~by:"" svg
 
 let svg ?(settings = settings) output =
   match K7.svg ~settings output with

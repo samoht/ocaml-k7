@@ -23,7 +23,7 @@ let test_record () =
   | Ok s ->
       let saved = Eio.Path.load Eio.Path.(cwd / "demo.svg") in
       Alcotest.(check string) "written to the output" s saved;
-      check_contains "green" ~sub:{|class="p2">green|} s;
+      check_contains "green" ~sub:{|-p2">green|} s;
       Alcotest.(check string)
         "final screen"
         (screen
@@ -450,7 +450,7 @@ let test_window_bar () =
     (fun sub -> check_contains "ring" ~sub s)
     [
       {|<circle cx="775" cy="25" r="7.5" fill="#333333"/>|};
-      {|<circle cx="775" cy="25" r="5.5" class="e"/>|};
+      {|<circle cx="775" cy="25" r="5.5" fill="#171717"/>|};
       {|<circle cx="753" cy="25" r="7.5" fill="#333333"/>|};
       {|<svg x="65" y="105" |};
     ]
@@ -1246,7 +1246,7 @@ let test_run_program () =
   | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok (s, status) ->
       Alcotest.(check bool) "status" true (status = `Exited 3);
-      check_contains "red" ~sub:{|class="p1">red|} s;
+      check_contains "red" ~sub:{|-p1">red|} s;
       Alcotest.(check (list string))
         "frames"
         [ screen [ "$ ./demo.sh" ]; screen [ "$ ./demo.sh"; "red"; "done" ] ]

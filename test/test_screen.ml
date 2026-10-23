@@ -15,7 +15,7 @@ let test_default_fg () =
   check_contains "default" ~sub:">b</tspan>" s;
   Alcotest.(check bool)
     "not drawn in the background" false
-    (contains ~sub:{|class="e">b|} s)
+    (contains ~sub:{|fill="#171717">b|} s)
 
 let test_cursor () =
   let s = svg [ (Ms 0, "ab") ] in
@@ -32,7 +32,7 @@ let test_concealed_cursor () =
   let s = svg [ (Ms 0, "\027[8msecret\r") ] in
   Alcotest.(check bool)
     "concealed glyph is not redrawn over the cursor" false
-    (contains ~sub:{|<text class="ka k"|} s)
+    (contains ~sub:{|<text class=|} s)
 
 let test_backspace () =
   Alcotest.(check (list string))

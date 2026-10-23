@@ -5,6 +5,11 @@
 
 open Native_test
 
+let foreground c = Fmt.str {|" fill="%s" font-family="|} c
+let background c = Fmt.str {| fill="%s"/><defs>|} c
+let cursor c = Fmt.str {| fill="%s"/><rect id=|} c
+let accent c = Fmt.str {| fill="%s">x</text>|} c
+
 let test_colours () =
   let s =
     svg
@@ -20,8 +25,8 @@ let test_colours () =
   check_contains "bold bright" ~sub:{|class="pa b">g|} s;
   check_contains "256 colours" ~sub:{|fill="#ff8700">o|} s;
   check_contains "true colour" ~sub:{|fill="#0a141e">t|} s;
-  check_contains "inverse text" ~sub:{|class="e">i|} s;
-  check_contains "inverse background" ~sub:{|class="d"/>|} s;
+  check_contains "inverse text" ~sub:{|fill="#1e1f29">i|} s;
+  check_contains "inverse background" ~sub:{|height="29"/>|} s;
   check_contains "underline" ~sub:{|class="xu">u|} s
 
 let test_json_theme () =
@@ -32,22 +37,22 @@ let test_json_theme () =
           Theme
             {|{"background": "#102030", "Red": "#f00", "brightred": "rgb(1, 2, 3)", "cursor": null, "name": "x", "other": [1, {"a": true}]}|};
         ]
-      [ (Ms 0, "x") ]
+      [ (Ms 0, "x\r") ]
   in
-  check_contains "background" ~sub:".e{fill:#102030}" s;
+  check_contains "background" ~sub:(background "#102030") s;
   check_contains "red" ~sub:".p1{fill:#ff0000}" s;
   check_contains "bright red" ~sub:".p9{fill:#010203}" s;
-  check_contains "foreground" ~sub:"text{fill:#ffffff}" s;
-  check_contains "cursor" ~sub:".kc{fill:#ffffff}" s;
+  check_contains "foreground" ~sub:(foreground "#ffffff") s;
+  check_contains "cursor" ~sub:(cursor "#ffffff") s;
   check_contains "green" ~sub:".p2{fill:#4e9a06}" s;
-  let accent theme = svg ~settings:[ Theme theme ] [ (Ms 0, "x") ] in
-  check_contains "named theme" ~sub:".ka{fill:#1e1f29}" (accent "Dracula");
-  check_contains "missing accent" ~sub:".ka{fill:#102030}" s;
-  check_contains "light cursor" ~sub:".ka{fill:#000000}"
-    (accent
+  let themed theme = svg ~settings:[ Theme theme ] [ (Ms 0, "x\r") ] in
+  check_contains "named theme" ~sub:(accent "#1e1f29") (themed "Dracula");
+  check_contains "missing accent" ~sub:(accent "#102030") s;
+  check_contains "light cursor" ~sub:(accent "#000000")
+    (themed
        {|{"background": "#ffffff", "foreground": "#000000", "cursor": "#eeeeee"}|});
-  check_contains "accent" ~sub:".ka{fill:#00ff00}"
-    (accent {|{"cursor": "#ff0000", "cursorAccent": "#00ff00"}|});
+  check_contains "accent" ~sub:(accent "#00ff00")
+    (themed {|{"cursor": "#ff0000", "cursorAccent": "#00ff00"}|});
   (match K7.svg ~settings:[ Theme {|{"red": "tomato"}|} ] [] with
   | Error (Unsupported why) ->
       check_contains "names it" ~sub:"tomato" why;
@@ -116,8 +121,8 @@ let test_go_oracle () =
                 K7.svg ~settings:[ Theme json ] [] )
             with
             | Some bg, Some red, Ok s ->
-                check_contains json ~sub:(".e{fill:" ^ bg ^ "}") s;
-                check_contains json ~sub:(".p1{fill:" ^ red ^ "}") s
+                check_contains json ~sub:(background bg) s;
+                check_contains json ~sub:("-p1{fill:" ^ red ^ "}") s
             | None, _, Error (Unsupported _) | _, None, Error (Unsupported _) ->
                 ()
             | _, _, Ok _ -> Alcotest.failf "%s: played" json
@@ -128,17 +133,17 @@ let test_go_oracle () =
 let test_default () =
   List.iter
     (fun settings ->
-      let s = svg ~settings [ (Ms 0, "x") ] in
-      check_contains "background" ~sub:".e{fill:#171717}" s;
-      check_contains "foreground" ~sub:"text{fill:#dddddd}" s;
+      let s = svg ~settings [ (Ms 0, "x\r") ] in
+      check_contains "background" ~sub:(background "#171717") s;
+      check_contains "foreground" ~sub:(foreground "#dddddd") s;
       check_contains "red" ~sub:".p1{fill:#d74e6f}" s;
-      check_contains "cursor accent" ~sub:".ka{fill:#171717}" s)
+      check_contains "cursor accent" ~sub:(accent "#171717") s)
     [ settings; K7.Theme "  " :: settings ]
 
 let test_no_cursor () =
-  let s = svg ~settings:(K7.Theme "TokyoNight" :: settings) [ (Ms 0, "x") ] in
-  check_contains "cursor" ~sub:".kc{fill:#ffffff}" s;
-  check_contains "accent" ~sub:".ka{fill:#16161e}" s
+  let s = svg ~settings:(K7.Theme "TokyoNight" :: settings) [ (Ms 0, "x\r") ] in
+  check_contains "cursor" ~sub:(cursor "#ffffff") s;
+  check_contains "accent" ~sub:(accent "#16161e") s
 
 (* Go's encoding/json counts the root in its 10,000-level limit. *)
 let test_json_depth () =

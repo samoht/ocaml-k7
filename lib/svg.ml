@@ -69,18 +69,17 @@ let add_escaped b s =
 
 let hex rgb = Fmt.str "#%06x" rgb
 
-let class_of = function
-  | Foreground -> Some "d"
-  | Background -> Some "e"
-  | Ansi i -> Fmt.kstr Option.some "p%x" i
-  | Rgb _ -> None
+(* Stands for the image's name prefix until the image is complete: escaped text
+   never holds a C0 control. *)
+let ns = "\001"
+let add_fill b rgb = Fmt.kstr (Buffer.add_string b) " fill=\"%s\"" (hex rgb)
 
-let add_paint b ~text p =
-  match (p, class_of p) with
-  | Foreground, _ when text -> ()
-  | Rgb c, _ -> Fmt.kstr (Buffer.add_string b) " fill=\"%s\"" (hex c)
-  | _, Some cls -> Fmt.kstr (Buffer.add_string b) " class=\"%s\"" cls
-  | _, None -> ()
+(* The foreground is the root's fill, which every element inherits. *)
+let add_rect_paint t b = function
+  | Foreground -> ()
+  | Background -> add_fill b t.palette.background
+  | Ansi i -> add_fill b t.palette.ansi.(i)
+  | Rgb c -> add_fill b c
 
 let add_backgrounds t b ~from cells =
   let n = Array.length cells in
@@ -97,7 +96,7 @@ let add_backgrounds t b ~from cells =
             "<rect x=\"%d\" width=\"%d\" height=\"%d\"" (x * t.cell_width)
             ((y - x) * t.cell_width)
             t.cell_height;
-          add_paint b ~text:false p;
+          add_rect_paint t b p;
           Buffer.add_string b "/>";
           go y
   in
@@ -135,14 +134,15 @@ let add_tspan t b (c : Screen.cell) xs text =
   Buffer.add_char b '"';
   let fg = fst (paints c) in
   let classes =
-    Option.to_list (match fg with Foreground -> None | p -> class_of p)
-    @ text_classes c
+    (match fg with Ansi i -> [ Fmt.str "p%x" i ] | _ -> []) @ text_classes c
   in
   (match fg with
-  | Rgb rgb -> Fmt.kstr (Buffer.add_string b) " fill=\"%s\"" (hex rgb)
-  | _ -> ());
+  | Background -> add_fill b t.palette.background
+  | Rgb rgb -> add_fill b rgb
+  | Foreground | Ansi _ -> ());
   if classes <> [] then
-    Fmt.kstr (Buffer.add_string b) " class=\"%s\"" (String.concat " " classes);
+    Fmt.kstr (Buffer.add_string b) " class=\"%s\""
+      (String.concat " " (List.map (( ^ ) ns) classes));
   Buffer.add_char b '>';
   add_escaped b text;
   Buffer.add_string b "</tspan>"
@@ -207,7 +207,7 @@ let add_double_underlines t b ~from cells =
               (t.baseline + (k * thickness))
               ((y - x) * t.cell_width)
               thickness;
-            add_paint b ~text:false p;
+            add_rect_paint t b p;
             Buffer.add_string b "/>")
           [ 2; 4 ];
         go y)
@@ -271,10 +271,6 @@ let markup t d ~base row =
         ( Fmt.str "<use href=\"#%s\"/>%s" id (row_markup t ~from:k row),
           depth + 1 )
 
-(* Stands for the image's id prefix until the image is complete: escaped text
-   never holds a C0 control. *)
-let ns = "\001"
-
 let base36 n =
   let digits = "0123456789abcdefghijklmnopqrstuvwxyz" in
   let rec go n acc =
@@ -309,23 +305,25 @@ let row_id t d ~base row =
 
 let add_cursor_defs t b =
   Fmt.kstr (Buffer.add_string b)
-    "<rect id=\"%sc\" class=\"kc\" width=\"%d\" height=\"%d\"/><rect \
-     id=\"%sw\" class=\"kc\" width=\"%d\" height=\"%d\"/>"
-    ns t.cell_width t.cell_height ns (2 * t.cell_width) t.cell_height
+    "<rect id=\"%sc\" width=\"%d\" height=\"%d\" fill=\"%s\"/><rect id=\"%sw\" \
+     width=\"%d\" height=\"%d\" fill=\"%s\"/>"
+    ns t.cell_width t.cell_height (hex t.palette.cursor) ns (2 * t.cell_width)
+    t.cell_height (hex t.palette.cursor)
 
 let add_cursor t b screen (r, c) =
   let cells = Screen.cells (Screen.rows screen).(r) in
   let c = if c > 0 && cells.(c).width = 0 then c - 1 else c in
   let cell = cells.(c) in
   Fmt.kstr (Buffer.add_string b)
-    "<use href=\"#%s%s\" class=\"k\" x=\"%d\" y=\"%d\"/>" ns
+    "<use href=\"#%s%s\" class=\"%sk\" x=\"%d\" y=\"%d\"/>" ns
     (if cell.width = 2 then "w" else "c")
-    (c * t.cell_width) (r * t.cell_height);
+    ns (c * t.cell_width) (r * t.cell_height);
   let text = Unicode.strip_format cell.text in
   if cell.width > 0 && text <> "" && text <> " " && not (has Hidden cell) then (
-    Fmt.kstr (Buffer.add_string b) "<text class=\"ka k\" x=\"%d\" y=\"%d\">"
-      (c * t.cell_width)
-      ((r * t.cell_height) + t.baseline);
+    Fmt.kstr (Buffer.add_string b)
+      "<text class=\"%sk\" x=\"%d\" y=\"%d\" fill=\"%s\">" ns (c * t.cell_width)
+      ((r * t.cell_height) + t.baseline)
+      (hex t.palette.cursor_accent);
     add_escaped b text;
     Buffer.add_string b "</text>")
 
@@ -353,8 +351,9 @@ let percent ~duration ms =
   let v = (q * 1000) + (r * 1000 / duration) in
   Fmt.str "%d.%04d%%" (v / 10_000) (v mod 10_000)
 
-let rule b selector decl =
-  Fmt.kstr (Buffer.add_string b) "#%s %s{%s}" ns selector decl
+(* One class each, with no combinator: a rule must also match inside the shadow
+   tree of a [use], which holds no ancestor of the referenced row. *)
+let rule b cls decl = Fmt.kstr (Buffer.add_string b) ".%s%s{%s}" ns cls decl
 
 let reduced b f =
   Buffer.add_string b "@media (prefers-reduced-motion:reduce){";
@@ -362,29 +361,20 @@ let reduced b f =
   Buffer.add_string b "}"
 
 let add_colours b (p : Palette.t) =
-  List.iter
-    (fun (selector, c) -> rule b selector ("fill:" ^ hex c))
-    [
-      ("text", p.foreground);
-      (".d", p.foreground);
-      (".e", p.background);
-      (".kc", p.cursor);
-      (".ka", p.cursor_accent);
-    ];
-  Array.iteri (fun i c -> rule b (Fmt.str ".p%x" i) ("fill:" ^ hex c)) p.ansi
+  Array.iteri (fun i c -> rule b (Fmt.str "p%x" i) ("fill:" ^ hex c)) p.ansi
 
 let attributes =
   [
-    (".b", "font-weight:bold");
-    (".f", "fill-opacity:.5");
-    (".i", "font-style:italic");
-    (".xu", "text-decoration:underline");
-    (".xs", "text-decoration:line-through");
-    (".xo", "text-decoration:overline");
-    (".xus", "text-decoration:underline line-through");
-    (".xuo", "text-decoration:underline overline");
-    (".xso", "text-decoration:line-through overline");
-    (".xuso", "text-decoration:underline line-through overline");
+    ("b", "font-weight:bold");
+    ("f", "fill-opacity:.5");
+    ("i", "font-style:italic");
+    ("xu", "text-decoration:underline");
+    ("xs", "text-decoration:line-through");
+    ("xo", "text-decoration:overline");
+    ("xus", "text-decoration:underline line-through");
+    ("xuo", "text-decoration:underline overline");
+    ("xso", "text-decoration:line-through overline");
+    ("xuso", "text-decoration:underline line-through overline");
   ]
 
 let add_frames t b ~duration frames =
@@ -395,7 +385,7 @@ let add_frames t b ~duration frames =
       Fmt.str ";animation-delay:-%dms"
         (int_of_float (Float.round (float t.loop_offset /. t.speed)))
   in
-  rule b ".s" (Fmt.str "animation:%ss %dms steps(1,end) infinite%s" ns ms delay);
+  rule b "s" (Fmt.str "animation:%ss %dms steps(1,end) infinite%s" ns ms delay);
   Fmt.kstr (Buffer.add_string b) "@keyframes %ss{" ns;
   List.iteri
     (fun i (time, _) ->
@@ -406,16 +396,16 @@ let add_frames t b ~duration frames =
   let last = -(List.length frames - 1) * t.cols * t.cell_width in
   Fmt.kstr (Buffer.add_string b) "100%%{transform:translateX(%dpx)}}" last;
   reduced b (fun () ->
-      rule b ".s" (Fmt.str "animation:none;transform:translateX(%dpx)" last))
+      rule b "s" (Fmt.str "animation:none;transform:translateX(%dpx)" last))
 
 let add_style t b ~duration frames =
   Buffer.add_string b "<style>";
   add_colours b t.palette;
   List.iter (fun (selector, decl) -> rule b selector decl) attributes;
   if t.blink then (
-    rule b ".k" (Fmt.str "animation:%sb 1.2s step-end infinite" ns);
+    rule b "k" (Fmt.str "animation:%sb 1.2s step-end infinite" ns);
     Fmt.kstr (Buffer.add_string b) "@keyframes %sb{50%%{opacity:0}}" ns;
-    reduced b (fun () -> rule b ".k" "animation:none"));
+    reduced b (fun () -> rule b "k" "animation:none"));
   (match frames with [] | [ _ ] -> () | _ -> add_frames t b ~duration frames);
   Buffer.add_string b "</style>"
 
@@ -440,7 +430,8 @@ let add_bar t b bar =
     for i = 0 to 2 do
       let cx = centre ~gap ~r:outer ~space i in
       circle ~cx ~cy:(cy outer gap) ~r:outer "fill=\"#333333\"";
-      circle ~cx ~cy:(cy outer gap) ~r:inner "class=\"e\""
+      circle ~cx ~cy:(cy outer gap) ~r:inner
+        (Fmt.str "fill=\"%s\"" (hex t.palette.background))
     done
   else
     let r = bar.size / 6 in
@@ -504,9 +495,9 @@ let image t ~duration frames =
   let shown = Array.make t.rows None in
   List.iteri (fun i (_, screen) -> add_frame t d strip shown i screen) frames;
   Fmt.kstr (Buffer.add_string b)
-    "<svg xmlns=\"http://www.w3.org/2000/svg\" id=\"%s\" width=\"%d\" \
-     height=\"%d\" viewBox=\"0 0 %d %d\" font-family=\""
-    ns t.width t.height t.width t.height;
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" \
+     viewBox=\"0 0 %d %d\" fill=\"%s\" font-family=\""
+    t.width t.height t.width t.height (hex t.palette.foreground);
   add_escaped b t.font_family;
   let desc = Buffer.create 256 in
   (match List.rev frames with
@@ -523,21 +514,21 @@ let image t ~duration frames =
   add_style t b ~duration frames;
   add_margin t b;
   Fmt.kstr (Buffer.add_string b)
-    "<rect x=\"%d\" y=\"%d\" width=\"%d\" height=\"%d\" rx=\"%d\" class=\"e\"/>"
+    "<rect x=\"%d\" y=\"%d\" width=\"%d\" height=\"%d\" rx=\"%d\" fill=\"%s\"/>"
     t.margin t.margin
     (t.width - (2 * t.margin))
     (t.height - (2 * t.margin))
-    t.radius;
+    t.radius (hex t.palette.background);
   Option.iter (add_bar t b) t.bar;
   Buffer.add_string b "<defs>";
   add_cursor_defs t b;
   Buffer.add_buffer b d.defs;
   Buffer.add_string b "</defs>";
   Fmt.kstr (Buffer.add_string b)
-    "<svg x=\"%d\" y=\"%d\" width=\"%d\" height=\"%d\"><g class=\"s\">" t.x t.y
-    (t.cols * t.cell_width) (t.rows * t.cell_height);
+    "<svg x=\"%d\" y=\"%d\" width=\"%d\" height=\"%d\"><g class=\"%ss\">" t.x
+    t.y (t.cols * t.cell_width) (t.rows * t.cell_height) ns;
   Buffer.add_buffer b strip;
   Buffer.add_string b "</g></svg></svg>\n";
   let s = Buffer.contents b in
-  let prefix = "k" ^ String.sub (Digest.to_hex (Digest.string s)) 0 6 in
+  let prefix = "k" ^ String.sub (Digest.to_hex (Digest.string s)) 0 6 ^ "-" in
   String.concat prefix (String.split_on_char ns.[0] s)
