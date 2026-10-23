@@ -2116,6 +2116,34 @@ let test_cram_reserved_executable () = check_cram_executable "if"
 let test_cram_assignment_executable () = check_cram_executable "FOO=bar"
 let test_cram_option_executable () = check_cram_executable "-"
 
+(* The displayed command must preserve even an invisible argument character. *)
+let test_run_command_format_argument () =
+  with_dir @@ fun env cwd ->
+  let argument = "a\u{200b}b" in
+  let image, status =
+    match
+      run
+        ~clock:(Eio_mock.Clock.Mono.make ())
+        env cwd
+        [ "/usr/bin/printf"; "%s"; argument ]
+    with
+    | Ok result -> result
+    | Error e -> Alcotest.failf "%a" K7.pp_error e
+  in
+  exited "printf" 0 status;
+  let command = shown_command (List.hd (frames image)) in
+  List.iter
+    (fun shell ->
+      let output = Buffer.create 32 in
+      Eio.Process.run
+        ~stdout:(Eio.Flow.buffer_sink output)
+        (Eio.Stdenv.process_mgr env)
+        [ shell; "-c"; command ];
+      Alcotest.(check string)
+        (shell ^ " replays the shown argument")
+        argument (Buffer.contents output))
+    shells
+
 (* The background loop prints once the shell has gone, so it prints nothing
    if it stops with the shell. *)
 let test_cram_stop () =
@@ -2311,6 +2339,8 @@ let suite =
          ( "cram quotes an assignment executable name",
            test_cram_assignment_executable );
          ("cram records an executable named dash", test_cram_option_executable);
+         ( "shown commands preserve Unicode format arguments",
+           test_run_command_format_argument );
          ( "cram quotes control characters for any sh",
            test_cram_control_argument );
          ("cram stops the command's process group", test_cram_stop);
