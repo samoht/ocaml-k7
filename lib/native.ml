@@ -937,10 +937,11 @@ let close_terminal (t : terminal) =
    as the id of a group while the group has a member. *)
 let stop_terminal clock ~reaped (t : terminal) =
   let reaped = ref reaped in
-  let reap flags =
+  let rec reap flags =
     if not !reaped then
       match Unix.waitpid flags t.pid with
       | 0, _ -> ()
+      | exception Unix.Unix_error (EINTR, _, _) -> reap flags
       | _ | (exception Unix.Unix_error _) -> reaped := true
   in
   let signal s =
@@ -997,6 +998,13 @@ let rec read_all fd b chunk =
       read_all fd b chunk
   | exception Unix.Unix_error (EINTR, _, _) -> read_all fd b chunk
 
+(* SIGCHLD, which Eio handles, can interrupt the wait for the child. *)
+let rec reap_child pid =
+  match Unix.waitpid [] pid with
+  | _ -> ()
+  | exception Unix.Unix_error (EINTR, _, _) -> reap_child pid
+  | exception Unix.Unix_error _ -> ()
+
 let open_terminal ~env ~cwd ~winsize ~path prog args =
   let argv = Array.of_list (prog :: args)
   and env = Eio.Process.Env.to_array env in
@@ -1048,7 +1056,7 @@ let open_terminal ~env ~cwd ~winsize ~path prog args =
       if msg = "" then { pty; slave; pid }
       else (
         close_terminal ();
-        (try ignore (Unix.waitpid [] pid) with Unix.Unix_error _ -> ());
+        reap_child pid;
         match msg.[0] with
         | 'N' -> stop (Executable_not_found prog)
         | _ -> stop (Io (String.sub msg 1 (String.length msg - 1))))
