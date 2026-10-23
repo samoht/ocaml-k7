@@ -968,13 +968,17 @@ let resolve ~cwd env exe =
   if String.contains exe '/' then
     if Sys.file_exists (in_cwd exe) then Some exe else None
   else
-    let path = Option.value (Eio.Process.Env.get_opt "PATH" env) ~default:"" in
+    let dirs =
+      match Eio.Process.Env.get_opt "PATH" env with
+      | None -> []
+      | Some path -> String.split_on_char ':' path
+    in
     let candidates =
       List.filter_map
         (fun dir ->
-          let p = Filename.concat dir exe in
-          if dir <> "" && Sys.file_exists (in_cwd p) then Some p else None)
-        (String.split_on_char ':' path)
+          let p = Filename.concat (if dir = "" then "." else dir) exe in
+          if Sys.file_exists (in_cwd p) then Some p else None)
+        dirs
     in
     match List.find_opt (fun p -> is_executable (in_cwd p)) candidates with
     | Some p -> Some p
