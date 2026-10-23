@@ -1551,6 +1551,27 @@ let test_capture_valid_roundtrip status glyph =
           check_eq ~pp:Fmt.Dump.string (image cast) (image restored);
           check_eq ~pp:Fmt.Dump.string (text cast) (text restored))
 
+let test_run_empty_path n =
+  Native_test.with_dir @@ fun env cwd ->
+  Native_test.executable
+    (Eio.Path.native_exn Eio.Path.(cwd / "local-only"))
+    "#!/bin/sh\nprintf LOCAL_PATH_WORKS\n";
+  let path =
+    List.nth [ ""; ":/k7-missing"; "/k7-missing:"; "/k7-a::/k7-b" ] (n mod 4)
+  in
+  match
+    K7.capture ~show:""
+      ~env:[ ("PATH", path) ]
+      ~clock:(Eio_mock.Clock.Mono.make ())
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd [ "local-only" ]
+  with
+  | Error e -> failf "PATH=%S: %a" path K7.pp_error e
+  | Ok (cast, status) ->
+      check (status = `Exited 0);
+      check_eq ~pp:Fmt.Dump.string "LOCAL_PATH_WORKS\n"
+        (Result.get_ok (K7.text_of_casts [ cast ]))
+
 let test_capture_standard_fds mask =
   Native_test.with_dir @@ fun env cwd ->
   let fds = [ Unix.stdin; Unix.stdout; Unix.stderr ] in
@@ -1579,6 +1600,8 @@ let test_capture_standard_fds mask =
 
 let with_programs =
   [
+    test_case "empty PATH components search the supplied cwd" [ uint8 ]
+      test_run_empty_path;
     test_case "capture gives the child all standard descriptors"
       [ range 7 ]
       test_capture_standard_fds;
