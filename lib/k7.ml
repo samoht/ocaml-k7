@@ -1493,42 +1493,18 @@ let for_all_uchars f s =
   in
   go 0
 
-(* [printf_word s] is a POSIX sh word for [s], unless [s] ends with a newline,
-   which command substitution strips. *)
-let printf_word s =
-  let b = Buffer.create (String.length s + 16) in
-  let octal c =
-    let digit k =
-      Buffer.add_char b (Char.chr (48 + ((Char.code c lsr k) land 7)))
-    in
-    Buffer.add_char b '\\';
-    digit 6;
-    digit 3;
-    digit 0
+let octal b c =
+  let digit k =
+    Buffer.add_char b (Char.chr (48 + ((Char.code c lsr k) land 7)))
   in
-  let rec go i =
-    if i < String.length s then (
-      let d = String.get_utf_8_uchar s i in
-      let n = Uchar.utf_decode_length d in
-      (match Uchar.to_int (Uchar.utf_decode_uchar d) with
-      | _ when not (Uchar.utf_decode_is_valid d) ->
-          String.iter octal (String.sub s i n)
-      | 0x5c -> Buffer.add_string b {|\\|}
-      | 0x25 -> Buffer.add_string b "%%"
-      | 0x0a -> Buffer.add_string b {|\n|}
-      | 0x0d -> Buffer.add_string b {|\r|}
-      | 0x09 -> Buffer.add_string b {|\t|}
-      | 0x27 -> octal '\''
-      | 0x2d when i = 0 -> octal '-'
-      | c when is_control c -> String.iter octal (String.sub s i n)
-      | _ -> Buffer.add_substring b s i n);
-      go (i + n))
-  in
-  Buffer.add_string b {|"$(printf '|};
-  go 0;
-  Buffer.add_string b {|')"|};
-  Buffer.contents b
+  Buffer.add_char b '\\';
+  digit 6;
+  digit 3;
+  digit 0
 
+(* [shell_word s] is a POSIX sh word for [s]: a newline stays raw inside
+   quotes, another control character or a byte that is not UTF-8 is what
+   [printf] prints. *)
 let shell_word s =
   let safe c =
     c >= 0xa0
@@ -1536,37 +1512,70 @@ let shell_word s =
        && (Char.Ascii.is_alphanum (Char.chr c)
           || String.contains "_@%+=:,./-" (Char.chr c))
   in
-  if String.ends_with ~suffix:"\n" s then
-    err_invalid
-      "argument %a ends with a newline, which no one-line sh command holds"
-      Quote.pp s
-  else if not (for_all_uchars (Fun.negate is_control) s) then Ok (printf_word s)
-  else if s <> "" && for_all_uchars safe s then Ok s
-  else Ok ("'" ^ String.concat {|'\''|} (String.split_on_char '\'' s) ^ "'")
-
-let quoted argv =
-  let rec go acc = function
-    | [] -> Ok (String.concat " " (List.rev acc))
-    | a :: rest ->
-        let* w = shell_word a in
-        go (w :: acc) rest
+  let b = Buffer.create (String.length s + 2) in
+  let text = Buffer.create 16 and escapes = Buffer.create 16 in
+  let add_text () =
+    let t = Buffer.contents text in
+    if t <> "" then
+      if for_all_uchars safe t then Buffer.add_string b t
+      else (
+        Buffer.add_char b '\'';
+        Buffer.add_string b
+          (String.concat {|'\''|} (String.split_on_char '\'' t));
+        Buffer.add_char b '\'');
+    Buffer.clear text
   in
-  go [] argv
+  let add_escapes () =
+    if Buffer.length escapes > 0 then (
+      Buffer.add_string b {|"$(printf '|};
+      Buffer.add_buffer b escapes;
+      Buffer.add_string b {|')"|});
+    Buffer.clear escapes
+  in
+  let rec go i =
+    if i < String.length s then (
+      let d = String.get_utf_8_uchar s i in
+      let n = Uchar.utf_decode_length d in
+      (match Uchar.to_int (Uchar.utf_decode_uchar d) with
+      | c when Uchar.utf_decode_is_valid d && not (is_control c && c <> 0x0a) ->
+          add_escapes ();
+          Buffer.add_substring text s i n
+      | c ->
+          add_text ();
+          if c = 0x0d then Buffer.add_string escapes {|\r|}
+          else if c = 0x09 then Buffer.add_string escapes {|\t|}
+          else String.iter (octal escapes) (String.sub s i n));
+      go (i + n))
+  in
+  go 0;
+  add_text ();
+  add_escapes ();
+  if s = "" then "''" else Buffer.contents b
+
+let quoted argv = String.concat " " (List.map shell_word argv)
+
+let check_show = function
+  | Some show when has_control show ->
+      err_invalid "show %a: holds a control character" Quote.pp show
+  | _ -> Ok ()
 
 let command_of ?show argv =
-  match show with Some s -> Ok s | None -> quoted argv
+  let* () = check_show show in
+  Ok (match show with Some s -> s | None -> quoted argv)
 
+(* A newline of the command starts a line after the [> ] of a shell. *)
 let command_line = function
   | "" -> ""
-  | show -> "\027[38;2;90;86;224m$ \027[0m" ^ show ^ "\r\n"
+  | show ->
+      "\027[38;2;90;86;224m$ \027[0m"
+      ^ String.concat "\r\n> " (String.split_on_char '\n' show)
+      ^ "\r\n"
 
 let shown ~show ~delay:(Ms delay) =
   let* () =
     Result.map_error (fun msg -> Invalid msg) (check_ms "delay " delay)
   in
-  if has_control show then
-    err_invalid "show %a: holds a control character" Quote.pp show
-  else Ok (command_line show, if show = "" then 0 else delay)
+  Ok (command_line show, if show = "" then 0 else delay)
 
 let command_line_of ?show ~delay argv =
   let* () = if argv = [] then Error (Invalid "no command to run") else Ok () in
@@ -1581,16 +1590,17 @@ let cast_of_string s =
 let string_of_cast = Asciicast.to_string
 let hold = 1000
 
-(* A header's command on one line. *)
-let one_line s =
+(* A header's command, a space for each control character but a newline. *)
+let header_command s =
   let b = Buffer.create (String.length s) in
   let rec go i =
     if i < String.length s then (
       let d = String.get_utf_8_uchar s i in
       let n = Uchar.utf_decode_length d in
-      if is_control (Uchar.to_int (Uchar.utf_decode_uchar d)) then
-        Buffer.add_char b ' '
-      else Buffer.add_substring b s i n;
+      (match Uchar.to_int (Uchar.utf_decode_uchar d) with
+      | 0x0a -> Buffer.add_char b '\n'
+      | c when is_control c -> Buffer.add_char b ' '
+      | _ -> Buffer.add_substring b s i n);
       go (i + n))
   in
   go 0;
@@ -1660,10 +1670,11 @@ let sequence ~show ~delay casts =
   let rec go start ~size acc = function
     | [] -> Ok (List.rev acc, start, size)
     | ((c : cast), show) :: rest ->
+        let* () = check_show show in
         let command =
           match show with
           | Some s -> s
-          | None -> Option.fold ~none:"" ~some:one_line c.command
+          | None -> Option.fold ~none:"" ~some:header_command c.command
         in
         let* line, d = shown ~show:command ~delay in
         let acc = (start, Asciicast.Resize (c.columns, c.rows)) :: acc in
@@ -1814,13 +1825,14 @@ let transcript ~line output code =
     (if command then "   " else "  ") ^ l ^ "\n"
   in
   String.concat ""
-    ((("  $ " ^ line ^ "\n") :: List.mapi output lines)
+    (("  $ " ^ String.concat "\n  > " (String.split_on_char '\n' line) ^ "\n")
+     :: List.mapi output lines
     @ if code = 0 then [] else [ Fmt.str "  [%d]\n" code ])
 
 let cram ?(env = []) ?stop ~clock ~proc ~cwd argv =
   let* () = check_argv argv in
   let* () = check_env env in
-  let* line = quoted argv in
+  let line = quoted argv in
   let out = Buffer.create 4096 in
   match
     Eio.Switch.run @@ fun sw ->

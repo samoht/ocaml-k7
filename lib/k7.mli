@@ -507,10 +507,11 @@ val svg_of_casts :
     [Ms 500]) later. If [show] (defaults to [[]]) holds one string, that string
     is the command of every recording; if it holds one string per recording, its
     [n]th string is the command of the [n]th recording. Otherwise a recording's
-    command is the [command] of its header, if any, its control characters shown
-    as spaces. An empty command shows no line and no delay. The last screen of
-    each recording holds for a second after its last event, an exit included,
-    and the next recording starts then.
+    command is the [command] of its header, if any, its control characters but
+    newlines shown as spaces. A newline in a command continues it on a line that
+    starts with [> ], as in a shell. An empty command shows no line and no
+    delay. The last screen of each recording holds for a second after its last
+    event, an exit included, and the next recording starts then.
 
     The terminal has the size of the header of each recording from its start,
     and of each resize, on an image of the largest of them, unless [settings]
@@ -564,13 +565,14 @@ val run :
     program started, rounded down to a frame, and the last screen holds for a
     second after the program exits. The image's first line is [$ ] in the colour
     of VHS's prompt, then [show] (defaults to [argv], each argument shell-quoted
-    where needed), and the program's output starts on the next line; an empty
-    [show] shows no line. A line that shows stays alone for [delay] (defaults to
-    [Ms 500]), as if typed, and the program's output shows that much later. The
-    first element of [argv] is the executable, looked up in the [PATH] the
-    program gets unless it holds a slash, and relative to [cwd] if it does. The
-    program gets the environment {!record} gives a shell up to the variables of
-    [env] (defaults to [[]]), without the prompt and the [Env] lines.
+    where needed, for POSIX sh), and the program's output starts on the next
+    line; an empty [show] shows no line. A line that shows stays alone for
+    [delay] (defaults to [Ms 500]), as if typed, and the program's output shows
+    that much later. The first element of [argv] is the executable, looked up in
+    the [PATH] the program gets unless it holds a slash, and relative to [cwd]
+    if it does. The program gets the environment {!record} gives a shell up to
+    the variables of [env] (defaults to [[]]), without the prompt and the [Env]
+    lines.
 
     A program that exits with another status than [0], or is killed, still gives
     its image: the status says how it exited. [run] returns once the program has
@@ -585,10 +587,9 @@ val run :
     {!capture}'s recording as {!svg_of_casts} draws it, with [settings] and
     [delay]. It is:
     - [Error (Invalid _)] if [argv] is empty, if a setting is one {!svg}
-      refuses, if [show] holds a control character, or is not given and an
-      argument of [argv] ends with a newline, which no one-line sh command
-      holds, if [delay] is out of the range of a {!duration}, or if a name of
-      [env] is empty or holds [=], or a name or a value holds a NUL byte;
+      refuses, if [show] holds a control character, if [delay] is out of the
+      range of a {!duration}, or if a name of [env] is empty or holds [=], or a
+      name or a value holds a NUL byte;
     - [Error (Unsupported _)] on what {!svg} refuses;
     - [Error (Executable_not_found _)] if the executable is not found;
     - [Error (Io _)] if an argument of [argv] holds a NUL byte, which [execve]
@@ -638,20 +639,20 @@ val cram :
     later by [clock], and returns once [sh] has exited and what the group
     printed is read.
 
-    The cram test is the line [  $ ] and the command line, then each line of
-    what the command printed, indented by two spaces, as dune writes them:
-    without the bytes from an escape character up to the next [m], without the
-    carriage return before a line feed, and with a last line that does not end
-    with a line feed; then [  [N]] if the exit code [N], or [128] plus the
-    number of the signal that killed the command, is not [0]. dune then reads
-    the test back unchanged, but for a line dune would read as a command: one
-    that starts with [$ ], or a first line that is [>] or starts with [> ]. dune
-    writes it as it is, and runs it; [cram] indents it by one more space, so
-    that it stays output, which dune reports as a difference. It is
-    [Error (Invalid _)] if [argv] is empty, if an argument of [argv] ends with a
-    newline, which no one-line sh command holds, or if a name of [env] is one
-    {!run} refuses, and [Error (Io _)] if an argument of [argv] holds a NUL
-    byte, as for {!run}, before anything runs, or on an I/O failure. *)
+    The cram test is the line [  $ ] and the command line, which continues on a
+    line [  > ] after each newline of an argument, then each line of what the
+    command printed, indented by two spaces, as dune writes them: without the
+    bytes from an escape character up to the next [m], without the carriage
+    return before a line feed, and with a last line that does not end with a
+    line feed; then [  [N]] if the exit code [N], or [128] plus the number of
+    the signal that killed the command, is not [0]. dune then reads the test
+    back unchanged, but for a line dune would read as a command: one that starts
+    with [$ ], or a first line that is [>] or starts with [> ]. dune writes it
+    as it is, and runs it; [cram] indents it by one more space, so that it stays
+    output, which dune reports as a difference. It is [Error (Invalid _)] if
+    [argv] is empty or a name of [env] is one {!run} refuses, and [Error (Io _)]
+    if an argument of [argv] holds a NUL byte, as for {!run}, before anything
+    runs, or on an I/O failure. *)
 
 (** {1:checks Checks}
 
