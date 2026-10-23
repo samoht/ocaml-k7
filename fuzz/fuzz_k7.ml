@@ -2266,8 +2266,44 @@ let test_require_executable n directory =
   | Error e -> failf "%a" K7.pp_error e
   | Ok () -> fail "a non-executable prerequisite was accepted"
 
+let test_unmapped_modifier_keys n alt =
+  Native_test.with_dir @@ fun env cwd ->
+  let scalars = [| 0x00e9; 0x03bb; 0x4e2d; 0x1f642; 0x0301; 0x200b |] in
+  let b = Buffer.create 32 in
+  for i = 0 to n mod 8 do
+    Buffer.add_utf_8_uchar b
+      (Uchar.of_int scalars.((n + i) mod Array.length scalars))
+  done;
+  let modifier = if alt then "Alt" else "Shift" in
+  let tape =
+    match
+      K7.tape
+        ~settings:K7.[ Columns 100; Rows 5; Typing_speed (Ms 0) ]
+        ~outputs:[ "keys.svg" ]
+        K7.
+          [
+            type'
+              "stty -echo; echo READY; IFS= read -r line; stty echo; printf \
+               '%s' \"$line\" > keys; echo DONE\n";
+            wait (Screen "(?m)^READY$");
+            raw (modifier ^ "+\"" ^ Buffer.contents b ^ "\"");
+            type' "X";
+            key Enter;
+            wait Prompt;
+          ]
+    with
+    | Ok t -> t
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  (match Native_test.play env cwd tape with
+  | Ok () -> ()
+  | Error e -> failf "%a" K7.pp_error e);
+  check_eq ~pp:pp_string "X" (Eio.Path.load Eio.Path.(cwd / "keys"))
+
 let with_processes =
   [
+    test_case "modifier strings omit Unicode absent from the VHS keymap"
+      [ uint8; bool ] test_unmapped_modifier_keys;
     test_case "Require rejects files and directories that cannot execute"
       [ uint8; bool ] test_require_executable;
     test_case "with_settings replaces parsed fractional typing speeds"
