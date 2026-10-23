@@ -1021,6 +1021,48 @@ let test_fixed_cast_size_ignores_resizes n =
     (get (K7.text_of_casts ~settings [ a ]))
     (get (K7.text_of_casts ~settings [ b ]))
 
+(* Joining recordings retains the terminal's cursor and active SGR state;
+   the pause between them changes the timeline, not the screen contents. *)
+let test_cast_join_state n glyph =
+  let glyphs = [| "a"; "é"; "中"; "🙂"; "é" |] in
+  let first =
+    "\027[31m"
+    ^ String.concat ""
+        (List.init
+           (1 + (n mod 8))
+           (fun _ -> glyphs.(glyph mod Array.length glyphs)))
+  in
+  let second = "\rX" in
+  let header = {|{"version":3,"term":{"cols":24,"rows":4}}|} in
+  let parse data =
+    match
+      K7.cast_of_string (header ^ "\n[0,\"o\"," ^ json_string data ^ "]\n")
+    with
+    | Ok c -> c
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  let get = function Ok s -> s | Error e -> failf "%a" K7.pp_error e in
+  let settings = K7.[ Columns 24; Rows 4 ] in
+  let joined = [ parse first; parse second ] in
+  let expected =
+    get
+      (K7.svg ~settings K7.[ (Ms 0, first); (Ms 1000, second); (Ms 2000, "") ])
+  in
+  let actual = get (K7.svg_of_casts ~settings joined) in
+  check_eq ~pp:pp_string expected actual;
+  check_eq ~pp:pp_string actual (get (K7.svg_of_casts ~settings joined));
+  let single =
+    match
+      K7.cast_of_string
+        (header ^ "\n[0,\"o\"," ^ json_string (first ^ second) ^ "]\n")
+    with
+    | Ok c -> c
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  check_eq ~pp:pp_string
+    (get (K7.text_of_casts [ single ]))
+    (get (K7.text_of_casts joined))
+
 let test_cast_ignored_metadata data n =
   let data = if String.is_valid_utf_8 data then data else String.escaped data in
   let header extra =
@@ -1177,6 +1219,9 @@ let casts =
 let suite =
   ( "svg",
     [
+      test_case
+        "joining casts preserves cursor, colour and deterministic timing"
+        [ uint8; uint8 ] test_cast_join_state;
       test_case "explicit cast dimensions make resize events harmless" [ uint8 ]
         test_fixed_cast_size_ignores_resizes;
       test_case "pure SVG ignores shell, typing speed and wait timeout"
