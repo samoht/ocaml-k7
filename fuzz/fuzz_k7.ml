@@ -1435,8 +1435,43 @@ let test_capture_incomplete_roundtrip n tail =
           in
           check_eq ~pp:Fmt.Dump.string (image cast) (image restored))
 
+let test_cast_dryrun_destination n directory text =
+  with_dir @@ fun env path ->
+  save env (path "input.cast")
+    ({|{"version":3,"term":{"cols":8,"rows":2}}|} ^ "\n");
+  let extension = if text then ".txt" else ".svg" in
+  let occupied = path (Fmt.str "occupied %d%s" n extension) in
+  let destination =
+    if directory then (
+      Unix.mkdir occupied 0o755;
+      occupied)
+    else (
+      save env (path "parent") "not a directory";
+      path ("parent/out" ^ extension))
+  in
+  Fun.protect ~finally:(fun () -> if directory then Unix.rmdir occupied)
+  @@ fun () ->
+  let cli = Option.value ~default:"k7" (Sys.getenv_opt "K7_TEST_EXE") in
+  let run dry_run =
+    let sink = Eio.Flow.buffer_sink (Buffer.create 128) in
+    Eio.Switch.run @@ fun sw ->
+    let argv =
+      [ cli; "play" ]
+      @ (if dry_run then [ "--dry-run" ] else [])
+      @ [ "-o"; destination; path "input.cast" ]
+    in
+    Eio.Process.spawn ~sw ~stdout:sink ~stderr:sink
+      (Eio.Stdenv.process_mgr env)
+      argv
+    |> Eio.Process.await
+  in
+  check (run false = `Exited 123);
+  check (run true = `Exited 123)
+
 let with_programs =
   [
+    test_case "asciicast dry-run refuses unwritable output paths"
+      [ uint8; bool; bool ] test_cast_dryrun_destination;
     test_case "saved captures preserve incomplete UTF-8 tails" [ uint8; uint8 ]
       test_capture_incomplete_roundtrip;
     test_case "the command read from SVG runs the same arguments" [ uint8 ]
