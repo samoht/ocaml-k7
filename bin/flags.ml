@@ -28,12 +28,13 @@ let framerate =
     & opt (some (count ~docv:"N" "frame rate")) None
     & info [ "framerate" ] ~docv:"N" ~doc)
 
-let settings =
+let settings_for ~columns:columns_default ~rows:rows_default =
   let columns =
     let doc =
-      "Give the terminal $(docv) columns, and the image the width they need \
-       (defaults to as many as a frame of 1200 pixels holds, as in VHS: 75 at \
-       the default font size)."
+      Fmt.str
+        "Give the terminal $(docv) columns, and the image the width they need \
+         (defaults to %s)."
+        columns_default
     in
     Arg.(
       value
@@ -41,9 +42,10 @@ let settings =
       & info [ "columns" ] ~docv:"N" ~doc)
   and rows =
     let doc =
-      "Give the terminal $(docv) rows, and the image the height they need \
-       (defaults to as many as a frame of 600 pixels holds, as in VHS: 16 at \
-       the default font size)."
+      Fmt.str
+        "Give the terminal $(docv) rows, and the image the height they need \
+         (defaults to %s)."
+        rows_default
     in
     Arg.(
       value
@@ -73,6 +75,15 @@ let settings =
       ]
   in
   Term.(const make $ columns $ rows $ font_size $ theme $ framerate)
+
+let settings =
+  settings_for
+    ~columns:
+      "as many as a frame of 1200 pixels holds, as in VHS: 75 at the default \
+       font size"
+    ~rows:
+      "as many as a frame of 600 pixels holds, as in VHS: 16 at the default \
+       font size"
 
 let binding s =
   match String.index_opt s '=' with
@@ -119,6 +130,19 @@ let wait_timeout =
         None
     & info [ "wait-timeout" ] ~docv:"SECONDS" ~doc)
 
+(* Go's longest duration, in milliseconds. *)
+let max_ms = 9_223_372_036_854
+
+let milliseconds =
+  let parser s =
+    match decimal s with
+    | Some n when n <= max_ms -> Ok n
+    | _ ->
+        Fmt.error "%a is not a number of milliseconds from 0 to %d" Quote.pp s
+          max_ms
+  in
+  Arg.Conv.make ~docv:"MS" ~parser ~pp:Fmt.int ()
+
 let vhs =
   let doc = "The $(b,vhs) executable to run." in
   Arg.(value & opt string "vhs" & info [ "vhs" ] ~docv:"PATH" ~doc)
@@ -163,6 +187,26 @@ let load env path =
   | exception Eio.Io (Eio.Fs.E (Permission_denied _), _) ->
       Fmt.error "%s: permission denied" path
   | exception Eio.Io (err, _) -> Fmt.error "%s: %a" path Eio.Exn.pp_err err
+
+let check_svg ~cmd output =
+  if Filename.extension output <> ".svg" then
+    Fmt.error "%a: not .svg, the animated SVG image %s writes" Quote.pp output
+      cmd
+  else Ok ()
+
+let save env output svg =
+  let file = Eio.Path.(Eio.Stdenv.fs env / output) in
+  match
+    Option.iter
+      (fun (dir, _) -> Eio.Path.mkdirs ~exists_ok:true ~perm:0o755 dir)
+      (Eio.Path.split file);
+    Eio.Path.save ~create:(`Or_truncate 0o644) file svg
+  with
+  | () -> Ok ()
+  | exception Eio.Io (Eio.Fs.E (Already_exists _ | Not_found _), _) ->
+      Fmt.error "%a: %a is not a directory" Quote.pp output Quote.pp
+        (Filename.dirname output)
+  | exception Eio.Io (err, _) -> Fmt.error "%s: %a" output Eio.Exn.pp_err err
 
 let write flow s =
   match Eio.Flow.copy_string s flow with

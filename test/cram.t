@@ -307,3 +307,39 @@ outputs as a recording would, without recording anything.
   [123]
   $ test -e dry.svg || test -e outless.txt || test -e played || echo nothing written
   nothing written
+
+k7 cast draws an asciicast v2 recording, at the times of its output
+events, on a terminal of the size of its header. It runs nothing, so it
+writes the same image each time.
+
+  $ cat > hello.cast <<'EOF'
+  > {"version": 2, "width": 20, "height": 3, "title": "hello"}
+  > [0.1, "o", "hello\r\n"]
+  > [0.2, "i", "q"]
+  > [0.25, "o", "\u001b[1mworld\u001b[0m"]
+  > EOF
+  $ k7 cast -o hello.svg hello.cast
+  $ k7 cast -o again.svg hello.cast
+  $ cmp hello.svg again.svg
+  $ grep -o '<desc id="k[0-9a-f]*d">[^<]*' hello.svg | sed 's/id="[^"]*"//'
+  <desc >hello
+  $ grep -o 'animation:k[0-9a-f]*s [0-9]*ms' hello.svg | sed 's/k[0-9a-f]*s/s/'
+  animation:s 1260ms
+  $ k7 cast --show 'make hello' --delay 250 -o show.svg hello.cast
+  $ grep -o '<desc id="k[0-9a-f]*d">[^<]*' show.svg | sed 's/id="[^"]*"//'
+  <desc >$ make hello
+  $ grep -o 'animation:k[0-9a-f]*s [0-9]*ms' show.svg | sed 's/k[0-9a-f]*s/s/'
+  animation:s 1500ms
+  $ k7 cast -o hello.gif hello.cast
+  k7: "hello.gif": not .svg, the animated SVG image k7 cast writes
+  [123]
+  $ printf '{"version": 3, "term": {"cols": 80, "rows": 24}}\n' > v3.cast
+  $ k7 cast -o v3.svg v3.cast
+  k7: v3.cast: line 1: asciicast version 3, not 2
+  [123]
+  $ printf '{"version": 2, "width": 20, "height": 3}\n[1, "o", "a"]\n[0.5, "o", "b"]\n' > late.cast
+  $ k7 cast -o late.svg late.cast
+  k7: late.cast: line 3: time 0.5s is before 1s
+  [123]
+  $ test -e v3.svg || test -e late.svg || echo nothing written
+  nothing written

@@ -5,34 +5,12 @@
 
 let ( let* ) = Result.bind
 
-let check_output output =
-  if Filename.extension output <> ".svg" then
-    Fmt.error "%a: not .svg, the animated SVG image k7 rec writes" Quote.pp
-      output
-  else Ok ()
-
-(* As K7.record, once the image is ready, so that the program does not see
-   the directories. *)
-let save stdenv output svg =
-  let file = Eio.Path.(Eio.Stdenv.fs stdenv / output) in
-  match
-    Option.iter
-      (fun (dir, _) -> Eio.Path.mkdirs ~exists_ok:true ~perm:0o755 dir)
-      (Eio.Path.split file);
-    Eio.Path.save ~create:(`Or_truncate 0o644) file svg
-  with
-  | () -> Ok ()
-  | exception Eio.Io (Eio.Fs.E (Already_exists _ | Not_found _), _) ->
-      Fmt.error "%a: %a is not a directory" Quote.pp output Quote.pp
-        (Filename.dirname output)
-  | exception Eio.Io (err, _) -> Fmt.error "%s: %a" output Eio.Exn.pp_err err
-
 let exit_code = function
   | `Exited n -> n
   | `Signaled s -> 128 + Sys.signal_to_int s
 
 let record ?show ?delay ?stop stdenv ~settings ~env ~output argv =
-  let* () = check_output output in
+  let* () = Flags.check_svg ~cmd:"k7 rec" output in
   let* svg, status =
     K7.run ~settings ~env ?show ?delay ?stop
       ~clock:(Eio.Stdenv.mono_clock stdenv)
@@ -40,7 +18,9 @@ let record ?show ?delay ?stop stdenv ~settings ~env ~output argv =
       ~cwd:(Eio.Stdenv.cwd stdenv) argv
     |> Result.map_error (Fmt.to_to_string Flags.pp_error)
   in
-  let* () = save stdenv output svg in
+  (* Once the image is ready, so that the program does not see the
+     directories. *)
+  let* () = Flags.save stdenv output svg in
   Ok status
 
 let run ?show ?delay stdenv ~settings ~env ~output argv =
@@ -65,26 +45,12 @@ let show =
   in
   Arg.(value & opt (some string) None & info [ "show" ] ~docv:"TEXT" ~doc)
 
-(* Go's longest duration, in milliseconds. *)
-let max_ms = 9_223_372_036_854
-
-let milliseconds s =
-  match
-    if s <> "" && String.for_all Char.Ascii.is_digit s then int_of_string_opt s
-    else None
-  with
-  | Some n when n <= max_ms -> Ok n
-  | _ ->
-      Fmt.error "%a is not a number of milliseconds from 0 to %d" Quote.pp s
-        max_ms
-
 let delay =
   let doc =
     "Show the command line alone for $(docv) milliseconds, as if typed, before \
      the program's output; 0 shows the output at once."
   in
-  let ms = Arg.Conv.make ~docv:"MS" ~parser:milliseconds ~pp:Fmt.int () in
-  Arg.(value & opt ms 500 & info [ "delay" ] ~docv:"MS" ~doc)
+  Arg.(value & opt Flags.milliseconds 500 & info [ "delay" ] ~docv:"MS" ~doc)
 
 let command =
   let doc = "The program to record, then its arguments, after $(b,--)." in

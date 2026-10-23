@@ -11,16 +11,24 @@
   screenshot only the other writes, or one whose directory it cannot write.
   `K7.svg` draws the image of timed output, with the settings `K7.tape`
   checks.
-- The `k7` command plays a tape or a cram test (`k7 play`), or records
-  any program (`k7 rec`), as an animated SVG image, and runs `vhs` for
-  the other outputs of a tape or a cram test, or when `--engine vhs`
-  says so. `--columns`, `--rows`, `--font-size`, `--theme`,
-  `--framerate` and `--env` set the terminal of each.
+- The `k7` command plays a tape or a cram test (`k7 play`), records any
+  program (`k7 rec`) or draws an asciicast recording (`k7 cast`) as an
+  animated SVG image, and runs `vhs` for the other outputs of a tape or a
+  cram test, or when `--engine vhs` says so. `--columns`, `--rows`, `--font-size`, `--theme` and
+  `--framerate` set the terminal of each, and `--env` the environment of
+  `k7 play` and `k7 rec`.
 - `K7.run` records a program on a pseudo-terminal, with no shell and
   nothing typed, and returns the animated SVG image of its screens below
   its command line, timed as they arrived, with how the program exited.
   `?show` (`--show`) replaces the command line, or hides it, and the line
   shows alone for `?delay` (`--delay`, 500ms by default), as if typed.
+- `K7.svg_of_cast` (`k7 cast`) draws a recording in asciicast v2, such
+  as asciinema or console's `CONSOLE_CAST` writes, as `K7.svg` draws its
+  output events, each at its time rounded to the millisecond, so the same
+  recording gives the same image, byte for byte. The header's width and
+  height size the terminal unless `--columns` and `--rows` do, and
+  `?show` and `?delay` (`--show`, `--delay`) add a command line as for
+  `K7.run`.
 - `K7.check` returns the error `K7.record` would before it records,
   without starting a shell or `vhs`.
 - `K7.run` and `K7.record` take `?env`, variables for the environment of

@@ -13,8 +13,9 @@ let man =
        browser. For a GIF or a video, $(b,k7 play) runs Charm's $(b,vhs).";
     `P
       "Every subcommand takes $(b,--columns), $(b,--rows), $(b,--font-size), \
-       $(b,--theme), $(b,--framerate) and $(b,--env). Run $(b,k7) $(i,COMMAND) \
-       $(b,--help) for the manual of a subcommand.";
+       $(b,--theme) and $(b,--framerate), and $(b,k7 play) and $(b,k7 rec) \
+       take $(b,--env). Run $(b,k7) $(i,COMMAND) $(b,--help) for the manual of \
+       a subcommand.";
     `S "PLAYING A TAPE OR A CRAM TEST";
     `P
       "$(b,k7 play) $(i,FILE) plays a tape in VHS's $(b,.tape) syntax to its \
@@ -31,6 +32,12 @@ let man =
        writes its screens to $(i,FILE.svg), each at the time it arrived. It \
        exits with the exit code of $(i,COMMAND); an error of k7 itself prints \
        $(b,k7:) and the reason on standard error.";
+    `S "DRAWING A RECORDING";
+    `P
+      "$(b,k7 cast) $(b,-o) $(i,FILE.svg) $(i,FILE.cast) draws a recording in \
+       asciinema's asciicast v2 format, such as console writes under its \
+       virtual clock, without running anything: the same recording gives the \
+       same image, byte for byte.";
   ]
 
 let exits =
@@ -52,4 +59,4 @@ let cmd =
   let doc = "record terminal sessions as animated SVG images" in
   Cmd.group
     (Cmd.info "k7" ~version:"%%VERSION%%" ~doc ~man ~exits)
-    [ Play_cmd.cmd; Rec_cmd.cmd ]
+    [ Play_cmd.cmd; Rec_cmd.cmd; Cast_cmd.cmd ]

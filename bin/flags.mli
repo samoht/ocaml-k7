@@ -11,11 +11,20 @@ val settings : K7.setting list Cmdliner.Term.t
 (** [settings] are the terminal settings of [--columns], [--rows],
     [--font-size], [--theme] and [--framerate], in that order. *)
 
+val settings_for :
+  columns:string -> rows:string -> K7.setting list Cmdliner.Term.t
+(** [settings_for ~columns ~rows] is {!settings}, whose manual gives [columns]
+    and [rows] as the defaults of [--columns] and [--rows]. *)
+
 val env : (string * string) list Cmdliner.Term.t
 (** [env] are the variables of the repeatable [--env VAR=VALUE], in order. *)
 
 val wait_timeout : int option Cmdliner.Term.t
 (** [wait_timeout] is the number of seconds of [--wait-timeout], if given. *)
+
+val milliseconds : int Cmdliner.Arg.conv
+(** [milliseconds] reads a decimal number of milliseconds from [0] to Go's
+    longest duration. *)
 
 val vhs : string Cmdliner.Term.t
 (** [vhs] is the [vhs] executable of [--vhs] (defaults to ["vhs"]). *)
@@ -31,6 +40,14 @@ val exits : Cmdliner.Cmd.Exit.info list
 val load : Eio_unix.Stdenv.base -> string -> (string, string) result
 (** [load env path] is the contents of the file [path], of at most 10 MiB, or
     [Error msg]. *)
+
+val check_svg : cmd:string -> string -> (unit, string) result
+(** [check_svg ~cmd path] is [Ok ()] if [path] ends with [.svg], and an error
+    that names the image [cmd] writes otherwise. *)
+
+val save : Eio_unix.Stdenv.base -> string -> string -> (unit, string) result
+(** [save env path svg] writes [svg] to the file [path], creating its missing
+    directories, or is [Error msg]. *)
 
 val print_tape : Eio_unix.Stdenv.base -> K7.t -> (unit, string) result
 (** [print_tape env t] writes [K7.to_string t] on standard output. A reader that

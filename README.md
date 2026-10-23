@@ -53,10 +53,24 @@ prints `k7:` and the reason on standard error, and exits 123.
 $ k7 rec --output ls.svg -- ls -l
 ```
 
-Both subcommands take `--columns`, `--rows`, `--font-size`, `--theme`,
-`--framerate` and `--env VAR=VALUE`. k7 writes `.svg` outputs and the text outputs
+`k7 cast` draws a recording in asciinema's
+[asciicast v2](https://docs.asciinema.org/manual/asciicast/v2/) format,
+such as console writes under its virtual clock with
+`CONSOLE_DETERMINISTIC_CLOCK=1 CONSOLE_CAST=FILE`. It runs nothing, so
+the same recording gives the same image, byte for byte; `--show` and
+`--delay` add the command line as for `k7 rec`.
+
+```sh
+$ printf '{"version": 2, "width": 40, "height": 4}\n[0.5, "o", "hello\\r\\n"]\n' > hello.cast
+$ k7 cast --show 'echo hello' --output hello.svg hello.cast
+```
+
+The three subcommands take `--columns`, `--rows`, `--font-size`,
+`--theme` and `--framerate`, and `k7 play` and `k7 rec` take
+`--env VAR=VALUE`. k7 writes `.svg` outputs and the text outputs
 (`.txt`, `.ascii` and `.test`) itself, and `k7 play` runs `vhs` for the
-others. `k7 play` calls `K7.record`, and `k7 rec` calls `K7.run`.
+others. `k7 play` calls `K7.record`, `k7 rec` calls `K7.run` and
+`k7 cast` calls `K7.svg_of_cast`.
 `k7 COMMAND --help` gives the details.
 
 ## OCaml
@@ -65,8 +79,9 @@ others. `k7 play` calls `K7.record`, and `k7 rec` calls `K7.run`.
 tape in bash, zsh or fish and writes the SVG and text outputs, and its
 `Vhs` engine runs `vhs`; `K7.record` picks the one that writes the outputs
 of the tape, unless `~engine` names one. `K7.svg` returns the image of
-output given with its times, such as the bytes a test captured. `K7.run`
-records a program as `k7 rec` does.
+output given with its times, such as the bytes a test captured, and
+`K7.svg_of_cast` the image of an asciicast recording. `K7.run` records a
+program as `k7 rec` does.
 
 ```ocaml
 let record_ls env =
