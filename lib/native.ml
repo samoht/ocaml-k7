@@ -37,23 +37,23 @@ let unsupported line fmt =
 type scope = Line | Screen
 
 type command =
-  | Type of { speed : int option; text : string }
-  | Key of { speed : int option; count : int; key : string }
+  | Type of { speed : Mtime.Span.t option; text : string }
+  | Key of { speed : Mtime.Span.t option; count : int; key : string }
   | Ctrl of lexeme list
   | Alt of lexeme
   | Shift of lexeme
-  | Sleep of int
+  | Sleep of Mtime.Span.t
   | Wait of {
       line : string;
       at : int;
       file : string option;
       scope : scope;
-      timeout : int option;
+      timeout : Mtime.Span.t option;
       pattern : Regexp_match.t option;
     }
   | Hide
   | Show
-  | Set_typing_speed of int
+  | Set_typing_speed of Mtime.Span.t
   | Copy of string
   | Paste
   | Env
@@ -64,14 +64,14 @@ let keys =
     "Down"; "Left"; "Right"; "PageUp"; "PageDown"; "ScrollUp"; "ScrollDown" ]
 [@@ocamlformat "disable"]
 
-let ms_of_ns ns = ns / 1_000_000
+let ms_of_span d =
+  Int64.to_int (Int64.unsigned_div (Mtime.Span.to_uint64_ns d) 1_000_000L)
 
-let int_of_ns ns =
-  if Int64.unsigned_compare ns (Int64.of_int max_int) > 0 then max_int
-  else Int64.to_int ns
+let ( +! ) a b =
+  let d = Mtime.Span.add a b in
+  if Mtime.Span.compare d a < 0 then Mtime.Span.max_span else d
 
-let span ns = Mtime.Span.of_uint64_ns (Int64.of_int ns)
-let ( +! ) a b = if a > max_int - b then max_int else a + b
+let min_span a b = if Mtime.Span.compare a b <= 0 then a else b
 
 (* VHS's parseTime: seconds without a unit. *)
 let time line = function
@@ -79,15 +79,15 @@ let time line = function
   | Num n :: rest -> (n ^ "s", rest)
   | _ -> unsupported line "expected a duration"
 
-let ns line s =
+let span line s =
   match duration s with
-  | Some ns -> int_of_ns ns
+  | Some ns -> Mtime.Span.of_uint64_ns ns
   | None -> unsupported line "%s is not a duration" s
 
 let speed line = function
   | Sym '@' :: rest ->
       let t, rest = time line rest in
-      (Some (ns line t), rest)
+      (Some (span line t), rest)
   | rest -> (None, rest)
 
 let strings tokens =
@@ -115,11 +115,11 @@ type config = {
   rows : int;
   columns : int;
   palette : Palette.t;
-  typing_speed : int;
+  typing_speed : Mtime.Span.t;
   framerate : int;
   playback_speed : float;
   loop_offset : float;
-  wait_timeout : int;
+  wait_timeout : Mtime.Span.t;
   wait_pattern : Regexp_match.t;
   cursor_blink : bool;
 }
@@ -147,11 +147,11 @@ let default_config () =
     rows = 0;
     columns = 0;
     palette = Palette.default;
-    typing_speed = 50_000_000;
+    typing_speed = Mtime.Span.(50 * ms);
     framerate = 50;
     playback_speed = 1.;
     loop_offset = 0.;
-    wait_timeout = 15_000_000_000;
+    wait_timeout = Mtime.Span.(15 * s);
     wait_pattern = Regexp_match.compile ">$";
     cursor_blink = true;
   }
@@ -233,7 +233,7 @@ let set line c name args =
       let u =
         match rest with Keyword (("ms" | "s") as u) :: _ -> u | _ -> "s"
       in
-      { c with typing_speed = ns line (n ^ u) }
+      { c with typing_speed = span line (n ^ u) }
   | "Framerate", _ -> (
       match int_of_string_opt (value ()) with
       | Some n when n >= 0 -> { c with framerate = max 1 n }
@@ -250,7 +250,8 @@ let set line c name args =
           let f = Float.rem (f /. 100.) 1. in
           { c with loop_offset = (if f < 0. then f +. 1. else f) }
       | _ -> unsupported line "%s is not a number" (value ()))
-  | "WaitTimeout", _ -> { c with wait_timeout = ns line (fst (time line args)) }
+  | "WaitTimeout", _ ->
+      { c with wait_timeout = span line (fst (time line args)) }
   | "WaitPattern", _ ->
       { c with wait_pattern = Regexp_match.compile (value ()) }
   | "CursorBlink", _ -> { c with cursor_blink = value () = "true" }
@@ -481,7 +482,7 @@ let rec read ~source ?file ~at line t =
             Ctrl (List.filter (function Sym '+' -> false | _ -> true) rest)
         | Keyword "Alt" :: Sym '+' :: k :: _ -> Alt k
         | Keyword "Shift" :: Sym '+' :: k :: _ -> Shift k
-        | Keyword "Sleep" :: rest -> Sleep (ns line (fst (time line rest)))
+        | Keyword "Sleep" :: rest -> Sleep (span line (fst (time line rest)))
         | Keyword "Wait" :: rest -> wait_command ~at ~file line rest
         | [ Keyword "Hide" ] -> Hide
         | [ Keyword "Show" ] -> Show
@@ -560,7 +561,7 @@ let palette t = t.look.palette
 
 (* As terminals, synchronized output ends after 150ms. *)
 let sync_timeout = 150
-let sync_timeout_ns = sync_timeout * 1_000_000
+let sync_span = Mtime.Span.(sync_timeout * ms)
 
 let replay t events =
   let s = t.look in
@@ -683,14 +684,14 @@ type state = {
   mutable live : Screen.t;
   mutable shown : Screen.t;
   mutable pending : bool;  (** [live] is not shown yet. *)
-  mutable sync : int option;
+  mutable sync : Mtime.Span.t option;
       (** When synchronized output started, which holds [live] back. *)
   mutable offset : int;
   mutable hidden : bool;
-  mutable logical : int;
+  mutable logical : Mtime.Span.t;
   mutable started : Mtime.t;
-  mutable cap : int option;
-  mutable typing_speed : int;
+  mutable cap : Mtime.Span.t option;
+  mutable typing_speed : Mtime.Span.t;
   mutable clipboard : string;
   text : Buffer.t;
   dumps : bool;
@@ -704,18 +705,16 @@ type state = {
 }
 
 let now st = Eio.Time.Mono.now st.clock
-
-let elapsed st =
-  int_of_ns (Mtime.Span.to_uint64_ns (Mtime.span st.started (now st)))
+let elapsed st = Mtime.span st.started (now st)
 
 let stamp st =
   st.logical
-  +! match st.cap with Some c -> min c (elapsed st) | None -> elapsed st
+  +! match st.cap with Some c -> min_span c (elapsed st) | None -> elapsed st
 
 let record ?at st =
   if not st.hidden then (
     add st.tl
-      (ms_of_ns (match at with Some ns -> ns | None -> stamp st))
+      (ms_of_span (match at with Some d -> d | None -> stamp st))
       st.shown;
     Option.iter
       (fun path ->
@@ -742,9 +741,10 @@ let refresh st =
 
 let expire st =
   match st.sync with
-  | Some since when stamp st >= since +! sync_timeout_ns ->
+  | Some since
+    when not (Mtime.Span.is_shorter (stamp st) ~than:(since +! sync_span)) ->
       st.sync <- None;
-      if st.pending then show ~at:(since +! sync_timeout_ns) st
+      if st.pending then show ~at:(since +! sync_span) st
   | _ -> ()
 
 let synchronize st on =
@@ -813,7 +813,7 @@ let last_output st =
 let feed st buf n =
   let output = Bytes.sub_string buf 0 n in
   Option.iter
-    (fun c -> st.captured <- Some ((ms_of_ns (stamp st), output) :: c))
+    (fun c -> st.captured <- Some ((ms_of_span (stamp st), output) :: c))
     st.captured;
   since st output;
   expire st;
@@ -842,13 +842,13 @@ let write st s =
     st.submitted <- Some (Screen.cursor_row st.term);
   send st s
 
-let step st ns =
+let step st d =
   st.started <- now st;
-  st.cap <- Some ns;
-  Eio.Time.Mono.sleep_span st.clock (span ns);
-  if not st.hidden then st.logical <- st.logical +! ns;
+  st.cap <- Some d;
+  Eio.Time.Mono.sleep_span st.clock d;
+  if not st.hidden then st.logical <- st.logical +! d;
   st.started <- now st;
-  st.cap <- Some 0
+  st.cap <- Some Mtime.Span.zero
 
 let press st ?speed s =
   write st s;
@@ -870,13 +870,13 @@ let scroll st ?speed ~count dir =
     step st (Option.value speed ~default:st.typing_speed)
   done
 
-let within st ns f =
+let within st d f =
   Eio.Fiber.first
     (fun () ->
       f ();
       true)
     (fun () ->
-      Eio.Time.Mono.sleep_span st.clock (span ns);
+      Eio.Time.Mono.sleep_span st.clock d;
       false)
 
 (* VHS reads as many lines as the screen has rows, from the buffer's top. *)
@@ -935,7 +935,7 @@ let wait st c ~line ~at ~file ~scope ~timeout ~pattern =
   Buffer.clear st.since;
   if not st.hidden then st.logical <- st.logical +! elapsed st;
   st.started <- now st;
-  st.cap <- Some 0
+  st.cap <- Some Mtime.Span.zero
 
 (* VHS's text output: the {!top} lines after each command, then 80 box
    characters. *)
@@ -962,14 +962,14 @@ let run_command st c = function
   | Ctrl args -> press st (ctrl_bytes args)
   | Alt k -> press st ("\027" ^ modified ~shift:false k)
   | Shift k -> press st (modified ~shift:true k)
-  | Sleep ns -> step st ns
+  | Sleep d -> step st d
   | Wait { line; at; file; scope; timeout; pattern } ->
       wait st c ~line ~at ~file ~scope ~timeout ~pattern
   | Hide -> st.hidden <- true
   | Show ->
       st.hidden <- false;
       record st
-  | Set_typing_speed ns -> st.typing_speed <- ns
+  | Set_typing_speed d -> st.typing_speed <- d
   | Copy s -> st.clipboard <- s
   | Paste -> write st st.clipboard
   | Screenshot path ->
@@ -1190,9 +1190,9 @@ let state ?(stuck = fun _ -> false) t ~clock ({ pty; pid; _ } : terminal) =
     sync = None;
     offset = 0;
     hidden = true;
-    logical = 0;
+    logical = Mtime.Span.zero;
     started = Eio.Time.Mono.now clock;
-    cap = Some 0;
+    cap = Some Mtime.Span.zero;
     typing_speed = t.config.typing_speed;
     clipboard = "";
     text = Buffer.create 4096;
@@ -1215,7 +1215,7 @@ let recording t st =
         [ (0, screen) ] )
   in
   {
-    svg = svg t st.tl ~end_ms:(ms_of_ns st.logical);
+    svg = svg t st.tl ~end_ms:(ms_of_span st.logical);
     text = Buffer.contents st.text;
     stills = List.rev_map still st.stills;
   }
@@ -1292,7 +1292,7 @@ let capture ?interrupt ~clock ~env ~vars ~cwd ~line t argv =
             terminate clock terminal);
     let output = List.rev (Option.value st.captured ~default:[]) in
     match st.exited with
-    | Some status -> (output, ms_of_ns (stamp st), status)
+    | Some status -> (output, ms_of_span (stamp st), status)
     | None -> stop (Io "the program's exit status is lost")
   with
   | r -> Ok r
