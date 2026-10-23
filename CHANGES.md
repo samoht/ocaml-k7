@@ -90,7 +90,10 @@
   and tab stops, a restore returns to the line of the buffer and leaves the
   designations of the character sets, `ESC % G` selects ASCII, an erasure at
   the right margin keeps the wrap pending, the cursor reports count the
-  column beyond the last, and `CSI S` keeps no scrollback.
+  column beyond the last, and `CSI S` keeps no scrollback. A frame drawn
+  in synchronized output (DEC private mode 2026) shows once complete,
+  when the program resets the mode or 150ms after it set it, even when it
+  reaches the terminal in several reads.
 - `K7.Columns` and `K7.Rows` size the terminal in cells, as VHS's
   `Set Columns` and `Set Rows` do, in place of `K7.Width` and
   `K7.Height`.

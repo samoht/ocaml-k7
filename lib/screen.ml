@@ -3,22 +3,58 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-type terminal = Vte.t
+(* Where a [CSI ? Pm h] or [CSI ? Pm l] is read: [n] is the parameter read so
+   far, and [sync] whether an earlier one is 2026. *)
+type scan = Ground | Esc | Csi | Private of { n : int; sync : bool }
+type terminal = { vte : Vte.t; mutable scan : scan }
 
 (* As xterm.js: a thousand lines of scrollback, a width per code point, and
    DA2 answered as xterm.js 5. *)
 let terminal ~rows ~cols =
-  Vte.create ~scrollback:1000 ~width_method:`Wcwidth
-    ~default_fg:Ansi.Color.default ~default_bg:Ansi.Color.default
-    ~da2:"\027[>0;276;0c" ~rows ~cols ()
+  {
+    vte =
+      Vte.create ~scrollback:1000 ~width_method:`Wcwidth
+        ~default_fg:Ansi.Color.default ~default_bg:Ansi.Color.default
+        ~da2:"\027[>0;276;0c" ~rows ~cols ();
+    scan = Ground;
+  }
 
-let feed = Vte.feed_string
-let take_replies = Vte.take_replies
-let is_dirty = Vte.is_dirty
-let clear_dirty = Vte.clear_dirty
-let history = Vte.scrollback_size
-let cursor_keys = Vte.cursor_key_mode
-let cursor_row t = fst (Vte.cursor_pos t)
+let next scan c =
+  match (scan, c) with
+  | _, '\027' -> Esc
+  | Esc, '[' -> Csi
+  | Csi, '?' -> Private { n = 0; sync = false }
+  | Private p, '0' .. '9' ->
+      Private { p with n = min 10_000 ((p.n * 10) + Char.code c - 48) }
+  | Private p, ';' -> Private { n = 0; sync = p.sync || p.n = 2026 }
+  | _ -> Ground
+
+(* matrix ignores DEC mode 2026, so the bytes are scanned here too. *)
+let feed ?(sync = ignore) t s =
+  let feed_to start i =
+    Vte.feed t.vte (Bytes.unsafe_of_string s) start (i - start)
+  in
+  let rec go start i =
+    if i = String.length s then feed_to start i
+    else
+      match (t.scan, s.[i]) with
+      | Private p, (('h' | 'l') as c) when p.sync || p.n = 2026 ->
+          t.scan <- Ground;
+          feed_to start (i + 1);
+          sync (c = 'h');
+          go (i + 1) (i + 1)
+      | scan, c ->
+          t.scan <- next scan c;
+          go start (i + 1)
+  in
+  go 0 0
+
+let take_replies t = Vte.take_replies t.vte
+let is_dirty t = Vte.is_dirty t.vte
+let clear_dirty t = Vte.clear_dirty t.vte
+let history t = Vte.scrollback_size t.vte
+let cursor_keys t = Vte.cursor_key_mode t.vte
+let cursor_row t = fst (Vte.cursor_pos t.vte)
 
 type colour = Default | Indexed of int | Rgb of int
 
@@ -112,9 +148,10 @@ let row grid y =
   Array.iter (fun (c : cell) -> Buffer.add_string b c.text) cells;
   { cells; text = trim_end (Buffer.contents b) }
 
-let of_terminal ?previous ?(offset = 0) vte =
+let of_terminal ?previous ?(offset = 0) term =
+  let vte = term.vte in
   let rows = Vte.rows vte and cols = Vte.cols vte in
-  let offset = max 0 (min offset (history vte)) in
+  let offset = max 0 (min offset (history term)) in
   let grid =
     if offset = 0 then Vte.grid vte
     else
@@ -146,7 +183,7 @@ let of_terminal ?previous ?(offset = 0) vte =
   { rows = rows'; cursor }
 
 let buffer term t =
-  let older = List.map trim_end (Vte.scrollback_lines term) in
+  let older = List.map trim_end (Vte.scrollback_lines term.vte) in
   Array.append (Array.of_list older) (Array.map (fun r -> r.text) t.rows)
 
 let line t r = if r >= 0 && r < Array.length t.rows then t.rows.(r).text else ""
@@ -179,9 +216,10 @@ let sgr b (c : cell) =
 (* [Vte.resize] clears the screen; a terminal keeps what fits. DECSC and DECRC
    keep the cursor, the pen and the character sets around the repaint. *)
 let resize term ~rows ~cols =
-  if Vte.rows term <> rows || Vte.cols term <> cols then (
+  let vte = term.vte in
+  if Vte.rows vte <> rows || Vte.cols vte <> cols then (
     let before = of_terminal term in
-    Vte.resize term ~rows ~cols;
+    Vte.resize vte ~rows ~cols;
     let b = Buffer.create 4096 in
     Buffer.add_string b "\0277\027(B";
     Array.iteri
@@ -198,4 +236,4 @@ let resize term ~rows ~cols =
             row.cells))
       before.rows;
     Buffer.add_string b "\0278";
-    feed term (Buffer.contents b))
+    Vte.feed_string vte (Buffer.contents b))

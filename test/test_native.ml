@@ -295,6 +295,28 @@ let test_hidden_end () =
         (screen [ "> echo shown"; "shown"; ">" ])
         (last (frames s))
 
+(* A frame in synchronized output that reaches the terminal in two reads
+   shows once complete. *)
+let test_synchronized () =
+  with_dir @@ fun env cwd ->
+  let t =
+    tape
+      K7.
+        [
+          type' "printf '\\033[?2026hHA''LF'; read x; printf '\\033[?2026l'\n";
+          wait (Screen "(?m)^HALF$");
+          sleep (Ms 100);
+          type' "done\n";
+          wait Prompt;
+        ]
+  in
+  match record env cwd t with
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+  | Ok s ->
+      let half f = List.mem "HALF" (String.split_on_char '\n' f) in
+      Alcotest.(check bool) "half frame" false (List.exists half (frames s));
+      check_contains "whole frame" ~sub:"\nHALFdone\n" (last (frames s))
+
 let test_scroll () =
   with_dir @@ fun env cwd ->
   let t =
@@ -1928,6 +1950,7 @@ let suite =
          ("no job control", test_no_job_control);
          ("hidden", test_hidden);
          ("hidden end", test_hidden_end);
+         ("synchronized output", test_synchronized);
          ("scroll", test_scroll);
          ("scroll far", test_scroll_far);
          ("buffer", test_buffer);

@@ -699,7 +699,11 @@ val cram :
     {!constructor-Framerate}, which lasts at least a millisecond. A tape whose
     program prints the same bytes within the same frames gives the same image,
     byte for byte. The time a command takes to print, including how the machine
-    schedules it, changes the frames its output lands in.
+    schedules it, changes the frames its output lands in. While a program has
+    set synchronized output (DEC private mode 2026), the image keeps its last
+    frame, and shows the screen once the program resets the mode or, as
+    terminals do, 150ms after it set it; waits and the text output read the
+    screen as it is. {!svg} and the asciicast recordings are drawn so too.
 
     The text output, [.txt], [.ascii] or [.test], is the one VHS writes. After
     each command that runs while recording, it holds the lines a

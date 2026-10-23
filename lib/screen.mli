@@ -14,8 +14,12 @@ type terminal
 val terminal : rows:int -> cols:int -> terminal
 (** [terminal ~rows ~cols] is a terminal that has read nothing. *)
 
-val feed : terminal -> string -> unit
-(** [feed term s] makes [term] read [s], the next bytes after those it read. *)
+val feed : ?sync:(bool -> unit) -> terminal -> string -> unit
+(** [feed ~sync term s] makes [term] read [s], the next bytes after those it
+    read. Each time [s] sets synchronized output (DEC private mode 2026), with
+    which a program asks that the frame it draws show once complete, [term]
+    reads [s] up to there and calls [sync true]; likewise [sync false] when [s]
+    resets it (defaults to [ignore]). *)
 
 val resize : terminal -> rows:int -> cols:int -> unit
 (** [resize term ~rows ~cols] gives [term] [rows] rows and [cols] columns,

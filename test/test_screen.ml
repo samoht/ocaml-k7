@@ -347,6 +347,28 @@ let test_text_emoji_width () =
     (screen [ prefix ^ heart; "X" ])
     (last (frames (svg [ (Ms 0, prefix ^ heart ^ "X") ])))
 
+(* A frame in synchronized output (DEC mode 2026) shows when the mode is
+   reset, or 150ms after it is set. *)
+let test_synchronized () =
+  let same name expected output =
+    Alcotest.(check string) name (svg expected) (svg output)
+  in
+  same "reset"
+    [ (Ms 0, ""); (Ms 100, "HALF") ]
+    [ (Ms 0, "\027[?2026hHA"); (Ms 100, "LF\027[?2026l") ];
+  same "timeout"
+    [ (Ms 0, ""); (Ms 150, "HA"); (Ms 400, "LF") ]
+    [ (Ms 0, "\027[?2026hHA"); (Ms 400, "LF") ];
+  same "within a read"
+    [ (Ms 0, "A"); (Ms 100, "BCD"); (Ms 200, "EF") ]
+    [
+      (Ms 0, "A\027[?2026hB");
+      (Ms 100, "C\027[?2026lD\027[?25;2026hE");
+      (Ms 200, "F\027[?20");
+      (Ms 200, "26l");
+    ];
+  same "other modes" [ (Ms 0, "AB") ] [ (Ms 0, "A\027[?2025h\027[?2026$pB") ]
+
 let suite =
   ( "screen",
     List.map
@@ -378,4 +400,5 @@ let suite =
         ("cell edits", test_cell_edits);
         ("sequences", test_sequences);
         ("replies", test_replies);
+        ("synchronized output", test_synchronized);
       ] )

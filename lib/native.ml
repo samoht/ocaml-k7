@@ -542,28 +542,50 @@ let stills t =
 
 let size t = (t.look.cols, t.look.rows)
 
+(* As terminals, synchronized output ends after 150ms. *)
+let sync_timeout = 150
+
 let replay t events =
   let s = t.look in
   let term = Screen.terminal ~rows:s.rows ~cols:s.cols in
   let tl = timeline t.config in
-  add tl 0 (Screen.of_terminal term);
   let screen = ref (Screen.of_terminal term) in
+  add tl 0 !screen;
+  let sync = ref None in
+  let show ms =
+    if !sync = None then (
+      screen := Screen.of_terminal ~previous:!screen term;
+      Screen.clear_dirty term;
+      add tl ms !screen)
+  in
+  let expire ms =
+    match !sync with
+    | Some since when ms >= since + sync_timeout ->
+        sync := None;
+        show (since + sync_timeout)
+    | _ -> ()
+  in
+  let synchronize ms on =
+    if not on then sync := None;
+    show ms;
+    if on && !sync = None then sync := Some ms
+  in
   let end_ms =
     List.fold_left
       (fun _ (ms, event) ->
+        expire ms;
         (match (event : Asciicast.event) with
         | Output bytes ->
-            Screen.feed term bytes;
+            Screen.feed ~sync:(synchronize ms) term bytes;
             ignore (Screen.take_replies term)
         | Resize (cols, rows) ->
             Screen.resize term ~rows:(min rows s.rows) ~cols:(min cols s.cols)
         | Exit _ -> ());
-        screen := Screen.of_terminal ~previous:!screen term;
-        Screen.clear_dirty term;
-        add tl ms !screen;
+        show ms;
         ms)
       0 events
   in
+  expire max_int;
   (svg t tl ~end_ms, !screen)
 
 (* The bytes xterm.js sends. *)
@@ -644,6 +666,9 @@ type state = {
   changed : Eio.Condition.t;
   mutable live : Screen.t;
   mutable shown : Screen.t;
+  mutable pending : bool;  (** [live] is not shown yet. *)
+  mutable sync : int option;
+      (** When synchronized output started, which holds [live] back. *)
   mutable offset : int;
   mutable hidden : bool;
   mutable logical : int;
@@ -674,24 +699,43 @@ let stamp st =
   st.logical
   + match st.cap with Some c -> min c (elapsed st) | None -> elapsed st
 
-let record st =
+let record ?at st =
   if not st.hidden then (
-    add st.tl (stamp st) st.shown;
+    add st.tl (match at with Some ms -> ms | None -> stamp st) st.shown;
     Option.iter
       (fun path ->
         st.stills <- (path, st.shown) :: List.remove_assoc path st.stills;
         st.still <- None)
       st.still)
 
-let refresh st =
-  if Screen.is_dirty st.term then (
-    st.live <- Screen.of_terminal ~previous:st.live st.term;
+let show ?at st =
+  if st.sync = None then (
+    st.pending <- false;
     st.shown <-
       (if st.offset = 0 then st.live
        else Screen.of_terminal ~offset:st.offset st.term);
+    record ?at st)
+  else st.pending <- true
+
+let refresh st =
+  if Screen.is_dirty st.term then (
+    st.live <- Screen.of_terminal ~previous:st.live st.term;
     Screen.clear_dirty st.term;
-    record st);
+    st.pending <- true);
+  if st.pending then show st;
   Eio.Condition.broadcast st.changed
+
+let expire st =
+  match st.sync with
+  | Some since when stamp st >= since + sync_timeout ->
+      st.sync <- None;
+      if st.pending then show ~at:(since + sync_timeout) st
+  | _ -> ()
+
+let synchronize st on =
+  if not on then st.sync <- None;
+  refresh st;
+  if on && st.sync = None then st.sync <- Some (stamp st)
 
 let fd st = Pty.file_descr st.pty
 
@@ -749,7 +793,8 @@ let feed st buf n =
     (fun c -> st.captured <- Some ((stamp st, output) :: c))
     st.captured;
   since st output;
-  Screen.feed st.term output;
+  expire st;
+  Screen.feed ~sync:(synchronize st) st.term output;
   settle st output;
   send st (Screen.take_replies st.term);
   refresh st
@@ -769,8 +814,7 @@ let reader st buf =
 let write st s =
   if st.offset > 0 then (
     st.offset <- 0;
-    st.shown <- st.live;
-    record st);
+    show st);
   if String.exists (fun c -> c = '\r' || c = '\n') s then
     st.submitted <- Some (Screen.cursor_row st.term);
   send st s
@@ -799,10 +843,7 @@ let type_text st ?speed text =
 let scroll st ?speed ~count dir =
   for _ = 1 to count do
     st.offset <- max 0 (min (Screen.history st.term) (st.offset + dir));
-    st.shown <-
-      (if st.offset = 0 then st.live
-       else Screen.of_terminal ~offset:st.offset st.term);
-    record st;
+    show st;
     step st (Option.value speed ~default:st.typing_speed)
   done
 
@@ -907,6 +948,7 @@ let run_command st c = function
   | Env -> ()
 
 let run st c command =
+  expire st;
   run_command st c command;
   dump st
 
@@ -1163,6 +1205,8 @@ let state ?(stuck = fun _ -> false) t ~clock ({ pty; pid; _ } : terminal) =
     changed = Eio.Condition.create ();
     live = screen;
     shown = screen;
+    pending = false;
+    sync = None;
     offset = 0;
     hidden = true;
     logical = 0;
@@ -1223,7 +1267,8 @@ let play ?interrupt ?stuck ~clock ~env ~vars ~cwd t =
         st.hidden <- false;
         st.started <- now st;
         record st;
-        List.iter (run st t.config) t.actions);
+        List.iter (run st t.config) t.actions;
+        expire st);
     recording t st
   with
   | r -> Ok r
