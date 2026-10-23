@@ -366,7 +366,7 @@ let add_colours b (p : Palette.t) =
 let attributes =
   [
     ("b", "font-weight:bold");
-    ("f", "fill-opacity:.5");
+    ("f", "fill-opacity:.6");
     ("i", "font-style:italic");
     ("xu", "text-decoration:underline");
     ("xs", "text-decoration:line-through");
