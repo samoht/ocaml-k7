@@ -1503,9 +1503,11 @@ let octal b c =
   digit 0
 
 (* [shell_word s] is a POSIX sh word for [s]: a newline stays raw inside
-   quotes, another control character or a byte that is not UTF-8 is what
-   [printf] prints. Its text is quoted if [quote], if it is not plain or if
-   [s] starts with [=], which zsh expands to a path. *)
+   quotes; what does not show as itself (another control character, a byte
+   that is not UTF-8, a format character, a selector or a joiner after no
+   character that shows) is what [printf] prints. Its text is quoted if
+   [quote], if it is not plain or if [s] starts with [=], which zsh expands
+   to a path. *)
 let shell_word ?(quote = false) s =
   let quote = quote || String.starts_with ~prefix:"=" s in
   let safe c =
@@ -1534,22 +1536,28 @@ let shell_word ?(quote = false) s =
       Buffer.add_string b {|')"|});
     Buffer.clear escapes
   in
-  let rec go i =
-    if i < String.length s then (
+  let shows c ~base =
+    (not (is_control c && c <> 0x0a))
+    && (not (Unicode.is_format c))
+    && (base || not (Unicode.is_selector c || c = 0x200c || c = 0x200d))
+  in
+  let rec go i ~base =
+    if i < String.length s then
       let d = String.get_utf_8_uchar s i in
       let n = Uchar.utf_decode_length d in
-      (match Uchar.to_int (Uchar.utf_decode_uchar d) with
-      | c when Uchar.utf_decode_is_valid d && not (is_control c && c <> 0x0a) ->
+      match Uchar.to_int (Uchar.utf_decode_uchar d) with
+      | c when Uchar.utf_decode_is_valid d && shows c ~base ->
           add_escapes ();
-          Buffer.add_substring text s i n
+          Buffer.add_substring text s i n;
+          go (i + n) ~base:(Unicode.is_base c)
       | c ->
           add_text ();
           if c = 0x0d then Buffer.add_string escapes {|\r|}
           else if c = 0x09 then Buffer.add_string escapes {|\t|}
-          else String.iter (octal escapes) (String.sub s i n));
-      go (i + n))
+          else String.iter (octal escapes) (String.sub s i n);
+          go (i + n) ~base:false
   in
-  go 0;
+  go 0 ~base:false;
   add_text ();
   add_escapes ();
   if s = "" then "''" else Buffer.contents b

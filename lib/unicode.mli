@@ -23,6 +23,10 @@ val is_selector : int -> bool
 (** [is_selector u] is [true] iff the code point [u] is a variation selector,
     U+FE00 to U+FE0F or U+E0100 to U+E01EF. *)
 
+val is_base : int -> bool
+(** [is_base u] is [true] iff a selector or a joiner after the code point [u]
+    joins it: [u] is not a space, a control, a selector or a joiner. *)
+
 val strip_format : string -> string
 (** [strip_format s] is [s] without the characters {!is_format} holds of, but
     for the tag characters of an emoji tag sequence, U+1F3F4 followed by tag
