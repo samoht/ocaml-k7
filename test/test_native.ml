@@ -748,6 +748,27 @@ let test_keys () =
         (screen [ "> echo X abc"; "X abc"; ">" ])
         (last (frames s))
 
+(* The screen wait observes the new prompt before the line wait starts.
+   Neither wait can race the child or depend on a particular PTY split. *)
+let test_prompt_after_noecho_screen_wait () =
+  with_dir @@ fun env cwd ->
+  let t =
+    tape
+      K7.
+        [
+          type'
+            "stty -echo; echo READY; IFS= read -r line; stty echo; printf DONE\n";
+          wait (Screen "(?m)^READY$");
+          type' "x\n";
+          wait (Screen "(?m)^DONE>$");
+          wait ~timeout:(Ms 1) Prompt;
+        ]
+  in
+  match play env cwd t with
+  | Ok () -> ()
+  | Error e ->
+      Alcotest.failf "the new prompt is already on screen: %a" K7.pp_error e
+
 (* VHS's modifier keymap has no non-ASCII key: Shift+"é" is accepted
    by its parser but emits nothing. The following literal Type still runs. *)
 let test_shift_unmapped_unicode () =
@@ -2513,6 +2534,8 @@ let suite =
          ("output paths", test_output_paths);
          ("render outputs", test_render_outputs);
          ("keys", test_keys);
+         ( "prompt after a no-echo screen wait",
+           test_prompt_after_noecho_screen_wait );
          ("Shift ignores unmapped Unicode keys", test_shift_unmapped_unicode);
          ("unsupported", test_unsupported);
          ("bounds", test_bounds);
