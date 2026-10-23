@@ -38,6 +38,24 @@ let rec collapse = function
   | a :: rest -> a :: collapse rest
   | [] -> []
 
+let test_svg_ignores_process_settings output n =
+  let shell =
+    List.nth
+      K7.[ Bash; Zsh; Fish; Powershell; Pwsh; Cmd; Nushell; Osh; Xonsh ]
+      (n mod 9)
+  in
+  let settings = K7.[ Columns 20; Rows 4 ] in
+  let events = K7.[ (Ms 0, output); (Ms 1000, "") ] in
+  let ignored =
+    K7.[ Shell shell; Typing_speed (Ms n); Wait_timeout (Ms (n * 1000)) ]
+  in
+  let draw settings =
+    match K7.svg ~settings events with
+    | Ok image -> image
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  check_eq ~pp:pp_string (draw settings) (draw (settings @ ignored))
+
 let test_frames chunks =
   let output = List.mapi (fun i s -> (K7.Ms (i * 20), s)) chunks in
   match K7.svg ~settings output with
@@ -1103,6 +1121,8 @@ let casts =
 let suite =
   ( "svg",
     [
+      test_case "pure SVG ignores shell, typing speed and wait timeout"
+        [ bytes; uint16 ] test_svg_ignores_process_settings;
       test_case "distinct inline SVG images own their namespace"
         [
           choose
