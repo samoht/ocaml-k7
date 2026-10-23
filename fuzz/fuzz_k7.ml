@@ -2460,6 +2460,19 @@ let test_reader output capacity closed size =
         (Bytes.create (1 + size)));
   check_eq ~pp:pp_string output (Buffer.contents fed)
 
+let test_upper_half_repeat_preflight n =
+  Native_test.with_dir @@ fun _env cwd ->
+  let count = Int64.add 0x4000000000000000L (Int64.of_int n) in
+  let source = Fmt.str "Output repeat.svg\nSpace@0ms %Ld\n" count in
+  let tape =
+    match K7.of_string source with
+    | Ok t -> t
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  match K7.check ~engine:Native ~cwd tape with
+  | Ok () -> ()
+  | Error e -> failf "repeat %Ld: %a" count K7.pp_error e
+
 let test_native_repeat_preflight n =
   Native_test.with_dir @@ fun _env cwd ->
   let count = 100001 + n in
@@ -2499,6 +2512,8 @@ let test_check_writes_nothing n =
 
 let bounds =
   [
+    test_case "native preflight accepts upper-half Go integer repeat counts"
+      [ uint16 ] test_upper_half_repeat_preflight;
     test_case "successful preflight writes nothing and starts no program"
       [ uint8 ] test_check_writes_nothing;
     test_case "native repeat counts are not pixel sizes" [ uint16 ]
