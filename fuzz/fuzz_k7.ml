@@ -2395,6 +2395,36 @@ let with_processes =
       test_no_publication;
   ]
 
+let test_public_update_idempotence n =
+  let get = function Ok t -> t | Error e -> failf "%a" K7.pp_error e in
+  let original =
+    get
+      (K7.tape
+         ~settings:K7.[ Width 600; Height 200 ]
+         ~outputs:[ "original.txt" ]
+         K7.
+           [
+             raw "Set TypingSpeed 0.5ms";
+             type' "λ中🙂é";
+             hidden [ type' "secret" ];
+             sleep (Ms 100);
+           ])
+  in
+  let before = K7.to_string original in
+  let settings =
+    K7.[ Columns (1 + (n mod 80)); Rows (1 + (n mod 24)); Typing_speed (Ms n) ]
+  in
+  let once = get (K7.with_settings settings original) in
+  let twice = get (K7.with_settings settings once) in
+  check_eq ~pp:pp_string (K7.to_string once) (K7.to_string twice);
+  let outputs = [ Fmt.str "replacement-%d.txt" n ] in
+  let replaced = get (K7.with_outputs outputs once) in
+  let repeated = get (K7.with_outputs outputs replaced) in
+  check_eq ~pp:pp_string (K7.to_string replaced) (K7.to_string repeated);
+  check_eq ~pp:Fmt.Dump.(list string) outputs (K7.outputs repeated);
+  check_eq ~pp:pp_string before (K7.to_string original);
+  check_eq ~pp:Fmt.Dump.(list string) [ "original.txt" ] (K7.outputs original)
+
 let test_accessors_roundtrip n =
   let timeout = K7.Ms (List.nth [ 0; 1; 15_000; max_ms ] (n mod 4)) in
   let settings = K7.[ Columns (1 + n); Rows 6; Wait_timeout timeout ] in
@@ -2577,6 +2607,8 @@ let test_check_writes_nothing n =
 
 let bounds =
   [
+    test_case "public tape updates are idempotent and preserve their input"
+      [ uint8 ] test_public_update_idempotence;
     test_case "native preflight accepts upper-half Go integer repeat counts"
       [ uint16 ] test_upper_half_repeat_preflight;
     test_case "successful preflight writes nothing and starts no program"
