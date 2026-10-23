@@ -32,7 +32,9 @@
   run with `sh -c` on pipes as dune runs it, with its output and its exit
   code as dune writes them. `K7.capture` records a program as an asciicast
   recording, and `K7.run` draws it with `K7.svg_of_casts`; `K7.cram` runs a
-  command and gives its cram test.
+  command and gives its cram test. Each starts the program in a process
+  group of its own, which gets SIGTERM when the program exits or `?stop`
+  resolves, then SIGKILL a second later by the `~clock` it takes.
 - `K7.cast_of_string` reads a recording in asciicast v2 or v3, as
   asciinema 2 and 3 and console's `CONSOLE_CAST` write it, and
   `K7.svg_of_casts` (`k7 play FILE.cast`) draws it as `K7.svg` draws its
@@ -57,9 +59,9 @@
   the program or the shell, which `--env` sets for each subcommand. Both
   clear an inherited `COLUMNS` and `LINES`, so that the program reads the
   size of its terminal.
-- `K7.run` and `K7.record` take `?stop`, which ends a recording and keeps
-  what it recorded; `k7 play` and `k7 rec` resolve it on SIGINT or
-  SIGTERM, then exit 130 or 143.
+- `K7.run`, `K7.capture`, `K7.cram` and `K7.record` take `?stop`, which
+  ends a recording and keeps what it recorded; `k7 play` and `k7 rec`
+  resolve it on SIGINT or SIGTERM, then exit 130 or 143.
 - `K7.record` takes `?stuck`, a test of what the shell wrote since the
   last wait, which fails a native recording at once with `K7.Stuck`;
   `k7 play` reports a cram command that leaves bash at its continuation

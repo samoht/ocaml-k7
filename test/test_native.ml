@@ -1892,9 +1892,9 @@ let test_capture_utf_8 () =
         (Result.get_ok (K7.text_of_casts [ c ]))
   | Error e -> Alcotest.failf "%a" K7.pp_error e
 
-let cram ?env:vars ?stop env cwd argv =
+let cram ?env:vars ?stop ?(clock = Eio_mock.Clock.Mono.make ()) env cwd argv =
   match
-    K7.cram ?env:vars ?stop ~proc:(Eio.Stdenv.process_mgr env) ~cwd argv
+    K7.cram ?env:vars ?stop ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd argv
   with
   | Ok r -> r
   | Error e -> Alcotest.failf "%a" K7.pp_error e
@@ -1962,6 +1962,29 @@ let test_cram_stop () =
     (Fmt.str "  $ sh -c '%s'\n  [143]\n" script)
     t
 
+(* The shell ignores SIGTERM, so only the SIGKILL a second later stops it. *)
+let test_cram_kill () =
+  with_dir @@ fun env cwd ->
+  let script = "trap '' TERM; : > started; while :; do sleep 0.01; done" in
+  let clock = Eio_mock.Clock.Mono.make () in
+  let stop, set = Eio.Promise.create () in
+  let (_, status), () =
+    Eio.Fiber.pair
+      (fun () -> cram ~stop ~clock env cwd [ "sh"; "-c"; script ])
+      (fun () ->
+        until (fun () -> Eio.Path.is_file Eio.Path.(cwd / "started"));
+        Eio.Promise.resolve set ();
+        until (fun () -> Eio_mock.Clock.Mono.try_advance clock))
+  in
+  signaled "killed" Sys.sigkill status
+
+(* A job left in the background ends with the shell. *)
+let test_cram_background () =
+  with_dir @@ fun env cwd ->
+  Alcotest.(check string)
+    "the shell's output" "  $ sh -c 'echo started; sleep 100007 &'\n  started\n"
+    (fst (cram env cwd [ "sh"; "-c"; "echo started; sleep 100007 &" ]))
+
 let suite =
   ( "native",
     List.map
@@ -2028,6 +2051,8 @@ let suite =
          ("capture keeps UTF-8 whole", test_capture_utf_8);
          ("cram", test_cram);
          ("cram stops the command's process group", test_cram_stop);
+         ("cram kills what ignores SIGTERM", test_cram_kill);
+         ("cram ends the command's background jobs", test_cram_background);
          ( "run cancellation reaps resistant descendants",
            test_run_cancel_descendant );
          ("record refuses Env names", test_record_env_names);

@@ -1763,41 +1763,54 @@ let transcript ~line output code =
     ((("  $ " ^ line ^ "\n") :: List.map (fun l -> "  " ^ crlf l ^ "\n") lines)
     @ if code = 0 then [] else [ Fmt.str "  [%d]\n" code ])
 
-let cram ?(env = []) ?stop ~proc ~cwd argv =
+let cram ?(env = []) ?stop ~clock ~proc ~cwd argv =
   let* () = if argv = [] then Error (Invalid "no command to run") else Ok () in
   let* () = check_env env in
   let line = quoted argv in
   let out = Buffer.create 4096 in
   match
     Eio.Switch.run @@ fun sw ->
-    let stdin, eof = Eio.Process.pipe ~sw proc in
+    let stdin, eof = Eio_unix.pipe sw in
     Eio.Flow.close eof;
-    let r, w = Eio.Process.pipe ~sw proc in
+    let r, w = Eio_unix.pipe sw in
+    let fd = Eio_unix.Resource.fd in
     let child =
-      Eio.Process.spawn ~sw proc
+      Eio_unix.Process.spawn_unix ~sw proc ~pgid:0
         ~env:
           (Eio.Process.environment proc
           |> Eio.Process.Env.override (List.map (fun (k, v) -> (k, Some v)) env)
           )
         ~cwd:(cwd :> Eio.Fs.dir_ty Eio.Path.t)
-        ~stdin ~stdout:w ~stderr:w [ "sh"; "-c"; line ]
+        ~fds:
+          [
+            (0, fd stdin, `Blocking); (1, fd w, `Blocking); (2, fd w, `Blocking);
+          ]
+        [ "sh"; "-c"; line ]
     in
     Eio.Flow.close stdin;
     Eio.Flow.close w;
+    let group s =
+      try Unix.kill (-Eio.Process.pid child) s with Unix.Unix_error _ -> ()
+    in
+    let exited () = ignore (Eio.Process.await child) in
     let read, finish = Eio.Promise.create () in
     Eio.Fiber.both
       (fun () ->
         Eio.Flow.copy r (Eio.Flow.buffer_sink out);
         Eio.Promise.resolve finish ())
       (fun () ->
-        match stop with
-        | None -> ()
-        | Some p ->
-            Eio.Fiber.first
-              (fun () ->
-                Eio.Promise.await p;
-                Eio.Process.signal child Sys.sigterm)
-              (fun () -> Eio.Promise.await read));
+        Eio.Fiber.first
+          (fun () ->
+            Eio.Promise.await read;
+            exited ())
+          (fun () ->
+            (match stop with
+            | None -> exited ()
+            | Some p -> Eio.Fiber.first (fun () -> Eio.Promise.await p) exited);
+            group Sys.sigterm;
+            Eio.Time.Mono.sleep clock 1.;
+            group Sys.sigkill;
+            Eio.Fiber.await_cancel ()));
     Eio.Process.await child
   with
   | status ->

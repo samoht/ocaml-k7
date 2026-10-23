@@ -35,14 +35,11 @@ let record ?show ?delay ?stop stdenv ~settings ~env ~outputs argv =
   let* outputs = kinds outputs in
   let error r = Result.map_error (Fmt.to_to_string Flags.pp_error) r in
   let proc = Eio.Stdenv.process_mgr stdenv and cwd = Eio.Stdenv.cwd stdenv in
+  let clock = Eio.Stdenv.mono_clock stdenv in
   let cast =
-    lazy
-      (K7.capture ~settings ~env ?show ?stop
-         ~clock:(Eio.Stdenv.mono_clock stdenv)
-         ~proc ~cwd argv
-      |> error)
+    lazy (K7.capture ~settings ~env ?show ?stop ~clock ~proc ~cwd argv |> error)
   in
-  let cram = lazy (K7.cram ~env ?stop ~proc ~cwd argv |> error) in
+  let cram = lazy (K7.cram ~env ?stop ~clock ~proc ~cwd argv |> error) in
   let draw = function
     | Svg ->
         let* c, _ = Lazy.force cast in

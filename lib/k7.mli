@@ -610,17 +610,21 @@ val capture :
 val cram :
   ?env:(string * string) list ->
   ?stop:unit Eio.Promise.t ->
-  proc:_ Eio.Process.mgr ->
-  cwd:Eio.Fs.dir_ty Eio.Path.t ->
+  clock:_ Eio.Time.Mono.t ->
+  proc:_ Eio_unix.Process.mgr ->
+  cwd:_ Eio.Path.t ->
   string list ->
   (string * Eio.Process.exit_status, error) result
-(** [cram ~env ~stop ~proc ~cwd argv] runs the program [argv] as a cram test
-    runs a command, and is that cram test, paired with how the command exited.
-    [cram] runs [sh -c] with the command line, [argv] with each argument
+(** [cram ~env ~stop ~clock ~proc ~cwd argv] runs the program [argv] as a cram
+    test runs a command, and is that cram test, paired with how the command
+    exited. [cram] runs [sh -c] with the command line, [argv] with each argument
     shell-quoted where needed, in the directory [cwd], on pipes: an empty
     standard input, and one pipe for both its standard output and standard
     error. It gets the environment of [proc] with the variables of [env]
-    (defaults to [[]]). Once [stop] resolves, it gets [SIGTERM].
+    (defaults to [[]]). [sh] leads a process group. Once [sh] exits, or once
+    [stop] resolves, [cram] sends the group [SIGTERM], then [SIGKILL] a second
+    later by [clock], and returns once [sh] has exited and what the group
+    printed is read.
 
     The cram test is the line [  $ ] and the command line, then each line of
     what the command printed, indented by two spaces, as dune writes them:
