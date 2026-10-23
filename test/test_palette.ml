@@ -54,6 +54,16 @@ let test_osc_recolours () =
   check_contains "bold bright" ~sub:{|fill="#0a0b0c" class="b">B|}
     (svg [ (Ms 0, "\027]4;9;#0a0b0c\007\027[1;31mB") ])
 
+let test_c1_osc_palette () =
+  let image = svg [ (Ms 0, "\xc2\x9d4;1;#123456\xc2\x9c\027[31mX\027[?25l") ] in
+  check_contains "UTF-8 C1 OSC sets the palette" ~sub:{|fill="#123456">X|} image;
+  let baseline = svg [ (Ms 0, "\027[31mX\027[?25l") ] in
+  let reset =
+    svg
+      [ (Ms 0, "\027]4;1;#123456\007\xc2\x9d104;1\xc2\x9c\027[31mX\027[?25l") ]
+  in
+  Alcotest.(check string) "UTF-8 C1 OSC resets the palette" baseline reset
+
 let test_json_theme () =
   let s =
     svg
@@ -195,6 +205,7 @@ let suite =
       [
         ("colours", test_colours);
         ("OSC palette changes", test_osc_palette);
+        ("UTF-8 C1 OSC palette", test_c1_osc_palette);
         ("OSC palette recolours the screen", test_osc_recolours);
         ("default theme", test_default);
         ("no cursor colour", test_no_cursor);
