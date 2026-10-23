@@ -1551,8 +1551,37 @@ let test_capture_valid_roundtrip status glyph =
           check_eq ~pp:Fmt.Dump.string (image cast) (image restored);
           check_eq ~pp:Fmt.Dump.string (text cast) (text restored))
 
+let test_capture_standard_fds mask =
+  Native_test.with_dir @@ fun env cwd ->
+  let fds = [ Unix.stdin; Unix.stdout; Unix.stderr ] in
+  let saved = List.map (fun fd -> (fd, Unix.dup fd)) fds in
+  let result =
+    Fun.protect
+      ~finally:(fun () ->
+        List.iter (fun (fd, backup) -> Unix.dup2 backup fd) saved;
+        List.iter (fun (_, backup) -> Unix.close backup) saved)
+      (fun () ->
+        List.iteri
+          (fun i fd -> if mask land (1 lsl i) <> 0 then Unix.close fd)
+          fds;
+        K7.capture ~show:""
+          ~clock:(Eio_mock.Clock.Mono.make ())
+          ~proc:(Eio.Stdenv.process_mgr env)
+          ~cwd
+          [ "/bin/sh"; "-c"; "printf OUT; printf ERR >&2" ])
+  in
+  match result with
+  | Error e -> failf "closed descriptors %d: %a" mask K7.pp_error e
+  | Ok (cast, status) ->
+      check (status = `Exited 0);
+      check_eq ~pp:Fmt.Dump.string "OUTERR\n"
+        (Result.get_ok (K7.text_of_casts [ cast ]))
+
 let with_programs =
   [
+    test_case "capture gives the child all standard descriptors"
+      [ range 7 ]
+      test_capture_standard_fds;
     test_case "saved captures preserve colour, Unicode, screens and exit codes"
       [ uint8; uint8 ] test_capture_valid_roundtrip;
     test_case "native recorders work with live or joined OCaml domains"
