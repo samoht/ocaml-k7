@@ -772,6 +772,30 @@ let test_modified_arrows () =
       check_contains "bytes" ~sub:"^[[1;5A^[[1;7A^[[1;6B^[[1;8D"
         (last (frames s))
 
+let test_require_non_executable () =
+  with_dir @@ fun env cwd ->
+  Eio.Path.save ~create:(`Or_truncate 0o644)
+    Eio.Path.(cwd / "not-executable")
+    "data\n";
+  let t =
+    tape
+      K7.
+        [
+          raw "Require ./not-executable";
+          type' "touch ran\n";
+          wait Prompt;
+          sleep (Ms 100);
+        ]
+  in
+  let result = play env cwd t in
+  Alcotest.(check bool)
+    "a failed executable prerequisite prevents all actions" false
+    (Sys.file_exists (Eio.Path.native_exn Eio.Path.(cwd / "ran")));
+  match result with
+  | Error (K7.Executable_not_found "./not-executable") -> ()
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+  | Ok () -> Alcotest.fail "Require accepted a file without execute permission"
+
 let test_bounds () =
   with_dir @@ fun env cwd ->
   let play ?settings raws =
@@ -2397,6 +2421,7 @@ let suite =
       ([
          ( "capture with closed standard descriptors",
            test_capture_closed_standard_fds );
+         ("Require refuses non-executable files", test_require_non_executable);
          ("fractional sleeps retain their duration", test_fractional_sleeps);
          ("long sleeps retain their duration", test_long_sleep);
          ( "replace a fractional typing speed",
