@@ -499,6 +499,20 @@ let test_cancelled_osc palette sub glyph =
     (image ("A" ^ suffix))
     (image ("A\027]" ^ body ^ cancel ^ suffix))
 
+let test_cancelled_string_control kind sub glyph split =
+  let prefix = [| "\027Pq"; "\027_"; "\027^"; "\027X" |].(kind mod 4) in
+  let cancel = if sub then "\026" else "\024" in
+  let suffix = [| "B"; "é"; "中"; "🙂"; "é" |].(glyph mod 5) in
+  let draw chunks =
+    let output = List.map (fun s -> (K7.Ms 0, s)) chunks in
+    match K7.svg ~settings (output @ K7.[ (Ms 1000, "\027[?25l") ]) with
+    | Ok s -> s
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  let chunks = [ "A"; prefix; "payload"; cancel; suffix ] in
+  let chunks = if split then chunks else [ String.concat "" chunks ] in
+  check_eq ~pp:pp_string (draw [ "A" ^ suffix ]) (draw chunks)
+
 let test_theme_xml output theme =
   let settings = K7.Theme theme :: settings in
   match K7.tape ~settings ~outputs:[ "a.svg" ] [ K7.sleep (Ms 100) ] with
@@ -1199,6 +1213,8 @@ let terminal =
 
 let casts =
   [
+    test_case "CAN and SUB cancel string controls before following text"
+      [ uint8; bool; uint8; bool ] test_cancelled_string_control;
     test_case "drawing settings preserve cast text at fixed cell dimensions"
       [ bytes; uint8 ] test_cast_text_style;
     test_case "ignored asciicast header metadata cannot change image or text"
