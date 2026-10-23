@@ -2266,6 +2266,33 @@ let test_require_executable n directory =
   | Error e -> failf "%a" K7.pp_error e
   | Ok () -> fail "a non-executable prerequisite was accepted"
 
+let test_noecho_prompt n =
+  Native_test.with_dir @@ fun env cwd ->
+  let marker = Fmt.str "DONE_%d" n in
+  let tape =
+    match
+      K7.tape
+        ~settings:K7.[ Columns 100; Rows 5; Typing_speed (Ms 0) ]
+        ~outputs:[ "prompt.svg" ]
+        K7.
+          [
+            type'
+              ("stty -echo; echo READY; IFS= read -r line; stty echo; printf "
+             ^ marker ^ "\n");
+            wait (Screen "(?m)^READY$");
+            type' (String.make (1 + (n mod 16)) 'x' ^ "\n");
+            wait (Screen ("(?m)^" ^ marker ^ ">$"));
+            wait ~timeout:(Ms 1) Prompt;
+          ]
+    with
+    | Ok t -> t
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  match Native_test.play env cwd tape with
+  | Ok () -> ()
+  | Error e ->
+      failf "an already observed new prompt must hold: %a" K7.pp_error e
+
 let test_unmapped_modifier_keys n alt =
   Native_test.with_dir @@ fun env cwd ->
   let scalars = [| 0x00e9; 0x03bb; 0x4e2d; 0x1f642; 0x0301; 0x200b |] in
@@ -2302,6 +2329,8 @@ let test_unmapped_modifier_keys n alt =
 
 let with_processes =
   [
+    test_case "an observed new prompt holds after echo-disabled input" [ uint8 ]
+      test_noecho_prompt;
     test_case "modifier strings omit Unicode absent from the VHS keymap"
       [ uint8; bool ] test_unmapped_modifier_keys;
     test_case "Require rejects files and directories that cannot execute"
