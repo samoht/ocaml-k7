@@ -2073,20 +2073,25 @@ let test_stuck_output_bound n =
 
 let test_source_wait_line n =
   with_dir @@ fun env path ->
+  let source =
+    List.nth
+      [ "inc.tape"; "included tape.tape"; "café.tape"; "./漢字.tape" ]
+      (n mod 4)
+  in
   let comments = 8 + (n mod 16) in
   let prefix = String.concat "" (List.init comments (fun _ -> "# comment\n")) in
-  save env (path "inc.tape")
+  save env (path source)
     (prefix ^ "Output \"ignored.txt\"\nSleep 20ms\nWait+Line /NEVER_MATCH/\n");
   let tape =
     match
       K7.tape
         ~outputs:[ path "out.svg" ]
-        K7.[ raw {|Source "inc.tape"|}; sleep (Ms 100) ]
+        K7.[ raw (Fmt.str {|Source "%s"|} source); sleep (Ms 100) ]
     with
     | Ok t -> t
     | Error e -> failf "%a" K7.pp_error e
   in
-  let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "inc.tape")) in
+  let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "out.svg")) in
   match
     K7.record ~engine:Native ~env:Native_test.no_job_control
       ~stuck:(fun _ -> true)
@@ -2094,13 +2099,19 @@ let test_source_wait_line n =
       ~proc:(Eio.Stdenv.process_mgr env)
       ~cwd tape
   with
-  | Error (Stuck { line; _ }) -> check_eq ~pp:Fmt.int (comments + 3) line
+  | Error (Stuck { line; file; wait; _ } as error) ->
+      check_eq ~pp:Fmt.int (comments + 3) line;
+      check_eq ~pp:Fmt.(Dump.option string) (Some source) file;
+      check_eq ~pp:pp_string "Wait+Line /NEVER_MATCH/" wait;
+      let message = Fmt.str "%a" K7.pp_error error in
+      check (contains ~sub:(Fmt.str "line %d of" line) message);
+      check (contains ~sub:source message)
   | Error e -> failf "%a" K7.pp_error e
   | Ok () -> fail "an impossible sourced wait succeeded"
 
 let with_processes =
   [
-    test_case "sourced wait diagnostics count the included tape lines" [ uint8 ]
+    test_case "sourced waits name their file and count its lines" [ uint8 ]
       test_source_wait_line;
     test_case "stuck callbacks receive only the last 64 KiB" [ uint8 ]
       test_stuck_output_bound;
