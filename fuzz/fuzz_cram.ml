@@ -130,7 +130,7 @@ let test_recorded_output_is_data n continuation =
         ~clock:(Eio_mock.Clock.Mono.make ())
         ~proc:(Eio.Stdenv.process_mgr env)
         ~cwd
-        [ "printf"; "%s\n"; output ]
+        [ "printf"; {|%s\n|}; output ]
     with
     | Ok result -> result
     | Error e -> failf "%a" K7.pp_error e

@@ -1624,7 +1624,8 @@ let test_run_show () =
     "quoted"
     (screen
        [
-         {|$ printf '%s|' '' 'it'\''s' $'a\nb' |} ^ "caf\xc3\xa9";
+         {|$ printf '%s|' '' 'it'\''s' "$(printf 'a\nb')"|};
+         " caf\xc3\xa9";
          "|it's|a";
          "b|caf\xc3\xa9|";
        ])
@@ -1796,8 +1797,8 @@ let test_output_directory_preflight () =
     (Result.map_error (Fmt.str "%a" K7.pp_error) checked)
 
 (* The $ COMMAND line quotes each argument so that the line runs the same
-   argv; a byte that is not UTF-8 needs $'\xHH', as a control character
-   gets. *)
+   argv; a byte that is not UTF-8 is written in octal, as a control character
+   is. *)
 let test_run_command_line_invalid_utf_8 () =
   with_dir @@ fun env cwd ->
   let proc = Eio.Stdenv.process_mgr env in
@@ -2145,7 +2146,7 @@ let test_cram_output_is_data () =
   with_dir @@ fun env cwd ->
   List.iter
     (fun output ->
-      let source, status = cram env cwd [ "printf"; "%s\n"; output ] in
+      let source, status = cram env cwd [ "printf"; {|%s\n|}; output ] in
       exited "printf" 0 status;
       let header = List.hd (String.split_on_char '\n' source) ^ "\n" in
       let actions src =

@@ -1493,36 +1493,40 @@ let for_all_uchars f s =
   in
   go 0
 
-(* A control character or a byte that is not UTF-8 is written [\xHH], so
-   that bash reads back the same bytes. *)
-let ansi_c_quote s =
-  let b = Buffer.create (String.length s + 3) in
-  let bytes i n =
-    String.iter
-      (fun c ->
-        Buffer.add_string b {|\x|};
-        Buffer.add_char b "0123456789ABCDEF".[Char.code c lsr 4];
-        Buffer.add_char b "0123456789ABCDEF".[Char.code c land 15])
-      (String.sub s i n)
+(* [printf_word s] is a POSIX sh word for [s], unless [s] ends with a newline,
+   which command substitution strips. *)
+let printf_word s =
+  let b = Buffer.create (String.length s + 16) in
+  let octal c =
+    let digit k =
+      Buffer.add_char b (Char.chr (48 + ((Char.code c lsr k) land 7)))
+    in
+    Buffer.add_char b '\\';
+    digit 6;
+    digit 3;
+    digit 0
   in
   let rec go i =
     if i < String.length s then (
       let d = String.get_utf_8_uchar s i in
       let n = Uchar.utf_decode_length d in
       (match Uchar.to_int (Uchar.utf_decode_uchar d) with
-      | _ when not (Uchar.utf_decode_is_valid d) -> bytes i n
-      | 0x27 | 0x5c ->
-          Buffer.add_char b '\\';
-          Buffer.add_char b s.[i]
+      | _ when not (Uchar.utf_decode_is_valid d) ->
+          String.iter octal (String.sub s i n)
+      | 0x5c -> Buffer.add_string b {|\\|}
+      | 0x25 -> Buffer.add_string b "%%"
       | 0x0a -> Buffer.add_string b {|\n|}
+      | 0x0d -> Buffer.add_string b {|\r|}
       | 0x09 -> Buffer.add_string b {|\t|}
-      | c when is_control c -> bytes i n
+      | 0x27 -> octal '\''
+      | 0x2d when i = 0 -> octal '-'
+      | c when is_control c -> String.iter octal (String.sub s i n)
       | _ -> Buffer.add_substring b s i n);
       go (i + n))
   in
-  Buffer.add_string b "$'";
+  Buffer.add_string b {|"$(printf '|};
   go 0;
-  Buffer.add_char b '\'';
+  Buffer.add_string b {|')"|};
   Buffer.contents b
 
 let shell_word s =
@@ -1532,9 +1536,25 @@ let shell_word s =
        && (Char.Ascii.is_alphanum (Char.chr c)
           || String.contains "_@%+=:,./-" (Char.chr c))
   in
-  if not (for_all_uchars (Fun.negate is_control) s) then ansi_c_quote s
-  else if s <> "" && for_all_uchars safe s then s
-  else "'" ^ String.concat {|'\''|} (String.split_on_char '\'' s) ^ "'"
+  if String.ends_with ~suffix:"\n" s then
+    err_invalid
+      "argument %a ends with a newline, which no one-line sh command holds"
+      Quote.pp s
+  else if not (for_all_uchars (Fun.negate is_control) s) then Ok (printf_word s)
+  else if s <> "" && for_all_uchars safe s then Ok s
+  else Ok ("'" ^ String.concat {|'\''|} (String.split_on_char '\'' s) ^ "'")
+
+let quoted argv =
+  let rec go acc = function
+    | [] -> Ok (String.concat " " (List.rev acc))
+    | a :: rest ->
+        let* w = shell_word a in
+        go (w :: acc) rest
+  in
+  go [] argv
+
+let command_of ?show argv =
+  match show with Some s -> Ok s | None -> quoted argv
 
 let command_line = function
   | "" -> ""
@@ -1550,9 +1570,7 @@ let shown ~show ~delay:(Ms delay) =
 
 let command_line_of ?show ~delay argv =
   let* () = if argv = [] then Error (Invalid "no command to run") else Ok () in
-  let show =
-    Option.value show ~default:(String.concat " " (List.map shell_word argv))
-  in
+  let* show = command_of ?show argv in
   shown ~show ~delay
 
 type cast = Asciicast.t
@@ -1723,15 +1741,13 @@ let native_dir cwd =
   Option.to_result ~none:(Io "the directory is not a native path")
     (Eio.Path.native cwd)
 
-let quoted argv = String.concat " " (List.map shell_word argv)
-
 let check_argv = function
   | [] -> Error (Invalid "no command to run")
   | argv -> Result.map_error native_error (Native.check_argv argv)
 
 let capture ?(settings = []) ?(env = []) ?show ?stop ~clock ~proc ~cwd argv =
   let* () = check_argv argv in
-  let command = Option.value show ~default:(quoted argv) in
+  let* command = command_of ?show argv in
   let* line, _ = shown ~show:command ~delay:(Ms 0) in
   let* () = check_env env in
   let* tape = terminal settings in
@@ -1804,7 +1820,7 @@ let transcript ~line output code =
 let cram ?(env = []) ?stop ~clock ~proc ~cwd argv =
   let* () = check_argv argv in
   let* () = check_env env in
-  let line = quoted argv in
+  let* line = quoted argv in
   let out = Buffer.create 4096 in
   match
     Eio.Switch.run @@ fun sw ->

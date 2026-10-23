@@ -228,6 +228,9 @@ Other limitations:
   one that is `>` or starts with `> `: dune reads it as a command. `k7 rec`
   indents such a line by one more space, so the test runs no command it
   did not record, but does not pass under dune.
+- `k7 rec` refuses an argument that ends with a newline, which no one-line
+  `sh` command holds, unless `--show` replaces the command line and no
+  output is a `.t` cram test.
 - A cram test that `k7 rec` writes of a command killed by a signal does not
   pass under dune: dune's shell then prints a line with the process ID,
   which changes on each run.

@@ -585,9 +585,10 @@ val run :
     {!capture}'s recording as {!svg_of_casts} draws it, with [settings] and
     [delay]. It is:
     - [Error (Invalid _)] if [argv] is empty, if a setting is one {!svg}
-      refuses, if [show] holds a control character, if [delay] is out of the
-      range of a {!duration}, or if a name of [env] is empty or holds [=], or a
-      name or a value holds a NUL byte;
+      refuses, if [show] holds a control character, or is not given and an
+      argument of [argv] ends with a newline, which no one-line sh command
+      holds, if [delay] is out of the range of a {!duration}, or if a name of
+      [env] is empty or holds [=], or a name or a value holds a NUL byte;
     - [Error (Unsupported _)] on what {!svg} refuses;
     - [Error (Executable_not_found _)] if the executable is not found;
     - [Error (Io _)] if an argument of [argv] holds a NUL byte, which [execve]
@@ -647,9 +648,10 @@ val cram :
     that starts with [$ ], or a first line that is [>] or starts with [> ]. dune
     writes it as it is, and runs it; [cram] indents it by one more space, so
     that it stays output, which dune reports as a difference. It is
-    [Error (Invalid _)] if [argv] is empty or a name of [env] is one {!run}
-    refuses, and [Error (Io _)] if an argument of [argv] holds a NUL byte, as
-    for {!run}, before anything runs, or on an I/O failure. *)
+    [Error (Invalid _)] if [argv] is empty, if an argument of [argv] ends with a
+    newline, which no one-line sh command holds, or if a name of [env] is one
+    {!run} refuses, and [Error (Io _)] if an argument of [argv] holds a NUL
+    byte, as for {!run}, before anything runs, or on an I/O failure. *)
 
 (** {1:checks Checks}
 
