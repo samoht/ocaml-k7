@@ -42,6 +42,8 @@ let keywords =
     "Env" ]
 [@@ocamlformat "disable"]
 
+let is_keyword s = List.mem s keywords
+
 let settings =
   [ "Shell"; "FontFamily"; "FontSize"; "LetterSpacing"; "LineHeight";
     "Framerate"; "TypingSpeed"; "Theme"; "PlaybackSpeed"; "Height"; "Width";

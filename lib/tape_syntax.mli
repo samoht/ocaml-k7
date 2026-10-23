@@ -68,6 +68,10 @@ val tokens : string -> lexeme list
 (** [tokens line] are the tokens of [line], its comment excluded. Only a line
     {!check} accepts gives the tokens VHS reads. *)
 
+val is_keyword : string -> bool
+(** [is_keyword s] is [true] iff VHS's lexer reads the word [s] as a
+    {!constructor-Keyword}. *)
+
 val duration : string -> int64 option
 (** [duration s] is [s] as Go's [time.ParseDuration] reads it, in nanoseconds,
     or [None] if Go rejects it. *)

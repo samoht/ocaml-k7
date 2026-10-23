@@ -818,6 +818,41 @@ let test_modified_arrows () =
       check_contains "bytes" ~sub:"^[[1;5A^[[1;7A^[[1;6B^[[1;8D"
         (last (frames s))
 
+(* Shift does not change the character typed, Alt sends the unshifted key
+   after ESC, and Ctrl sends nothing for a key xterm.js has no control for. *)
+let test_modified_keymap () =
+  with_dir @@ fun env cwd ->
+  let t =
+    tape
+      K7.
+        [
+          type' "stty -echo; echo READY; cat -v; stty echo\n";
+          wait (Screen "(?m)^READY$");
+          raw "Shift+\"a\"";
+          type' "|";
+          raw "Alt+\"A!\"";
+          type' "|";
+          raw "Ctrl+@";
+          type' "|";
+          raw "Ctrl+Shift+@";
+          type' "|";
+          raw "Ctrl+^";
+          type' "|";
+          raw "Shift+\"s\"";
+          type' "|";
+          raw "Shift+\"a\xc3\xa9\xe2\x86\x90\"";
+          type' "|";
+          key Enter;
+          key (Ctrl 'd');
+          wait Prompt;
+          sleep (Ms 100);
+        ]
+  in
+  match record env cwd t with
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+  | Ok s ->
+      check_contains "bytes" ~sub:"a|^[a^[1||^@|^^||a^[[1;2D|" (last (frames s))
+
 let test_require_non_executable () =
   with_dir @@ fun env cwd ->
   Eio.Path.save ~create:(`Or_truncate 0o644)
@@ -2537,6 +2572,7 @@ let suite =
          ( "prompt after a no-echo screen wait",
            test_prompt_after_noecho_screen_wait );
          ("Shift ignores unmapped Unicode keys", test_shift_unmapped_unicode);
+         ("modifiers type the VHS keymap", test_modified_keymap);
          ("unsupported", test_unsupported);
          ("bounds", test_bounds);
          ("terminal state recording", test_terminal_state);

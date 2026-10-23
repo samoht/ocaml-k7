@@ -631,49 +631,114 @@ let key_bytes term = function
   | "PageDown" -> "\027[6~"
   | _ -> ""
 
-let ctrl_char c =
-  match c with
-  | 'a' .. 'z' -> String.make 1 (Char.chr (Char.code c - 96))
-  | 'A' .. 'Z' | '@' | '[' | '\\' | ']' | '^' ->
-      String.make 1 (Char.chr (Char.code c land 0x1f))
-  | '-' -> "\x1f"
-  | c -> String.make 1 c
+(* VHS presses each character of its keymap as a key of a US keyboard; off
+   macOS, xterm.js sends these bytes for it under the held modifiers. *)
+type held = { shift : bool; alt : bool; ctrl : bool }
 
-(* xterm.js: [CSI 1 ; m X] with [m] one more than Shift 1 + Alt 2 + Control
-   4 for an arrow; Alt prefixes ESC to the other keys. *)
+let us_keys = "0)1!2@3#4$5%6^7&8*9(;:=+,<-_.>/?`~[{\\|]}'\""
+
+let unshifted = function
+  | 'A' .. 'Z' as c -> Char.lowercase_ascii c
+  | c -> (
+      match String.index_opt us_keys c with
+      | Some i when i land 1 = 1 -> us_keys.[i - 1]
+      | _ -> c)
+
+let shifted = function
+  | 'a' .. 'z' as c -> Char.uppercase_ascii c
+  | c -> (
+      match String.index_opt us_keys c with
+      | Some i when i land 1 = 0 -> us_keys.[i + 1]
+      | _ -> c)
+
+let keymap u =
+  match Uchar.to_int u with
+  | 0x08 -> Some `Backspace
+  | 0x09 -> Some `Tab
+  | 0x0a | 0x0d -> Some `Enter
+  | 0x1b -> Some `Escape
+  | c when c >= 0x20 && c < 0x7f -> Some (`Char (Char.chr c))
+  | 0x2190 -> Some (`Arrow 'D')
+  | 0x2191 -> Some (`Arrow 'A')
+  | 0x2192 -> Some (`Arrow 'C')
+  | 0x2193 -> Some (`Arrow 'B')
+  | _ -> None
+
+let control c = String.make 1 (Char.chr (Char.code c land 0x1f))
+
+let modified_bytes m = function
+  | `Enter -> if m.alt then "\027\r" else "\r"
+  | `Tab -> if m.shift then "\027[Z" else "\t"
+  | `Backspace ->
+      (if m.alt then "\027" else "") ^ if m.ctrl then "\b" else "\x7f"
+  | `Escape -> if m.alt then "\027\027" else "\027"
+  | `Arrow c -> (
+      match
+        Bool.to_int m.shift + (2 * Bool.to_int m.alt) + (4 * Bool.to_int m.ctrl)
+      with
+      | 0 -> Fmt.str "\027[%c" c
+      | 2 -> Fmt.str "\027[1;5%c" c
+      | n -> Fmt.str "\027[1;%d%c" (n + 1) c)
+  | `Char c -> (
+      let b = unshifted c in
+      match b with
+      | 'a' .. 'z' when m.alt ->
+          "\027"
+          ^
+          if m.ctrl then control b
+          else String.make 1 (if m.shift then shifted b else b)
+      | ' ' when m.alt -> if m.ctrl then "\027\000" else "\027 "
+      | _ when m.alt ->
+          "\027" ^ String.make 1 (if m.shift then shifted b else b)
+      | _ when m.ctrl && m.shift -> (
+          match c with '_' -> "\x1f" | '@' -> "\000" | _ -> "")
+      | ('a' .. 'z' | '[' | '\\' | ']') when m.ctrl -> control b
+      | ' ' when m.ctrl -> "\000"
+      | '3' .. '7' when m.ctrl -> String.make 1 (Char.chr (Char.code b - 24))
+      | '8' when m.ctrl -> "\x7f"
+      | _ when m.ctrl -> ""
+      | _ -> String.make 1 c)
+
 let ctrl_bytes args =
-  let alt = List.mem (Keyword "Alt") args
-  and shift = List.mem (Keyword "Shift") args in
-  let arrow c =
-    Fmt.str "\027[1;%d%c"
-      (1 + 4 + (if alt then 2 else 0) + if shift then 1 else 0)
-      c
+  let m =
+    {
+      shift = List.mem (Keyword "Shift") args;
+      alt = List.mem (Keyword "Alt") args;
+      ctrl = true;
+    }
   in
   let key = function
-    | Keyword "Enter" -> "\r"
-    | Keyword "Space" -> "\x00"
-    | Keyword "Backspace" -> "\x08"
-    | Keyword "Up" -> arrow 'A'
-    | Keyword "Down" -> arrow 'B'
-    | Keyword "Right" -> arrow 'C'
-    | Keyword "Left" -> arrow 'D'
-    | Keyword ("Alt" | "Shift") -> ""
-    | Str s when String.length s = 1 -> ctrl_char s.[0]
-    | Sym c -> ctrl_char c
-    | _ -> ""
+    | Keyword "Enter" -> Some `Enter
+    | Keyword "Space" -> Some (`Char ' ')
+    | Keyword "Backspace" -> Some `Backspace
+    | Keyword "Up" -> Some (`Arrow 'A')
+    | Keyword "Down" -> Some (`Arrow 'B')
+    | Keyword "Right" -> Some (`Arrow 'C')
+    | Keyword "Left" -> Some (`Arrow 'D')
+    | Str s when s <> "" -> keymap (Uchar.of_char s.[0])
+    | Sym c -> keymap (Uchar.of_char c)
+    | _ -> None
   in
-  let is_arrow = function
-    | Keyword ("Up" | "Down" | "Right" | "Left") -> true
-    | _ -> false
-  in
-  (if alt && not (List.exists is_arrow args) then "\027" else "")
-  ^ String.concat "" (List.map key args)
+  String.concat ""
+    (List.filter_map (fun a -> Option.map (modified_bytes m) (key a)) args)
 
-let modified ~shift = function
-  | Keyword "Enter" -> "\r"
-  | Keyword "Tab" -> if shift then "\027[Z" else "\t"
-  | Str s -> if shift then String.uppercase_ascii s else s
-  | t -> lit t
+let modified m k =
+  match lit k with
+  | "Enter" -> modified_bytes m `Enter
+  | "Tab" -> modified_bytes m `Tab
+  | s when Tape_syntax.is_keyword s -> ""
+  | s ->
+      let b = Buffer.create (String.length s) in
+      let rec go i =
+        if i < String.length s then (
+          let d = String.get_utf_8_uchar s i in
+          Option.iter
+            (fun k -> Buffer.add_string b (modified_bytes m k))
+            (keymap (Uchar.utf_decode_uchar d));
+          go (i + Uchar.utf_decode_length d))
+      in
+      go 0;
+      Buffer.contents b
 
 (* k7 keeps [slave] open: matrix 0.1.0's [Pty.spawn] closes it, so macOS loses
    the output of a program that exits at once. *)
@@ -970,8 +1035,8 @@ let run_command st c = function
         press st ?speed (key_bytes st.term key)
       done
   | Ctrl args -> press st (ctrl_bytes args)
-  | Alt k -> press st ("\027" ^ modified ~shift:false k)
-  | Shift k -> press st (modified ~shift:true k)
+  | Alt k -> press st (modified { shift = false; alt = true; ctrl = false } k)
+  | Shift k -> press st (modified { shift = true; alt = false; ctrl = false } k)
   | Sleep d -> step st d
   | Wait { line; at; file; scope; timeout; pattern } ->
       wait st c ~line ~at ~file ~scope ~timeout ~pattern
