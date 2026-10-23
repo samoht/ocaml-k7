@@ -90,6 +90,18 @@ let test_rejected () =
   fails "padding" "Set Padding 400" "use the setting Padding instead";
   fails "output" "Output x.gif" "an output, which goes in outputs"
 
+let test_screenshot_output_alias () =
+  match
+    K7.tape ~outputs:[ "demo.svg" ]
+      K7.[ raw "Screenshot ./demo.svg"; sleep (Ms 100) ]
+  with
+  | Error (Invalid _) -> ()
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+  | Ok _ ->
+      Alcotest.fail
+        "./demo.svg is the output demo.svg: saving the still overwrites the \
+         animation"
+
 (* Written by tape_oracle.go from [vhs validate]. *)
 let test_oracle () =
   let cases = In_channel.with_open_bin "tape_cases.txt" In_channel.input_all in
@@ -163,6 +175,7 @@ let suite =
       [
         ("accepted", test_accepted);
         ("rejected", test_rejected);
+        ("screenshot aliases an output", test_screenshot_output_alias);
         ("durations", test_durations);
         ("numbers", test_numbers);
         ("vhs validate oracle", test_oracle);
