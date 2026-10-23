@@ -193,6 +193,26 @@ let test_keyframes () =
     [ screen [ "a" ]; screen [ "ab" ]; screen [ "ab"; "c" ] ]
     (frames s)
 
+let test_long_recording_offsets () =
+  let s = svg K7.[ (Ms 0, "a"); (Ms 20, "b"); (Ms 86_400_020, "c") ] in
+  let keyframes = between ~start:"@keyframes s{" ~stop:"}}@media" s in
+  let offsets =
+    String.split_on_char '}' keyframes
+    |> List.filter_map (fun rule ->
+        Option.map
+          (fun i -> float_of_string (String.sub rule 0 i))
+          (String.index_opt rule '%'))
+  in
+  Alcotest.(check int)
+    "three screens and the loop endpoint" 4 (List.length offsets);
+  let rec increasing = function
+    | a :: (b :: _ as rest) -> a < b && increasing rest
+    | _ -> true
+  in
+  Alcotest.(check bool)
+    "different frame times must not merge into the same CSS offset" true
+    (increasing offsets)
+
 let test_accessible () =
   let s = svg [ (Ms 0, "a"); (Ms 500, "\r\n<b>") ] in
   check_contains "still"
@@ -429,6 +449,8 @@ let suite =
         ("styled without ids", test_no_ids);
         ("readable without style", test_no_style);
         ("keyframes", test_keyframes);
+        ( "long recordings retain distinct frame offsets",
+          test_long_recording_offsets );
         ("accessible", test_accessible);
         ("concealed text alternative", test_concealed_description);
         ("zero-width text alternative", test_zero_width_description);
