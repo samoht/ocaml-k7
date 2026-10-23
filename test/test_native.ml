@@ -796,6 +796,18 @@ let test_require_non_executable () =
   | Error e -> Alcotest.failf "%a" K7.pp_error e
   | Ok () -> Alcotest.fail "Require accepted a file without execute permission"
 
+let test_large_key_repeat () =
+  with_dir @@ fun _env cwd ->
+  let t =
+    match K7.of_string "Output repeat.svg\nSpace@0ms 100001\n" with
+    | Ok t -> t
+    | Error e -> Alcotest.failf "%a" K7.pp_error e
+  in
+  match K7.check ~engine:Native ~cwd t with
+  | Ok () -> ()
+  | Error e ->
+      Alcotest.failf "a valid repeat count was refused: %a" K7.pp_error e
+
 let test_bounds () =
   with_dir @@ fun env cwd ->
   let play ?settings raws =
@@ -2421,6 +2433,7 @@ let suite =
       ([
          ( "capture with closed standard descriptors",
            test_capture_closed_standard_fds );
+         ("large key repeat counts validate", test_large_key_repeat);
          ("Require refuses non-executable files", test_require_non_executable);
          ("fractional sleeps retain their duration", test_fractional_sleeps);
          ("long sleeps retain their duration", test_long_sleep);
