@@ -29,6 +29,12 @@ let test_colours () =
   check_contains "inverse background" ~sub:{|height="29"/>|} s;
   check_contains "underline" ~sub:{|class="xu">u|} s
 
+let test_osc_palette () =
+  let output = "\027]4;1;#123456\007\027[31mX\027[?25l" in
+  let image = svg [ (Ms 0, output) ] in
+  check_contains "OSC 4 replaces ANSI red for the recorded glyph" ~sub:"#123456"
+    image
+
 let test_json_theme () =
   let s =
     svg
@@ -169,6 +175,7 @@ let suite =
       (fun (name, fn) -> Alcotest.test_case name `Quick fn)
       [
         ("colours", test_colours);
+        ("OSC palette changes", test_osc_palette);
         ("default theme", test_default);
         ("no cursor colour", test_no_cursor);
         ("JSON theme", test_json_theme);
