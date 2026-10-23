@@ -779,13 +779,21 @@ let closed st =
   Eio.Condition.broadcast st.changed;
   Eio.Fiber.await_cancel ()
 
-(* What the shell wrote since the last wait held, its last 64 KiB. *)
+let kept = 65536
+
+(* What the shell wrote since the last wait held, at least its last [kept]
+   bytes. *)
 let since st output =
-  if Buffer.length st.since > 131072 then (
-    let tail = Buffer.sub st.since (Buffer.length st.since - 65536) 65536 in
+  if Buffer.length st.since > 2 * kept then (
+    let tail = Buffer.sub st.since (Buffer.length st.since - kept) kept in
     Buffer.clear st.since;
     Buffer.add_string st.since tail);
   Buffer.add_string st.since output
+
+let last_output st =
+  let n = Buffer.length st.since in
+  if n <= kept then Buffer.contents st.since
+  else Buffer.sub st.since (n - kept) kept
 
 let feed st buf n =
   let output = Bytes.sub_string buf 0 n in
@@ -894,7 +902,7 @@ let wait st c ~line ~at ~scope ~timeout ~pattern =
           stop
             (Exited
                { status; wait = line; line = at; last = wait_text st scope })
-      | None when st.stuck (Buffer.contents st.since) ->
+      | None when st.stuck (last_output st) ->
           stop (Stuck { wait = line; line = at; last = wait_text st scope })
       | None ->
           Eio.Condition.await_no_mutex st.changed;
