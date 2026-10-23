@@ -9,10 +9,12 @@
   k7
   k7_cli
   svg_check
+  native_test
   matrix_backport
   fmt
   alcobar
   eio
+  eio.unix
   eio.mock
   eio_main
   unix))

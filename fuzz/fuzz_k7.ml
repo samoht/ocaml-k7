@@ -515,8 +515,18 @@ let test_error_item n =
     (Fmt.str "Wait+Screen %a:" Quote.pp bad)
     (K7.tape ~outputs [ K7.wait (Screen bad) ])
 
+(* A few turns of the scheduler, to vary where a cancellation lands. *)
+let yields n =
+  for _ = 0 to n land 15 do
+    Eio.Fiber.yield ()
+  done
+
+(* On the clock of Native_test.with_clock, so that no verdict depends on
+   real time. *)
 let with_dir fn =
   Eio_main.run @@ fun env ->
+  Native_test.with_clock @@ fun clock ->
+  let env = Eio_unix.Stdenv.override env ~mono_clock:clock in
   let dir = Filename.temp_dir "k7-property" "" in
   Fun.protect
     ~finally:(fun () ->
@@ -648,22 +658,18 @@ let test_cancel_reaps delay =
      cat > /dev/null\n\
      echo $$ > \"$0.pid\"\n\
      while :; do sleep 0.01; done\n";
-  let clock = Eio.Stdenv.clock env in
   let result =
-    Eio.Time.with_timeout_exn clock 60. (fun () ->
-        Eio.Fiber.first
-          (fun () ->
-            `Rendered
-              (K7.record ~engine:Vhs ~vhs:executable
-                 ~clock:(Eio.Stdenv.mono_clock env)
-                 ~proc:(Eio.Stdenv.process_mgr env)
-                 ~cwd:(Eio.Stdenv.cwd env) (render_tape ())))
-          (fun () ->
-            while not (Sys.file_exists (executable ^ ".pid")) do
-              Eio.Time.sleep clock 0.001
-            done;
-            Eio.Time.sleep clock (float_of_int (delay land 15) /. 1000.);
-            `Cancelled))
+    Eio.Fiber.first
+      (fun () ->
+        `Rendered
+          (K7.record ~engine:Vhs ~vhs:executable
+             ~clock:(Eio.Stdenv.mono_clock env)
+             ~proc:(Eio.Stdenv.process_mgr env)
+             ~cwd:(Eio.Stdenv.cwd env) (render_tape ())))
+      (fun () ->
+        Native_test.until (fun () -> Sys.file_exists (executable ^ ".pid"));
+        yields delay;
+        `Cancelled)
   in
   check (result = `Cancelled);
   let pid =
@@ -690,29 +696,21 @@ let nested_shells =
               wait ~timeout:(Ms 10000) (Line "NEVER_READY");
             ]))
 
+(* Only k7's signals end them, at a time of the kernel's choosing. *)
 let check_reaped cwd =
-  let pids =
-    List.map
-      (fun name ->
-        Eio.Path.load Eio.Path.(cwd / name) |> String.trim |> int_of_string)
-      [ "shell.pid"; "child.pid" ]
-  in
-  let alive pid =
-    try
-      Unix.kill pid 0;
-      true
-    with Unix.Unix_error (Unix.ESRCH, _, _) -> false
-  in
-  let left = List.filter alive pids in
   List.iter
-    (fun pid -> try Unix.kill pid Sys.sigkill with Unix.Unix_error _ -> ())
-    left;
-  if left <> [] then
-    failf "recording left shells alive: %a" Fmt.(Dump.list int) left
+    (fun name ->
+      let pid =
+        Eio.Path.load Eio.Path.(cwd / name) |> String.trim |> int_of_string
+      in
+      Native_test.until (fun () ->
+          match Unix.kill pid 0 with
+          | () -> false
+          | exception Unix.Unix_error (Unix.ESRCH, _, _) -> true))
+    [ "shell.pid"; "child.pid" ]
 
 let test_record_reaps delay callback_raises =
   with_dir @@ fun env path ->
-  let clock = Eio.Stdenv.clock env in
   let cwd =
     Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "shell.pid"))
   in
@@ -722,24 +720,21 @@ let test_record_reaps delay callback_raises =
     && String.trim (Eio.Path.load Eio.Path.(cwd / "child.pid")) <> ""
   in
   let cancel () =
-    while not (ready ()) do
-      Eio.Time.sleep clock 0.001
-    done;
-    Eio.Time.sleep clock (float_of_int (delay land 15) /. 1000.);
+    Native_test.until ready;
+    yields delay;
     if callback_raises then raise Exit;
     `Cancelled
   in
   let result =
     try
-      Eio.Time.with_timeout_exn clock 60. (fun () ->
-          Eio.Fiber.first
-            (fun () ->
-              `Recorded
-                (K7.record ~engine:Native
-                   ~clock:(Eio.Stdenv.mono_clock env)
-                   ~proc:(Eio.Stdenv.process_mgr env)
-                   ~cwd tape))
-            cancel)
+      Eio.Fiber.first
+        (fun () ->
+          `Recorded
+            (K7.record ~engine:Native
+               ~clock:(Eio.Stdenv.mono_clock env)
+               ~proc:(Eio.Stdenv.process_mgr env)
+               ~cwd tape))
+        cancel
     with Exit when callback_raises -> `Cancelled
   in
   (match result with
@@ -890,11 +885,10 @@ let record_cram ?(setup = []) ?(settings = []) env path src =
          (K7_cli.Cram.actions ~setup cram @ [ K7.sleep (Ms 3500) ]))
   in
   let result =
-    Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 40. (fun () ->
-        K7.record ~engine:Vhs ?vhs:oracle
-          ~clock:(Eio.Stdenv.mono_clock env)
-          ~proc:(Eio.Stdenv.process_mgr env)
-          ~cwd:(Eio.Stdenv.cwd env) t)
+    K7.record ~engine:Vhs ?vhs:oracle
+      ~clock:(Eio.Stdenv.mono_clock env)
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd:(Eio.Stdenv.cwd env) t
   in
   (match result with Ok () -> () | Error e -> failf "%a" K7.pp_error e);
   Eio.Path.load Eio.Path.(Eio.Stdenv.fs env / output)
@@ -998,11 +992,10 @@ let test_native_literal n =
   in
   let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "received")) in
   (match
-     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 60. (fun () ->
-         K7.record ~engine:Native
-           ~clock:(Eio.Stdenv.mono_clock env)
-           ~proc:(Eio.Stdenv.process_mgr env)
-           ~cwd tape)
+     K7.record ~engine:Native
+       ~clock:(Eio.Stdenv.mono_clock env)
+       ~proc:(Eio.Stdenv.process_mgr env)
+       ~cwd tape
    with
   | Ok _ -> ()
   | Error e -> failf "%a" K7.pp_error e);
@@ -1026,11 +1019,10 @@ let test_zero_speed_prompt n =
   in
   let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "out.txt")) in
   (match
-     Eio.Time.with_timeout_exn (Eio.Stdenv.clock env) 60. (fun () ->
-         K7.record ~engine:Native
-           ~clock:(Eio.Stdenv.mono_clock env)
-           ~proc:(Eio.Stdenv.process_mgr env)
-           ~cwd tape)
+     K7.record ~engine:Native
+       ~clock:(Eio.Stdenv.mono_clock env)
+       ~proc:(Eio.Stdenv.process_mgr env)
+       ~cwd tape
    with
   | Ok () -> ()
   | Error e -> failf "%a" K7.pp_error e);
@@ -1293,7 +1285,6 @@ let test_run_inherited_fd n =
 
 let test_run_fd_cleanup n cancelled =
   with_dir @@ fun env _ ->
-  let clock = Eio.Stdenv.clock env in
   let record () =
     let argv =
       if cancelled then [ "/bin/sh"; "-c"; "read value" ]
@@ -1310,8 +1301,7 @@ let test_run_fd_cleanup n cancelled =
       | Ok _ -> fail "true did not exit successfully"
       | Error e -> failf "%a" K7.pp_error e
     in
-    if cancelled then Eio.Fiber.first play (fun () -> Eio.Time.sleep clock 0.02)
-    else play ()
+    if cancelled then Eio.Fiber.first play (fun () -> yields n) else play ()
   in
   record ();
   let count () = Array.length (Sys.readdir "/dev/fd") in
@@ -1326,8 +1316,7 @@ let test_run_cancel_descendant cancelled =
   let cwd =
     Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "child.pid"))
   in
-  let child = "trap '' HUP TERM; echo $$ > child.pid; exec sleep 30" in
-  let clock = Eio.Stdenv.clock env in
+  let child = "trap '' HUP TERM; echo $$ > child.pid; exec sleep 100000" in
   let ready () =
     try String.trim (Eio.Path.load Eio.Path.(cwd / "child.pid")) <> ""
     with Eio.Io _ -> false
@@ -1347,30 +1336,24 @@ let test_run_cancel_descendant cancelled =
          ])
   in
   let result =
-    Eio.Time.with_timeout_exn clock 60. @@ fun () ->
     if not cancelled then play ()
     else
       Eio.Fiber.first play (fun () ->
-          while not (ready ()) do
-            Eio.Time.sleep clock 0.001
-          done;
+          Native_test.until ready;
           `Cancelled)
   in
-  let pid =
-    int_of_string (String.trim (Eio.Path.load Eio.Path.(cwd / "child.pid")))
-  in
-  let alive =
-    try
-      Unix.kill pid 0;
-      true
-    with Unix.Unix_error (ESRCH, _, _) -> false
-  in
-  (if alive then try Unix.kill pid Sys.sigkill with Unix.Unix_error _ -> ());
   (match result with
   | `Cancelled when cancelled -> ()
   | `Ran (Ok (_, `Exited 0)) when not cancelled -> ()
   | _ -> fail "run did not finish as expected");
-  if alive then fail "run left its descendant alive"
+  (* Only k7's SIGKILL ends it, at a time of the kernel's choosing. *)
+  let pid =
+    int_of_string (String.trim (Eio.Path.load Eio.Path.(cwd / "child.pid")))
+  in
+  Native_test.until (fun () ->
+      match Unix.kill pid 0 with
+      | () -> false
+      | exception Unix.Unix_error (ESRCH, _, _) -> true)
 
 let payloads =
   [
