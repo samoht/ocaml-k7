@@ -513,6 +513,17 @@ let test_of_string () =
     (Result.map K7.to_string
        (read "Set Shell \"tcsh\"\nOutput a.gif\nType x\n"))
 
+let test_trailing_hidden_round_trip () =
+  let t =
+    Result.get_ok
+      (K7.tape ~outputs:[ "a.txt" ]
+         K7.[ sleep (Ms 100); hidden [ type' "secret" ] ])
+  in
+  let printed = K7.to_string t in
+  let read_back = Result.get_ok (K7.of_string printed) in
+  expect "a final hidden action survives reading without extra lines" printed
+    (K7.to_string read_back)
+
 let test_of_string_outputs () =
   let pp_error = Fmt.to_to_string K7.pp_error in
   let read ?(outputs = [ "a.txt" ]) src =
@@ -573,5 +584,6 @@ let suite =
         ("keys", test_keys);
         ("waits", test_waits);
         ("of_string", test_of_string);
+        ("final hidden action round trip", test_trailing_hidden_round_trip);
         ("of_string without outputs", test_of_string_outputs);
       ] )
