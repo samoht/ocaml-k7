@@ -748,6 +748,31 @@ let test_keys () =
         (screen [ "> echo X abc"; "X abc"; ">" ])
         (last (frames s))
 
+(* VHS's modifier keymap has no non-ASCII key: Shift+"é" is accepted
+   by its parser but emits nothing. The following literal Type still runs. *)
+let test_shift_unmapped_unicode () =
+  with_dir @@ fun env cwd ->
+  let t =
+    tape
+      K7.
+        [
+          type'
+            "stty -echo; echo READY; IFS= read -r line; stty echo; printf '%s' \
+             \"$line\" > keys; echo DONE\n";
+          wait (Screen "(?m)^READY$");
+          raw "Shift+\"é\"";
+          type' "X";
+          key Enter;
+          wait Prompt;
+        ]
+  in
+  (match play env cwd t with
+  | Ok () -> ()
+  | Error e -> Alcotest.failf "%a" K7.pp_error e);
+  Alcotest.(check string)
+    "an unmapped modifier key emits no bytes, as in VHS" "X"
+    (Eio.Path.load Eio.Path.(cwd / "keys"))
+
 let test_modified_arrows () =
   with_dir @@ fun env cwd ->
   let t =
@@ -2488,6 +2513,7 @@ let suite =
          ("output paths", test_output_paths);
          ("render outputs", test_render_outputs);
          ("keys", test_keys);
+         ("Shift ignores unmapped Unicode keys", test_shift_unmapped_unicode);
          ("unsupported", test_unsupported);
          ("bounds", test_bounds);
          ("terminal state recording", test_terminal_state);
