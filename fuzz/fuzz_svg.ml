@@ -925,6 +925,31 @@ let test_cast_cursor_theme n =
     (draw ~settings (parse (source "")))
     (draw ~settings restored)
 
+let test_cast_ignored_metadata data n =
+  let data = if String.is_valid_utf_8 data then data else String.escaped data in
+  let header extra =
+    {|{"version":3,"term":{"cols":12,"rows":3}|} ^ extra ^ "}\n"
+  in
+  let events = "[0,\"o\",\"é中👍\"]\n[0.02,\"x\",\"0\"]\n" in
+  let extra =
+    Fmt.str
+      ",\"title\":%s,\"timestamp\":%d,\"env\":{\"CUSTOM\":%s},\"vendor\":{\"nested\":[%s]}"
+      (json_string data) n (json_string data) (json_string data)
+  in
+  let parse source =
+    match K7.cast_of_string source with
+    | Ok c -> c
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  let a = parse (header "" ^ events) and b = parse (header extra ^ events) in
+  let get = function Ok s -> s | Error e -> failf "%a" K7.pp_error e in
+  check_eq ~pp:pp_string
+    (get (K7.svg_of_casts [ a ]))
+    (get (K7.svg_of_casts [ b ]));
+  check_eq ~pp:pp_string
+    (get (K7.text_of_casts [ a ]))
+    (get (K7.text_of_casts [ b ]))
+
 let test_namespace_collision (a, b) =
   if a <> b then (
     let draw text =
@@ -1011,6 +1036,8 @@ let terminal =
 
 let casts =
   [
+    test_case "ignored asciicast header metadata cannot change image or text"
+      [ bytes; uint16 ] test_cast_ignored_metadata;
     test_case "cursor theme extensions match JSON themes and explicit overrides"
       [ uint8 ] test_cast_cursor_theme;
     test_case "cast serialization preserves palettes, resizes and Unicode"
