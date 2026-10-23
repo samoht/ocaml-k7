@@ -1504,8 +1504,8 @@ let octal b c =
 
 (* [shell_word s] is a POSIX sh word for [s]: a newline stays raw inside
    quotes, another control character or a byte that is not UTF-8 is what
-   [printf] prints. *)
-let shell_word s =
+   [printf] prints. Its text is quoted if [quote] or if it is not plain. *)
+let shell_word ?(quote = false) s =
   let safe c =
     c >= 0xa0
     || c < 0x80
@@ -1517,7 +1517,7 @@ let shell_word s =
   let add_text () =
     let t = Buffer.contents text in
     if t <> "" then
-      if for_all_uchars safe t then Buffer.add_string b t
+      if (not quote) && for_all_uchars safe t then Buffer.add_string b t
       else (
         Buffer.add_char b '\'';
         Buffer.add_string b
@@ -1552,7 +1552,17 @@ let shell_word s =
   add_escapes ();
   if s = "" then "''" else Buffer.contents b
 
-let quoted argv = String.concat " " (List.map shell_word argv)
+(* The reserved words of sh, bash and zsh that [shell_word] leaves bare. *)
+let reserved =
+  String.split_on_char ' '
+    "case coproc do done elif else end esac fi for foreach function if in \
+     nocorrect repeat select then time until while"
+
+let program p = shell_word ~quote:(List.mem p reserved) p
+
+let quoted = function
+  | [] -> ""
+  | p :: args -> String.concat " " (program p :: List.map shell_word args)
 
 let check_show = function
   | Some show when has_control show ->
