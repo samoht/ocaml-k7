@@ -899,6 +899,31 @@ let test_casts () =
   Native_test.check_contains "several cram tests"
     ~sub:"demo.t: several files play only as asciicast recordings (.cast)" error
 
+let test_cast_dry_run_destinations () =
+  with_files
+    [
+      ("input.cast", 0o644, {|{"version":3,"term":{"cols":8,"rows":2}}|});
+      ("parent", 0o644, "a regular file");
+      ("err", 0o644, "");
+    ]
+  @@ fun env path ->
+  Unix.mkdir (path "occupied.svg") 0o755;
+  List.iter
+    (fun destination ->
+      let run dry_run =
+        captured path @@ fun () ->
+        Play_cmd.run env ~dry_run ~print:false ~settings:[] ~env:[]
+          ~outputs:[ path destination ]
+          ~setup:[] ~dir:None ~wait_timeout:None
+          [ path "input.cast" ]
+      in
+      let status, _ = run false in
+      Alcotest.(check int) "play refuses the destination" 123 status;
+      let status, error = run true in
+      Alcotest.(check int) "dry-run refuses the same destination" 123 status;
+      Native_test.check_contains "names the destination" ~sub:destination error)
+    [ "occupied.svg"; "parent/out.svg" ]
+
 let suite =
   ( "cli",
     List.map
@@ -926,6 +951,8 @@ let suite =
          ("rec outputs", test_rec_outputs);
          ("engine", test_engine);
          ("asciicast recordings", test_cast);
+         ( "asciicast dry-run checks destinations",
+           test_cast_dry_run_destinations );
          ("several asciicast recordings", test_casts);
        ]
       @ readiness ~native:true
