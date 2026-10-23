@@ -126,6 +126,30 @@ let with_clock ?(hold = 1.) ?(release = fun () -> false) f =
     (Eio.Resource.T
        ({ Held.clock; hold; released }, Eio.Time.Pi.clock (module Held)))
 
+module Sleep_log = struct
+  type t = { clock : clock; sleeps : int64 list ref }
+  type time = Mtime.t
+
+  let now t = Eio.Time.Mono.now t.clock
+
+  let sleep_until t deadline =
+    let ns =
+      Int64.sub (Mtime.to_uint64_ns deadline) (Mtime.to_uint64_ns (now t))
+    in
+    t.sleeps := ns :: !(t.sleeps);
+    Eio.Time.Mono.sleep_until t.clock deadline
+end
+
+let with_sleep_log f =
+  with_clock @@ fun clock ->
+  let sleeps = ref [] in
+  let observed =
+    Eio.Resource.T
+      ({ Sleep_log.clock; sleeps }, Eio.Time.Pi.clock (module Sleep_log))
+  in
+  let result = f observed in
+  (result, List.rev !sleeps)
+
 let rec until p =
   if not (p ()) then (
     Eio.Fiber.yield ();

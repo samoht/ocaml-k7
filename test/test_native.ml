@@ -2322,6 +2322,31 @@ let test_capture_closed_standard_fds () =
         "the child's standard output is recorded" "STDOUT_WORKS\n"
         (Result.get_ok (K7.text_of_casts [ cast ]))
 
+(* VHS Sleep accepts fractional milliseconds. Their sum must survive even
+   when each individual pause is shorter than one SVG frame. *)
+let test_fractional_sleeps () =
+  with_dir @@ fun env cwd ->
+  let t =
+    Result.get_ok
+      (K7.tape ~outputs:[ "out.svg" ]
+         (List.init 100 (fun _ -> K7.raw "Sleep 1.5ms")))
+  in
+  let result, sleeps =
+    with_sleep_log @@ fun clock ->
+    K7.record ~engine:Native ~env:no_job_control ~clock
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd t
+  in
+  (match result with
+  | Ok () -> ()
+  | Error e -> Alcotest.failf "%a" K7.pp_error e);
+  (* Startup's timeout and cleanup's polling intervals exceed 2ms. *)
+  let total =
+    List.filter (fun ns -> ns >= 0L && ns < 2_000_000L) sleeps
+    |> List.fold_left Int64.add 0L
+  in
+  Alcotest.(check int64) "100 pauses of 1.5ms last 150ms" 150_000_000L total
+
 let suite =
   ( "native",
     List.map
@@ -2329,6 +2354,7 @@ let suite =
       ([
          ( "capture with closed standard descriptors",
            test_capture_closed_standard_fds );
+         ("fractional sleeps retain their duration", test_fractional_sleeps);
          ("record", test_record);
          ("stuck callback receives at most 64 KiB", test_stuck_output_bound);
          ("zero-speed prompt wait", test_zero_speed_prompt);

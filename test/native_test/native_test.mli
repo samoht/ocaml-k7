@@ -79,6 +79,10 @@ val with_clock : ?hold:float -> ?release:(unit -> bool) -> (clock -> 'a) -> 'a
     holds (defaults to never), so that until then a wait lasts as long as what
     it waits for takes to arrive. *)
 
+val with_sleep_log : (clock -> 'a) -> 'a * int64 list
+(** [with_sleep_log f] runs [f] on {!with_clock}'s mock clock and returns its
+    result and the requested sleep intervals, in nanoseconds, in order. *)
+
 val until : (unit -> bool) -> unit
 (** [until p] yields until [p ()] holds. *)
 
