@@ -1248,8 +1248,25 @@ let terminal =
       test_zero_width;
   ]
 
+let test_submicrosecond_time_order microsecond ignored =
+  let code = if ignored then "i" else "o" in
+  let source =
+    Fmt.str
+      {|{"version":2,"width":8,"height":2}
+[0.%06d4,"%s","a"]
+[0.%06d1,"o","b"]
+|}
+      microsecond code microsecond
+  in
+  match K7.cast_of_string source with
+  | Error (K7.Invalid _) -> ()
+  | Error e -> failf "expected Invalid: %a" K7.pp_error e
+  | Ok _ -> failf "accepted decreasing timestamps: %s" source
+
 let casts =
   [
+    test_case "v2 timestamps are ordered before microsecond rounding"
+      [ uint16; bool ] test_submicrosecond_time_order;
     test_case "malformed UTF-8 prefixes use Stdlib replacement grouping"
       [ uint8; uint8; uint8 ] test_invalid_utf_8_prefix;
     test_case "CAN and SUB cancel string controls before following text"
