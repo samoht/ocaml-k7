@@ -863,6 +863,28 @@ let test_rec_outputs () =
     "refused before it runs" false
     (Sys.file_exists (path "b.cast"))
 
+let test_rec_cast_keeps_theme () =
+  with_files [ ("err", 0o644, "") ] @@ fun env path ->
+  Alcotest.(check (pair int string))
+    "recorded with Dracula" (0, "")
+    ( captured path @@ fun () ->
+      Rec_cmd.run env
+        ~settings:K7.[ Theme "Dracula" ]
+        ~env:[]
+        ~outputs:[ path "themed.svg"; path "themed.cast" ]
+        [ "printf"; "hello" ] );
+  Alcotest.(check (pair int string))
+    "played without replacing the recording's theme" (0, "")
+    ( captured path @@ fun () ->
+      Play_cmd.run env ~dry_run:false ~print:false ~settings:[] ~env:[]
+        ~outputs:[ path "replayed.svg" ]
+        ~setup:[] ~dir:None ~wait_timeout:None
+        [ path "themed.cast" ] );
+  let read file = In_channel.with_open_bin (path file) In_channel.input_all in
+  Alcotest.(check bool)
+    "playing the saved cast gives the recorded SVG byte for byte" true
+    (read "themed.svg" = read "replayed.svg")
+
 (* k7 play draws several recordings one after the other in one image, as
    K7.svg_of_casts does, and refuses several files of another kind. *)
 let test_casts () =
@@ -949,6 +971,7 @@ let suite =
            test_output_option_replaces_late_output );
          ("rec creates the output directory", test_rec_creates_output_directory);
          ("rec outputs", test_rec_outputs);
+         ("rec cast keeps the selected theme", test_rec_cast_keeps_theme);
          ("engine", test_engine);
          ("asciicast recordings", test_cast);
          ( "asciicast dry-run checks destinations",
