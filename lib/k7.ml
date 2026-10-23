@@ -1720,7 +1720,7 @@ let capture ?(settings = []) ?(env = []) ?show ?stop ~clock ~proc ~cwd argv =
   in
   let columns, rows = Native.size tape in
   let events =
-    List.map (fun (ms, s) -> (ms, Asciicast.Output s)) output
+    Asciicast.utf_8 (List.map (fun (ms, s) -> (ms, Asciicast.Output s)) output)
     @ [ (exited, Asciicast.Exit (exit_code status)) ]
   in
   let command = if command = "" then None else Some command in

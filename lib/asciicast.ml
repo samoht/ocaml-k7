@@ -267,6 +267,24 @@ let valid_utf_8 s =
     go 0;
     Buffer.contents b
 
+let utf_8 events =
+  let is_output = function _, Output _ -> true | _ -> false in
+  let rec go ~pending ~outputs acc = function
+    | [] -> List.rev acc
+    | (ms, Output s) :: rest ->
+        let s = pending ^ s in
+        let i = if outputs > 1 then incomplete s else String.length s in
+        let acc =
+          if i = 0 then acc
+          else (ms, Output (valid_utf_8 (String.sub s 0 i))) :: acc
+        in
+        go
+          ~pending:(String.sub s i (String.length s - i))
+          ~outputs:(outputs - 1) acc rest
+    | e :: rest -> go ~pending ~outputs (e :: acc) rest
+  in
+  go ~pending:"" ~outputs:(List.length (List.filter is_output events)) [] events
+
 let json codec v =
   match Jsont_bytesrw.encode_string codec v with
   | Ok s -> s
@@ -299,25 +317,13 @@ let to_string t =
     Fmt.kstr (Buffer.add_string b) "[%d.%03d,%s,%s]\n" (d / 1000) (d mod 1000)
       (string code) (string data)
   in
-  let rec go ~prev ~pending = function
-    | [] -> ()
-    | (ms, Output s) :: rest ->
-        let s = pending ^ s in
-        let i =
-          match rest with
-          | (_, Output _) :: _ -> incomplete s
-          | _ -> String.length s
-        in
-        if i = 0 then go ~prev ~pending:s rest
-        else (
-          line ~prev ms "o" (valid_utf_8 (String.sub s 0 i));
-          go ~prev:ms ~pending:(String.sub s i (String.length s - i)) rest)
-    | (ms, Resize (c, r)) :: rest ->
-        line ~prev ms "r" (Fmt.str "%dx%d" c r);
-        go ~prev:ms ~pending rest
-    | (ms, Exit n) :: rest ->
-        line ~prev ms "x" (string_of_int n);
-        go ~prev:ms ~pending rest
-  in
-  go ~prev:0 ~pending:"" t.events;
+  ignore
+    (List.fold_left
+       (fun prev (ms, e) ->
+         (match e with
+         | Output s -> line ~prev ms "o" s
+         | Resize (c, r) -> line ~prev ms "r" (Fmt.str "%dx%d" c r)
+         | Exit n -> line ~prev ms "x" (string_of_int n));
+         ms)
+       0 (utf_8 t.events));
   Buffer.contents b

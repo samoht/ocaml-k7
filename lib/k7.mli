@@ -605,10 +605,13 @@ val capture :
     how it exited. The recording has the size of the terminal of [settings],
     [show] as its [command] (defaults to [argv], each argument shell-quoted
     where needed; none if empty), each output at the millisecond it arrived
-    since the program started, and the exit, with the exit code or [128] plus
-    the number of the signal that killed the program. The terminal reads the
-    command line first, as in the image of {!run}, so the program's queries get
-    the answers they would there. It is the error of {!run} otherwise. *)
+    since the program started, in valid UTF-8 (a character split across two
+    outputs goes in the second, and a byte that is not UTF-8, an incomplete
+    character at the end included, is U+FFFD), and the exit, with the exit code
+    or [128] plus the number of the signal that killed the program. The terminal
+    reads the command line first, as in the image of {!run}, so the program's
+    queries get the answers they would there. It is the error of {!run}
+    otherwise. *)
 
 val cram :
   ?env:(string * string) list ->

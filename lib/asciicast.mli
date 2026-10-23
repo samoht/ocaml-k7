@@ -56,8 +56,12 @@ val of_string : string -> (t, string) result
     of other codes, such as input and markers, are skipped. It is [Error msg]
     otherwise, with [msg] naming the line by its number from [1], and why. *)
 
+val utf_8 : (int * event) list -> (int * event) list
+(** [utf_8 events] are [events] with the data of each [o] event in valid UTF-8:
+    an incomplete UTF-8 sequence at its end is held until the next [o] event,
+    which then starts with it, and a byte that is not UTF-8, the end of the last
+    [o] event included, is U+FFFD. An [o] event left without data goes. *)
+
 val to_string : t -> string
-(** [to_string t] is [t] in asciicast v3, without an [idle_time_limit]. The data
-    of an [o] event is held until the next one when it ends with an incomplete
-    UTF-8 sequence, and a byte that is not UTF-8 is written as U+FFFD, so that
-    {!of_string} reads [to_string t] back. *)
+(** [to_string t] is [t] in asciicast v3, without an [idle_time_limit], with the
+    events [utf_8 t.events], which {!of_string} reads back. *)
