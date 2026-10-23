@@ -101,6 +101,31 @@ let chunk =
       const "\027[S\027[T";
     ]
 
+let test_simultaneous_scalar_chunks chunks =
+  let data = String.concat "" (List.take 20 chunks) in
+  let b = Buffer.create (String.length data) in
+  let rec normalize i =
+    if i < String.length data then (
+      let d = String.get_utf_8_uchar data i in
+      Buffer.add_utf_8_uchar b (Uchar.utf_decode_uchar d);
+      normalize (i + Uchar.utf_decode_length d))
+  in
+  normalize 0;
+  let data = "e\u{0301}\u{4e2d}\u{1f642}" ^ Buffer.contents b in
+  let rec split i acc =
+    if i = String.length data then List.rev acc
+    else
+      let d = String.get_utf_8_uchar data i in
+      let n = Uchar.utf_decode_length d in
+      split (i + n) ((K7.Ms 0, String.sub data i n) :: acc)
+  in
+  let draw output =
+    match K7.svg ~settings (output @ [ (K7.Ms 1000, "") ]) with
+    | Ok image -> image
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  check_eq ~pp:pp_string (draw [ (K7.Ms 0, data) ]) (draw (split 0 []))
+
 let bases = [| "a"; " "; "\xc3\xa9"; "\xe4\xb8\xad"; "\xf0\x9f\x91\xa8" |]
 
 let marks =
@@ -1135,6 +1160,9 @@ let suite =
         test_namespace_collision;
       test_case "long SVG recordings preserve distinct frame offsets" [ uint16 ]
         test_long_recording_offsets;
+      test_case "simultaneous Unicode scalar chunks preserve the public SVG"
+        [ list chunk ]
+        test_simultaneous_scalar_chunks;
       test_case "frames" [ list chunk ] test_frames;
       test_case "regional indicators retain cells at every PTY split" [ uint8 ]
         test_regional_splits;
