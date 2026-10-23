@@ -2047,11 +2047,42 @@ let test_capture_after_domain () =
     "capture still works after a domain has joined" true
     (status = Unix.WEXITED 0)
 
+(* A recorder in a daemon may have no standard input or standard output.
+   Restore both before making assertions so Alcotest keeps its own output. *)
+let test_capture_closed_standard_fds () =
+  with_dir @@ fun env cwd ->
+  let stdin = Unix.dup Unix.stdin and stdout = Unix.dup Unix.stdout in
+  let result =
+    Fun.protect
+      ~finally:(fun () ->
+        Unix.dup2 stdin Unix.stdin;
+        Unix.dup2 stdout Unix.stdout;
+        Unix.close stdin;
+        Unix.close stdout)
+      (fun () ->
+        Unix.close Unix.stdin;
+        Unix.close Unix.stdout;
+        K7.capture ~show:""
+          ~clock:(Eio_mock.Clock.Mono.make ())
+          ~proc:(Eio.Stdenv.process_mgr env)
+          ~cwd
+          [ "/bin/sh"; "-c"; "printf STDOUT_WORKS" ])
+  in
+  match result with
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+  | Ok (cast, status) ->
+      exited "stdout is usable after exec" 0 status;
+      Alcotest.(check string)
+        "the child's standard output is recorded" "STDOUT_WORKS\n"
+        (Result.get_ok (K7.text_of_casts [ cast ]))
+
 let suite =
   ( "native",
     List.map
       (fun (name, fn) -> Alcotest.test_case name `Quick fn)
       ([
+         ( "capture with closed standard descriptors",
+           test_capture_closed_standard_fds );
          ("record", test_record);
          ("zero-speed prompt wait", test_zero_speed_prompt);
          ("screenshot over the recording", test_screenshot_clash);
