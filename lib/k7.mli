@@ -568,7 +568,9 @@ val run :
     until the program exited. The program leads a process group. When it exits,
     or if the calling fiber is cancelled, [run] sends the group [SIGTERM], hangs
     up its terminal, sends the group [SIGKILL] if one of it still runs a second
-    later by [clock], and waits for the program to exit. It is:
+    later by [clock], and waits for the program to exit. The image is that of
+    {!capture}'s recording as {!svg_of_casts} draws it, with [settings] and
+    [delay]. It is:
     - [Error (Invalid _)] if [argv] is empty, if a setting is one {!svg}
       refuses, if [show] holds a control character, if [delay] is out of the
       range of a {!duration}, or if a name of [env] is empty or holds [=], or a
@@ -578,6 +580,51 @@ val run :
     - [Error (Io _)] if [cwd] is not a directory of the native file system or
       cannot be entered, if the executable cannot run, with the reason, and on
       any other I/O failure. *)
+
+val capture :
+  ?settings:setting list ->
+  ?env:(string * string) list ->
+  ?show:string ->
+  ?stop:unit Eio.Promise.t ->
+  clock:_ Eio.Time.Mono.t ->
+  proc:_ Eio.Process.mgr ->
+  cwd:_ Eio.Path.t ->
+  string list ->
+  (cast * Eio.Process.exit_status, error) result
+(** [capture ~settings ~env ~show ~stop ~clock ~proc ~cwd argv] runs the program
+    [argv] as {!run} does and is the recording of what it printed, paired with
+    how it exited. The recording has the size of the terminal of [settings],
+    [show] as its [command] (defaults to [argv], each argument shell-quoted
+    where needed; none if empty), each output at the millisecond it arrived
+    since the program started, and the exit, with the exit code or [128] plus
+    the number of the signal that killed the program. The terminal reads the
+    command line first, as in the image of {!run}, so the program's queries get
+    the answers they would there. It is the error of {!run} otherwise. *)
+
+val cram :
+  ?env:(string * string) list ->
+  ?stop:unit Eio.Promise.t ->
+  proc:_ Eio.Process.mgr ->
+  cwd:Eio.Fs.dir_ty Eio.Path.t ->
+  string list ->
+  (string * Eio.Process.exit_status, error) result
+(** [cram ~env ~stop ~proc ~cwd argv] runs the program [argv] as a cram test
+    runs a command, and is that cram test, paired with how the command exited.
+    [cram] runs [sh -c] with the command line, [argv] with each argument
+    shell-quoted where needed, in the directory [cwd], on pipes: an empty
+    standard input, and one pipe for both its standard output and standard
+    error. It gets the environment of [proc] with the variables of [env]
+    (defaults to [[]]). Once [stop] resolves, it gets [SIGTERM].
+
+    The cram test is the line [  $ ] and the command line, then each line of
+    what the command printed, indented by two spaces, as dune writes them:
+    without the bytes from an escape character up to the next [m], without the
+    carriage return before a line feed, and with a last line that does not end
+    with a line feed; then [  [N]] if the exit code [N], or [128] plus the
+    number of the signal that killed the command, is not [0]. dune then reads
+    the test back unchanged. It is [Error (Invalid _)] if [argv] is empty or a
+    name of [env] is one {!run} refuses, and [Error (Io _)] on an I/O failure.
+*)
 
 (** {1:checks Checks}
 

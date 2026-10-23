@@ -5,50 +5,103 @@
 
 let ( let* ) = Result.bind
 
+type kind = Svg | Cast | Txt | Cram
+
+(* Ignoring case, as k7 play does. *)
+let kind output =
+  match String.lowercase_ascii (Filename.extension output) with
+  | ".svg" -> Ok Svg
+  | ".cast" -> Ok Cast
+  | ".txt" -> Ok Txt
+  | ".t" -> Ok Cram
+  | _ ->
+      Fmt.error "%a: not .svg, .cast, .txt or .t, the outputs k7 rec writes"
+        Quote.pp output
+
+let kinds outputs =
+  List.fold_left
+    (fun acc o ->
+      let* acc = acc in
+      let* k = kind o in
+      Ok ((o, k) :: acc))
+    (Ok []) outputs
+  |> Result.map List.rev
+
 let exit_code = function
   | `Exited n -> n
   | `Signaled s -> 128 + Sys.signal_to_int s
 
-let record ?show ?delay ?stop stdenv ~settings ~env ~output argv =
-  let* () = Flags.check_svg ~cmd:"k7 rec" output in
-  let* svg, status =
-    K7.run ~settings ~env ?show ?delay ?stop
-      ~clock:(Eio.Stdenv.mono_clock stdenv)
-      ~proc:(Eio.Stdenv.process_mgr stdenv)
-      ~cwd:(Eio.Stdenv.cwd stdenv) argv
-    |> Result.map_error (Fmt.to_to_string Flags.pp_error)
+let record ?show ?delay ?stop stdenv ~settings ~env ~outputs argv =
+  let* outputs = kinds outputs in
+  let error r = Result.map_error (Fmt.to_to_string Flags.pp_error) r in
+  let proc = Eio.Stdenv.process_mgr stdenv and cwd = Eio.Stdenv.cwd stdenv in
+  let cast =
+    lazy
+      (K7.capture ~settings ~env ?show ?stop
+         ~clock:(Eio.Stdenv.mono_clock stdenv)
+         ~proc ~cwd argv
+      |> error)
   in
-  (* Once the image is ready, so that the program does not see the
-     directories. *)
-  let* () = Flags.save stdenv output svg in
-  Ok status
+  let cram = lazy (K7.cram ~env ?stop ~proc ~cwd argv |> error) in
+  let draw = function
+    | Svg ->
+        let* c, _ = Lazy.force cast in
+        K7.svg_of_casts ~settings ?delay [ c ] |> error
+    | Cast ->
+        let* c, _ = Lazy.force cast in
+        Ok (K7.string_of_cast c)
+    | Txt ->
+        let* c, _ = Lazy.force cast in
+        K7.text_of_casts ~settings [ c ] |> error
+    | Cram -> Result.map fst (Lazy.force cram)
+  in
+  let* drawn =
+    List.fold_left
+      (fun acc (o, k) ->
+        let* acc = acc in
+        let* s = draw k in
+        Ok ((o, s) :: acc))
+      (Ok []) outputs
+  in
+  (* Once all are ready, so that the program does not see the directories. *)
+  let* () =
+    List.fold_left
+      (fun acc (o, s) ->
+        let* () = acc in
+        Flags.save stdenv o s)
+      (Ok ()) (List.rev drawn)
+  in
+  if Lazy.is_val cast then Result.map snd (Lazy.force cast)
+  else Result.map snd (Lazy.force cram)
 
-let run ?show ?delay stdenv ~settings ~env ~output argv =
+let run ?show ?delay stdenv ~settings ~env ~outputs argv =
   Flags.interruptible (fun stop ->
-      record ?show ?delay ~stop stdenv ~settings ~env ~output argv)
+      record ?show ?delay ~stop stdenv ~settings ~env ~outputs argv)
   |> Flags.exit stdenv ~ok:exit_code
 
 open Cmdliner
 
-let output =
+let outputs =
   let doc =
-    "Write the animated SVG image to $(docv), which ends with .svg, creating \
-     its missing directories."
+    "Write the recording to $(docv), in the format of its extension, creating \
+     its missing directories: $(b,.svg) for an animated SVG image, $(b,.cast) \
+     for an asciicast v3 recording, $(b,.txt) for the text of the last screen, \
+     or $(b,.t) for a cram test. Repeatable."
   in
-  Arg.(
-    required & opt (some string) None & info [ "o"; "output" ] ~docv:"FILE" ~doc)
+  Arg.(non_empty & opt_all string [] & info [ "o"; "output" ] ~docv:"FILE" ~doc)
 
 let show =
   let doc =
     "Show $(docv) after the $(b,\\$) of the image's first line instead of \
-     $(i,COMMAND); an empty $(docv) shows no line."
+     $(i,COMMAND), and write it as the command of an asciicast recording; an \
+     empty $(docv) shows no line. A cram test holds $(i,COMMAND) itself."
   in
   Arg.(value & opt (some string) None & info [ "show" ] ~docv:"TEXT" ~doc)
 
 let delay =
   let doc =
     "Show the command line alone for $(docv) milliseconds, as if typed, before \
-     the program's output; 0 shows the output at once."
+     the program's output in an image; 0 shows the output at once."
   in
   Arg.(value & opt Flags.milliseconds 500 & info [ "delay" ] ~docv:"MS" ~doc)
 
@@ -61,13 +114,29 @@ let man =
     `S Manpage.s_description;
     `P
       "$(cmd) runs $(i,COMMAND) on a pseudo-terminal, with no shell and \
-       nothing typed, and writes what the terminal showed as an animated SVG \
-       image, which plays in an HTML $(i,img) element. Each screen shows at \
-       the time it arrived since the program started, and the last one holds \
-       for a second after the program exits. The first line of the image shows \
-       $(b,\\$) and $(i,COMMAND), each argument shell-quoted where needed, and \
-       the program's output starts on the next line. Output beyond the last \
-       row of the terminal scrolls its first rows away.";
+       nothing typed, and writes what the terminal showed to each output, in \
+       the format of its extension, in any case. An $(b,.svg) output is an \
+       animated SVG image, which plays in an HTML $(i,img) element: each \
+       screen shows at the time it arrived since the program started, and the \
+       last one holds for a second after the program exits. The first line of \
+       the image shows $(b,\\$) and $(i,COMMAND), each argument shell-quoted \
+       where needed, and the program's output starts on the next line. Output \
+       beyond the last row of the terminal scrolls its first rows away.";
+    `P
+      "A $(b,.cast) output is the recording itself, in asciinema's asciicast \
+       v3 format: the size of the terminal, the command, what the program \
+       printed at the millisecond it arrived, and its exit. $(b,k7 play) \
+       $(b,-o) $(i,FILE.svg) $(i,FILE.cast) draws the same image later, with \
+       other options if need be, and asciinema plays it. A $(b,.txt) output is \
+       the text of the last screen.";
+    `P
+      "A $(b,.t) output is a cram test of $(i,COMMAND), as dune runs it: \
+       $(cmd) runs the command line with $(b,sh -c) on pipes, with an empty \
+       standard input and standard error on standard output, not on the \
+       terminal, and writes what it printed and its exit code as dune does, so \
+       that dune finds no difference. With other outputs, $(i,COMMAND) runs \
+       twice: once on the terminal, whose exit code $(cmd) exits with, and \
+       once on pipes.";
     `P
       "Without $(b,--columns) and $(b,--rows), the terminal has as many \
        columns and rows as a frame of 1200 by 600 pixels holds, as in VHS, \
@@ -88,7 +157,9 @@ let man =
     `S Manpage.s_examples;
     `Pre
       "$(cmd) -o ls.svg -- ls -l --color=always\n\
-       $(cmd) -o columns.svg --columns 100 -- dune exec -- ./main.exe";
+       $(cmd) -o columns.svg --columns 100 -- dune exec -- ./main.exe\n\
+       $(cmd) -o demo.cast -- ./demo.sh && k7 play -o demo.svg demo.cast\n\
+       $(cmd) -o version.t -- k7 --version";
   ]
 
 let exits =
@@ -96,12 +167,12 @@ let exits =
     [
       info 0 ~max:255
         ~doc:
-          "the exit code of $(i,COMMAND), once the image is written, or 128 \
+          "the exit code of $(i,COMMAND), once the outputs are written, or 128 \
            plus the number of the signal that killed it.";
       info some_error
         ~doc:
           "also when k7 itself fails, such as when the program cannot start or \
-           the image cannot be written, after printing $(b,k7:) and the reason \
+           an output cannot be written, after printing $(b,k7:) and the reason \
            on standard error. A program can exit with 123, 124 or 125 too; \
            only k7's own errors print that line.";
       info 130 ~doc:"also when $(cmd) is interrupted by SIGINT.";
@@ -112,11 +183,11 @@ let exits =
 
 let cmd =
   let doc = "run a program on a pseudo-terminal and record its screens" in
-  let run settings env show delay output argv =
+  let run settings env show delay outputs argv =
     Eio_main.run @@ fun stdenv ->
-    run ?show ~delay:(Ms delay) stdenv ~settings ~env ~output argv
+    run ?show ~delay:(Ms delay) stdenv ~settings ~env ~outputs argv
   in
   Cmd.make
     (Cmd.info "rec" ~doc ~man ~exits)
     Term.(
-      const run $ Flags.settings $ Flags.env $ show $ delay $ output $ command)
+      const run $ Flags.settings $ Flags.env $ show $ delay $ outputs $ command)

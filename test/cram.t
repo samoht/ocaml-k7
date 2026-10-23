@@ -219,7 +219,7 @@ with the program's exit code once the image is written.
   $ grep -q '&gt; ' run.svg || echo no prompt
   no prompt
   $ k7 rec -o run.gif -- true
-  k7: "run.gif": not .svg, the animated SVG image k7 rec writes
+  k7: "run.gif": not .svg, .cast, .txt or .t, the outputs k7 rec writes
   [123]
   $ k7 rec -o run.svg -- k7-no-such-program
   k7: executable not found: k7-no-such-program
@@ -247,6 +247,33 @@ the program's output. --show replaces the line and --show "" hides it.
   $ k7 rec -o hide.svg --columns 40 --rows 3 --show '' -- printf 'hi\n'
   $ grep -o '<desc id="k[0-9a-f]*-d">[^<]*</desc>' hide.svg | sed 's/ id="[^"]*"//'
   <desc>hi</desc>
+
+k7 rec writes each output by its extension: an asciicast v3 recording,
+which k7 play draws as the same image, the text of the last screen, and
+a cram test of the command run on pipes, as dune runs it.
+
+  $ k7 rec -o out/rec.svg -o out/rec.CAST -o out/rec.txt -o out/rec.t --columns 80 --rows 4 -- sh -c 'printf "\033[1mhi\033[0m\n"; [ -t 1 ] && echo tty; exit 4'
+  [4]
+  $ head -1 out/rec.CAST
+  {"version":3,"term":{"cols":80,"rows":4,"type":"xterm-256color"},"command":"sh -c 'printf \"\\033[1mhi\\033[0m\\n\"; [ -t 1 ] && echo tty; exit 4'"}
+  $ k7 play -o out/play.svg out/rec.CAST
+  $ cmp out/rec.svg out/play.svg
+  $ tr '$' '%' < out/rec.txt
+  % sh -c 'printf "\033[1mhi\033[0m\n"; [ -t 1 ] && echo tty; exit 4'
+  hi
+  tty
+  $ cat out/rec.t
+    $ sh -c 'printf "\033[1mhi\033[0m\n"; [ -t 1 ] && echo tty; exit 4'
+    hi
+    [4]
+
+A cram test alone runs nothing on a terminal, and holds the command,
+not the line of --show.
+
+  $ k7 rec --show 'hello' -o out/alone.t -- printf 'hello\n'
+  $ cat out/alone.t
+    $ printf 'hello\n'
+    hello
 
 k7 play reads a tape in VHS's syntax; the command line replaces its
 settings and outputs.

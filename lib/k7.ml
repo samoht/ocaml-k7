@@ -1677,15 +1677,112 @@ let text_of_casts ?(settings = []) ?show casts =
     (String.concat ""
        (List.map (fun l -> l ^ "\n") (List.rev (drop_blank (List.rev lines)))))
 
-let run ?(settings = []) ?(env = []) ?show ?(delay = Ms 500) ?stop ~clock ~proc
-    ~cwd argv =
-  let* line, delay = command_line_of ?show ~delay argv in
+let exit_code = function
+  | `Exited n -> n
+  | `Signaled s -> 128 + Sys.signal_to_int s
+
+let native_dir cwd =
+  Option.to_result ~none:(Io "the directory is not a native path")
+    (Eio.Path.native cwd)
+
+let quoted argv = String.concat " " (List.map shell_word argv)
+
+let capture ?(settings = []) ?(env = []) ?show ?stop ~clock ~proc ~cwd argv =
+  let* () = if argv = [] then Error (Invalid "no command to run") else Ok () in
+  let command = Option.value show ~default:(quoted argv) in
+  let* line, _ = shown ~show:command ~delay:(Ms 0) in
   let* () = check_env env in
   let* tape = terminal settings in
-  let* dir =
-    Option.to_result ~none:(Io "the directory is not a native path")
-      (Eio.Path.native cwd)
+  let* dir = native_dir cwd in
+  let* output, exited, status =
+    Result.map_error native_error
+      (Native.capture ?interrupt:stop ~clock ~env:(environment proc) ~vars:env
+         ~cwd:dir ~line tape argv)
   in
-  Result.map_error native_error
-    (Native.run ?interrupt:stop ~clock ~env:(environment proc) ~vars:env
-       ~cwd:dir ~line ~delay tape argv)
+  let columns, rows = Native.size tape in
+  let events =
+    List.map (fun (ms, s) -> (ms, Asciicast.Output s)) output
+    @ [ (exited, Asciicast.Exit (exit_code status)) ]
+  in
+  let command = if command = "" then None else Some command in
+  Ok ({ Asciicast.columns; rows; command; theme = None; events }, status)
+
+let run ?(settings = []) ?env ?show ?(delay = Ms 500) ?stop ~clock ~proc ~cwd
+    argv =
+  let* _ = command_line_of ?show ~delay argv in
+  let* cast, status =
+    capture ~settings ?env ?show ?stop ~clock ~proc ~cwd argv
+  in
+  let* svg = svg_of_casts ~settings ~delay [ cast ] in
+  Ok (svg, status)
+
+(* As dune's [Ansi_color.strip]: from ESC up to the next [m]. *)
+let strip_escapes s =
+  let b = Buffer.create (String.length s) in
+  let rec text i =
+    if i < String.length s then
+      if s.[i] = '\027' then skip (i + 1)
+      else (
+        Buffer.add_char b s.[i];
+        text (i + 1))
+  and skip i =
+    if i < String.length s then
+      if s.[i] = 'm' then text (i + 1) else skip (i + 1)
+  in
+  text 0;
+  Buffer.contents b
+
+let transcript ~line output code =
+  let lines =
+    match List.rev (String.split_on_char '\n' (strip_escapes output)) with
+    | "" :: rest -> List.rev rest
+    | lines -> List.rev lines
+  in
+  let crlf l =
+    if String.ends_with ~suffix:"\r" l then String.sub l 0 (String.length l - 1)
+    else l
+  in
+  String.concat ""
+    ((("  $ " ^ line ^ "\n") :: List.map (fun l -> "  " ^ crlf l ^ "\n") lines)
+    @ if code = 0 then [] else [ Fmt.str "  [%d]\n" code ])
+
+let cram ?(env = []) ?stop ~proc ~cwd argv =
+  let* () = if argv = [] then Error (Invalid "no command to run") else Ok () in
+  let* () = check_env env in
+  let line = quoted argv in
+  let out = Buffer.create 4096 in
+  match
+    Eio.Switch.run @@ fun sw ->
+    let stdin, eof = Eio.Process.pipe ~sw proc in
+    Eio.Flow.close eof;
+    let r, w = Eio.Process.pipe ~sw proc in
+    let child =
+      Eio.Process.spawn ~sw proc
+        ~env:
+          (Eio.Process.environment proc
+          |> Eio.Process.Env.override (List.map (fun (k, v) -> (k, Some v)) env)
+          )
+        ~cwd:(cwd :> Eio.Fs.dir_ty Eio.Path.t)
+        ~stdin ~stdout:w ~stderr:w [ "sh"; "-c"; line ]
+    in
+    Eio.Flow.close stdin;
+    Eio.Flow.close w;
+    let read, finish = Eio.Promise.create () in
+    Eio.Fiber.both
+      (fun () ->
+        Eio.Flow.copy r (Eio.Flow.buffer_sink out);
+        Eio.Promise.resolve finish ())
+      (fun () ->
+        match stop with
+        | None -> ()
+        | Some p ->
+            Eio.Fiber.first
+              (fun () ->
+                Eio.Promise.await p;
+                Eio.Process.signal child Sys.sigterm)
+              (fun () -> Eio.Promise.await read));
+    Eio.Process.await child
+  with
+  | status ->
+      Ok (transcript ~line (Buffer.contents out) (exit_code status), status)
+  | exception Eio.Io (e, _) -> Error (Io (io_message ~cwd e))

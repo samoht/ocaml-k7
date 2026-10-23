@@ -1763,6 +1763,133 @@ let test_run_concurrent_terminals () =
         "no other terminal reaches the program" (screen [ "DONE" ])
         (last (frames image))
 
+let capture ?show ?(clock = Eio_mock.Clock.Mono.make ()) env cwd argv =
+  match
+    K7.capture ~settings ?show ~clock
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd argv
+  with
+  | Ok r -> r
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+
+let lines s = String.split_on_char '\n' s
+
+let exited name n = function
+  | `Exited m -> Alcotest.(check int) name n m
+  | `Signaled s -> Alcotest.failf "%s: signal %d" name s
+
+(* The recording holds the size, the command, the output at its times and the
+   exit; drawn, it is the image of K7.run. *)
+let test_capture () =
+  with_dir @@ fun env cwd ->
+  script cwd "demo.sh"
+    "#!/bin/sh\n\
+     : > started\n\
+     while [ ! -e go ]; do sleep 0.01; done\n\
+     printf '\\033[31mred\\033[0m\\n'\n\
+     exit 3\n";
+  let clock = Eio_mock.Clock.Mono.make () in
+  let (cast, status), () =
+    Eio.Fiber.pair
+      (fun () -> capture ~clock env cwd [ "./demo.sh" ])
+      (fun () ->
+        until (fun () -> Sys.file_exists (Eio.Path.native_exn cwd ^ "/started"));
+        Eio_mock.Clock.Mono.set_time clock (Mtime.of_uint64_ns 500_000_000L);
+        Eio.Path.save ~create:(`Or_truncate 0o644) Eio.Path.(cwd / "go") "")
+  in
+  exited "status" 3 status;
+  let src = K7.string_of_cast cast in
+  Alcotest.(check (list string))
+    "asciicast v3"
+    [
+      {|{"version":3,"term":{"cols":46,"rows":9,"type":"xterm-256color"},"command":"./demo.sh"}|};
+      {|[0.500,"o","\u001B[31mred\u001B[0m\r\n"]|};
+      {|[0.000,"x","3"]|};
+      "";
+    ]
+    (lines src);
+  Alcotest.(check string)
+    "the last screen" "$ ./demo.sh\nred\n"
+    (Result.get_ok (K7.text_of_casts [ cast ]));
+  let svg = Result.get_ok (K7.svg_of_casts ~settings [ cast ]) in
+  Alcotest.(check (list string))
+    "frames"
+    [ screen [ "$ ./demo.sh" ]; screen [ "$ ./demo.sh"; "red" ] ]
+    (frames svg);
+  let cast, _ = capture ~show:"" env cwd [ "true" ] in
+  Alcotest.(check (list string))
+    "no command"
+    [
+      {|{"version":3,"term":{"cols":46,"rows":9,"type":"xterm-256color"}}|};
+      {|[0.000,"x","0"]|};
+      "";
+    ]
+    (lines (K7.string_of_cast cast))
+
+(* A character split across two writes is written whole, and a byte that is
+   not UTF-8 as U+FFFD. *)
+let test_capture_utf_8 () =
+  with_dir @@ fun env cwd ->
+  let cast, _ =
+    capture ~show:"" env cwd
+      [ "sh"; "-c"; "printf '\\303'; sleep 0.2; printf '\\251\\377\\n'" ]
+  in
+  let src = K7.string_of_cast cast in
+  Alcotest.(check bool) "valid UTF-8" true (String.is_valid_utf_8 src);
+  check_contains "é then U+FFFD" ~sub:"é\xef\xbf\xbd" src;
+  match K7.cast_of_string src with
+  | Ok c ->
+      Alcotest.(check string)
+        "read back" "é\xef\xbf\xbd\n"
+        (Result.get_ok (K7.text_of_casts [ c ]))
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+
+let cram ?env:vars env cwd argv =
+  match K7.cram ?env:vars ~proc:(Eio.Stdenv.process_mgr env) ~cwd argv with
+  | Ok r -> r
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+
+(* What dune writes for each command of a cram test: the output and the
+   error, without escape sequences or the carriage return before a line feed,
+   each line indented, then the exit code unless 0. *)
+let test_cram () =
+  with_dir @@ fun env cwd ->
+  script cwd "out.sh"
+    "#!/bin/sh\n\
+     printf 'a\\n\\nb  \\n'\n\
+     printf 'err\\n' >&2\n\
+     printf '\\033[1mbold\\033[0m\\r\\n'\n\
+     printf 'x\\ry\\n'\n\
+     printf '\\303\\n'\n\
+     printf 'no eol'\n\
+     exit 3\n";
+  let t, status = cram env cwd [ "./out.sh" ] in
+  exited "status" 3 status;
+  Alcotest.(check string)
+    "a cram test"
+    "  $ ./out.sh\n\
+    \  a\n\
+    \  \n\
+    \  b  \n\
+    \  err\n\
+    \  bold\n\
+    \  x\ry\n\
+    \  \xc3\n\
+    \  no eol\n\
+    \  [3]\n"
+    t;
+  let t, status = cram env cwd [ "cat"; "-"; "a b" ] in
+  exited "cat" 1 status;
+  Alcotest.(check string)
+    "quoted, nothing printed, stdin empty"
+    "  $ cat - 'a b'\n  cat: a b: No such file or directory\n  [1]\n" t;
+  Alcotest.(check string)
+    "environment" "  $ printenv K7_TEST\n  set\n"
+    (fst (cram ~env:[ ("K7_TEST", "set") ] env cwd [ "printenv"; "K7_TEST" ]));
+  Alcotest.(check string)
+    "killed" "  $ sh -c 'kill -9 $$'\n  [137]\n"
+    (fst (cram env cwd [ "sh"; "-c"; "kill -9 $$" ]))
+
 let suite =
   ( "native",
     List.map
@@ -1823,6 +1950,9 @@ let suite =
          ("run keeps the rows", test_run_rows);
          ("run shows another line", test_run_show);
          ("run cancelled", test_run_cancel);
+         ("capture", test_capture);
+         ("capture keeps UTF-8 whole", test_capture_utf_8);
+         ("cram", test_cram);
          ( "run cancellation reaps resistant descendants",
            test_run_cancel_descendant );
          ("record refuses Env names", test_record_env_names);

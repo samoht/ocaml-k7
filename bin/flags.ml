@@ -189,12 +189,6 @@ let load env path =
       Fmt.error "%s: permission denied" path
   | exception Eio.Io (err, _) -> Fmt.error "%s: %a" path Eio.Exn.pp_err err
 
-let check_svg ~cmd output =
-  if Filename.extension output <> ".svg" then
-    Fmt.error "%a: not .svg, the animated SVG image %s writes" Quote.pp output
-      cmd
-  else Ok ()
-
 let save env output svg =
   let file = Eio.Path.(Eio.Stdenv.fs env / output) in
   match

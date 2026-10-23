@@ -25,6 +25,14 @@
   its command line, timed as they arrived, with how the program exited.
   `?show` (`--show`) replaces the command line, or hides it, and the line
   shows alone for `?delay` (`--delay`, 500ms by default), as if typed.
+- `k7 rec -o FILE` writes each output by its extension: `.svg` for the
+  image, `.cast` for the recording in asciicast v3, which `k7 play` draws
+  as the same image byte for byte, with other options if need be, `.txt`
+  for the text of the last screen, and `.t` for a cram test of the command,
+  run with `sh -c` on pipes as dune runs it, with its output and its exit
+  code as dune writes them. `K7.capture` records a program as an asciicast
+  recording, and `K7.run` draws it with `K7.svg_of_casts`; `K7.cram` runs a
+  command and gives its cram test.
 - `K7.cast_of_string` reads a recording in asciicast v2 or v3, as
   asciinema 2 and 3 and console's `CONSOLE_CAST` write it, and
   `K7.svg_of_casts` (`k7 play FILE.cast`) draws it as `K7.svg` draws its

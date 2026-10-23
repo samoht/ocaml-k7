@@ -659,6 +659,7 @@ type state = {
   mutable exited : Eio.Process.exit_status option;
   stuck : string -> bool;
   since : Buffer.t;
+  mutable captured : (int * string) list option;  (** Latest first. *)
 }
 
 let now st = Eio.Time.Mono.now st.clock
@@ -744,6 +745,9 @@ let since st output =
 
 let feed st buf n =
   let output = Bytes.sub_string buf 0 n in
+  Option.iter
+    (fun c -> st.captured <- Some ((stamp st, output) :: c))
+    st.captured;
   since st output;
   Screen.feed st.term output;
   settle st output;
@@ -1174,6 +1178,7 @@ let state ?(stuck = fun _ -> false) t ~clock ({ pty; pid; _ } : terminal) =
     exited = None;
     stuck;
     since = Buffer.create 4096;
+    captured = None;
   }
 
 let recording t st =
@@ -1224,8 +1229,6 @@ let play ?interrupt ?stuck ~clock ~env ~vars ~cwd t =
   | r -> Ok r
   | exception Stop e -> Error e
 
-let hold = 1000
-
 (* As [stop_terminal], without hanging up, so that the reader reads what the
    program prints until it exits. *)
 let terminate clock (t : terminal) =
@@ -1235,7 +1238,7 @@ let terminate clock (t : terminal) =
   signal Sys.sigkill;
   Eio.Fiber.await_cancel ()
 
-let run ?interrupt ~clock ~env ~vars ~cwd ~line ~delay t argv =
+let capture ?interrupt ~clock ~env ~vars ~cwd ~line t argv =
   let clock = (clock :> Eio.Time.Mono.ty Eio.Resource.t) in
   match
     let prog, args =
@@ -1252,8 +1255,7 @@ let run ?interrupt ~clock ~env ~vars ~cwd ~line ~delay t argv =
     st.started <- now st;
     Screen.feed st.term line;
     refresh st;
-    record st;
-    st.logical <- delay;
+    st.captured <- Some [];
     Eio.Fiber.first
       (fun () -> reader st (Bytes.create 65536))
       (fun () ->
@@ -1262,9 +1264,9 @@ let run ?interrupt ~clock ~env ~vars ~cwd ~line ~delay t argv =
         | Some p ->
             Eio.Promise.await p;
             terminate clock terminal);
-    let end_ms = stamp st + hold in
+    let output = List.rev (Option.value st.captured ~default:[]) in
     match st.exited with
-    | Some status -> (svg t st.tl ~end_ms, status)
+    | Some status -> (output, stamp st, status)
     | None -> stop (Io "the program's exit status is lost")
   with
   | r -> Ok r

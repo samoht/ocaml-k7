@@ -596,7 +596,8 @@ let test_run_exec_failure () =
   @@ fun env path ->
   let code, error =
     captured path @@ fun () ->
-    Rec_cmd.run env ~settings:[] ~env:[] ~output:(path "failed.svg")
+    Rec_cmd.run env ~settings:[] ~env:[]
+      ~outputs:[ path "failed.svg" ]
       [ path "not-executable" ]
   in
   Alcotest.(check int) "recording failure has documented exit code" 123 code;
@@ -662,7 +663,8 @@ let test_interrupt () =
   Unix.mkdir (path "cram") 0o755;
   interrupt path ~signal:Sys.sigint ~ready:"ready.run" (fun () ->
       code :=
-        Rec_cmd.run env ~settings:[] ~env:[] ~output:(path "run.svg")
+        Rec_cmd.run env ~settings:[] ~env:[]
+          ~outputs:[ path "run.svg" ]
           [
             "sh";
             "-c";
@@ -732,7 +734,8 @@ let test_rec_creates_output_directory () =
   let output = path "new/dir/echo.svg" in
   let code, error =
     captured path @@ fun () ->
-    Rec_cmd.run env ~settings:[] ~env:[] ~output [ "/bin/echo"; "hi" ]
+    Rec_cmd.run env ~settings:[] ~env:[] ~outputs:[ output ]
+      [ "/bin/echo"; "hi" ]
   in
   Alcotest.(check (pair int string)) "recorded" (0, "") (code, error);
   Alcotest.(check bool) "image written" true (Sys.file_exists output)
@@ -821,6 +824,41 @@ let test_cast () =
     "refused, nothing written" false
     (Sys.file_exists (path "d.svg"))
 
+(* k7 rec writes each output by its extension, in any case, from one
+   recording on a terminal, and the cram test from a run on pipes; the image
+   is the one k7 play draws of the recording. *)
+let test_rec_outputs () =
+  with_files [ ("err", 0o644, "") ] @@ fun env path ->
+  let code, error =
+    captured path @@ fun () ->
+    Rec_cmd.run env
+      ~settings:K7.[ Columns 40; Rows 3 ]
+      ~env:[]
+      ~outputs:[ path "a.svg"; path "a.cast"; path "a.TXT"; path "a.t" ]
+      [ "sh"; "-c"; "printf hi; exit 2" ]
+  in
+  Alcotest.(check (pair int string)) "the program's code" (2, "") (code, error);
+  let read file = In_channel.with_open_bin (path file) In_channel.input_all in
+  let cast = Result.get_ok (K7.cast_of_string (read "a.cast")) in
+  expect "k7 play draws the same image"
+    (Result.get_ok (K7.svg_of_casts [ cast ]))
+    (read "a.svg");
+  expect "the last screen" "$ sh -c 'printf hi; exit 2'\nhi\n" (read "a.TXT");
+  expect "the cram test" "  $ sh -c 'printf hi; exit 2'\n  hi\n  [2]\n"
+    (read "a.t");
+  let code, error =
+    captured path @@ fun () ->
+    Rec_cmd.run env ~settings:[] ~env:[]
+      ~outputs:[ path "b.cast"; path "b.gif" ]
+      [ "true" ]
+  in
+  Alcotest.(check int) "refused" 123 code;
+  Native_test.check_contains "the outputs of k7 rec"
+    ~sub:"b.gif\": not .svg, .cast, .txt or .t, the outputs k7 rec writes" error;
+  Alcotest.(check bool)
+    "refused before it runs" false
+    (Sys.file_exists (path "b.cast"))
+
 let suite =
   ( "cli",
     List.map
@@ -845,6 +883,7 @@ let suite =
          ( "-o replaces a late Output line",
            test_output_option_replaces_late_output );
          ("rec creates the output directory", test_rec_creates_output_directory);
+         ("rec outputs", test_rec_outputs);
          ("engine", test_engine);
          ("asciicast recordings", test_cast);
        ]

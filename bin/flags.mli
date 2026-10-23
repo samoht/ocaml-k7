@@ -41,10 +41,6 @@ val load : Eio_unix.Stdenv.base -> string -> (string, string) result
 (** [load env path] is the contents of the file [path], of at most 10 MiB, or
     [Error msg]. *)
 
-val check_svg : cmd:string -> string -> (unit, string) result
-(** [check_svg ~cmd path] is [Ok ()] if [path] ends with [.svg], and an error
-    that names the image [cmd] writes otherwise. *)
-
 val save : Eio_unix.Stdenv.base -> string -> string -> (unit, string) result
 (** [save env path svg] writes [svg] to the file [path], creating its missing
     directories, or is [Error msg]. *)
