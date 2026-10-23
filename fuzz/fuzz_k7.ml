@@ -1505,8 +1505,56 @@ let test_native_domains surface live =
   in
   check (status = Unix.WEXITED 0)
 
+let test_capture_valid_roundtrip status glyph =
+  with_dir @@ fun env _ ->
+  let glyph = List.nth [ "é"; "漢字"; "👍"; "é" ] (glyph mod 4) in
+  let body = "\027[31m" ^ glyph ^ "\027[0m\nlast" in
+  let payload =
+    match status mod 3 with
+    | 0 -> body
+    | 1 -> "normal\027[?1049h" ^ body
+    | _ -> "normal\027[?1049h" ^ body ^ "\027[?1049lEND"
+  in
+  let settings = K7.[ Columns 24; Rows 4; Font_size 10 ] in
+  let result =
+    K7.capture ~settings ~show:"demo"
+      ~clock:(Eio.Stdenv.mono_clock env)
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd:(Eio.Stdenv.cwd env)
+      [
+        "/bin/sh";
+        "-c";
+        Fmt.str "printf '%%s' \"$1\"; exit %d" status;
+        "demo";
+        payload;
+      ]
+  in
+  match result with
+  | Error e -> failf "%a" K7.pp_error e
+  | Ok (cast, got) -> (
+      check (got = `Exited status);
+      let saved = K7.string_of_cast cast in
+      check (String.is_valid_utf_8 saved);
+      match K7.cast_of_string saved with
+      | Error e -> failf "%a" K7.pp_error e
+      | Ok restored ->
+          let image c =
+            match K7.svg_of_casts ~settings [ c ] with
+            | Ok s -> s
+            | Error e -> failf "%a" K7.pp_error e
+          in
+          let text c =
+            match K7.text_of_casts ~settings [ c ] with
+            | Ok s -> s
+            | Error e -> failf "%a" K7.pp_error e
+          in
+          check_eq ~pp:Fmt.Dump.string (image cast) (image restored);
+          check_eq ~pp:Fmt.Dump.string (text cast) (text restored))
+
 let with_programs =
   [
+    test_case "saved captures preserve colour, Unicode, screens and exit codes"
+      [ uint8; uint8 ] test_capture_valid_roundtrip;
     test_case "native recorders work with live or joined OCaml domains"
       [ uint8; bool ] test_native_domains;
     test_case "asciicast dry-run refuses unwritable output paths"
