@@ -21,6 +21,14 @@ The image above is the cram test [doc/demo.t](doc/demo.t), recorded with
 
 ## Installation
 
+On macOS or Linux, from the Homebrew tap:
+
+```
+brew install samoht/monopam/k7
+```
+
+With opam (k7 needs OCaml 5.4):
+
 ```
 opam install k7
 ```
