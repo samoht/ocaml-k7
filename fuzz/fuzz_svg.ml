@@ -925,6 +925,28 @@ let test_cast_cursor_theme n =
     (draw ~settings (parse (source "")))
     (draw ~settings restored)
 
+let test_cast_text_style data n =
+  let data = if String.is_valid_utf_8 data then data else String.escaped data in
+  let source =
+    {|{"version":3,"term":{"cols":12,"rows":3}}|} ^ "\n[0,\"o\","
+    ^ json_string data ^ "]\n"
+  in
+  let cast =
+    match K7.cast_of_string source with
+    | Ok c -> c
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  let text settings =
+    match K7.text_of_casts ~settings [ cast ] with
+    | Ok s -> s
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  let fixed = K7.[ Columns 12; Rows 3 ] in
+  let styled =
+    K7.[ Font_size (8 + (n mod 32)); Framerate (1 + n); Theme "Dracula" ]
+  in
+  check_eq ~pp:pp_string (text fixed) (text (fixed @ styled))
+
 let test_cast_ignored_metadata data n =
   let data = if String.is_valid_utf_8 data then data else String.escaped data in
   let header extra =
@@ -1036,6 +1058,8 @@ let terminal =
 
 let casts =
   [
+    test_case "drawing settings preserve cast text at fixed cell dimensions"
+      [ bytes; uint8 ] test_cast_text_style;
     test_case "ignored asciicast header metadata cannot change image or text"
       [ bytes; uint16 ] test_cast_ignored_metadata;
     test_case "cursor theme extensions match JSON themes and explicit overrides"
