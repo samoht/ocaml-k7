@@ -652,9 +652,8 @@ let modified ~shift = function
   | Str s -> if shift then String.uppercase_ascii s else s
   | t -> lit t
 
-(* Temporary: matrix 0.1.0's [Pty.spawn] closes the slave, so macOS loses the
-   output of a program that exits at once. Once matrix fixes it, delete
-   [slave], [open_terminal], [acquire_terminal] and terminal_stubs.c. *)
+(* k7 keeps [slave] open: matrix 0.1.0's [Pty.spawn] closes it, so macOS loses
+   the output of a program that exits at once. *)
 type terminal = { pty : Pty.t; slave : Pty.t; pid : int }
 
 type state = {
@@ -1018,45 +1017,24 @@ let stop_terminal clock ~reaped (t : terminal) =
     if signal Sys.sigkill then wait 100);
   reap []
 
-(* Temporary, see [terminal]. *)
-external acquire_terminal : Unix.file_descr -> unit = "native_acquire_terminal"
-external default_signals : unit -> unit = "native_default_signals"
-external close_from_3 : Unix.file_descr -> unit = "native_close_from_3"
+external spawn :
+  Unix.file_descr ->
+  string ->
+  string array ->
+  string array ->
+  string ->
+  (int, Unix.error * string) result = "native_spawn"
 
 let lower e = String.uncapitalize_ascii (Unix.error_message e)
 
-(* What the child reports on the error pipe before it exits: [N] for a
-   program that is not there, [E] and a message for any other failure. *)
 let child_error ~cwd ~path ~prog e f =
   match (e, f) with
-  | Unix.ENOENT, "execve" -> "N"
+  | Unix.ENOENT, "execve" -> Executable_not_found prog
   | EACCES, "execve" when try Sys.is_directory path with Sys_error _ -> false ->
-      Fmt.str "E%s: is a directory" prog
-  | e, "chdir" -> Fmt.str "E%s: %s" cwd (lower e)
-  | e, "execve" -> Fmt.str "E%s: %s" prog (lower e)
-  | e, f -> Fmt.str "E%s: %s" f (lower e)
-
-let exec ~path argv env =
-  try Unix.execve path argv env
-  with Unix.Unix_error (ENOEXEC, _, _) ->
-    (* As execvp, a file without a #! line is a shell script. *)
-    let args = Array.sub argv 1 (Array.length argv - 1) in
-    Unix.execve "/bin/sh" (Array.append [| "/bin/sh"; path |] args) env
-
-let rec read_all fd b chunk =
-  match Unix.read fd chunk 0 (Bytes.length chunk) with
-  | 0 -> Buffer.contents b
-  | n ->
-      Buffer.add_subbytes b chunk 0 n;
-      read_all fd b chunk
-  | exception Unix.Unix_error (EINTR, _, _) -> read_all fd b chunk
-
-(* SIGCHLD, which Eio handles, can interrupt the wait for the child. *)
-let rec reap_child pid =
-  match Unix.waitpid [] pid with
-  | _ -> ()
-  | exception Unix.Unix_error (EINTR, _, _) -> reap_child pid
-  | exception Unix.Unix_error _ -> ()
+      Io (Fmt.str "%s: is a directory" prog)
+  | e, "chdir" -> Io (Fmt.str "%s: %s" cwd (lower e))
+  | e, "execve" -> Io (Fmt.str "%s: %s" prog (lower e))
+  | e, f -> Io (Fmt.str "%s: %s" f (lower e))
 
 let open_terminal ~env ~cwd ~winsize ~path prog args =
   let argv = Array.of_list (prog :: args)
@@ -1066,55 +1044,16 @@ let open_terminal ~env ~cwd ~winsize ~path prog args =
     Pty.close pty;
     Pty.close slave
   in
-  let report, reported =
-    try
-      Unix.set_close_on_exec (Pty.file_descr pty);
-      Unix.set_close_on_exec (Pty.file_descr slave);
-      Unix.pipe ~cloexec:true ()
-    with e ->
+  match
+    Unix.set_close_on_exec (Pty.file_descr pty);
+    Unix.set_close_on_exec (Pty.file_descr slave);
+    spawn (Pty.file_descr slave) path argv env cwd
+  with
+  | Ok pid -> { pty; slave; pid }
+  | Error (e, f) ->
       close_terminal ();
-      raise e
-  in
-  match Unix.fork () with
-  | 0 ->
-      let sent = ref false in
-      let send msg =
-        sent := true;
-        try ignore (Unix.write_substring reported msg 0 (String.length msg))
-        with Unix.Unix_error _ -> ()
-      in
-      (* Whatever is raised, the child exits rather than return into k7. *)
-      Fun.protect
-        ~finally:(fun () ->
-          if not !sent then send "Ethe child failed before exec";
-          Unix._exit 127)
-        (fun () ->
-          (try
-             let fd = Pty.file_descr slave in
-             acquire_terminal fd;
-             List.iter (Unix.dup2 fd) [ Unix.stdin; Unix.stdout; Unix.stderr ];
-             close_from_3 reported;
-             default_signals ();
-             Unix.chdir cwd;
-             exec ~path argv env
-           with Unix.Unix_error (e, f, _) ->
-             send (child_error ~cwd ~path ~prog e f));
-          Unix._exit 127)
-  | pid ->
-      Unix.close reported;
-      let msg =
-        Fun.protect ~finally:(fun () -> Unix.close report) @@ fun () ->
-        read_all report (Buffer.create 64) (Bytes.create 256)
-      in
-      if msg = "" then { pty; slave; pid }
-      else (
-        close_terminal ();
-        reap_child pid;
-        match msg.[0] with
-        | 'N' -> stop (Executable_not_found prog)
-        | _ -> stop (Io (String.sub msg 1 (String.length msg - 1))))
+      stop (child_error ~cwd ~path ~prog e f)
   | exception e ->
-      List.iter Unix.close [ report; reported ];
       close_terminal ();
       raise e
 
