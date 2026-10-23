@@ -202,9 +202,9 @@ let read_data code data =
       | _ -> Fmt.error "exit status %S is not an integer" data)
   | _ -> Ok None
 
-(* [prev] is the time of the event ahead, as written, and [at] its time once
-   idle intervals are cut, both in microseconds. *)
-let read_event format ~idle ~prev ~at line =
+(* [last] is the time of the event ahead as written, in seconds; [prev] is
+   that time in microseconds, and [at] its time once idle intervals are cut. *)
+let read_event format ~idle ~last ~prev ~at line =
   let* time, code, data = decode event line in
   match (time, code, data) with
   | Number t, String code, String data ->
@@ -212,9 +212,8 @@ let read_event format ~idle ~prev ~at line =
         match format with
         | V2 ->
             if t < 0. then Fmt.error "time %as is negative" pp_number t
-            else if us t < prev then
-              Fmt.error "time %as is before %as" pp_number t pp_number
-                (prev /. 1e6)
+            else if t < last then
+              Fmt.error "time %as is before %as" pp_number t pp_number last
             else Ok (us t, us t -. prev)
         | V3 ->
             if t < 0. then Fmt.error "interval %as is negative" pp_number t
@@ -228,7 +227,7 @@ let read_event format ~idle ~prev ~at line =
         Fmt.error "time %as is beyond %dms" pp_number t max_ms
       else
         let* e = read_data code data in
-        Ok (written, at, Option.map (fun e -> (ms at, e)) e)
+        Ok (t, written, at, Option.map (fun e -> (ms at, e)) e)
   | String _, _, _ -> Error "the time is not a number"
   | _, Number _, _ -> Error "the code is not a string"
   | _, _, Number _ -> Error "the data is not a string"
@@ -248,21 +247,21 @@ let of_string s =
   else
     let* format, idle, t = at 1 (read_header first) in
     let idle = Option.map (fun s -> us (Float.max 0. s)) idle in
-    let rec events n ~prev ~at:time acc = function
+    let rec events n ~last ~prev ~at:time acc = function
       | [] -> Ok (List.rev acc)
       | line :: rest when is_blank line ->
-          events (n + 1) ~prev ~at:time acc rest
+          events (n + 1) ~last ~prev ~at:time acc rest
       | line :: rest when format = V3 && line.[0] = '#' ->
-          events (n + 1) ~prev ~at:time acc rest
+          events (n + 1) ~last ~prev ~at:time acc rest
       | line :: rest ->
-          let* prev, time, e =
-            at n (read_event format ~idle ~prev ~at:time line)
+          let* last, prev, time, e =
+            at n (read_event format ~idle ~last ~prev ~at:time line)
           in
           let acc = match e with Some e -> e :: acc | None -> acc in
-          events (n + 1) ~prev ~at:time acc rest
+          events (n + 1) ~last ~prev ~at:time acc rest
     in
     let* events =
-      events 2 ~prev:0. ~at:0. [] (String.split_on_char '\n' rest)
+      events 2 ~last:0. ~prev:0. ~at:0. [] (String.split_on_char '\n' rest)
     in
     Ok { t with events }
 
