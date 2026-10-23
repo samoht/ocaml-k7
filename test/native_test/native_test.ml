@@ -83,6 +83,9 @@ let executable path contents =
   Out_channel.with_open_gen [ Open_wronly; Open_creat; Open_trunc; Open_binary ]
     0o755 path (fun oc -> Out_channel.output_string oc contents)
 
+(* Under load, bash 3.2 on macOS can print a failed setpgid of a job. *)
+let no_job_control = [ ("PROMPT_COMMAND", "set +m") ]
+
 type clock = Eio.Time.Mono.ty Eio.Resource.t
 
 module Held = struct
@@ -132,7 +135,9 @@ let rec until p =
 
 let play env cwd t =
   with_clock @@ fun clock ->
-  K7.record ~engine:Native ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd t
+  K7.record ~engine:Native ~env:no_job_control ~clock
+    ~proc:(Eio.Stdenv.process_mgr env)
+    ~cwd t
 
 let record ?(image = "demo.svg") env cwd t =
   (try Eio.Path.unlink Eio.Path.(cwd / image) with Eio.Io _ -> ());

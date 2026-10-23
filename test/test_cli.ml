@@ -90,8 +90,8 @@ let fake_vhs status =
     status
 
 let run env ?(print = false) ~vhs input =
-  Play_cram.run env ~dry_run:false ~print ~vhs ~setup:[] ~outputs:[ "demo.gif" ]
-    input
+  Play_cram.run env ~env:Native_test.no_job_control ~dry_run:false ~print ~vhs
+    ~setup:[] ~outputs:[ "demo.gif" ] input
 
 let test_run () =
   with_files
@@ -307,7 +307,8 @@ let oracle = Sys.getenv_opt "VHS_ORACLE"
 let play ~native env t =
   let clock = Eio.Stdenv.mono_clock env and proc = Eio.Stdenv.process_mgr env in
   let cwd = Eio.Stdenv.cwd env in
-  if native then K7.record ~engine:Native ~clock ~proc ~cwd t
+  if native then
+    K7.record ~engine:Native ~env:Native_test.no_job_control ~clock ~proc ~cwd t
   else K7.record ~engine:Vhs ?vhs:oracle ~clock ~proc ~cwd t
 
 let test_output_order ~native () =
@@ -446,7 +447,8 @@ let test_unfinished ~native () =
   @@ fun env path ->
   let code, msg =
     captured path @@ fun () ->
-    Play_cram.run env ~dry_run:false ~print:false
+    Play_cram.run env ~env:Native_test.no_job_control ~dry_run:false
+      ~print:false
       ~vhs:(Option.value oracle ~default:"vhs")
       ~setup:[]
       ~outputs:[ path (if native then "out.svg" else "out.gif") ]
@@ -464,8 +466,8 @@ let run_err env path ?wait_timeout_s src =
     Eio.Path.(Eio.Stdenv.fs env / path "demo.t")
     src;
   captured path @@ fun () ->
-  Play_cram.run env ~dry_run:false ~print:false ~vhs:"vhs" ~setup:[]
-    ?wait_timeout_s
+  Play_cram.run env ~env:Native_test.no_job_control ~dry_run:false ~print:false
+    ~vhs:"vhs" ~setup:[] ?wait_timeout_s
     ~outputs:[ path "out.svg" ]
     (path "demo.t")
 
@@ -485,8 +487,8 @@ let test_native_text () =
   List.iter
     (fun output ->
       let code =
-        Play_cram.run env ~dry_run:false ~print:false
-          ~vhs:"vhs-no-such-executable" ~setup:[]
+        Play_cram.run env ~env:Native_test.no_job_control ~dry_run:false
+          ~print:false ~vhs:"vhs-no-such-executable" ~setup:[]
           ~outputs:[ path output ]
           (path "demo.t")
       in
@@ -522,7 +524,7 @@ let test_tape_timeout () =
   let code, msg =
     captured path @@ fun () ->
     Play_tape.run env ~dry_run:false ~print:false ~vhs:"vhs" ~settings:[]
-      ~env:[] ~outputs:[] tape
+      ~env:Native_test.no_job_control ~outputs:[] tape
   in
   Alcotest.(check int) "exit code" 123 code;
   check_message msg
@@ -531,7 +533,7 @@ let test_tape_timeout () =
   let code, msg =
     captured path @@ fun () ->
     Play_tape.run env ~dry_run:false ~print:false ~vhs:"vhs" ~settings:[]
-      ~env:[]
+      ~env:Native_test.no_job_control
       ~outputs:[ path "a.svg"; path "b.gif" ]
       tape
   in
@@ -596,7 +598,8 @@ let test_tape_output_option () =
   @@ fun env path ->
   let code, error =
     captured path @@ fun () ->
-    Play_tape.run env ~dry_run:false ~print:true ~vhs:"vhs" ~settings:[] ~env:[]
+    Play_tape.run env ~dry_run:false ~print:true ~vhs:"vhs" ~settings:[]
+      ~env:Native_test.no_job_control
       ~outputs:[ path "out.txt" ]
       (path "t.tape")
   in
@@ -613,8 +616,8 @@ let test_cram_dir () =
   @@ fun env path ->
   let shown ?dir () =
     let code =
-      Play_cram.run env ~dry_run:false ~print:false ~vhs:"vhs" ~setup:[] ?dir
-        ~settings:[ Columns 1000 ]
+      Play_cram.run env ~env:Native_test.no_job_control ~dry_run:false
+        ~print:false ~vhs:"vhs" ~setup:[] ?dir ~settings:[ Columns 1000 ]
         ~outputs:[ path "pwd.txt" ]
         (path "pwd.t")
     in
@@ -663,7 +666,8 @@ let test_interrupt () =
        (In_channel.with_open_bin (path "run.svg") In_channel.input_all));
   interrupt path ~signal:Sys.sigterm ~ready:"cram/ready" (fun () ->
       code :=
-        Play_cram.run env ~dry_run:false ~print:false ~vhs:"vhs" ~setup:[]
+        Play_cram.run env ~env:Native_test.no_job_control ~dry_run:false
+          ~print:false ~vhs:"vhs" ~setup:[]
           ~dir:(Filename.dirname (path "cram/x"))
           ~outputs:[ path "cram.svg" ]
           (path "wait.t"));
@@ -697,7 +701,8 @@ let test_output_option_replaces_late_output () =
     src;
   let play ~dry_run output =
     captured path @@ fun () ->
-    Play_tape.run env ~dry_run ~print:false ~vhs:"vhs" ~settings:[] ~env:[]
+    Play_tape.run env ~dry_run ~print:false ~vhs:"vhs" ~settings:[]
+      ~env:Native_test.no_job_control
       ~outputs:[ path output ]
       (path "late.tape")
   in

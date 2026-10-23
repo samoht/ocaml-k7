@@ -158,7 +158,8 @@ resetting the prompt that the waits rely on.
 
 An .svg output is recorded without vhs, with the same prompt and mark.
 Its waits, as every native recording's here, time out after 600 seconds,
-only to stop a hang.
+only to stop a hang, and its bash runs without job control: under load,
+bash 3.2 on macOS can print a failed setpgid of a job.
 
   $ k7 play --print --output demo.svg demo.t | grep -v '^Env'
   Set Shell "bash"
@@ -171,7 +172,7 @@ only to stop a hang.
   Enter
   Wait+Line /\x{2060}\x{2060}\x{200B}\x{2060}\x{200B}\x{200B}\x{200B}\x{2060}\x{200B}\x{2060}\x{200B}\x{200B}\x{2060}\x{200B}\x{2060}\x{2060}$/
   Sleep 1000ms
-  $ k7 play --vhs ./missing-vhs --wait-timeout 600 --output demo.svg demo.t
+  $ k7 play --vhs ./missing-vhs --wait-timeout 600 --env PROMPT_COMMAND='set +m' --output demo.svg demo.t
   $ grep -c '<svg xmlns' demo.svg
   1
 
@@ -200,7 +201,7 @@ A native recording has the columns asked for and the variables set,
 whatever quotes they hold.
 
   $ printf '  $ echo "$GREETING"; printf "%%099d|\\n" 0\n' > env.t
-  $ k7 play --wait-timeout 600 --columns 100 --env GREETING='"bonjour'"'"'`' --output env.txt env.t
+  $ k7 play --wait-timeout 600 --env PROMPT_COMMAND='set +m' --columns 100 --env GREETING='"bonjour'"'"'`' --output env.txt env.t
   $ grep -m 1 -c '^"bonjour'"'"'`$' env.txt
   1
   $ grep -m 1 -c '^0*|$' env.txt
@@ -266,7 +267,7 @@ settings and outputs.
   Enter
   Wait
   Sleep 500ms
-  $ k7 play --columns 40 --env GREETING=salut -o tape.txt demo.tape
+  $ k7 play --columns 40 --env GREETING=salut --env PROMPT_COMMAND='set +m' -o tape.txt demo.tape
   $ grep -m 1 -c '^salut$' tape.txt
   1
   $ k7 play --wait-timeout 5 demo.tape

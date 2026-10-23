@@ -58,6 +58,12 @@ val executable : string -> string -> unit
     with a blocking [close]. Under io_uring, Eio closes a file late, and running
     it at once fails with [ETXTBSY]. *)
 
+val no_job_control : (string * string) list
+(** [no_job_control] is the environment, for the [?env] of {!K7.record}, in
+    which a recording's bash turns job control off before its first prompt: its
+    [PROMPT_COMMAND] runs [set +m], since an interactive bash turns job control
+    on whatever its command line says. *)
+
 type clock = Eio.Time.Mono.ty Eio.Resource.t
 (** The type for the clocks of recordings. *)
 
@@ -77,7 +83,8 @@ val play :
   Eio.Fs.dir_ty Eio.Path.t ->
   K7.t ->
   (unit, K7.error) result
-(** [play env cwd t] records [t] in [cwd] on a {!with_clock} clock. *)
+(** [play env cwd t] records [t] in [cwd] on a {!with_clock} clock, in the
+    environment {!no_job_control}. *)
 
 val record :
   ?image:string ->

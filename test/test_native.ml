@@ -131,7 +131,9 @@ let test_timeout_precedence () =
   let times_out ~within t =
     with_clock ~hold:0. ~release:(started cwd) @@ fun clock ->
     (match
-       K7.record ~engine:Native ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd t
+       K7.record ~engine:Native ~env:no_job_control ~clock
+         ~proc:(Eio.Stdenv.process_mgr env)
+         ~cwd t
      with
     | Error (Timeout _) -> ()
     | Ok _ -> Alcotest.fail "no timeout"
@@ -174,7 +176,9 @@ let test_playback_speed () =
              ])
     in
     match
-      K7.record ~engine:Native ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd t
+      K7.record ~engine:Native ~env:no_job_control ~clock
+        ~proc:(Eio.Stdenv.process_mgr env)
+        ~cwd t
     with
     | Error e -> Alcotest.failf "%a" K7.pp_error e
     | Ok () ->
@@ -211,7 +215,9 @@ let test_first_prompt () =
          K7.[ raw {|Env PS1 ""|}; type' "touch played\n"; sleep (Ms 100) ])
   in
   (match
-     K7.record ~engine:Native ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd t
+     K7.record ~engine:Native ~env:no_job_control ~clock
+       ~proc:(Eio.Stdenv.process_mgr env)
+       ~cwd t
    with
   | Error (Timeout { line = 0; _ } as e) ->
       Alcotest.(check string)
@@ -227,6 +233,23 @@ let test_first_prompt () =
   Alcotest.(check bool)
     "within the wait timeout" true
     (Mtime.to_uint64_ns (Eio.Time.Mono.now clock) < 5_000_000_000L)
+
+(* In the environment of Native_test.no_job_control. *)
+let test_no_job_control () =
+  with_dir @@ fun env cwd ->
+  match
+    record env cwd (tape K7.[ type' "echo \"flags $-\"\n"; wait Prompt ])
+  with
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+  | Ok s -> (
+      match
+        List.find_opt
+          (String.starts_with ~prefix:"flags ")
+          (String.split_on_char '\n' (last (frames s)))
+      with
+      | Some flags ->
+          Alcotest.(check bool) flags false (String.contains flags 'm')
+      | None -> Alcotest.fail "no flags")
 
 let test_hidden () =
   with_dir @@ fun env cwd ->
@@ -1604,7 +1627,7 @@ let test_record_env () =
   match
     with_clock @@ fun clock ->
     K7.record ~engine:Native
-      ~env:[ ("GREETING", "bonjour") ]
+      ~env:(("GREETING", "bonjour") :: no_job_control)
       ~clock
       ~proc:(Eio.Stdenv.process_mgr env)
       ~cwd t
@@ -1620,7 +1643,7 @@ let test_record_term_override () =
   (match
      with_clock @@ fun clock ->
      K7.record ~engine:Native
-       ~env:[ ("TERM", "vt100") ]
+       ~env:(("TERM", "vt100") :: no_job_control)
        ~clock
        ~proc:(Eio.Stdenv.process_mgr env)
        ~cwd t
@@ -1753,6 +1776,7 @@ let suite =
          ("timeout precedence", test_timeout_precedence);
          ("playback speed", test_playback_speed);
          ("first prompt", test_first_prompt);
+         ("no job control", test_no_job_control);
          ("hidden", test_hidden);
          ("scroll", test_scroll);
          ("scroll far", test_scroll_far);

@@ -730,7 +730,7 @@ let test_record_reaps delay callback_raises =
       Eio.Fiber.first
         (fun () ->
           `Recorded
-            (K7.record ~engine:Native
+            (K7.record ~engine:Native ~env:Native_test.no_job_control
                ~clock:(Eio.Stdenv.mono_clock env)
                ~proc:(Eio.Stdenv.process_mgr env)
                ~cwd tape))
@@ -992,7 +992,7 @@ let test_native_literal n =
   in
   let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "received")) in
   (match
-     K7.record ~engine:Native
+     K7.record ~engine:Native ~env:Native_test.no_job_control
        ~clock:(Eio.Stdenv.mono_clock env)
        ~proc:(Eio.Stdenv.process_mgr env)
        ~cwd tape
@@ -1019,7 +1019,7 @@ let test_zero_speed_prompt n =
   in
   let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "out.txt")) in
   (match
-     K7.record ~engine:Native
+     K7.record ~engine:Native ~env:Native_test.no_job_control
        ~clock:(Eio.Stdenv.mono_clock env)
        ~proc:(Eio.Stdenv.process_mgr env)
        ~cwd tape
@@ -1057,7 +1057,8 @@ let test_output_preflight n =
   refused "the Native engine" image
     (K7.record ~engine:Vhs ~vhs:(path "missing-vhs") ~clock ~proc ~cwd tape);
   refused "the Vhs engine" movie
-    (K7.record ~engine:Native ~clock ~proc ~cwd tape);
+    (K7.record ~engine:Native ~env:Native_test.no_job_control ~clock ~proc ~cwd
+       tape);
   check (not (Sys.file_exists (path "played")));
   check (not (Sys.file_exists image));
   if n mod 2 = 0 then
@@ -1092,7 +1093,7 @@ let check_native_path env cwd marker (output, actual, rate) =
     | Error e -> failf "%a" K7.pp_error e
   in
   (match
-     K7.record ~engine:Native
+     K7.record ~engine:Native ~env:Native_test.no_job_control
        ~clock:(Eio.Stdenv.mono_clock env)
        ~proc:(Eio.Stdenv.process_mgr env)
        ~cwd:(cwd :> Eio.Fs.dir_ty Eio.Path.t)
@@ -1463,7 +1464,7 @@ let test_record_term n =
   in
   (match
      K7.record ~engine:Native
-       ~env:[ ("TERM", term) ]
+       ~env:(("TERM", term) :: Native_test.no_job_control)
        ~clock:(Eio.Stdenv.mono_clock env)
        ~proc:(Eio.Stdenv.process_mgr env)
        ~cwd t
