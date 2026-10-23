@@ -210,15 +210,8 @@ let alphabet =
     0x61;
   |]
 
-let test_cram_argument_bytes scalars =
+let check_cram_argument argument =
   Native_test.with_dir @@ fun env cwd ->
-  let buffer = Buffer.create 128 in
-  List.iter
-    (fun n ->
-      Buffer.add_utf_8_uchar buffer
-        (Uchar.of_int alphabet.(n mod Array.length alphabet)))
-    scalars;
-  let argument = Buffer.contents buffer in
   let proc = Eio.Stdenv.process_mgr env in
   let received = Eio.Path.(cwd / "received") in
   let source, status =
@@ -243,9 +236,26 @@ let test_cram_argument_bytes scalars =
       check_eq ~pp:Fmt.Dump.string argument (Eio.Path.load received))
     Native_test.shells
 
+let test_cram_argument_bytes scalars =
+  let buffer = Buffer.create 128 in
+  List.iter
+    (fun n ->
+      Buffer.add_utf_8_uchar buffer
+        (Uchar.of_int alphabet.(n mod Array.length alphabet)))
+    scalars;
+  check_cram_argument (Buffer.contents buffer)
+
+(* Exec arguments are byte strings, including bytes that are not UTF-8. *)
+let test_cram_argument_octets suffix =
+  let every_byte = String.init 255 (fun i -> Char.chr (i + 1)) in
+  let suffix = String.map (fun c -> if c = '\000' then '\001' else c) suffix in
+  check_cram_argument (every_byte ^ suffix)
+
 let suite =
   ( "cram",
     [
+      test_case "cram preserves every non-NUL argument byte under each sh"
+        [ bytes ] test_cram_argument_octets;
       test_case "cram preserves non-NUL Unicode and control arguments"
         [ list uint8 ]
         test_cram_argument_bytes;
