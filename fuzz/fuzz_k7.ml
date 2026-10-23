@@ -2237,8 +2237,39 @@ let test_replace_fractional_speed n replacement =
   in
   check_eq ~pp:Fmt.int64 (Int64.of_int (3 * milliseconds * 1_000_000)) total
 
+let test_require_executable n directory =
+  Native_test.with_dir @@ fun env cwd ->
+  let name = Fmt.str "required-%d" n in
+  let path = Eio.Path.(cwd / name) in
+  if directory then Eio.Path.mkdir ~perm:0o755 path
+  else Eio.Path.save ~create:(`Or_truncate 0o644) path "data\n";
+  let tape =
+    match
+      K7.tape
+        ~settings:K7.[ Typing_speed (Ms 0) ]
+        ~outputs:[ "require.svg" ]
+        K7.
+          [
+            raw ("Require ./" ^ name);
+            type' "touch ran\n";
+            wait Prompt;
+            sleep (Ms 100);
+          ]
+    with
+    | Ok t -> t
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  let result = Native_test.play env cwd tape in
+  check (not (Sys.file_exists (Eio.Path.native_exn Eio.Path.(cwd / "ran"))));
+  match result with
+  | Error (K7.Executable_not_found _) -> ()
+  | Error e -> failf "%a" K7.pp_error e
+  | Ok () -> fail "a non-executable prerequisite was accepted"
+
 let with_processes =
   [
+    test_case "Require rejects files and directories that cannot execute"
+      [ uint8; bool ] test_require_executable;
     test_case "with_settings replaces parsed fractional typing speeds"
       [ uint8; uint8 ] test_replace_fractional_speed;
     test_case "tiny and zero typing durations count Unicode scalars and keys"
