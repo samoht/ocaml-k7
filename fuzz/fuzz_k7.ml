@@ -1459,6 +1459,47 @@ let test_executable_command_roundtrip n =
           (Buffer.contents error))
     Native_test.shells
 
+let test_command_format_roundtrip n =
+  Native_test.with_dir @@ fun env cwd ->
+  let scalar = [| 0x200b; 0x202e; 0x2060; 0xad; 0xfeff |].(n mod 5) in
+  let buffer = Buffer.create 16 in
+  Buffer.add_char buffer 'a';
+  Buffer.add_utf_8_uchar buffer (Uchar.of_int scalar);
+  Buffer.add_char buffer 'b';
+  let argument = Buffer.contents buffer in
+  let proc = Eio.Stdenv.process_mgr env in
+  let settings = K7.[ Columns 100; Rows 4; Font_size 10; Padding 0 ] in
+  let recording, status =
+    match
+      K7.capture ~settings
+        ~clock:(Eio_mock.Clock.Mono.make ())
+        ~proc ~cwd
+        [ "/usr/bin/printf"; "%s"; argument ]
+    with
+    | Ok result -> result
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  check (status = `Exited 0);
+  let recording =
+    Result.get_ok (K7.cast_of_string (K7.string_of_cast recording))
+  in
+  let image = Result.get_ok (K7.svg_of_casts ~settings [ recording ]) in
+  let first =
+    match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows:4 image with
+    | Ok (first :: _) -> first
+    | Ok [] -> fail "no command frame"
+    | Error e -> fail e
+  in
+  let command = Native_test.shown_command first in
+  List.iter
+    (fun shell ->
+      let output = Buffer.create 32 in
+      Eio.Process.run
+        ~stdout:(Eio.Flow.buffer_sink output)
+        proc [ shell; "-c"; command ];
+      check_eq ~pp:Fmt.Dump.string argument (Buffer.contents output))
+    Native_test.shells
+
 let test_capture_incomplete_roundtrip n tail =
   with_dir @@ fun env _ ->
   let suffix = List.nth [ "\xc3"; "\xe4\xb8"; "\xf0\x9f\x91" ] (tail mod 3) in
@@ -1736,6 +1777,8 @@ let test_capture_theme_roundtrip n =
 
 let with_programs =
   [
+    test_case "saved command images preserve Unicode format arguments" [ uint8 ]
+      test_command_format_roundtrip;
     test_case "saved command images preserve shell-sensitive executable names"
       [ uint8 ] test_executable_command_roundtrip;
     test_case "saved captures retain their selected theme" [ uint8 ]
