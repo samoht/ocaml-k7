@@ -1411,6 +1411,22 @@ let test_run_path_override () =
         (screen [ "PATH_OVERRIDE_WORKED" ])
         (last (frames image))
 
+let test_run_empty_path_component () =
+  with_dir @@ fun env cwd ->
+  script cwd "k7-local-only" "#!/bin/sh\nprintf LOCAL_PATH_WORKS\n";
+  match
+    run
+      ~vars:[ ("PATH", ":/k7-missing-directory") ]
+      ~show:"" env cwd [ "k7-local-only" ]
+  with
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+  | Ok (image, status) ->
+      Alcotest.(check bool) "the local program ran" true (status = `Exited 0);
+      Alcotest.(check string)
+        "an empty PATH component searches cwd"
+        (screen [ "LOCAL_PATH_WORKS" ])
+        (last (frames image))
+
 let test_run_sigpipe () =
   let previous = Sys.signal Sys.sigpipe Sys.Signal_ignore in
   Fun.protect ~finally:(fun () -> Sys.set_signal Sys.sigpipe previous)
@@ -2127,6 +2143,7 @@ let suite =
          ("run a program that exits at once", test_run_fast);
          ("run environment", test_run_env);
          ("run searches the overridden PATH", test_run_path_override);
+         ("run searches empty PATH components", test_run_empty_path_component);
          ("run restores SIGPIPE", test_run_sigpipe);
          ("record restores SIGPIPE", test_record_sigpipe);
          ("run reports exec failures as I/O errors", test_run_exec_errors);
