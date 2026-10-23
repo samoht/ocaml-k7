@@ -125,7 +125,7 @@ let test_timeout () =
         ]
   in
   match record env cwd t with
-  | Error (Timeout { wait; line; last } as e) ->
+  | Error (Timeout { wait; line; last; _ } as e) ->
       Alcotest.(check string) "wait" "Wait+Screen@300ms /never/" wait;
       Alcotest.(check string)
         "line" "Wait+Screen@300ms /never/"

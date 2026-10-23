@@ -275,6 +275,7 @@ let test_pp_error_names () =
           {
             wait = "Wait+Line /x/";
             line = 3;
+            file = None;
             last = "> a\u{200B}\u{2060}b\u{FEFF}\u{200B}";
           }));
   expect "variation selectors" "dir \u{2764}\u{FE0F} x"
@@ -282,16 +283,40 @@ let test_pp_error_names () =
   expect "shell exit"
     "the shell exited (status 3) while waiting for line 3, Wait; last value \
      was: >"
-    (pp (Exited { status = `Exited 3; wait = "Wait"; line = 3; last = ">" }));
+    (pp
+       (Exited
+          {
+            status = `Exited 3;
+            wait = "Wait";
+            line = 3;
+            file = None;
+            last = ">";
+          }));
   expect "shell killed"
     "the shell was killed by signal 9 while waiting for line 3, Wait; last \
      value was: >"
-    (pp (Exited { status = `Signaled 9; wait = "Wait"; line = 3; last = ">" }));
+    (pp
+       (Exited
+          {
+            status = `Signaled 9;
+            wait = "Wait";
+            line = 3;
+            file = None;
+            last = ">";
+          }));
+  expect "sourced tape" "the shell is stuck at line 4 of inc.tape, Wait"
+    (pp (Stuck { wait = "Wait"; line = 4; file = Some "inc.tape"; last = "" }));
   expect "OCaml's signal"
     "the shell was killed by signal 9 while waiting for line 3, Wait"
     (pp
        (Exited
-          { status = `Signaled Sys.sigkill; wait = "Wait"; line = 3; last = "" }))
+          {
+            status = `Signaled Sys.sigkill;
+            wait = "Wait";
+            line = 3;
+            file = None;
+            last = "";
+          }))
 
 let test_spawn_errors () =
   Eio_mock.Backend.run @@ fun () ->

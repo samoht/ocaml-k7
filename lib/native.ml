@@ -9,12 +9,18 @@ type error =
   | Executable_not_found of string
   | Io of string
   | Unsupported of string
-  | Timeout of { wait : string; line : int; last : string }
-  | Stuck of { wait : string; line : int; last : string }
+  | Timeout of {
+      wait : string;
+      line : int;
+      file : string option;
+      last : string;
+    }
+  | Stuck of { wait : string; line : int; file : string option; last : string }
   | Exited of {
       status : Eio.Process.exit_status;
       wait : string;
       line : int;
+      file : string option;
       last : string;
     }
   | Invalid of string
@@ -40,6 +46,7 @@ type command =
   | Wait of {
       line : string;
       at : int;
+      file : string option;
       scope : scope;
       timeout : int option;
       pattern : Regexp_match.t option;
@@ -344,7 +351,7 @@ type t = {
 let is_text path =
   match extension path with ".txt" | ".ascii" | ".test" -> true | _ -> false
 
-let wait_command ~at line tokens =
+let wait_command ~at ~file line tokens =
   let scope, rest =
     match tokens with
     | Sym '+' :: Str "Screen" :: rest -> (Screen, rest)
@@ -357,7 +364,7 @@ let wait_command ~at line tokens =
     | Pattern p :: _ -> Some (Regexp_match.compile p)
     | _ -> None
   in
-  Wait { line; at; scope; timeout; pattern }
+  Wait { line; at; file; scope; timeout; pattern }
 
 let sourced ~source line path =
   let invalid fmt =
@@ -369,8 +376,9 @@ let sourced ~source line path =
     | Ok src -> src
     | Error e -> stop e
   in
-  List.filter_map
-    (fun l ->
+  String.split_on_char '\n' src
+  |> List.mapi (fun i l -> (i + 1, l))
+  |> List.filter_map (fun (at, l) ->
       if has_control ~except:"\t\r" l then
         invalid "%a holds a control character" Quote.pp l
       else
@@ -379,8 +387,7 @@ let sourced ~source line path =
         | Ok (Output _) -> None
         | Ok _ when List.mem (Keyword "Source") (tokens l) ->
             invalid "VHS refuses a nested Source"
-        | Ok _ -> Some l)
-    (String.split_on_char '\n' src)
+        | Ok _ -> Some (at, l))
 
 let base64 s =
   let alphabet =
@@ -424,14 +431,15 @@ let data_uri ~source line path =
           stop (Invalid (line ^ ": not a PNG, JPEG, GIF, WebP or BMP image")))
   | Error e -> stop e
 
-let rec read ~source ~at line t =
+let rec read ~source ?file ~at line t =
   match tokens line with
   | [] -> t
   | Keyword "Source" :: p :: _ ->
+      let file = lit p in
       List.fold_left
-        (fun t l -> read ~source ~at l t)
+        (fun t (at, l) -> read ~source ~file ~at l t)
         t
-        (sourced ~source line (lit p))
+        (sourced ~source line file)
   | Keyword "Output" :: p :: _ ->
       if is_text (lit p) then { t with text = Some (lit p) } else t
   | Keyword "Set" :: Keyword "TypingSpeed" :: args when t.actions <> [] ->
@@ -467,7 +475,7 @@ let rec read ~source ~at line t =
         | Keyword "Alt" :: Sym '+' :: k :: _ -> Alt k
         | Keyword "Shift" :: Sym '+' :: k :: _ -> Shift k
         | Keyword "Sleep" :: rest -> Sleep (ms line (fst (time line rest)))
-        | Keyword "Wait" :: rest -> wait_command ~at line rest
+        | Keyword "Wait" :: rest -> wait_command ~at ~file line rest
         | [ Keyword "Hide" ] -> Hide
         | [ Keyword "Show" ] -> Show
         | Keyword "Copy" :: rest -> Copy (strings rest)
@@ -881,7 +889,7 @@ let wait_text st = function
         if i >= 0 && i < Array.length lines then lines.(i) else ""
   | Screen -> String.concat "\n" (top st)
 
-let wait st c ~line ~at ~scope ~timeout ~pattern =
+let wait st c ~line ~at ~file ~scope ~timeout ~pattern =
   let re = Option.value pattern ~default:c.wait_pattern in
   let timeout = Option.value timeout ~default:c.wait_timeout in
   st.started <- now st;
@@ -901,15 +909,22 @@ let wait st c ~line ~at ~scope ~timeout ~pattern =
       | Some status ->
           stop
             (Exited
-               { status; wait = line; line = at; last = wait_text st scope })
+               {
+                 status;
+                 wait = line;
+                 line = at;
+                 file;
+                 last = wait_text st scope;
+               })
       | None when st.stuck (last_output st) ->
-          stop (Stuck { wait = line; line = at; last = wait_text st scope })
+          stop
+            (Stuck { wait = line; line = at; file; last = wait_text st scope })
       | None ->
           Eio.Condition.await_no_mutex st.changed;
           loop ()
   in
   if not (within st (float timeout /. 1000.) loop) then
-    stop (Timeout { wait = line; line = at; last = wait_text st scope });
+    stop (Timeout { wait = line; line = at; file; last = wait_text st scope });
   Buffer.clear st.since;
   if not st.hidden then st.logical <- st.logical + elapsed st;
   st.started <- now st;
@@ -941,8 +956,8 @@ let run_command st c = function
   | Alt k -> press st ("\027" ^ modified ~shift:false k)
   | Shift k -> press st (modified ~shift:true k)
   | Sleep ms -> step st ms
-  | Wait { line; at; scope; timeout; pattern } ->
-      wait st c ~line ~at ~scope ~timeout ~pattern
+  | Wait { line; at; file; scope; timeout; pattern } ->
+      wait st c ~line ~at ~file ~scope ~timeout ~pattern
   | Hide -> st.hidden <- true
   | Show ->
       st.hidden <- false;
@@ -1139,14 +1154,16 @@ let await_prompt st c =
   let rec loop () =
     match st.exited with
     | Some status ->
-        stop (Exited { status; wait = first_prompt; line = 0; last = "" })
+        stop
+          (Exited
+             { status; wait = first_prompt; line = 0; file = None; last = "" })
     | None when blank () ->
         Eio.Condition.await_no_mutex st.changed;
         loop ()
     | None -> ()
   in
   if not (within st (float c.wait_timeout /. 1000.) loop) then
-    stop (Timeout { wait = first_prompt; line = 0; last = "" });
+    stop (Timeout { wait = first_prompt; line = 0; file = None; last = "" });
   Buffer.clear st.since
 
 let state ?(stuck = fun _ -> false) t ~clock ({ pty; pid; _ } : terminal) =

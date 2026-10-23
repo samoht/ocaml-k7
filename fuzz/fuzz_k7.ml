@@ -364,8 +364,10 @@ let test_unified_errors message last =
       [
         Invalid message;
         Unsupported message;
-        Timeout { wait = message; line = 1; last };
-        Exited { status = `Exited 1; wait = message; line = 1; last };
+        Timeout { wait = message; line = 1; file = None; last };
+        Stuck { wait = message; line = 1; file = Some message; last };
+        Exited
+          { status = `Exited 1; wait = message; line = 1; file = None; last };
       ]
 
 let test_keys c =

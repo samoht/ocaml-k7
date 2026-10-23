@@ -17,20 +17,29 @@ type error =
   | Executable_not_found of string  (** An executable is not on the [PATH]. *)
   | Io of string  (** Any other I/O failure. *)
   | Unsupported of string  (** A line only VHS plays, and why. *)
-  | Timeout of { wait : string; line : int; last : string }
-      (** The wait line [wait], line [line] of the tape from 1, did not hold in
-          time; [last] is what it last read. *)
-  | Stuck of { wait : string; line : int; last : string }
-      (** The [stuck] of {!play} held while the wait line [wait], line [line],
-          did not; [last] is what it last read. *)
+  | Timeout of {
+      wait : string;
+      line : int;
+      file : string option;
+      last : string;
+    }
+      (** The wait line [wait], line [line] from 1 of the tape, or of the tape
+          [file] a [Source] line names, did not hold in time; [last] is what it
+          last read. *)
+  | Stuck of { wait : string; line : int; file : string option; last : string }
+      (** The [stuck] of {!play} held while the wait line [wait], line [line] of
+          [file] as for {!constructor-Timeout}, did not; [last] is what it last
+          read. *)
   | Exited of {
       status : Eio.Process.exit_status;
       wait : string;
       line : int;
+      file : string option;
       last : string;
     }
-      (** The shell exited with [status] while the wait line [wait], line
-          [line], did not hold; [last] is what it last read. *)
+      (** The shell exited with [status] while the wait line [wait], line [line]
+          of [file] as for {!constructor-Timeout}, did not hold; [last] is what
+          it last read. *)
   | Invalid of string
       (** A line of the tape of a [Source] line that VHS rejects or that holds a
           control character, or an empty command, and why. *)

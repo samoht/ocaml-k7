@@ -251,11 +251,13 @@ let pp_error ppf = function
       Fmt.pf ppf
         "timed out waiting for %s; give the tape a longer Set WaitTimeout"
         (shown wait)
-  | K7.Timeout { wait; line; last } ->
+  | K7.Timeout { wait; line; file; last } ->
       Fmt.pf ppf
-        "timed out waiting for line %d, %s%s; give the wait a longer timeout, \
-         as in Wait@30s, or the tape a longer Set WaitTimeout"
-        line (shown wait)
+        "timed out waiting for line %d%s, %s%s; give the wait a longer \
+         timeout, as in Wait@30s, or the tape a longer Set WaitTimeout"
+        line
+        (match file with None -> "" | Some f -> " of " ^ shown f)
+        (shown wait)
         (if last = "" then "" else "; last value was: " ^ shown last)
   | e -> K7.pp_error ppf e
 

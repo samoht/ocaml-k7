@@ -77,12 +77,18 @@ type error =
     }
   | Io of string
   | Unsupported of string
-  | Timeout of { wait : string; line : int; last : string }
-  | Stuck of { wait : string; line : int; last : string }
+  | Timeout of {
+      wait : string;
+      line : int;
+      file : string option;
+      last : string;
+    }
+  | Stuck of { wait : string; line : int; file : string option; last : string }
   | Exited of {
       status : Eio.Process.exit_status;
       wait : string;
       line : int;
+      file : string option;
       last : string;
     }
   | Invalid of string
@@ -1006,6 +1012,10 @@ let pp_last ppf = function
   | "" -> ()
   | last -> Fmt.pf ppf "; last value was: %s" (one_line last)
 
+let pp_line ppf (line, file) =
+  Fmt.pf ppf "line %d" line;
+  Option.iter (fun f -> Fmt.pf ppf " of %s" (one_line f)) file
+
 (* Eio's statuses carry OCaml's signal numbers; one OCaml has no system
    number for is printed as it is. *)
 let signal_number n = try Sys.signal_to_int n with Invalid_argument _ -> n
@@ -1031,23 +1041,23 @@ let pp_error ppf = function
   | Timeout { wait; line = 0; _ } ->
       Fmt.pf ppf "timed out waiting for %s; give the tape a longer Wait_timeout"
         (one_line wait)
-  | Timeout { wait; line; last } ->
+  | Timeout { wait; line; file; last } ->
       Fmt.pf ppf
-        "timed out waiting for line %d, %s%a; give the wait a longer ~timeout \
-         or the tape a longer Wait_timeout"
-        line (one_line wait) pp_last last
-  | Stuck { wait; line; last } ->
-      Fmt.pf ppf "the shell is stuck at line %d, %s%a" line (one_line wait)
-        pp_last last
-  | Exited { status; wait; line; last } ->
+        "timed out waiting for %a, %s%a; give the wait a longer ~timeout or \
+         the tape a longer Wait_timeout"
+        pp_line (line, file) (one_line wait) pp_last last
+  | Stuck { wait; line; file; last } ->
+      Fmt.pf ppf "the shell is stuck at %a, %s%a" pp_line (line, file)
+        (one_line wait) pp_last last
+  | Exited { status; wait; line; file; last } ->
       (match status with
       | `Exited n -> Fmt.pf ppf "the shell exited (status %d)" n
       | `Signaled n ->
           Fmt.pf ppf "the shell was killed by signal %d" (signal_number n));
       if line = 0 then Fmt.pf ppf " while waiting for %s" (one_line wait)
       else
-        Fmt.pf ppf " while waiting for line %d, %s%a" line (one_line wait)
-          pp_last last
+        Fmt.pf ppf " while waiting for %a, %s%a" pp_line (line, file)
+          (one_line wait) pp_last last
   | Invalid msg -> Fmt.string ppf (one_line msg)
 
 let fs_message path = function
@@ -1295,9 +1305,9 @@ let prepare_vhs ~cwd t =
 
 (* The [n]th line of [to_string t] is the [k]th of its text there, and so
    in the source of [of_string]: an action's lines keep their text and order. *)
-let source_line tape n =
-  match tape with
-  | Some ({ source = Some src; _ } as t) when n > 0 -> (
+let source_line tape ~file n =
+  match (tape, file) with
+  | Some ({ source = Some src; _ } as t), None when n > 0 -> (
       let printed = String.split_on_char '\n' (to_string t) in
       match List.nth_opt printed (n - 1) with
       | None -> n
@@ -1314,12 +1324,12 @@ let source_line tape n =
 
 let native_error ?(verb = "recorded") ?tape : Native.error -> error = function
   | Unsupported why -> Unsupported ("not " ^ verb ^ " natively: " ^ why)
-  | Timeout { wait; line; last } ->
-      Timeout { wait; line = source_line tape line; last }
-  | Stuck { wait; line; last } ->
-      Stuck { wait; line = source_line tape line; last }
-  | Exited { status; wait; line; last } ->
-      Exited { status; wait; line = source_line tape line; last }
+  | Timeout { wait; line; file; last } ->
+      Timeout { wait; line = source_line tape ~file line; file; last }
+  | Stuck { wait; line; file; last } ->
+      Stuck { wait; line = source_line tape ~file line; file; last }
+  | Exited { status; wait; line; file; last } ->
+      Exited { status; wait; line = source_line tape ~file line; file; last }
   | Executable_not_found exe -> Executable_not_found exe
   | Io msg -> Io msg
   | Invalid msg -> Invalid msg
