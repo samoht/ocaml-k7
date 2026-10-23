@@ -702,7 +702,8 @@ type state = {
   dumps : bool;
   mutable still : string option;
   mutable stills : (string * Screen.t) list;
-  mutable submitted : int option;
+  mutable submitted : (int * string) option;
+      (** The cursor's row and its text when a line was submitted. *)
   mutable exited : Eio.Process.exit_status option;
   stuck : string -> bool;
   since : Buffer.t;
@@ -775,7 +776,7 @@ let is_line_feed c = c = '\n' || c = '\x0b' || c = '\x0c'
 
 let settle st output =
   match st.submitted with
-  | Some row
+  | Some (row, _)
     when Screen.cursor_row st.term <> row || String.exists is_line_feed output
     ->
       st.submitted <- None
@@ -844,7 +845,9 @@ let write st s =
     st.offset <- 0;
     show st);
   if String.exists (fun c -> c = '\r' || c = '\n') s then
-    st.submitted <- Some (Screen.cursor_row st.term);
+    st.submitted <-
+      (let row = Screen.cursor_row st.term in
+       Some (row, Screen.line st.live row));
   send st s
 
 let step st d =
@@ -910,9 +913,11 @@ let wait st c ~line ~at ~file ~scope ~timeout ~pattern =
   let holds () =
     let h = Regexp_match.matches re (wait_text st scope) in
     match (scope, st.submitted) with
-    | Line, Some _ ->
-        if not h then st.submitted <- None;
+    | Line, Some (_, typed_at) when h && Regexp_match.matches re typed_at ->
         false
+    | Line, Some _ ->
+        st.submitted <- None;
+        h
     | _ -> h
   in
   let rec loop () =

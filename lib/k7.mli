@@ -776,8 +776,9 @@ val cram :
     Unicode classes of Go's tables included. After a line is submitted, by
     {!constructor-Enter} or the newline of a {!type'}, a {!constructor-Prompt}
     or {!constructor-Line} wait holds only once the terminal has started another
-    line, or has changed the line so that the wait does not hold. It never holds
-    on the prompt the command was typed at, however fast it is typed.
+    line, or has changed the line so that the wait does not hold, or the line
+    did not hold when it was submitted. It never holds on the prompt the command
+    was typed at, however fast it is typed.
 
     [Set CursorBlink], [Set BorderRadius], [Set PlaybackSpeed] and
     [Set LoopOffset] change the animation, and [Set WindowBar] and
