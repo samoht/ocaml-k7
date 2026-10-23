@@ -1504,8 +1504,10 @@ let octal b c =
 
 (* [shell_word s] is a POSIX sh word for [s]: a newline stays raw inside
    quotes, another control character or a byte that is not UTF-8 is what
-   [printf] prints. Its text is quoted if [quote] or if it is not plain. *)
+   [printf] prints. Its text is quoted if [quote], if it is not plain or if
+   [s] starts with [=], which zsh expands to a path. *)
 let shell_word ?(quote = false) s =
+  let quote = quote || String.starts_with ~prefix:"=" s in
   let safe c =
     c >= 0xa0
     || c < 0x80
@@ -1558,9 +1560,9 @@ let reserved =
     "case coproc do done elif else end esac fi for foreach function if in \
      nocorrect repeat select then time until while"
 
-(* A bare first word with a [=] is an assignment to sh, or [=cmd] to zsh;
-   one that starts with [-] is an option of [sh -c]. zsh reads [-] and
-   [noglob] as precommand modifiers even quoted. *)
+(* A bare first word with a [=] is an assignment to sh; one that starts
+   with [-] is an option of [sh -c]. zsh reads [-] and [noglob] as
+   precommand modifiers even quoted. *)
 let program = function
   | ("-" | "noglob") as p -> "command -- " ^ p
   | p ->
