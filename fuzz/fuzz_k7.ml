@@ -2043,8 +2043,37 @@ let test_stuck_output_bound n =
   if !largest > 65536 then
     failf "stuck callback received %d bytes, more than the last 64 KiB" !largest
 
+let test_source_wait_line n =
+  with_dir @@ fun env path ->
+  let comments = 8 + (n mod 16) in
+  let prefix = String.concat "" (List.init comments (fun _ -> "# comment\n")) in
+  save env (path "inc.tape")
+    (prefix ^ "Output \"ignored.txt\"\nSleep 20ms\nWait+Line /NEVER_MATCH/\n");
+  let tape =
+    match
+      K7.tape
+        ~outputs:[ path "out.svg" ]
+        K7.[ raw {|Source "inc.tape"|}; sleep (Ms 100) ]
+    with
+    | Ok t -> t
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "inc.tape")) in
+  match
+    K7.record ~engine:Native ~env:Native_test.no_job_control
+      ~stuck:(fun _ -> true)
+      ~clock:(Eio.Stdenv.mono_clock env)
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd tape
+  with
+  | Error (Stuck { line; _ }) -> check_eq ~pp:Fmt.int (comments + 3) line
+  | Error e -> failf "%a" K7.pp_error e
+  | Ok () -> fail "an impossible sourced wait succeeded"
+
 let with_processes =
   [
+    test_case "sourced wait diagnostics count the included tape lines" [ uint8 ]
+      test_source_wait_line;
     test_case "stuck callbacks receive only the last 64 KiB" [ uint8 ]
       test_stuck_output_bound;
     test_case "CLI dry-run and recording refuse the same preflight failures"
