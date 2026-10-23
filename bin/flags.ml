@@ -251,7 +251,7 @@ let pp_error ppf = function
       Fmt.pf ppf
         "timed out waiting for %s; give the tape a longer Set WaitTimeout"
         (shown wait)
-  | K7.Timeout { wait; line; file; last } ->
+  | K7.Timeout { wait; line; file; last; _ } ->
       Fmt.pf ppf
         "timed out waiting for line %d%s, %s%s; give the wait a longer \
          timeout, as in Wait@30s, or the tape a longer Set WaitTimeout"

@@ -1080,7 +1080,7 @@ let signal_number n = try Sys.signal_to_int n with Invalid_argument _ -> n
 let pp_error ppf = function
   | Executable_not_found exe ->
       Fmt.pf ppf "executable not found: %s" (one_line exe)
-  | Vhs_failed { vhs; status; output } ->
+  | Vhs_failed { vhs; status; output; _ } ->
       let vhs = one_line vhs in
       (match status with
       | `Exited n -> Fmt.pf ppf "%s exited with code %d" vhs n
@@ -1098,15 +1098,15 @@ let pp_error ppf = function
   | Timeout { wait; line = 0; _ } ->
       Fmt.pf ppf "timed out waiting for %s; give the tape a longer Wait_timeout"
         (one_line wait)
-  | Timeout { wait; line; file; last } ->
+  | Timeout { wait; line; file; last; _ } ->
       Fmt.pf ppf
         "timed out waiting for %a, %s%a; give the wait a longer ~timeout or \
          the tape a longer Wait_timeout"
         pp_line (line, file) (one_line wait) pp_last last
-  | Stuck { wait; line; file; last } ->
+  | Stuck { wait; line; file; last; _ } ->
       Fmt.pf ppf "the shell is stuck at %a, %s%a" pp_line (line, file)
         (one_line wait) pp_last last
-  | Exited { status; wait; line; file; last } ->
+  | Exited { status; wait; line; file; last; _ } ->
       (match status with
       | `Exited n -> Fmt.pf ppf "the shell exited (status %d)" n
       | `Signaled n ->

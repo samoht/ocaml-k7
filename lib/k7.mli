@@ -117,7 +117,8 @@ val raw : string -> action
 (** {1:errors Errors} *)
 
 (** The type for errors. Constructors may be added, so a match on [error] ends
-    with a case for the others. *)
+    with a case for the others, and fields may be added to their records, so a
+    record pattern ends with [; _]. *)
 type error =
   | Executable_not_found of string  (** No such executable on the [PATH]. *)
   | Vhs_failed of {
