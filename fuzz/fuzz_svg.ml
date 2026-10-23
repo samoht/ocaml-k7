@@ -1021,6 +1021,31 @@ let test_fixed_cast_size_ignores_resizes n =
     (get (K7.text_of_casts ~settings [ a ]))
     (get (K7.text_of_casts ~settings [ b ]))
 
+let test_hidden_cast_delay n =
+  let source command =
+    Fmt.str
+      {|{"version":3,"term":{"cols":24,"rows":4}%s}
+[0.020,"o","é中🙂"]
+[0.030,"x","0"]
+|}
+      command
+  in
+  let parse s =
+    match K7.cast_of_string s with
+    | Ok c -> c
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  let get = function Ok s -> s | Error e -> failf "%a" K7.pp_error e in
+  let recorded = parse (source {|,"command":"printf hello"|}) in
+  let bare = parse (source "") in
+  let delay = if n mod 2 = 0 then n else 9_223_372_036_854 - n in
+  check_eq ~pp:pp_string
+    (get (K7.svg_of_casts [ bare ]))
+    (get (K7.svg_of_casts ~show:[ "" ] ~delay:(Ms delay) [ recorded ]));
+  check_eq ~pp:pp_string
+    (get (K7.text_of_casts [ bare ]))
+    (get (K7.text_of_casts ~show:[ "" ] [ recorded ]))
+
 (* Joining recordings retains the terminal's cursor and active SGR state;
    the pause between them changes the timeline, not the screen contents. *)
 let test_cast_join_state n glyph =
@@ -1219,6 +1244,8 @@ let casts =
 let suite =
   ( "svg",
     [
+      test_case "hiding a cast command removes its line and any delay"
+        [ uint16 ] test_hidden_cast_delay;
       test_case
         "joining casts preserves cursor, colour and deterministic timing"
         [ uint8; uint8 ] test_cast_join_state;
