@@ -636,6 +636,27 @@ let test_cast_total src =
   | Ok _ | Error (Invalid _ | Unsupported _) -> ()
   | Error e -> failf "%a" K7.pp_error e
 
+let test_cast_text_conceal n glyph =
+  let glyph, width =
+    List.nth [ ("x", 1); ("é", 1); ("中", 2); ("👍", 2) ] (glyph mod 4)
+  in
+  let count = 1 + (n mod 16) in
+  let hidden = String.concat "" (List.init count (fun _ -> glyph)) in
+  let src =
+    {|{"version":3,"term":{"cols":80,"rows":2}}|} ^ "\n[0,\"o\","
+    ^ json_string ("a\027[8m" ^ hidden ^ "\027[0mz")
+    ^ "]\n"
+  in
+  let actual =
+    Result.bind (K7.cast_of_string src) (fun c -> K7.text_of_casts [ c ])
+  in
+  match actual with
+  | Error e -> failf "%a" K7.pp_error e
+  | Ok text ->
+      check_eq ~pp:pp_string
+        ("a" ^ String.make (count * width) ' ' ^ "z\n")
+        text
+
 let terminal =
   [
     test_case "scroll regions preserve header and footer" [ uint8 ]
@@ -671,6 +692,8 @@ let terminal =
 
 let casts =
   [
+    test_case "asciicast text exports conceal hidden cells" [ uint8; uint8 ]
+      test_cast_text_conceal;
     test_case "a cast draws its output events at their milliseconds"
       [
         range 80;
