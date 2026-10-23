@@ -243,15 +243,54 @@ let raw_screenshots actions =
     (function Tape_syntax.Screenshot p -> Some p | _ -> None)
     (raw_commands actions)
 
-let shared outputs shots =
+let in_dir dir path =
+  if Filename.is_relative path then Filename.concat dir path else path
+
+let normalise path =
+  let absolute = not (Filename.is_relative path) in
+  let rec go acc = function
+    | [] -> List.rev acc
+    | ("" | ".") :: rest -> go acc rest
+    | ".." :: rest -> (
+        match acc with
+        | s :: acc when s <> ".." -> go acc rest
+        | [] when absolute -> go [] rest
+        | _ -> go (".." :: acc) rest)
+    | s :: rest -> go (s :: acc) rest
+  in
+  let p = String.concat "/" (go [] (String.split_on_char '/' path)) in
+  if absolute then "/" ^ p else p
+
+let real_path file =
+  match Unix.realpath file with
+  | p -> Some p
+  | exception Unix.Unix_error _ -> (
+      match Unix.realpath (Filename.dirname file) with
+      | d -> Some (Filename.concat d (Filename.basename file))
+      | exception Unix.Unix_error _ -> None)
+
+type destination = { lexical : string; real : string option }
+
+let destination ?dir path =
+  match dir with
+  | None -> { lexical = normalise path; real = None }
+  | Some dir ->
+      let file = in_dir dir path in
+      { lexical = normalise file; real = real_path file }
+
+let same d d' = d.lexical = d'.lexical || (d.real <> None && d.real = d'.real)
+
+let shared ?dir outputs shots =
   let rec go seen = function
     | [] -> None
-    | p :: rest -> if List.mem p seen then Some p else go (p :: seen) rest
+    | p :: rest ->
+        let d = destination ?dir p in
+        if List.exists (same d) seen then Some p else go (d :: seen) rest
   in
-  go outputs shots
+  go (List.map (destination ?dir) outputs) shots
 
-let check_screenshots outputs shots =
-  match shared outputs shots with
+let check_screenshots ?dir outputs shots =
+  match shared ?dir outputs shots with
   | None -> Ok ()
   | Some p ->
       Fmt.error "Screenshot %a: the path of an output or another screenshot"
@@ -1223,9 +1262,6 @@ let refuse ~by ~other kinds t =
         "not recorded %s: Output %a: %s, which the %s engine records" by
         Quote.pp p what other
 
-let in_dir dir path =
-  if Filename.is_relative path then Filename.concat dir path else path
-
 (* VHS creates the directories of its outputs, but not those of PNG frames
    or screenshots; PNG frames are written in a directory. *)
 let dir_problem dir (dest, path) =
@@ -1295,6 +1331,14 @@ let prepare_vhs ~cwd t =
           "not recorded by vhs: Screenshot %a: an SVG image, which the Native \
            engine takes"
           Quote.pp p
+  in
+  let* () =
+    match Eio.Path.native cwd with
+    | None | (exception Failure _) -> Ok ()
+    | Some dir ->
+        Result.map_error
+          (fun msg -> Invalid msg)
+          (check_screenshots ~dir t.outputs (raw_screenshots t.actions))
   in
   let* () =
     check_dirs cwd
@@ -1402,7 +1446,7 @@ let prepare_native ~cwd t =
   let* () =
     Result.map_error
       (fun msg -> Invalid msg)
-      (check_screenshots t.outputs (Native.stills tape))
+      (check_screenshots ~dir t.outputs (Native.stills tape))
   in
   let svgs = List.filter is_svg t.outputs
   and texts = Option.to_list (Native.text_output tape) in

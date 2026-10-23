@@ -1824,6 +1824,43 @@ let test_output_directory_preflight () =
     (Result.map_error (Fmt.str "%a" K7.pp_error) recorded)
     (Result.map_error (Fmt.str "%a" K7.pp_error) checked)
 
+let test_screenshot_real_path () =
+  with_dir @@ fun env cwd ->
+  let dir = Unix.realpath (Eio.Path.native_exn cwd) in
+  Unix.symlink "." (Filename.concat dir "here");
+  let refused shot =
+    let t =
+      match
+        K7.tape ~settings ~outputs:[ "demo.svg" ]
+          K7.
+            [
+              type' "touch played\n";
+              Fmt.kstr raw "Screenshot %S" shot;
+              wait Prompt;
+            ]
+      with
+      | Ok t -> t
+      | Error e -> Alcotest.failf "%s: %a" shot K7.pp_error e
+    in
+    let expected =
+      Fmt.str "Screenshot %S: the path of an output or another screenshot" shot
+    in
+    let message = Result.map_error (Fmt.to_to_string K7.pp_error) in
+    Alcotest.(check (result unit string))
+      (shot ^ " is refused by check")
+      (Error expected)
+      (message (K7.check ~engine:Native ~cwd t));
+    Alcotest.(check (result unit string))
+      (shot ^ " is refused by record")
+      (Error expected)
+      (message (play env cwd t))
+  in
+  refused (Filename.concat dir "demo.svg");
+  refused "here/demo.svg";
+  Alcotest.(check bool)
+    "nothing played" false
+    (Eio.Path.is_file Eio.Path.(cwd / "played"))
+
 (* The $ COMMAND line quotes each argument so that the line runs the same
    argv; a byte that is not UTF-8 is written in octal, as a control character
    is. *)
@@ -2380,6 +2417,7 @@ let suite =
          ("record respects TERM override", test_record_term_override);
          ("check", test_check);
          ("output directory preflight", test_output_directory_preflight);
+         ("screenshot real path", test_screenshot_real_path);
          ( "command line quotes invalid UTF-8",
            test_run_command_line_invalid_utf_8 );
          ("concurrent runs keep their terminals", test_run_concurrent_terminals);

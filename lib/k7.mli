@@ -397,6 +397,9 @@ val record :
     has exited with [0]. It is:
     - [Error (Unsupported _)] on an [.svg] output or a {!raw} [Screenshot] of an
       [.svg] image, which {!constructor-Native} writes, before it runs anything;
+    - [Error (Invalid _)], before it runs anything, on a [Screenshot] whose
+      path, in [cwd] and with symbolic links followed, is that of an output or
+      of another [Screenshot];
     - [Error (Io _)] if the directory of an output cannot be written, before it
       runs anything, and on any other I/O failure;
     - [Error (Executable_not_found _)] if [vhs] is not found;
@@ -421,8 +424,9 @@ val record :
       on what the {{!native_details}native recorder} does not play, before it
       plays anything;
     - [Error (Invalid _)] on a [Source] line or a [Set MarginFill] image it
-      refuses, and on a [Screenshot] of a sourced tape that has the path of an
-      output or of another [Screenshot];
+      refuses, and on a [Screenshot], of [t] or of a sourced tape, whose path,
+      in [cwd] and with symbolic links followed, is that of an output or of
+      another [Screenshot], before it plays anything;
     - [Error (Timeout _)] if a wait does not hold in time, or the shell shows no
       prompt within the {!constructor-Wait_timeout} of the tape;
     - [Error (Exited _)] as soon as the shell exits while a wait does not hold,
@@ -671,8 +675,9 @@ val cram :
     - two outputs are of the same kind (GIF, MP4, WebM, text, PNG frames or
       SVG). VHS writes only the last of each kind but SVG, which it never reads,
       and {!record} writes one SVG image;
-    - a {!raw} [Screenshot] has the path of an output or of another
-      [Screenshot];
+    - a {!raw} [Screenshot] has the path of an output or of another [Screenshot]
+      once [.] segments, [..] segments after a name and repeated slashes are
+      removed;
     - a string holds a control character, C1 controls included (the tabs and
       newlines of {!type'} aside), or, in typed text, invalid UTF-8;
     - an output path or a {!constructor-Theme} holds all three quote characters
