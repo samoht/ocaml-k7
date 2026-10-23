@@ -2099,6 +2099,21 @@ let test_cram_control_argument () =
       "-\x1b%s\\'\"$`\xc2\x9b\xff caf\xc3\xa9";
     ]
 
+(* A shell word in executable position must still name a program. *)
+let check_cram_executable name =
+  with_dir @@ fun env cwd ->
+  let dir = Eio.Path.native_exn cwd in
+  executable (Filename.concat dir name) "#!/bin/sh\nprintf 'EXECUTED\\n'\n";
+  let source, status =
+    cram ~env:[ ("PATH", dir ^ ":/usr/bin:/bin") ] env cwd [ name ]
+  in
+  exited "the named executable runs" 0 status;
+  Alcotest.(check bool)
+    "the executable's output is recorded" true
+    (contains ~sub:"\n  EXECUTED\n" source)
+
+let test_cram_reserved_executable () = check_cram_executable "if"
+
 (* The background loop prints once the shell has gone, so it prints nothing
    if it stops with the shell. *)
 let test_cram_stop () =
@@ -2289,6 +2304,8 @@ let suite =
          ("capture keeps a theme's cursor colours", test_capture_theme_cursor);
          ("cram", test_cram);
          ("cram refuses NUL in argv", test_cram_nul_argument);
+         ( "cram quotes a reserved executable name",
+           test_cram_reserved_executable );
          ( "cram quotes control characters for any sh",
            test_cram_control_argument );
          ("cram stops the command's process group", test_cram_stop);
