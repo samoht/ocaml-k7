@@ -657,6 +657,68 @@ let test_cast_text_conceal n glyph =
         ("a" ^ String.make (count * width) ' ' ^ "z\n")
         text
 
+(* Absolute v2 times and relative v3 intervals describe the same stream.
+   The exit anchors the last event even when all preceding events are ignored. *)
+let test_cast_versions events =
+  let events = List.take 32 events in
+  let total, v2, v3, output =
+    List.fold_left
+      (fun (us, v2, v3, output) (gap, ignored, data) ->
+        let gap = gap * 37 in
+        let us = us + gap in
+        let data =
+          if String.is_valid_utf_8 data then data else String.escaped data
+        in
+        let code = if ignored then "i" else "o" in
+        let event time =
+          Fmt.str "[%s,\"%s\",%s]"
+            (seconds ~short:false time)
+            code (json_string data)
+        in
+        let output =
+          if ignored then output
+          else (K7.Ms ((us + 500) / 1000), data) :: output
+        in
+        (us, event us :: v2, event gap :: v3, output))
+      (0, [], [], []) events
+  in
+  let source header lines exit eol =
+    String.concat eol ((header :: List.rev lines) @ [ exit; "" ])
+  in
+  let a =
+    source {|{"version":2,"width":20,"height":3}|} v2
+      (Fmt.str "[%s,\"x\",\"7\"]" (seconds ~short:false (total + 13000)))
+      "\n"
+  and b =
+    source {|{"version":3,"term":{"cols":20,"rows":3}}|} v3 {|[0.013,"x","7"]|}
+      "\r\n"
+  in
+  let settings = K7.[ Columns 20; Rows 3; Font_size 10 ] in
+  let image c =
+    match K7.svg_of_casts ~settings [ c ] with
+    | Ok s -> s
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  let parse src =
+    match K7.cast_of_string src with
+    | Ok c -> c
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  let a = parse a and b = parse b in
+  let output =
+    List.rev output @ [ (K7.Ms (((total + 13000 + 500) / 1000) + 1000), "") ]
+  in
+  let expected =
+    match K7.svg ~settings output with
+    | Ok s -> s
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  List.iter
+    (fun c ->
+      check_eq ~pp:pp_string expected (image c);
+      check_eq ~pp:pp_string expected (image (parse (K7.string_of_cast c))))
+    [ a; b ]
+
 let terminal =
   [
     test_case "scroll regions preserve header and footer" [ uint8 ]
@@ -692,6 +754,13 @@ let terminal =
 
 let casts =
   [
+    test_case "v2 and v3 timings survive serialization and CRLF"
+      [
+        list
+          (map [ uint8; bool; chunk ] (fun gap ignored data ->
+               (gap, ignored, data)));
+      ]
+      test_cast_versions;
     test_case "asciicast text exports conceal hidden cells" [ uint8; uint8 ]
       test_cast_text_conceal;
     test_case "a cast draws its output events at their milliseconds"
