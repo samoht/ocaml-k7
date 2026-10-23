@@ -925,6 +925,44 @@ let test_cast_cursor_theme n =
     (draw ~settings (parse (source "")))
     (draw ~settings restored)
 
+let test_long_recording_offsets n =
+  let finish = 1000 + (n * 100_000) in
+  let image =
+    match
+      K7.svg ~settings K7.[ (Ms 0, "a"); (Ms 20, "b"); (Ms finish, "c") ]
+    with
+    | Ok s -> Native_test.unprefixed s
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  let key = "@keyframes s{" in
+  let rec find i =
+    if i + String.length key > String.length image then
+      fail "no frame animation"
+    else if String.sub image i (String.length key) = key then
+      i + String.length key
+    else find (i + 1)
+  in
+  let start = find 0 in
+  let stop = String.index_from image start '@' in
+  let rules = String.sub image start (stop - start) in
+  let offsets =
+    String.split_on_char '}' rules
+    |> List.filter_map (fun rule ->
+        Option.map
+          (fun i -> float_of_string (String.sub rule 0 i))
+          (String.index_opt rule '%'))
+  in
+  check_eq ~pp:Fmt.int 4 (List.length offsets);
+  let rec increasing = function
+    | a :: (b :: _ as rest) ->
+        if a >= b then
+          failf "duration %dms merges distinct frame offsets at %g%% and %g%%"
+            finish a b;
+        increasing rest
+    | _ -> ()
+  in
+  increasing offsets
+
 let terminal =
   [
     test_case "scroll regions preserve header and footer" [ uint8 ]
@@ -1001,6 +1039,8 @@ let casts =
 let suite =
   ( "svg",
     [
+      test_case "long SVG recordings preserve distinct frame offsets" [ uint16 ]
+        test_long_recording_offsets;
       test_case "frames" [ list chunk ] test_frames;
       test_case "regional indicators retain cells at every PTY split" [ uint8 ]
         test_regional_splits;
