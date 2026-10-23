@@ -381,6 +381,28 @@ let test_concealed_description n =
   | Error e -> failf "%a" K7.pp_error e
   | Ok image -> check (not (contains ~sub:"<desc" image))
 
+let test_osc_palette colour index st =
+  let index = index mod 16 in
+  let colour = Fmt.str "#12%04x" colour in
+  let sgr = if index < 8 then 30 + index else 90 + index - 8 in
+  let terminator = if st then "\027\\" else "\007" in
+  let sequence =
+    Fmt.str "\027]4;%d;%s%s\027[%dmX\027[?25l" index colour terminator sgr
+  in
+  let split = String.length sequence / 2 in
+  let output =
+    K7.
+      [
+        (Ms 0, String.sub sequence 0 split);
+        (Ms 20, String.sub sequence split (String.length sequence - split));
+      ]
+  in
+  match K7.svg ~settings output with
+  | Error e -> failf "%a" K7.pp_error e
+  | Ok image ->
+      if not (contains ~sub:colour image) then
+        failf "OSC 4 palette entry %d lost colour %s" index colour
+
 let test_theme_xml output theme =
   let settings = K7.Theme theme :: settings in
   match K7.tape ~settings ~outputs:[ "a.svg" ] [ K7.sleep (Ms 100) ] with
@@ -851,6 +873,8 @@ let suite =
             [ int; const 0; const 9_223_372_036_854; const 9_223_372_036_855 ];
         ]
         test_time_bounds;
+      test_case "OSC palette changes survive output boundaries"
+        [ uint8; uint8; bool ] test_osc_palette;
       test_case "arbitrary output and themes produce XML" [ bytes; theme ]
         test_theme_xml;
       test_case "text alternatives respect SGR conceal" [ uint8 ]
