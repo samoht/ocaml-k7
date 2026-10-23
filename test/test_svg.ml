@@ -282,6 +282,21 @@ let test_huge () =
   | Ok _ -> Alcotest.fail "a huge terminal played"
   | Error e -> Alcotest.failf "%a" K7.pp_error e
 
+let test_invalid_utf_8_prefix () =
+  let input = "\xe2\x82A" in
+  let normalized = Buffer.create 8 in
+  let rec normalize i =
+    if i < String.length input then (
+      let d = String.get_utf_8_uchar input i in
+      Buffer.add_utf_8_uchar normalized (Uchar.utf_decode_uchar d);
+      normalize (i + Uchar.utf_decode_length d))
+  in
+  normalize 0;
+  Alcotest.(check string)
+    "an incomplete UTF-8 prefix uses the Stdlib replacement grouping"
+    (svg K7.[ (Ms 0, Buffer.contents normalized) ])
+    (svg K7.[ (Ms 0, input) ])
+
 let test_deterministic () =
   let output =
     [ (K7.Ms 0, "a\027[31mb"); (Ms 33, "\r\nc"); (Ms 65, "\027[2J") ]
@@ -475,6 +490,7 @@ let suite =
         ("settings", test_settings);
         ("huge sizes", test_huge);
         ("deterministic", test_deterministic);
+        ("invalid UTF-8 prefix uses Stdlib decoding", test_invalid_utf_8_prefix);
         ("svg output", test_svg_output);
         ("times", test_times);
         ("direct SVG setting errors", test_setting_errors);
