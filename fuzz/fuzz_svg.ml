@@ -659,6 +659,31 @@ let seconds ~short us =
 
 let codes = [| "o"; "o"; "i"; "m"; "r" |]
 
+let test_palette_roundtrip index colour reset_all =
+  let get = function Ok s -> s | Error e -> failf "%a" K7.pp_error e in
+  let settings = K7.[ Columns 12; Rows 3; Font_size 10; Padding 0 ] in
+  let base = Fmt.str "\027[38;5;%dmX\027[0mD\027[?25l" index in
+  let colour = Fmt.str "#12%04x" colour in
+  let payload = base ^ Fmt.str "\027]4;%d;%s\007" index colour in
+  let image data = get (K7.svg ~settings K7.[ (Ms 0, data); (Ms 1000, "") ]) in
+  let changed = image payload in
+  check (contains ~sub:("fill=\"" ^ colour ^ "\">X") changed);
+  let reset =
+    if reset_all then "\027]104\007" else Fmt.str "\027]104;%d\027\\" index
+  in
+  check_eq ~pp:pp_string (image base) (image (payload ^ reset));
+  let source =
+    {|{"version":2,"width":12,"height":3}|} ^ "\n[0,\"o\","
+    ^ json_string payload ^ "]\n"
+  in
+  let original = get (K7.cast_of_string source) in
+  let restored = get (K7.cast_of_string (K7.string_of_cast original)) in
+  List.iter
+    (fun cast ->
+      check_eq ~pp:pp_string changed (get (K7.svg_of_casts ~settings [ cast ]));
+      check_eq ~pp:pp_string "XD\n" (get (K7.text_of_casts ~settings [ cast ])))
+    [ original; restored ]
+
 let test_cast columns rows events =
   let columns = columns + 1 and rows = rows + 1 in
   let _, lines, output =
@@ -1008,6 +1033,8 @@ let suite =
       test_case
         "CAN and SUB cancel OSC without consuming following Unicode text"
         [ bool; bool; uint8 ] test_cancelled_osc;
+      test_case "all palette indices recolour, reset and survive cast replay"
+        [ uint8; uint16; bool ] test_palette_roundtrip;
       test_case "OSC palette changes survive output boundaries"
         [ uint8; uint8; bool ] test_osc_palette;
       test_case "arbitrary output and themes produce XML" [ bytes; theme ]
