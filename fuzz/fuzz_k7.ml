@@ -1409,6 +1409,56 @@ let test_command_line_roundtrip n =
       check_eq ~pp:Fmt.Dump.string payload (Buffer.contents output))
     Native_test.shells
 
+(* Replaying a command from a saved recording must execute the named file,
+   including when the shell gives its name a meaning in command position. *)
+let test_executable_command_roundtrip n =
+  Native_test.with_dir @@ fun env cwd ->
+  let dir = Eio.Path.native_exn cwd in
+  let name =
+    match n mod 4 with
+    | 0 -> "if"
+    | 1 -> Fmt.str "K7_ARG_%d=value" n
+    | 2 -> "-"
+    | _ -> Fmt.str "k7-program-%d" n
+  in
+  Native_test.executable (Filename.concat dir name)
+    "#!/bin/sh\nprintf 'EXECUTED\\n'\n";
+  let vars = [ ("PATH", dir ^ ":/usr/bin:/bin") ] in
+  let proc = Eio.Stdenv.process_mgr env in
+  let settings = K7.[ Columns 100; Rows 4; Font_size 10; Padding 0 ] in
+  let saved, status =
+    match
+      K7.capture ~settings ~env:vars
+        ~clock:(Eio_mock.Clock.Mono.make ())
+        ~proc ~cwd [ name ]
+    with
+    | Ok result -> result
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  check (status = `Exited 0);
+  let saved = Result.get_ok (K7.cast_of_string (K7.string_of_cast saved)) in
+  let image = Result.get_ok (K7.svg_of_casts ~settings [ saved ]) in
+  let first =
+    match Svg_check.frames ~cell_width:7 ~cell_height:13 ~rows:4 image with
+    | Ok (first :: _) -> first
+    | Ok [] -> fail "no command frame"
+    | Error e -> fail e
+  in
+  let command = Native_test.shown_command first in
+  List.iter
+    (fun shell ->
+      let output = Buffer.create 32 and error = Buffer.create 32 in
+      Eio.Process.run ~cwd
+        ~env:[| "PATH=" ^ dir ^ ":/usr/bin:/bin" |]
+        ~is_success:(fun _ -> true)
+        ~stdout:(Eio.Flow.buffer_sink output)
+        ~stderr:(Eio.Flow.buffer_sink error)
+        proc [ shell; "-c"; command ];
+      if Buffer.contents output <> "EXECUTED\n" then
+        failf "%s replays %S as %S (%s)" shell command (Buffer.contents output)
+          (Buffer.contents error))
+    Native_test.shells
+
 let test_capture_incomplete_roundtrip n tail =
   with_dir @@ fun env _ ->
   let suffix = List.nth [ "\xc3"; "\xe4\xb8"; "\xf0\x9f\x91" ] (tail mod 3) in
@@ -1686,6 +1736,8 @@ let test_capture_theme_roundtrip n =
 
 let with_programs =
   [
+    test_case "saved command images preserve shell-sensitive executable names"
+      [ uint8 ] test_executable_command_roundtrip;
     test_case "saved captures retain their selected theme" [ uint8 ]
       test_capture_theme_roundtrip;
     test_case "executable text without a shebang preserves arguments and status"
