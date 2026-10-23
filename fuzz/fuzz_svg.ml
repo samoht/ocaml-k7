@@ -443,6 +443,19 @@ let test_c1_palette index colour reset split =
            (Ms 0, String.sub c1 cut (String.length c1 - cut));
          ])
 
+let test_cancelled_osc palette sub glyph =
+  let cancel = if sub then "\026" else "\024" in
+  let body = if palette then "4;1;#123456" else "0;title" in
+  let suffix = [| "B"; "é"; "中"; "👍" |].(glyph mod 4) in
+  let image data =
+    match K7.svg ~settings K7.[ (Ms 0, data ^ "\027[?25l") ] with
+    | Ok s -> s
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  check_eq ~pp:pp_string
+    (image ("A" ^ suffix))
+    (image ("A\027]" ^ body ^ cancel ^ suffix))
+
 let test_theme_xml output theme =
   let settings = K7.Theme theme :: settings in
   match K7.tape ~settings ~outputs:[ "a.svg" ] [ K7.sleep (Ms 100) ] with
@@ -992,6 +1005,9 @@ let suite =
         "C1 OSC sets and resets all palette entries across scalar boundaries"
         [ uint8; uint16; bool; uint8 ]
         test_c1_palette;
+      test_case
+        "CAN and SUB cancel OSC without consuming following Unicode text"
+        [ bool; bool; uint8 ] test_cancelled_osc;
       test_case "OSC palette changes survive output boundaries"
         [ uint8; uint8; bool ] test_osc_palette;
       test_case "arbitrary output and themes produce XML" [ bytes; theme ]
