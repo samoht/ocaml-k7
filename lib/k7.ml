@@ -966,13 +966,33 @@ let replaces s s' =
 let settings t = t.settings
 let outputs t = t.outputs
 
+(* A raw [Set] before the first action, such as a fractional [TypingSpeed],
+   is one of the tape's settings. *)
+let without_raw_sets names actions =
+  let is_replaced line =
+    match Tape_syntax.check line with
+    | Ok (Set (name, _)) -> List.mem name names
+    | _ -> false
+  in
+  let rec go = function
+    | Raw line :: rest when is_replaced line -> go rest
+    | a :: rest -> (
+        match check_actions ~started:false [ a ] with
+        | Ok false -> a :: go rest
+        | _ -> a :: rest)
+    | [] -> []
+  in
+  go actions
+
 let with_settings settings t =
   let kept =
     List.filter
       (fun s' -> not (List.exists (fun s -> replaces s s') settings))
       t.settings
   in
-  tape ~settings:(kept @ settings) ~outputs:t.outputs t.actions
+  let names = List.map (fun s -> fst (setting_line s)) settings in
+  tape ~settings:(kept @ settings) ~outputs:t.outputs
+    (without_raw_sets names t.actions)
   |> Result.map (fun t' -> { t' with source = t.source })
 
 let with_outputs outputs t =

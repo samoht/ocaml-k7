@@ -272,8 +272,10 @@ val with_settings : setting list -> t -> (t, error) result
 (** [with_settings settings t] is [t] with [settings] after its own settings, in
     place of those of the same constructors and of those that size the frame in
     the same direction: {!constructor-Columns} replaces {!constructor-Width} and
-    {!constructor-Rows} replaces {!constructor-Height}, and the reverse. It is
-    [Error (Invalid _)] as {!val-tape} is. *)
+    {!constructor-Rows} replaces {!constructor-Height}, and the reverse. A
+    {!raw} [Set] of the same setting before the first action, such as a
+    fractional [Set TypingSpeed] that {!of_string} keeps raw, is replaced too.
+    It is [Error (Invalid _)] as {!val-tape} is. *)
 
 val with_outputs : string list -> t -> (t, error) result
 (** [with_outputs outputs t] is [t] that writes to [outputs] in place of its own
