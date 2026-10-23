@@ -1408,8 +1408,37 @@ let test_command_line_roundtrip n =
     [ "/bin/bash"; "-c"; command ];
   check_eq ~pp:Fmt.Dump.string payload (Buffer.contents output)
 
+let test_capture_incomplete_roundtrip n tail =
+  with_dir @@ fun env _ ->
+  let suffix = List.nth [ "\xc3"; "\xe4\xb8"; "\xf0\x9f\x91" ] (tail mod 3) in
+  let payload = String.make (n mod 8) 'a' ^ suffix in
+  let captured =
+    K7.capture ~show:""
+      ~settings:K7.[ Columns 16; Rows 2 ]
+      ~clock:(Eio.Stdenv.mono_clock env)
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd:(Eio.Stdenv.cwd env)
+      [ "printf"; "%s"; payload ]
+  in
+  match captured with
+  | Error e -> failf "%a" K7.pp_error e
+  | Ok (cast, _) -> (
+      let saved = K7.string_of_cast cast in
+      check (String.is_valid_utf_8 saved);
+      match K7.cast_of_string saved with
+      | Error e -> failf "%a" K7.pp_error e
+      | Ok restored ->
+          let image c =
+            match K7.svg_of_casts [ c ] with
+            | Ok s -> s
+            | Error e -> failf "%a" K7.pp_error e
+          in
+          check_eq ~pp:Fmt.Dump.string (image cast) (image restored))
+
 let with_programs =
   [
+    test_case "saved captures preserve incomplete UTF-8 tails" [ uint8; uint8 ]
+      test_capture_incomplete_roundtrip;
     test_case "the command read from SVG runs the same arguments" [ uint8 ]
       test_command_line_roundtrip;
     test_case "run searches the overridden PATH" [ uint8 ]
