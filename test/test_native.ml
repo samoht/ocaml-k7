@@ -1985,6 +1985,29 @@ let test_cram_background () =
     "the shell's output" "  $ sh -c 'echo started; sleep 100007 &'\n  started\n"
     (fst (cram env cwd [ "sh"; "-c"; "echo started; sleep 100007 &" ]))
 
+(* Dune reads these as commands and continuations, rather than expected
+   output. The recorded command must remain the only command in its test. *)
+let test_cram_output_is_data () =
+  with_dir @@ fun env cwd ->
+  List.iter
+    (fun output ->
+      let source, status = cram env cwd [ "printf"; "%s\n"; output ] in
+      exited "printf" 0 status;
+      let header = List.hd (String.split_on_char '\n' source) ^ "\n" in
+      let actions src =
+        let t = Result.get_ok (K7_cli.Cram.parse src) in
+        let tape =
+          Result.get_ok
+            (K7.tape ~outputs:[ "out.svg" ] (K7_cli.Cram.actions ~setup:[] t))
+        in
+        K7.to_string tape |> String.split_on_char '\n'
+        |> List.filter (String.starts_with ~prefix:"Type ")
+      in
+      Alcotest.(check (list string))
+        ("output stays data: " ^ output)
+        (actions header) (actions source))
+    [ "$ echo injected"; "> echo injected" ]
+
 let suite =
   ( "native",
     List.map
@@ -2053,6 +2076,7 @@ let suite =
          ("cram stops the command's process group", test_cram_stop);
          ("cram kills what ignores SIGTERM", test_cram_kill);
          ("cram ends the command's background jobs", test_cram_background);
+         ("cram output stays data", test_cram_output_is_data);
          ( "run cancellation reaps resistant descendants",
            test_run_cancel_descendant );
          ("record refuses Env names", test_record_env_names);
