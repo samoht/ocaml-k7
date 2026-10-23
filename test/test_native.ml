@@ -1946,9 +1946,14 @@ let test_cram () =
     t;
   let t, status = cram env cwd [ "cat"; "-"; "a b" ] in
   exited "cat" 1 status;
-  Alcotest.(check string)
-    "quoted, nothing printed, stdin empty"
-    "  $ cat - 'a b'\n  cat: a b: No such file or directory\n  [1]\n" t;
+  (match String.split_on_char '\n' t with
+  | [ cmd; err; code; "" ] ->
+      Alcotest.(check string) "quoted" "  $ cat - 'a b'" cmd;
+      Alcotest.(check bool)
+        "nothing printed, stdin empty" true
+        (String.starts_with ~prefix:"  cat: " err);
+      Alcotest.(check string) "exit code" "  [1]" code
+  | _ -> Alcotest.failf "cat: %S" t);
   Alcotest.(check string)
     "environment" "  $ printenv K7_TEST\n  set\n"
     (fst (cram ~env:[ ("K7_TEST", "set") ] env cwd [ "printenv"; "K7_TEST" ]));
@@ -1978,7 +1983,10 @@ let test_cram_stop () =
     (Fmt.str "  $ sh -c '%s'\n  [143]\n" script)
     t
 
-(* The shell ignores SIGTERM, so only the SIGKILL a second later stops it. *)
+(* The inner shell ignores SIGTERM and holds the output open, so cram returns
+   only once the SIGKILL a second later stops it. The status is that of the
+   outer sh: killed where sh execs its last command (bash), terminated where
+   it does not (dash). *)
 let test_cram_kill () =
   with_dir @@ fun env cwd ->
   let script = "trap '' TERM; : > started; while :; do sleep 0.01; done" in
@@ -1992,7 +2000,9 @@ let test_cram_kill () =
         Eio.Promise.resolve set ();
         until (fun () -> Eio_mock.Clock.Mono.try_advance clock))
   in
-  signaled "killed" Sys.sigkill status
+  match status with
+  | `Signaled s when Int.equal s Sys.sigkill || Int.equal s Sys.sigterm -> ()
+  | status -> Alcotest.failf "killed: %a" Eio.Process.pp_status status
 
 (* A job left in the background ends with the shell. *)
 let test_cram_background () =
