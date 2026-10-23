@@ -34,9 +34,19 @@ let read stdenv input =
   let error e = Fmt.str "%s: %a" input K7.pp_error e in
   K7.cast_of_string src |> Result.map_error error
 
-let draw stdenv ~dry_run ~settings ?show ?delay ~outputs inputs =
+let check_shows input ~show inputs =
+  match List.length show with
+  | 0 | 1 -> Ok ()
+  | n when n = List.length inputs -> Ok ()
+  | n ->
+      Fmt.error
+        "%s: %d --show for %d recordings; give one, or one per recording" input
+        n (List.length inputs)
+
+let draw stdenv ~dry_run ~settings ~show ?delay ~outputs inputs =
   let input = String.concat " " inputs in
   let* outputs = check_outputs input outputs in
+  let* () = check_shows input ~show inputs in
   let* casts =
     List.fold_left
       (fun acc i ->
@@ -48,8 +58,8 @@ let draw stdenv ~dry_run ~settings ?show ?delay ~outputs inputs =
   in
   let error e = Fmt.str "%s: %a" input K7.pp_error e in
   let render = function
-    | Svg -> K7.svg_of_casts ~settings ?show ?delay casts
-    | Txt -> K7.text_of_casts ~settings ?show casts
+    | Svg -> K7.svg_of_casts ~settings ~show ?delay casts
+    | Txt -> K7.text_of_casts ~settings ~show casts
   in
   let* drawn =
     List.fold_left
@@ -69,7 +79,7 @@ let draw stdenv ~dry_run ~settings ?show ?delay ~outputs inputs =
         Flags.save stdenv output (List.assoc k drawn))
       (Ok ()) outputs
 
-let run stdenv ~dry_run ~settings ?show ?delay ~outputs inputs =
-  match draw stdenv ~dry_run ~settings ?show ?delay ~outputs inputs with
+let run stdenv ~dry_run ~settings ~show ?delay ~outputs inputs =
+  match draw stdenv ~dry_run ~settings ~show ?delay ~outputs inputs with
   | Ok () -> 0
   | Error msg -> Flags.fail stdenv msg

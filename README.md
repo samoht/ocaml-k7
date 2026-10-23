@@ -68,7 +68,8 @@ $ k7 play --theme Dracula --output hello.svg hello.cast
 ```
 
 Several recordings play one after the other in one image, as commands
-typed in turn, such as a program run with two different options.
+typed in turn, such as a program run with two different options. One
+`--show` replaces every command, and one per recording each in turn.
 
 ```sh
 $ k7 rec --output dark.cast -- printf 'dark\n'

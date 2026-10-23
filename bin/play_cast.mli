@@ -9,7 +9,7 @@ val run :
   Eio_unix.Stdenv.base ->
   dry_run:bool ->
   settings:K7.setting list ->
-  ?show:string ->
+  show:string list ->
   ?delay:K7.duration ->
   outputs:string list ->
   string list ->
@@ -21,6 +21,6 @@ val run :
     extensions in any case, with [settings], [show] and [delay], writes them to
     [outputs], or to none if [dry_run] is [true], and is [0]. It is [123] after
     printing an error on standard error, if standard error can be written, if
-    [outputs] is empty or one of them is neither [.svg] nor [.txt], if an input
-    cannot be read, if reading or drawing them fails, or if an output cannot be
-    written. *)
+    [outputs] is empty or one of them is neither [.svg] nor [.txt], if [show]
+    has several strings but not one per input, if an input cannot be read, if
+    reading or drawing them fails, or if an output cannot be written. *)

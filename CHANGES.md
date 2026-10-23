@@ -49,7 +49,8 @@
   last screen. Several recordings (`k7 play -o FILE.svg A.cast B.cast`)
   play one after the other on one terminal, each with its command line,
   the next starting once the last screen of the one before has held for a
-  second.
+  second; one `--show` replaces every command, and one per recording each
+  in turn.
 - `K7.check` returns the error `K7.record` would before it records,
   without starting a shell or `vhs`.
 - `K7.run` and `K7.record` take `?env`, variables for the environment of

@@ -17,7 +17,7 @@ val run :
   setup:string list ->
   dir:string option ->
   wait_timeout:int option ->
-  ?show:string ->
+  ?show:string list ->
   ?delay:K7.duration ->
   string list ->
   int
@@ -25,14 +25,14 @@ val run :
      ~wait_timeout ~show ~delay inputs] is {!Play_tape.run} on one [.tape] file,
     {!Play_cram.run} on one [.t] file, with the [setup] scripts, the directory
     [dir] and the [wait_timeout] seconds of a cram test, and {!Play_cast.run} on
-    one or more [.cast] files, with [show] and [delay]; the extension is read in
-    any case. [vhs] defaults to ["vhs"]. It is [123] after printing an error on
-    standard error for another extension, for several [inputs] that are not all
-    [.cast] files, for [dry_run] and [print] together, and for an option given
-    that does not apply to the kind of [inputs]: [engine], [print], [vhs] and a
-    non-empty [env] apply to a tape or a cram test, [setup], [dir] and
-    [wait_timeout] to a cram test, [show] and [delay] to asciicast recordings.
-*)
+    one or more [.cast] files, with [show] (defaults to [[]]) and [delay]; the
+    extension is read in any case. [vhs] defaults to ["vhs"]. It is [123] after
+    printing an error on standard error for another extension, for several
+    [inputs] that are not all [.cast] files, for [dry_run] and [print] together,
+    and for an option given that does not apply to the kind of [inputs]:
+    [engine], [print], [vhs] and a non-empty [env] apply to a tape or a cram
+    test, [setup], [dir] and [wait_timeout] to a cram test, a non-empty [show]
+    and [delay] to asciicast recordings. *)
 
 val cmd : int Cmdliner.Cmd.t
 (** [cmd] is the [play] subcommand. *)

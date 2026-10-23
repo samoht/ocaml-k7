@@ -107,11 +107,11 @@ let test_show () =
   Alcotest.(check string)
     "500ms by default"
     (svg ~settings (shifted 500))
-    (cast ~show:"make demo" timed);
+    (cast ~show:[ "make demo" ] timed);
   Alcotest.(check string)
     "delay"
     (svg ~settings (shifted 250))
-    (cast ~show:"make demo" ~delay:(Ms 250) timed);
+    (cast ~show:[ "make demo" ] ~delay:(Ms 250) timed);
   Alcotest.(check string)
     "no delay without a line" (svg ~settings at_ms)
     (cast ~delay:(Ms 250) timed);
@@ -127,14 +127,14 @@ let test_show () =
   Alcotest.(check string)
     "an empty show hides it"
     (svg ~settings K7.[ (Ms 2, "a"); (Ms 1002, "") ])
-    (cast ~show:"" commanded);
+    (cast ~show:[ "" ] commanded);
   Alcotest.(check string)
     "a command on several lines shows on one"
     (svg ~settings K7.[ (Ms 0, line "a  b"); (Ms 502, "a"); (Ms 1502, "") ])
     (cast
        ({|{"version": 3, "term": {"cols": 20, "rows": 3}, "command": "a\n\tb"}|}
       ^ "\n" ^ {|[0.002, "o", "a"]|}));
-  match K7.svg_of_casts ~show:"a\nb" [ parse timed ] with
+  match K7.svg_of_casts ~show:[ "a\nb" ] [ parse timed ] with
   | Error (Invalid msg) ->
       Alcotest.(check string)
         "control" {|show "a\nb": holds a control character|} msg
@@ -352,7 +352,7 @@ let test_asciinema_v3 () =
     (cast src);
   Alcotest.(check string)
     "the last screen without the command" "green and blue\n1\n2\n3\n"
-    (text ~show:"" [ src ])
+    (text ~show:[ "" ] [ src ])
 
 let test_several () =
   let a =
@@ -375,7 +375,15 @@ let test_several () =
     (text [ a; b ]);
   Alcotest.(check string)
     "show replaces each command" "1\n$ c\n2\n"
-    (text ~show:"c" [ a; b ])
+    (text ~show:[ "c" ] [ a; b ]);
+  Alcotest.(check string)
+    "one show per recording" "1\n$ d\n2\n"
+    (text ~show:[ "c"; "d" ] [ a; b ]);
+  match K7.text_of_casts ~show:[ "c"; "d"; "e" ] [ parse a; parse b ] with
+  | Error (Invalid msg) ->
+      Alcotest.(check string)
+        "a show per recording or one" "3 commands to show for 2 recordings" msg
+  | _ -> Alcotest.fail "three shows for two recordings"
 
 let test_round_trip () =
   let c = parse (read "asciinema-v3.cast") in

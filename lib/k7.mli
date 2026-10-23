@@ -491,7 +491,7 @@ val string_of_cast : cast -> string
 
 val svg_of_casts :
   ?settings:setting list ->
-  ?show:string ->
+  ?show:string list ->
   ?delay:duration ->
   cast list ->
   (string, error) result
@@ -499,11 +499,12 @@ val svg_of_casts :
     recordings [casts], one after the other on one terminal, as {!svg} draws the
     data of their output events at their times. A recording's first line is [$ ]
     then its command, as for {!run}, and its output shows [delay] (defaults to
-    [Ms 500]) later; its command is [show] if given, or the [command] of its
-    header, if any, its control characters shown as spaces. An empty command
-    shows no line and no delay. The last screen of each recording holds for a
-    second after its last event, an exit included, and the next recording starts
-    then.
+    [Ms 500]) later. Its command is the string of [show] (defaults to [[]]) if
+    it has one, its [n]th string for the [n]th recording if it has one per
+    recording, and otherwise the [command] of its header, if any, its control
+    characters shown as spaces. An empty command shows no line and no delay. The
+    last screen of each recording holds for a second after its last event, an
+    exit included, and the next recording starts then.
 
     The terminal has the size of the header of each recording from its start,
     and of each resize, on an image of the largest of them, unless [settings]
@@ -523,12 +524,15 @@ val svg_of_casts :
         (output @ [ (Ms (last + 1000), "") ])
     ]}
 
-    It is [Error (Invalid _)] on an empty [casts], on what {!run} refuses in
-    [show] and [delay], and the error of {!svg} on [settings] that it refuses.
-*)
+    It is [Error (Invalid _)] on an empty [casts], on a [show] of several
+    strings but not one per recording, on what {!run} refuses in [show] and
+    [delay], and the error of {!svg} on [settings] that it refuses. *)
 
 val text_of_casts :
-  ?settings:setting list -> ?show:string -> cast list -> (string, error) result
+  ?settings:setting list ->
+  ?show:string list ->
+  cast list ->
+  (string, error) result
 (** [text_of_casts ~settings ~show casts] is the text of the last screen of
     [svg_of_casts ~settings ~show casts]: each row without its trailing white
     space, as {!svg} reads it, followed by a newline, up to the last row that is

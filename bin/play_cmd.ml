@@ -40,7 +40,7 @@ let misplaced kind ~engine ~print ~vhs ~env ~setup ~dir ~wait_timeout ~show
       (setup <> [], "--setup", [ Cram ]);
       (Option.is_some dir, "--dir", [ Cram ]);
       (Option.is_some wait_timeout, "--wait-timeout", [ Cram ]);
-      (Option.is_some show, "--show", [ Cast ]);
+      (show <> [], "--show", [ Cast ]);
       (Option.is_some delay, "--delay", [ Cast ]);
     ]
 
@@ -57,7 +57,7 @@ let kinds = function
       | None -> Ok Cast)
 
 let run stdenv ?engine ~dry_run ~print ?vhs ~settings ~env ~outputs ~setup ~dir
-    ~wait_timeout ?show ?delay inputs =
+    ~wait_timeout ?(show = []) ?delay inputs =
   let input = String.concat " " inputs in
   let play = function
     | Cram ->
@@ -69,7 +69,7 @@ let run stdenv ?engine ~dry_run ~print ?vhs ~settings ~env ~outputs ~setup ~dir
           ~vhs:(Option.value vhs ~default:"vhs")
           ~settings ~env ~outputs input
     | Cast ->
-        Play_cast.run stdenv ~dry_run ~settings ?show ?delay ~outputs inputs
+        Play_cast.run stdenv ~dry_run ~settings ~show ?delay ~outputs inputs
   in
   match kinds inputs with
   | Error msg -> Flags.fail stdenv msg
@@ -136,9 +136,10 @@ let show =
   let doc =
     "Show a first line with $(b,\\$) and $(docv), as $(b,k7 rec) does, before \
      an asciicast recording, in place of the $(b,command) of its header; an \
-     empty $(docv) shows no line."
+     empty $(docv) shows no line. Given once per recording, the $(i,n)th \
+     applies to the $(i,n)th recording."
   in
-  Arg.(value & opt (some string) None & info [ "show" ] ~docv:"TEXT" ~doc)
+  Arg.(value & opt_all string [] & info [ "show" ] ~docv:"TEXT" ~doc)
 
 let delay =
   let doc =
@@ -253,8 +254,9 @@ let man =
       "Several recordings play one after the other in one image, on one \
        terminal, as commands typed in turn: each shows its command line, and \
        the next starts once the last screen of the one before has held for a \
-       second. $(b,--show) then replaces the command of each, and the theme is \
-       that of the first.";
+       second. One $(b,--show) then replaces the command of each, one per \
+       recording replaces each command in turn, and the theme is that of the \
+       first.";
     `P
       "asciinema writes such recordings, and so does $(b,k7 rec) $(b,-o) \
        $(i,FILE.cast). A program that uses console writes one at the times of \
@@ -268,7 +270,9 @@ let man =
        $(cmd) -o demo.gif demo.t\n\
        $(cmd) --print -o demo.gif demo.t   # show the tape\n\
        $(cmd) --show 'dune exec -- ./main.exe' -o main.svg main.cast\n\
-       $(cmd) -o themes.svg dark.cast light.cast";
+       $(cmd) -o themes.svg dark.cast light.cast\n\
+       $(cmd) --show 'demo' --show 'demo --theme light' -o themes.svg \
+       dark.cast light.cast";
   ]
 
 let cmd =
@@ -277,7 +281,7 @@ let cmd =
       show delay inputs =
     Eio_main.run @@ fun stdenv ->
     run stdenv ?engine ~dry_run ~print ?vhs ~settings ~env ~outputs ~setup ~dir
-      ~wait_timeout ?show
+      ~wait_timeout ~show
       ?delay:(Option.map (fun ms -> K7.Ms ms) delay)
       inputs
   in

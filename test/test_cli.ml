@@ -794,13 +794,13 @@ let test_cast () =
   Alcotest.(check (pair int string)) "drawn" (0, "") (play "a.svg");
   Alcotest.(check (pair int string))
     "drawn with a command line" (0, "")
-    (play ~show:"make" ~delay:(Ms 250) "b.svg");
+    (play ~show:[ "make" ] ~delay:(Ms 250) "b.svg");
   let c = Result.get_ok (K7.cast_of_string cast) in
   expect "as K7.svg_of_casts"
     (Result.get_ok (K7.svg_of_casts [ c ]))
     (read "a.svg");
   expect "with --show and --delay"
-    (Result.get_ok (K7.svg_of_casts ~show:"make" ~delay:(Ms 250) [ c ]))
+    (Result.get_ok (K7.svg_of_casts ~show:[ "make" ] ~delay:(Ms 250) [ c ]))
     (read "b.svg");
   Alcotest.(check (pair int string)) "the last screen" (0, "") (play "a.TXT");
   expect "as K7.text_of_casts"

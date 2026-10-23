@@ -469,6 +469,22 @@ last screen for a second before the next.
   dark
   % demo
   light
+
+--show given once per recording replaces each command in turn, and any
+other count than one or one per recording is refused.
+
+  $ k7 play --show 'demo' --show '' -o shows.txt -o shows.svg dark.cast light.cast
+  $ tr '$' '%' < shows.txt
+  % demo
+  dark
+  light
+  $ sed 's/"command": "[^"]*"/"command": "demo"/' dark.cast > dark2.cast
+  $ sed 's/"command": "[^"]*"/"command": ""/' light.cast > light2.cast
+  $ k7 play -o headers.svg dark2.cast light2.cast
+  $ cmp shows.svg headers.svg
+  $ k7 play --show a --show b --show c -o three.svg dark.cast light.cast
+  k7: dark.cast light.cast: 3 --show for 2 recordings; give one, or one per recording
+  [123]
   $ k7 play -o both.svg dark.cast demo.t
   k7: demo.t: several files play only as asciicast recordings (.cast)
   [123]

@@ -1609,10 +1609,19 @@ let sizes settings =
 
 (* The events of [casts] one after the other, the end of the last, and the
    largest size of the terminal. *)
+let shows show casts =
+  match show with
+  | [] -> Ok (List.map (fun _ -> None) casts)
+  | [ s ] -> Ok (List.map (fun _ -> Some s) casts)
+  | l when List.compare_lengths l casts = 0 -> Ok (List.map Option.some l)
+  | l ->
+      err_invalid "%d commands to show for %d recordings" (List.length l)
+        (List.length casts)
+
 let sequence ~show ~delay casts =
   let rec go start ~size acc = function
     | [] -> Ok (List.rev acc, start, size)
-    | (c : cast) :: rest ->
+    | ((c : cast), show) :: rest ->
         let command =
           match show with
           | Some s -> s
@@ -1639,9 +1648,10 @@ let sequence ~show ~delay casts =
         let size = (max (fst size) c.columns, max (snd size) c.rows) in
         go (last + hold) ~size acc rest
   in
-  go 0 ~size:(0, 0) [] casts
+  let* shows = shows show casts in
+  go 0 ~size:(0, 0) [] (List.combine casts shows)
 
-let replay ~settings ?show ~delay casts =
+let replay ~settings ?(show = []) ~delay casts =
   let* events, last, (w, h) =
     match casts with
     | [] -> Error (Invalid "no recording to draw")
