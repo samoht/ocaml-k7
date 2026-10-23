@@ -1459,14 +1459,8 @@ let test_executable_command_roundtrip n =
           (Buffer.contents error))
     Native_test.shells
 
-let test_command_format_roundtrip n =
+let check_saved_command_argument argument =
   Native_test.with_dir @@ fun env cwd ->
-  let scalar = [| 0x200b; 0x202e; 0x2060; 0xad; 0xfeff |].(n mod 5) in
-  let buffer = Buffer.create 16 in
-  Buffer.add_char buffer 'a';
-  Buffer.add_utf_8_uchar buffer (Uchar.of_int scalar);
-  Buffer.add_char buffer 'b';
-  let argument = Buffer.contents buffer in
   let proc = Eio.Stdenv.process_mgr env in
   let settings = K7.[ Columns 100; Rows 4; Font_size 10; Padding 0 ] in
   let recording, status =
@@ -1499,6 +1493,17 @@ let test_command_format_roundtrip n =
         proc [ shell; "-c"; command ];
       check_eq ~pp:Fmt.Dump.string argument (Buffer.contents output))
     Native_test.shells
+
+let test_command_format_roundtrip n =
+  let scalar = [| 0x200b; 0x202e; 0x2060; 0xad; 0xfeff |].(n mod 5) in
+  let buffer = Buffer.create 16 in
+  Buffer.add_char buffer 'a';
+  Buffer.add_utf_8_uchar buffer (Uchar.of_int scalar);
+  Buffer.add_char buffer 'b';
+  check_saved_command_argument (Buffer.contents buffer)
+
+let test_command_octet_roundtrip n =
+  check_saved_command_argument (String.make 1 (Char.chr (1 + (n mod 255))))
 
 let test_capture_incomplete_roundtrip n tail =
   with_dir @@ fun env _ ->
@@ -1777,6 +1782,8 @@ let test_capture_theme_roundtrip n =
 
 let with_programs =
   [
+    test_case "saved command images preserve each non-NUL argument byte"
+      [ uint8 ] test_command_octet_roundtrip;
     test_case "saved command images preserve Unicode format arguments" [ uint8 ]
       test_command_format_roundtrip;
     test_case "saved command images preserve shell-sensitive executable names"
