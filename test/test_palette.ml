@@ -35,6 +35,25 @@ let test_osc_palette () =
   check_contains "OSC 4 replaces ANSI red for the recorded glyph" ~sub:"#123456"
     image
 
+let test_osc_recolours () =
+  let p1 = {|class="p1">A|} and set = {|fill="#123456">A|} in
+  let image =
+    svg [ (Ms 0, "\027[31mA\027[?25l"); (Ms 100, "\027]4;1;#123456\007") ]
+  in
+  check_contains "before the change" ~sub:p1 image;
+  check_contains "after it" ~sub:set image;
+  let image =
+    svg
+      [
+        (Ms 0, "\027]4;1;#123456\007\027[31mA\027[?25l");
+        (Ms 100, "\027]104;1\007");
+      ]
+  in
+  check_contains "before the reset" ~sub:set image;
+  check_contains "after it" ~sub:p1 image;
+  check_contains "bold bright" ~sub:{|fill="#0a0b0c" class="b">B|}
+    (svg [ (Ms 0, "\027]4;9;#0a0b0c\007\027[1;31mB") ])
+
 let test_json_theme () =
   let s =
     svg
@@ -176,6 +195,7 @@ let suite =
       [
         ("colours", test_colours);
         ("OSC palette changes", test_osc_palette);
+        ("OSC palette recolours the screen", test_osc_recolours);
         ("default theme", test_default);
         ("no cursor colour", test_no_cursor);
         ("JSON theme", test_json_theme);

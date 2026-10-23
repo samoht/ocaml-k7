@@ -5,7 +5,8 @@
 
 (** Snapshots of a terminal screen.
 
-    A snapshot holds the cells of each row of a {!Vte.t} and its cursor. *)
+    A snapshot holds the cells of each row of a {!Vte.t}, its cursor and the
+    palette colours that OSC 4 set. *)
 
 type terminal
 (** The type for terminals: xterm's emulation, as {!Vte} gives it, with the
@@ -19,7 +20,8 @@ val feed : ?sync:(bool -> unit) -> terminal -> string -> unit
     read. Each time [s] sets synchronized output (DEC private mode 2026), with
     which a program asks that the frame it draws show once complete, [term]
     reads [s] up to there and calls [sync true]; likewise [sync false] when [s]
-    resets it (defaults to [ignore]). *)
+    resets it (defaults to [ignore]). OSC 4 and OSC 104 set and reset palette
+    colours, as in xterm.js. *)
 
 val resize : terminal -> rows:int -> cols:int -> unit
 (** [resize term ~rows ~cols] gives [term] [rows] rows and [cols] columns,
@@ -38,8 +40,8 @@ val cursor_row : terminal -> int
 (** [cursor_row term] is the row of the cursor of [term], from [0]. *)
 
 val is_dirty : terminal -> bool
-(** [is_dirty term] is [true] iff the screen or the cursor of [term] changed
-    since the last {!clear_dirty}. *)
+(** [is_dirty term] is [true] iff the screen, the cursor or the palette of
+    [term] changed since the last {!clear_dirty}. *)
 
 val clear_dirty : terminal -> unit
 (** [clear_dirty term] marks [term] unchanged. *)
@@ -103,6 +105,14 @@ val rows : t -> row array
 val cursor : t -> (int * int) option
 (** [cursor t] is the row and column of the visible cursor, if any. *)
 
+val indexed : t -> int -> int option
+(** [indexed t i] is the colour [0xRRGGBB] that OSC 4 gave the palette index [i]
+    of [t], if any, which replaces the theme's. *)
+
+val same_palette : t -> t -> bool
+(** [same_palette t0 t1] is [true] iff [t0] and [t1] have the same {!indexed}
+    colours. *)
+
 val text : t -> string
 (** [text t] is the text of the rows of [t], joined by newlines. *)
 
@@ -115,4 +125,5 @@ val line : t -> int -> string
 (** [line t r] is [row_text (rows t).(r)], or [""] if [t] has no row [r]. *)
 
 val equal : t -> t -> bool
-(** [equal t0 t1] is [true] iff [t0] and [t1] have equal rows and cursors. *)
+(** [equal t0 t1] is [true] iff [t0] and [t1] have equal rows, cursors and
+    palettes. *)

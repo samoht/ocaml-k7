@@ -182,6 +182,47 @@ let colour =
       | Rgb c -> Fmt.pf ppf "#%06x" c)
     ( = )
 
+let indexed s i =
+  let t = Screen.terminal ~rows:2 ~cols:5 in
+  Screen.feed t s;
+  Screen.indexed (Screen.of_terminal t) i
+
+(* The colours xterm.js's [parseColor] gives. *)
+let test_osc_palette () =
+  List.iter
+    (fun (what, s, i, expected) ->
+      Alcotest.(check (option int)) what expected (indexed s i))
+    [
+      ("#RRGGBB", "\027]4;1;#123456\007", 1, Some 0x123456);
+      ("#RGB", "\027]4;1;#abc\027\\", 1, Some 0xa0b0c0);
+      ("upper case", "\027]4;1;#AbCdEf\007", 1, Some 0xabcdef);
+      ("#RRRGGGBBB", "\027]4;1;#123456789\007", 1, Some 0x124578);
+      ("#RRRRGGGGBBBB", "\027]4;1;#123456789abc\007", 1, Some 0x12569a);
+      ("#RRGGB", "\027]4;1;#12345\007", 1, None);
+      ("rgb:R/G/B", "\027]4;1;rgb:f/0/8\007", 1, Some 0xff0088);
+      ("rgb:RR/GG/BB", "\027]4;1;RGB:12/34/56\007", 1, Some 0x123456);
+      ("rgb:RRR/GGG/BBB", "\027]4;1;rgb:fff/800/000\007", 1, Some 0xff8000);
+      ("rgb:RRRR/GGGG/BBBB", "\027]4;1;rgb:ffff/8000/0\007", 1, None);
+      ("16-bit channels", "\027]4;1;rgb:ffff/8000/0000\007", 1, Some 0xff8000);
+      ("several pairs", "\027]4;1;#111111;2;#222222\007", 2, Some 0x222222);
+      ("a 256-colour index", "\027]4;200;#010203\007", 200, Some 0x010203);
+      ("past the palette", "\027]4;256;#010203\007", 256, None);
+      ("leading zeros", "\027]004;01;#123456\007", 1, Some 0x123456);
+      ("query", "\027]4;1;?\007", 1, None);
+      ("C1 ST", "\027]4;1;#123456\xc2\x9c", 1, Some 0x123456);
+      ("ESC", "\027]4;1;#123456\027[31m", 1, Some 0x123456);
+      ("cancelled", "\027]4;1;#123456\030", 1, None);
+      ("unterminated", "\027]4;1;#123456", 1, None);
+      ("a control inside", "\027]4;1;#12\t3456\007", 1, Some 0x123456);
+      ("another OSC", "\027]44;1;#123456\007", 1, None);
+      ("reset all", "\027]4;1;#123456\007\027]104\007", 1, None);
+      ( "reset one",
+        "\027]4;1;#111111;2;#222222\007\027]104;2\007",
+        1,
+        Some 0x111111 );
+      ("reset another", "\027]4;1;#111111;2;#222222\007\027]104;2\007", 2, None);
+    ]
+
 let test_restore () =
   check_screens
     [
@@ -391,6 +432,7 @@ let suite =
         ("controls", test_controls);
         ("history", test_history);
         ("saved character set", test_saved_charset);
+        ("OSC palette", test_osc_palette);
         ("restore", test_restore);
         ("screens", test_screens);
         ("character sets", test_charsets);

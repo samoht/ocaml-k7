@@ -30,23 +30,26 @@ type look = {
 
 type paint = Foreground | Background | Ansi of int | Rgb of int
 
-(* xterm.js draws bold in the bright variant of the first eight colours. *)
-let paint ~bold ~default : Screen.colour -> paint = function
+(* xterm.js draws bold in the bright variant of the first eight colours, and
+   [palette] gives the colours that OSC 4 set. *)
+let paint ~palette ~bold ~default : Screen.colour -> paint = function
   | Default -> default
-  | Indexed i when i < 16 -> Ansi (if bold && i < 8 then i + 8 else i)
-  | Indexed i ->
-      let r, g, b = Ansi.Color.to_rgb (Ansi.Color.indexed i) in
-      Rgb ((r lsl 16) lor (g lsl 8) lor b)
+  | Indexed i -> (
+      let i = if bold && i < 8 then i + 8 else i in
+      match palette i with
+      | Some c -> Rgb c
+      | None when i < 16 -> Ansi i
+      | None ->
+          let r, g, b = Ansi.Color.to_rgb (Ansi.Color.indexed i) in
+          Rgb ((r lsl 16) lor (g lsl 8) lor b))
   | Rgb c -> Rgb c
 
 let has flag (c : Screen.cell) = Ansi.Attr.mem flag c.attrs
 
-let paints (c : Screen.cell) =
-  let bold = has Bold c in
-  let fg = paint ~bold ~default:Foreground c.fg in
-  let bg = paint ~bold:false ~default:Background c.bg in
-  if has Inverse c then (paint ~bold:false ~default:Background c.bg, fg)
-  else (fg, bg)
+let paints ~palette (c : Screen.cell) =
+  let fg = paint ~palette ~bold:(has Bold c) ~default:Foreground c.fg in
+  let bg = paint ~palette ~bold:false ~default:Background c.bg in
+  if has Inverse c then (bg, fg) else (fg, bg)
 
 let add_escaped b s =
   let rec go i =
@@ -81,15 +84,16 @@ let add_rect_paint t b = function
   | Ansi i -> add_fill b t.palette.ansi.(i)
   | Rgb c -> add_fill b c
 
-let add_backgrounds t b ~from cells =
+let add_backgrounds t ~palette b ~from cells =
   let n = Array.length cells in
   let rec go x =
     if x < n then
-      match snd (paints cells.(x)) with
+      match snd (paints ~palette cells.(x)) with
       | Background -> go (x + 1)
       | p ->
           let rec stop y =
-            if y < n && snd (paints cells.(y)) = p then stop (y + 1) else y
+            if y < n && snd (paints ~palette cells.(y)) = p then stop (y + 1)
+            else y
           in
           let y = stop (x + 1) in
           Fmt.kstr (Buffer.add_string b)
@@ -126,13 +130,13 @@ let shows (c : Screen.cell) =
 let is_simple s =
   String.length s = Uchar.utf_decode_length (String.get_utf_8_uchar s 0)
 
-let add_tspan t b (c : Screen.cell) xs text =
+let add_tspan t ~palette b (c : Screen.cell) xs text =
   Buffer.add_string b "<tspan x=\"";
   Buffer.add_string b
     (String.concat " "
        (List.map (fun x -> Int.to_string (x * t.cell_width)) xs));
   Buffer.add_char b '"';
-  let fg = fst (paints c) in
+  let fg = fst (paints ~palette c) in
   let classes =
     (match fg with Ansi i -> [ Fmt.str "p%x" i ] | _ -> []) @ text_classes c
   in
@@ -147,13 +151,15 @@ let add_tspan t b (c : Screen.cell) xs text =
   add_escaped b text;
   Buffer.add_string b "</tspan>"
 
-let same_style (a : Screen.cell) (b : Screen.cell) =
-  fst (paints a) = fst (paints b) && text_classes a = text_classes b
+let same_style ~palette (a : Screen.cell) (b : Screen.cell) =
+  fst (paints ~palette a) = fst (paints ~palette b)
+  && text_classes a = text_classes b
 
-let add_texts t b ~from cells =
+let add_texts t ~palette b ~from cells =
   let n = Array.length cells in
   let flush first xs text =
-    if xs <> [] then add_tspan t b first (List.rev xs) (Buffer.contents text);
+    if xs <> [] then
+      add_tspan t ~palette b first (List.rev xs) (Buffer.contents text);
     Buffer.clear text
   in
   let text = Buffer.create 64 in
@@ -168,7 +174,7 @@ let add_texts t b ~from cells =
         go (x + 1) None [])
       else
         match first with
-        | Some f when same_style f c && is_simple shown ->
+        | Some f when same_style ~palette f c && is_simple shown ->
             Buffer.add_string text shown;
             go (x + 1) first (x :: xs)
         | _ ->
@@ -182,7 +188,7 @@ let add_texts t b ~from cells =
   go from None []
 
 (* Rectangles: WebKit ignores text-decoration-style on SVG text. *)
-let add_double_underlines t b ~from cells =
+let add_double_underlines t ~palette b ~from cells =
   let n = Array.length cells in
   let double x = has Double_underline cells.(x) && shows cells.(x) in
   let thickness = max 1 (t.font_size / 16) in
@@ -190,11 +196,12 @@ let add_double_underlines t b ~from cells =
     if x < n then (
       if not (double x) then go (x + 1)
       else
-        let p = fst (paints cells.(x)) in
+        let p = fst (paints ~palette cells.(x)) in
         let rec stop y =
           if
             y < n
-            && (cells.(y).width = 0 || (double y && fst (paints cells.(y)) = p))
+            && (cells.(y).width = 0
+               || (double y && fst (paints ~palette cells.(y)) = p))
           then stop (y + 1)
           else y
         in
@@ -214,13 +221,13 @@ let add_double_underlines t b ~from cells =
   in
   go from
 
-let row_markup t ?(from = 0) row =
+let row_markup t ~palette ?(from = 0) row =
   let cells = Screen.cells row in
   let b = Buffer.create 256 in
-  add_backgrounds t b ~from cells;
-  add_double_underlines t b ~from cells;
+  add_backgrounds t ~palette b ~from cells;
+  add_double_underlines t ~palette b ~from cells;
   let texts = Buffer.create 256 in
-  add_texts t texts ~from cells;
+  add_texts t ~palette texts ~from cells;
   if Buffer.length texts > 0 then (
     Fmt.kstr (Buffer.add_string b) "<text y=\"%d\">" t.baseline;
     Buffer.add_buffer b texts;
@@ -254,8 +261,8 @@ let rec same_prefix c0 c1 k =
 
 let max_depth = 16
 
-let markup t d ~base row =
-  let full = (row_markup t row, 0) in
+let markup t ~palette d ~base row =
+  let full = (row_markup t ~palette row, 0) in
   match base with
   | None -> full
   | Some (prev, id) ->
@@ -268,7 +275,7 @@ let markup t d ~base row =
         || not (same_prefix p c k)
       then full
       else
-        ( Fmt.str "<use href=\"#%s\"/>%s" id (row_markup t ~from:k row),
+        ( Fmt.str "<use href=\"#%s\"/>%s" id (row_markup t ~palette ~from:k row),
           depth + 1 )
 
 let base36 n =
@@ -279,12 +286,13 @@ let base36 n =
   in
   go n ""
 
-let row_id t d ~base row =
+let row_id t ~palette d ~base row =
   match Rows.find_opt d.ids row with
   | Some id -> id
   | None ->
       let markup, depth =
-        if used (Screen.cells row) = 0 then ("", 0) else markup t d ~base row
+        if used (Screen.cells row) = 0 then ("", 0)
+        else markup t ~palette d ~base row
       in
       let id =
         if markup = "" then None
@@ -328,13 +336,14 @@ let add_cursor t b screen (r, c) =
     Buffer.add_string b "</text>")
 
 let add_frame t d b shown i screen =
+  let palette = Screen.indexed screen in
   if i = 0 then Buffer.add_string b "<g>"
   else
     Fmt.kstr (Buffer.add_string b) "<g transform=\"translate(%d)\">"
       (i * t.cols * t.cell_width);
   Array.iteri
     (fun r row ->
-      match row_id t d ~base:shown.(r) row with
+      match row_id t ~palette d ~base:shown.(r) row with
       | None -> shown.(r) <- None
       | Some id ->
           shown.(r) <- Some (row, id);
@@ -481,6 +490,21 @@ let add_margin t b =
            href=\"%s\"/>"
           t.width t.height uri
 
+let add_strip t d strip frames =
+  let shown = Array.make t.rows None in
+  (* A palette change redraws every row: a row's markup holds its colours. *)
+  ignore
+    (List.fold_left
+       (fun (i, previous) (_, screen) ->
+         (match previous with
+         | Some p when not (Screen.same_palette p screen) ->
+             Rows.reset d.ids;
+             Array.fill shown 0 t.rows None
+         | _ -> ());
+         add_frame t d strip shown i screen;
+         (i + 1, Some screen))
+       (0, None) frames)
+
 let image t ~duration frames =
   let b = Buffer.create 65536 in
   let d =
@@ -493,8 +517,7 @@ let image t ~duration frames =
     }
   in
   let strip = Buffer.create 65536 in
-  let shown = Array.make t.rows None in
-  List.iteri (fun i (_, screen) -> add_frame t d strip shown i screen) frames;
+  add_strip t d strip frames;
   Fmt.kstr (Buffer.add_string b)
     "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" \
      viewBox=\"0 0 %d %d\" fill=\"%s\" font-family=\""

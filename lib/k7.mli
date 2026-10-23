@@ -708,7 +708,8 @@ val cram :
     the raw [Set Margin], [Set LetterSpacing] and [Set LineHeight] size it. VHS
     sizes it with the fonts of the machine it runs on, so it can show more rows
     than the image elsewhere. The image draws each cell on a grid, in a
-    monospace font of the viewer's machine, in the colours of the [Theme]. The
+    monospace font of the viewer's machine, in the colours of the [Theme] and
+    those a program sets with OSC 4, which recolour the cells on the screen. The
     terminal keeps a colour as RGB, so a 256-colour or true colour equal to one
     of xterm's sixteen ANSI colours takes the theme's colour too. The terminal
     reads what the shell prints as xterm does. VHS's xterm.js departs from xterm

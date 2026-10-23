@@ -204,7 +204,7 @@ matrix 0.1.0 lacks. The copy goes once matrix 0.2.0 is released.
 k7 differs from VHS in these cases:
 
 - The native terminal answers the device attribute, status and cursor
-  position queries, but not DECRQM or the OSC 11 background colour query,
+  position queries, but not DECRQM or the OSC 4 and OSC 11 colour queries,
   so the queries fish 4 sends as it starts go unanswered. CI tests fish 3.7
   only.
 - A cursor shape set with DECSCUSR is drawn as a block.
