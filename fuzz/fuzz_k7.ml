@@ -2473,8 +2473,34 @@ let test_native_repeat_preflight n =
   | Ok () -> ()
   | Error e -> failf "repeat %d: %a" count K7.pp_error e
 
+let test_check_writes_nothing n =
+  Native_test.with_dir @@ fun _env cwd ->
+  let output = Fmt.str "missing-%d/deep/image.svg" n in
+  let tape =
+    match
+      K7.tape ~outputs:[ output ]
+        K7.
+          [
+            raw "Require k7-deliberately-missing-prerequisite";
+            type' "touch ran\n";
+            sleep (Ms 100);
+          ]
+    with
+    | Ok t -> t
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  (match K7.check ~engine:Native ~env:[ ("PATH", "") ] ~cwd tape with
+  | Ok () -> ()
+  | Error e -> failf "%a" K7.pp_error e);
+  check_eq
+    ~pp:Fmt.(Dump.list string)
+    []
+    (Array.to_list (Sys.readdir (Eio.Path.native_exn cwd)))
+
 let bounds =
   [
+    test_case "successful preflight writes nothing and starts no program"
+      [ uint8 ] test_check_writes_nothing;
     test_case "native repeat counts are not pixel sizes" [ uint16 ]
       test_native_repeat_preflight;
     test_case "the reader drains what a program wrote before it exited"
