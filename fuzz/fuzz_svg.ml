@@ -513,6 +513,26 @@ let test_cancelled_string_control kind sub glyph split =
   let chunks = if split then chunks else [ String.concat "" chunks ] in
   check_eq ~pp:pp_string (draw [ "A" ^ suffix ]) (draw chunks)
 
+let test_invalid_utf_8_prefix prefix glyph =
+  let input =
+    [| "\xe2\x82"; "\xf0\x9f\x91"; "\xe1\x80"; "\xf1\x80\x80" |].(prefix mod 4)
+    ^ [| "A"; "é"; "中"; "🙂" |].(glyph mod 4)
+  in
+  let normalized = Buffer.create 16 in
+  let rec normalize i =
+    if i < String.length input then (
+      let d = String.get_utf_8_uchar input i in
+      Buffer.add_utf_8_uchar normalized (Uchar.utf_decode_uchar d);
+      normalize (i + Uchar.utf_decode_length d))
+  in
+  normalize 0;
+  let draw s =
+    match K7.svg ~settings K7.[ (Ms 0, s) ] with
+    | Ok image -> image
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  check_eq ~pp:pp_string (draw (Buffer.contents normalized)) (draw input)
+
 let test_theme_xml output theme =
   let settings = K7.Theme theme :: settings in
   match K7.tape ~settings ~outputs:[ "a.svg" ] [ K7.sleep (Ms 100) ] with
@@ -1213,8 +1233,11 @@ let terminal =
 
 let casts =
   [
+    test_case "malformed UTF-8 prefixes use Stdlib replacement grouping"
+      [ uint8; uint8 ] test_invalid_utf_8_prefix;
     test_case "CAN and SUB cancel string controls before following text"
-      [ uint8; bool; uint8; bool ] test_cancelled_string_control;
+      [ uint8; bool; uint8; bool ]
+      test_cancelled_string_control;
     test_case "drawing settings preserve cast text at fixed cell dimensions"
       [ bytes; uint8 ] test_cast_text_style;
     test_case "ignored asciicast header metadata cannot change image or text"
