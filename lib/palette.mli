@@ -21,6 +21,10 @@ val default : t
 (** [default] is the theme of a tape without a [Theme] setting, or with a blank
     one. *)
 
+val accent : background:int -> foreground:int -> cursor:int -> int
+(** [accent ~background ~foreground ~cursor] is the {!field-cursor_accent} of a
+    theme that does not give one. *)
+
 val find : string -> t option
 (** [find name] is the theme VHS v0.12.1 names [name], if any. *)
 

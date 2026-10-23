@@ -26,8 +26,9 @@
   `?show` (`--show`) replaces the command line, or hides it, and the line
   shows alone for `?delay` (`--delay`, 500ms by default), as if typed.
 - `k7 rec -o FILE` writes each output by its extension: `.svg` for the
-  image, `.cast` for the recording in asciicast v3, which `k7 play` draws
-  as the same image byte for byte, with other options if need be, `.txt`
+  image, `.cast` for the recording in asciicast v3, with the colours of
+  `--theme` in its header, which `k7 play` draws as the same image byte
+  for byte, with other options if need be, `.txt`
   for the text of the last screen, and `.t` for a cram test of the command,
   run with `sh -c` on pipes as dune runs it, with its output and its exit
   code as dune writes them, but for an output line dune would read as a

@@ -541,6 +541,7 @@ let stills t =
   List.filter_map (function Screenshot p -> Some p | _ -> None) t.actions
 
 let size t = (t.look.cols, t.look.rows)
+let palette t = t.look.palette
 
 (* As terminals, synchronized output ends after 150ms. *)
 let sync_timeout = 150

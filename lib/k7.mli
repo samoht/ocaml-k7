@@ -469,7 +469,8 @@ val cast_of_string : string -> (cast, error) result
     {{:https://docs.asciinema.org/manual/asciicast/v2/}asciicast v2} or
     {{:https://docs.asciinema.org/manual/asciicast/v3/}asciicast v3}, as
     asciinema 2 and 3 write it. It keeps the size of the terminal, the
-    [command], the [theme] and, after the [idle_time_limit] of the header, the
+    [command], the [theme], with the [cursor] and [cursor_accent] colours of
+    {!string_of_cast}, and, after the [idle_time_limit] of the header, the
     output, resize and exit events at their times, each rounded to the
     microsecond, then to the nearest millisecond, half up, so the same [s] gives
     the same image, byte for byte. It ignores the other members of the header,
@@ -488,7 +489,10 @@ val cast_of_string : string -> (cast, error) result
 val string_of_cast : cast -> string
 (** [string_of_cast c] is [c] in asciicast v3, its times as intervals in
     milliseconds and without an [idle_time_limit]: {!cast_of_string} reads it
-    back as [c]. *)
+    back as [c]. Beyond asciicast v3, its theme holds the [cursor] colour if it
+    is not the foreground and the [cursor_accent] colour if it is not the one
+    {!svg} derives, so that a recording {!capture} made with a
+    {!constructor-Theme} draws with that theme's colours. *)
 
 val svg_of_casts :
   ?settings:setting list ->
@@ -603,16 +607,16 @@ val capture :
   (cast * Eio.Process.exit_status, error) result
 (** [capture ~settings ~env ~show ~stop ~clock ~proc ~cwd argv] runs the program
     [argv] as {!run} does and is the recording of what it printed, paired with
-    how it exited. The recording has the size of the terminal of [settings],
-    [show] as its [command] (defaults to [argv], each argument shell-quoted
-    where needed; none if empty), each output at the millisecond it arrived
-    since the program started, in valid UTF-8 (a character split across two
-    outputs goes in the second, and a byte that is not UTF-8, an incomplete
-    character at the end included, is U+FFFD), and the exit, with the exit code
-    or [128] plus the number of the signal that killed the program. The terminal
-    reads the command line first, as in the image of {!run}, so the program's
-    queries get the answers they would there. It is the error of {!run}
-    otherwise. *)
+    how it exited. The recording has the size of the terminal of [settings], the
+    colours of their {!constructor-Theme}, if any, as its theme, [show] as its
+    [command] (defaults to [argv], each argument shell-quoted where needed; none
+    if empty), each output at the millisecond it arrived since the program
+    started, in valid UTF-8 (a character split across two outputs goes in the
+    second, and a byte that is not UTF-8, an incomplete character at the end
+    included, is U+FFFD), and the exit, with the exit code or [128] plus the
+    number of the signal that killed the program. The terminal reads the command
+    line first, as in the image of {!run}, so the program's queries get the
+    answers they would there. It is the error of {!run} otherwise. *)
 
 val cram :
   ?env:(string * string) list ->

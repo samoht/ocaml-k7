@@ -1597,10 +1597,30 @@ let theme (t : Asciicast.theme) =
            ([
               ("background", t.background);
               ("foreground", t.foreground);
-              ("cursor", t.foreground);
+              ("cursor", Option.value t.cursor ~default:t.foreground);
             ]
+           @ Option.to_list
+               (Option.map (fun c -> ("cursorAccent", c)) t.cursor_accent)
            @ List.combine names palette))
     ^ "}")
+
+let cast_theme (p : Palette.t) : Asciicast.theme =
+  let hex = Fmt.str "#%06x" in
+  let accent =
+    Palette.accent ~background:p.background ~foreground:p.foreground
+      ~cursor:p.cursor
+  in
+  {
+    foreground = hex p.foreground;
+    background = hex p.background;
+    palette = List.map hex (Array.to_list p.ansi);
+    cursor = (if p.cursor = p.foreground then None else Some (hex p.cursor));
+    cursor_accent =
+      (if p.cursor_accent = accent then None else Some (hex p.cursor_accent));
+  }
+
+let themed settings =
+  List.exists (function Theme _ -> true | _ -> false) settings
 
 let sizes settings =
   let given f = List.exists f settings in
@@ -1669,12 +1689,11 @@ let replay ~settings ?(show = []) ~delay casts =
         | e -> e)
       events
   in
-  let themed = List.exists (function Theme _ -> true | _ -> false) settings in
   let settings =
     (if sized_columns then [] else [ Columns w ])
     @ (if sized_rows then [] else [ Rows h ])
     @ (match casts with
-      | { theme = Some t; _ } :: _ when not themed -> [ theme t ]
+      | { theme = Some t; _ } :: _ when not (themed settings) -> [ theme t ]
       | _ -> [])
     @ settings
   in
@@ -1723,12 +1742,15 @@ let capture ?(settings = []) ?(env = []) ?show ?stop ~clock ~proc ~cwd argv =
          ~cwd:dir ~line tape argv)
   in
   let columns, rows = Native.size tape in
+  let theme =
+    if themed settings then Some (cast_theme (Native.palette tape)) else None
+  in
   let events =
     Asciicast.utf_8 (List.map (fun (ms, s) -> (ms, Asciicast.Output s)) output)
     @ [ (exited, Asciicast.Exit (exit_code status)) ]
   in
   let command = if command = "" then None else Some command in
-  Ok ({ Asciicast.columns; rows; command; theme = None; events }, status)
+  Ok ({ Asciicast.columns; rows; command; theme; events }, status)
 
 let run ?(settings = []) ?env ?show ?(delay = Ms 500) ?stop ~clock ~proc ~cwd
     argv =

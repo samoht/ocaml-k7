@@ -1924,6 +1924,28 @@ let test_capture_incomplete_utf_8_round_trip () =
     (Result.get_ok (K7.svg_of_casts [ cast ]))
     (Result.get_ok (K7.svg_of_casts [ restored ]))
 
+let test_capture_theme_cursor () =
+  with_dir @@ fun env cwd ->
+  let theme =
+    {|{"background": "#102030", "foreground": "#eeeeee", "cursor": "#ff0000", "cursorAccent": "#00ff00"}|}
+  in
+  let settings = K7.[ Columns 20; Rows 3; Theme theme ] in
+  let cast, _ =
+    match
+      K7.capture ~settings ~show:""
+        ~clock:(Eio_mock.Clock.Mono.make ())
+        ~proc:(Eio.Stdenv.process_mgr env)
+        ~cwd [ "printf"; "x" ]
+    with
+    | Ok r -> r
+    | Error e -> Alcotest.failf "%a" K7.pp_error e
+  in
+  let restored = Result.get_ok (K7.cast_of_string (K7.string_of_cast cast)) in
+  Alcotest.(check string)
+    "the saved capture keeps the cursor colours"
+    (Result.get_ok (K7.svg_of_casts ~settings [ cast ]))
+    (Result.get_ok (K7.svg_of_casts [ restored ]))
+
 let cram ?env:vars ?stop ?(clock = Eio_mock.Clock.Mono.make ()) env cwd argv =
   match
     K7.cram ?env:vars ?stop ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd argv
@@ -2181,6 +2203,7 @@ let suite =
          ("capture keeps UTF-8 whole", test_capture_utf_8);
          ( "capture round-trips incomplete UTF-8",
            test_capture_incomplete_utf_8_round_trip );
+         ("capture keeps a theme's cursor colours", test_capture_theme_cursor);
          ("cram", test_cram);
          ("cram refuses NUL in argv", test_cram_nul_argument);
          ("cram stops the command's process group", test_cram_stop);

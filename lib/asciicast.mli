@@ -11,6 +11,10 @@ type theme = {
   foreground : string;
   background : string;
   palette : string list;  (** Eight or sixteen colours, black first. *)
+  cursor : string option;  (** The [cursor] colour, not in asciicast v3. *)
+  cursor_accent : string option;
+      (** The [cursor_accent] colour, of the text under the cursor, not in
+          asciicast v3. *)
 }
 (** The type for the theme of a header. Each colour is [#rrggbb]. *)
 
@@ -46,10 +50,11 @@ val of_string : string -> (t, string) result
     integer ["cols"] and ["rows"], and the times of its events are seconds since
     the event ahead of it. A [theme], at the top of the header in version 2 and
     in [term] in version 3, has [fg] and [bg] colours and a ["palette"] of eight
-    or sixteen colours separated by [:], each [#rrggbb]. With an
-    [idle_time_limit] in the header, a longer interval between two events lasts
-    that many seconds. An interval is rounded to the microsecond and a time to
-    the nearest millisecond, half up.
+    or sixteen colours separated by [:], each [#rrggbb], and may have the
+    {!field-cursor} and {!field-cursor_accent} colours, which only k7 writes.
+    With an [idle_time_limit] in the header, a longer interval between two
+    events lasts that many seconds. An interval is rounded to the microsecond
+    and a time to the nearest millisecond, half up.
 
     The [o], [r] and [x] events are kept, an [r] event with [COLSxROWS] data and
     an [x] event with an integer; the other members of the header and the events

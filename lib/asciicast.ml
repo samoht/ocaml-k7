@@ -3,7 +3,14 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-type theme = { foreground : string; background : string; palette : string list }
+type theme = {
+  foreground : string;
+  background : string;
+  palette : string list;
+  cursor : string option;
+  cursor_accent : string option;
+}
+
 type event = Output of string | Resize of int * int | Exit of int
 
 type t = {
@@ -41,14 +48,22 @@ let version =
   |> Jsont.Object.mem "version" value ~enc:Fun.id
   |> Jsont.Object.finish
 
-type raw_theme = { fg : string; bg : string; colours : string }
+type raw_theme = {
+  fg : string;
+  bg : string;
+  colours : string;
+  cursor : string option;
+  accent : string option;
+}
 
 let theme =
-  Jsont.Object.map ~kind:"asciicast theme" (fun fg bg colours ->
-      { fg; bg; colours })
+  Jsont.Object.map ~kind:"asciicast theme" (fun fg bg colours cursor accent ->
+      { fg; bg; colours; cursor; accent })
   |> Jsont.Object.mem "fg" Jsont.string ~enc:(fun t -> t.fg)
   |> Jsont.Object.mem "bg" Jsont.string ~enc:(fun t -> t.bg)
   |> Jsont.Object.mem "palette" Jsont.string ~enc:(fun t -> t.colours)
+  |> Jsont.Object.opt_mem "cursor" Jsont.string ~enc:(fun t -> t.cursor)
+  |> Jsont.Object.opt_mem "cursor_accent" Jsont.string ~enc:(fun t -> t.accent)
   |> Jsont.Object.finish
 
 type header = {
@@ -115,15 +130,26 @@ let is_colour s =
   && s.[0] = '#'
   && String.for_all Char.Ascii.is_hex_digit (String.sub s 1 6)
 
-let read_theme { fg; bg; colours } =
+let read_theme { fg; bg; colours; cursor; accent } =
   let palette = String.split_on_char ':' colours in
-  match List.find_opt (Fun.negate is_colour) (fg :: bg :: palette) with
+  let colours =
+    (fg :: bg :: palette) @ Option.to_list cursor @ Option.to_list accent
+  in
+  match List.find_opt (Fun.negate is_colour) colours with
   | Some c -> Fmt.error "theme: %S is not a colour #rrggbb" c
   | None ->
       let n = List.length palette in
       if n <> 8 && n <> 16 then
         Fmt.error "theme: a palette of %d colours, not 8 or 16" n
-      else Ok { foreground = fg; background = bg; palette }
+      else
+        Ok
+          {
+            foreground = fg;
+            background = bg;
+            palette;
+            cursor;
+            cursor_accent = accent;
+          }
 
 type format = V2 | V3
 
@@ -299,9 +325,16 @@ let header t =
     t.columns t.rows;
   Option.iter
     (fun th ->
-      Fmt.kstr (Buffer.add_string b) {|,"theme":{"fg":%s,"bg":%s,"palette":%s}|}
+      Fmt.kstr (Buffer.add_string b) {|,"theme":{"fg":%s,"bg":%s,"palette":%s|}
         (string th.foreground) (string th.background)
-        (string (String.concat ":" th.palette)))
+        (string (String.concat ":" th.palette));
+      let colour name =
+        Option.iter (fun c ->
+            Fmt.kstr (Buffer.add_string b) {|,%s:%s|} (string name) (string c))
+      in
+      colour "cursor" th.cursor;
+      colour "cursor_accent" th.cursor_accent;
+      Buffer.add_char b '}')
     t.theme;
   Buffer.add_char b '}';
   Option.iter

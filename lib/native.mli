@@ -101,6 +101,9 @@ val resolve : cwd:string -> Eio.Process.Env.t -> string -> string option
 val size : t -> int * int
 (** [size t] is the number of columns and rows of the terminal of [t]. *)
 
+val palette : t -> Palette.t
+(** [palette t] is the theme of the terminal of [t]. *)
+
 val replay : t -> (int * Asciicast.event) list -> string * Screen.t
 (** [replay t events] is the SVG image of a terminal with the settings of [t]
     that receives each event of [events] at its time, in milliseconds, and the
