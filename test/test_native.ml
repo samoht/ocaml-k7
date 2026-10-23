@@ -2347,6 +2347,28 @@ let test_fractional_sleeps () =
   in
   Alcotest.(check int64) "100 pauses of 1.5ms last 150ms" 150_000_000L total
 
+(* Observe the requested span, without waiting centuries on a real clock. *)
+let test_long_sleep () =
+  with_dir @@ fun env cwd ->
+  let milliseconds = 9_223_372_036_854 in
+  let t =
+    Result.get_ok
+      (K7.tape ~outputs:[ "long.svg" ] [ K7.sleep (Ms milliseconds) ])
+  in
+  let result, sleeps =
+    with_sleep_log ~release:(fun ns -> ns > 1_000_000_000_000L) @@ fun clock ->
+    K7.record ~engine:Native ~env:no_job_control ~clock
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd t
+  in
+  (match result with
+  | Ok () -> ()
+  | Error e -> Alcotest.failf "%a" K7.pp_error e);
+  Alcotest.(check int64)
+    "the documented maximum duration reaches the clock"
+    (Int64.mul (Int64.of_int milliseconds) 1_000_000L)
+    (List.fold_left Int64.max 0L sleeps)
+
 let suite =
   ( "native",
     List.map
@@ -2355,6 +2377,7 @@ let suite =
          ( "capture with closed standard descriptors",
            test_capture_closed_standard_fds );
          ("fractional sleeps retain their duration", test_fractional_sleeps);
+         ("long sleeps retain their duration", test_long_sleep);
          ("record", test_record);
          ("stuck callback receives at most 64 KiB", test_stuck_output_bound);
          ("zero-speed prompt wait", test_zero_speed_prompt);
