@@ -1468,8 +1468,47 @@ let test_cast_dryrun_destination n directory text =
   check (run false = `Exited 123);
   check (run true = `Exited 123)
 
+let test_native_domains surface live =
+  let status =
+    Native_test.in_subprocess (fun () ->
+        let ready = Semaphore.Binary.make false in
+        let finish = Semaphore.Binary.make false in
+        let worker =
+          Domain.spawn (fun () ->
+              Semaphore.Binary.release ready;
+              Semaphore.Binary.acquire finish)
+        in
+        Semaphore.Binary.acquire ready;
+        let join () =
+          Semaphore.Binary.release finish;
+          Domain.join worker
+        in
+        if not live then join ();
+        Fun.protect ~finally:(fun () -> if live then join ()) @@ fun () ->
+        Native_test.with_dir @@ fun env cwd ->
+        let clock = Eio_mock.Clock.Mono.make () in
+        let proc = Eio.Stdenv.process_mgr env in
+        let result =
+          match surface mod 3 with
+          | 0 ->
+              Result.map (fun _ -> ()) (K7.capture ~clock ~proc ~cwd [ "true" ])
+          | 1 -> Result.map (fun _ -> ()) (K7.run ~clock ~proc ~cwd [ "true" ])
+          | _ ->
+              let tape =
+                Result.get_ok
+                  (K7.tape ~outputs:[ "out.svg" ]
+                     K7.[ type' "true\n"; wait Prompt ])
+              in
+              Native_test.play env cwd tape
+        in
+        match result with Ok () -> () | Error e -> failf "%a" K7.pp_error e)
+  in
+  check (status = Unix.WEXITED 0)
+
 let with_programs =
   [
+    test_case "native recorders work with live or joined OCaml domains"
+      [ uint8; bool ] test_native_domains;
     test_case "asciicast dry-run refuses unwritable output paths"
       [ uint8; bool; bool ] test_cast_dryrun_destination;
     test_case "saved captures preserve incomplete UTF-8 tails" [ uint8; uint8 ]
