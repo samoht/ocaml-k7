@@ -430,8 +430,9 @@ let add_bar t b bar =
     for i = 0 to 2 do
       let cx = centre ~gap ~r:outer ~space i in
       circle ~cx ~cy:(cy outer gap) ~r:outer "fill=\"#333333\"";
-      circle ~cx ~cy:(cy outer gap) ~r:inner
-        (Fmt.str "fill=\"%s\"" (hex t.palette.background))
+      Fmt.kstr
+        (circle ~cx ~cy:(cy outer gap) ~r:inner)
+        "fill=\"%s\"" (hex t.palette.background)
     done
   else
     let r = bar.size / 6 in
