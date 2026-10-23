@@ -401,6 +401,16 @@ let test_round_trip () =
    ^ "\n")
     (K7.string_of_cast c)
 
+let test_text_conceal () =
+  let src =
+    header3 ^ "\n" ^ {|[0, "o", "a\u001b[8msecret\u001b[0mz"]|} ^ "\n"
+  in
+  Alcotest.(check (list string))
+    "the SVG conceals the text" [ "a      z\n" ]
+    (screens ~rows:2 (cast src));
+  Alcotest.(check string)
+    "text is the visible last screen" "a      z\n" (text [ src ])
+
 let suite =
   ( "asciicast",
     List.map
@@ -419,4 +429,5 @@ let suite =
         ("asciinema v3", test_asciinema_v3);
         ("several", test_several);
         ("round trip", test_round_trip);
+        ("text conceals hidden cells", test_text_conceal);
       ] )
