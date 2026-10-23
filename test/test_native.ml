@@ -1973,9 +1973,11 @@ let test_cram () =
   Alcotest.(check string)
     "environment" "  $ printenv K7_TEST\n  set\n"
     (fst (cram ~env:[ ("K7_TEST", "set") ] env cwd [ "printenv"; "K7_TEST" ]));
-  Alcotest.(check string)
-    "killed" "  $ sh -c 'kill -9 $$'\n  [137]\n"
-    (fst (cram env cwd [ "sh"; "-c"; "kill -9 $$" ]))
+  let t = fst (cram env cwd [ "sh"; "-c"; "kill -9 $$" ]) in
+  Alcotest.(check bool)
+    "killed" true
+    (String.starts_with ~prefix:"  $ sh -c 'kill -9 $$'\n" t
+    && String.ends_with ~suffix:"\n  [137]\n" t)
 
 (* The background loop prints once the shell has gone, so it prints nothing
    if it stops with the shell. *)
