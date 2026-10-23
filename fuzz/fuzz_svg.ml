@@ -925,6 +925,19 @@ let test_cast_cursor_theme n =
     (draw ~settings (parse (source "")))
     (draw ~settings restored)
 
+let test_namespace_collision (a, b) =
+  if a <> b then (
+    let draw text =
+      match K7.svg ~settings:K7.[ Columns 8; Rows 2 ] K7.[ (Ms 0, text) ] with
+      | Ok s -> s
+      | Error e -> failf "%a" K7.pp_error e
+    in
+    let a = draw a and b = draw b in
+    check (a <> b);
+    let pa = Option.get (Native_test.prefix a)
+    and pb = Option.get (Native_test.prefix b) in
+    if pa = pb then failf "distinct SVG images share namespace %s" pa)
+
 let test_long_recording_offsets n =
   let finish = 1000 + (n * 100_000) in
   let image =
@@ -1039,6 +1052,16 @@ let casts =
 let suite =
   ( "svg",
     [
+      test_case "distinct inline SVG images own their namespace"
+        [
+          choose
+            [
+              const ("screen-2623", "screen-3903");
+              map [ uint16; uint16 ] (fun a b ->
+                  (Fmt.str "screen-%d" a, Fmt.str "screen-%d" b));
+            ];
+        ]
+        test_namespace_collision;
       test_case "long SVG recordings preserve distinct frame offsets" [ uint16 ]
         test_long_recording_offsets;
       test_case "frames" [ list chunk ] test_frames;
