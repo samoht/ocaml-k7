@@ -56,7 +56,8 @@ type key =
   | Scroll_down
   | Ctrl of char
       (** [Ctrl c] holds control and presses [c]: an ASCII letter, [@], [^],
-          [-], [.], a backslash or a square bracket. *)
+          [-], [.], a backslash or a square bracket. As in VHS, [@], [-] and [.]
+          send nothing. *)
   | Alt of char
       (** [Alt c] holds alt and presses [c]: an ASCII letter other than [m] and
           [s], which VHS reads as time units, [.] or a square bracket. *)
