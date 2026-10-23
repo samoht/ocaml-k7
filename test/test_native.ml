@@ -2113,6 +2113,7 @@ let check_cram_executable name =
     (contains ~sub:"\n  EXECUTED\n" source)
 
 let test_cram_reserved_executable () = check_cram_executable "if"
+let test_cram_assignment_executable () = check_cram_executable "FOO=bar"
 
 (* The background loop prints once the shell has gone, so it prints nothing
    if it stops with the shell. *)
@@ -2306,6 +2307,8 @@ let suite =
          ("cram refuses NUL in argv", test_cram_nul_argument);
          ( "cram quotes a reserved executable name",
            test_cram_reserved_executable );
+         ( "cram quotes an assignment executable name",
+           test_cram_assignment_executable );
          ( "cram quotes control characters for any sh",
            test_cram_control_argument );
          ("cram stops the command's process group", test_cram_stop);
