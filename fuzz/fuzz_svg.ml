@@ -774,6 +774,79 @@ let test_cast_palette_resize_roundtrip n =
     (get (K7.text_of_casts [ original ]))
     (get (K7.text_of_casts [ restored ]))
 
+let test_cast_cursor_theme n =
+  let count = if n mod 2 = 0 then 8 else 16 in
+  let colours =
+    List.init count (fun i -> Fmt.str "#%06x" (0x300000 + (i * 1027) + n))
+  in
+  let fg = "#eeeeee" and bg = "#102030" in
+  let cursor = if n mod 3 = 0 then fg else Fmt.str "#12%04x" n in
+  let accent = if n mod 3 = 1 then bg else Fmt.str "#23%04x" n in
+  let header_theme =
+    Fmt.str
+      {|{"fg":%S,"bg":%S,"palette":%S,"cursor":%S,"cursor_accent":%S,"vendor":{"extra":true}}|}
+      fg bg
+      (String.concat ":" colours)
+      cursor accent
+  in
+  let output = "\027[91mé\027[0m\r" in
+  let source theme =
+    Fmt.str {|{"version":3,"term":{"cols":8,"rows":2%s}}|} theme
+    ^ "\n[0,\"o\"," ^ json_string output ^ "]\n"
+  in
+  let parse source =
+    match K7.cast_of_string source with
+    | Ok c -> c
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  let get = function Ok s -> s | Error e -> failf "%a" K7.pp_error e in
+  let original = parse (source (",\"theme\":" ^ header_theme)) in
+  let serialized = K7.string_of_cast original in
+  let restored = parse serialized in
+  check_eq ~pp:pp_string serialized (K7.string_of_cast restored);
+  let draw ?(settings = []) c = get (K7.svg_of_casts ~settings [ c ]) in
+  check_eq ~pp:pp_string (draw original) (draw restored);
+  let names =
+    [
+      "black";
+      "red";
+      "green";
+      "yellow";
+      "blue";
+      "magenta";
+      "cyan";
+      "white";
+      "brightBlack";
+      "brightRed";
+      "brightGreen";
+      "brightYellow";
+      "brightBlue";
+      "brightMagenta";
+      "brightCyan";
+      "brightWhite";
+    ]
+  in
+  let expanded = if count = 8 then colours @ colours else colours in
+  let fields =
+    List.map2 (fun name colour -> Fmt.str "%S:%S" name colour) names expanded
+  in
+  let theme =
+    Fmt.str
+      {|{"foreground":%S,"background":%S,"cursor":%S,"cursorAccent":%S,%s}|} fg
+      bg cursor accent (String.concat "," fields)
+  in
+  let expected =
+    get
+      (K7.svg
+         ~settings:K7.[ Columns 8; Rows 2; Theme theme ]
+         K7.[ (Ms 0, output); (Ms 1000, "") ])
+  in
+  check_eq ~pp:pp_string expected (draw restored);
+  let settings = K7.[ Theme "Dracula" ] in
+  check_eq ~pp:pp_string
+    (draw ~settings (parse (source "")))
+    (draw ~settings restored)
+
 let terminal =
   [
     test_case "scroll regions preserve header and footer" [ uint8 ]
@@ -809,6 +882,8 @@ let terminal =
 
 let casts =
   [
+    test_case "cursor theme extensions match JSON themes and explicit overrides"
+      [ uint8 ] test_cast_cursor_theme;
     test_case "cast serialization preserves palettes, resizes and Unicode"
       [ uint8 ] test_cast_palette_resize_roundtrip;
     test_case "v2 and v3 timings survive serialization and CRLF"
