@@ -2406,6 +2406,36 @@ let test_cram_kill () =
   | `Signaled s when Int.equal s Sys.sigkill || Int.equal s Sys.sigterm -> ()
   | status -> Alcotest.failf "killed: %a" Eio.Process.pp_status status
 
+(* The command and its background job hold the FIFO open for writing, so a
+   read of it finds no writer only once both have exited. *)
+let test_cram_cancel () =
+  with_dir @@ fun env cwd ->
+  let dir = Eio.Path.native_exn cwd in
+  let fifo = Filename.concat dir "held" in
+  Unix.mkfifo fifo 0o600;
+  let held = Unix.openfile fifo [ O_RDONLY; O_NONBLOCK ] 0 in
+  Fun.protect ~finally:(fun () -> Unix.close held) @@ fun () ->
+  let script =
+    "exec 3>held; sleep 100008 & echo $! > bg.pid; : > started; wait"
+  in
+  let result =
+    Eio.Fiber.first
+      (fun () -> `Ran (cram env cwd [ "sh"; "-c"; script ]))
+      (fun () ->
+        until (fun () -> Eio.Path.is_file Eio.Path.(cwd / "started"));
+        `Cancelled)
+  in
+  Alcotest.(check bool) "cancelled" true (result = `Cancelled);
+  match Unix.read held (Bytes.create 1) 0 1 with
+  | 0 -> ()
+  | _ -> Alcotest.fail "the command wrote to the FIFO"
+  | exception Unix.Unix_error ((EAGAIN | EWOULDBLOCK), _, _) ->
+      let pid =
+        int_of_string (String.trim (Eio.Path.load Eio.Path.(cwd / "bg.pid")))
+      in
+      (try Unix.kill pid Sys.sigkill with Unix.Unix_error _ -> ());
+      Alcotest.fail "the background job outlives the cancellation"
+
 (* A job left in the background ends with the shell. *)
 let test_cram_background () =
   with_dir @@ fun env cwd ->
@@ -2646,6 +2676,7 @@ let suite =
            test_cram_control_argument );
          ("cram stops the command's process group", test_cram_stop);
          ("cram kills what ignores SIGTERM", test_cram_kill);
+         ("cram cancelled stops the process group", test_cram_cancel);
          ("cram ends the command's background jobs", test_cram_background);
          ("cram output stays data", test_cram_output_is_data);
          ( "run cancellation reaps resistant descendants",
