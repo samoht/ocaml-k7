@@ -695,7 +695,8 @@ let test_dry_run_directory_output () =
     captured path @@ fun () ->
     Play_cmd.run env ~dry_run:true ~print:false ~vhs:"vhs" ~settings:[] ~env:[]
       ~outputs:[ path "occupied.svg" ]
-      ~setup:[] ~dir:None ~wait_timeout:None (path "input.tape")
+      ~setup:[] ~dir:None ~wait_timeout:None
+      [ path "input.tape" ]
   in
   Alcotest.(check int) "dry-run rejects a directory destination" 123 status;
   Native_test.check_contains "names the destination" ~sub:"occupied.svg" error
@@ -754,7 +755,8 @@ let test_engine () =
     Play_cmd.run env ?engine ~dry_run:true ~print:false ~vhs:"vhs" ~settings:[]
       ~env:[]
       ~outputs:[ path "out.txt" ]
-      ~setup:[] ~dir:None ~wait_timeout:None (path "pwsh.tape")
+      ~setup:[] ~dir:None ~wait_timeout:None
+      [ path "pwsh.tape" ]
   in
   Alcotest.(check int) "native refuses pwsh" 123 (fst (play ()));
   Alcotest.(check (pair int string))
@@ -766,7 +768,8 @@ let test_engine () =
          Play_cmd.run env ~engine:K7.Native ~dry_run:true ~print:false
            ~vhs:"vhs" ~settings:[] ~env:[]
            ~outputs:[ path "out.gif" ]
-           ~setup:[] ~dir:None ~wait_timeout:None (path "pwsh.tape") ))
+           ~setup:[] ~dir:None ~wait_timeout:None
+           [ path "pwsh.tape" ] ))
 
 (* k7 play draws a .cast, in any case, as K7.svg_of_casts does, byte for
    byte, and writes its last screen as K7.text_of_casts does; --dry-run writes
@@ -784,7 +787,8 @@ let test_cast () =
     captured path @@ fun () ->
     Play_cmd.run env ?engine ~dry_run ~print:false ~settings:[] ~env:env_vars
       ~outputs:[ path output ]
-      ~setup ~dir:None ~wait_timeout:None ?show ?delay (path "hello.CAST")
+      ~setup ~dir:None ~wait_timeout:None ?show ?delay
+      [ path "hello.CAST" ]
   in
   let read file = In_channel.with_open_bin (path file) In_channel.input_all in
   Alcotest.(check (pair int string)) "drawn" (0, "") (play "a.svg");
@@ -859,6 +863,42 @@ let test_rec_outputs () =
     "refused before it runs" false
     (Sys.file_exists (path "b.cast"))
 
+(* k7 play draws several recordings one after the other in one image, as
+   K7.svg_of_casts does, and refuses several files of another kind. *)
+let test_casts () =
+  let cast theme =
+    Fmt.str
+      "{\"version\": 3, \"term\": {\"cols\": 24, \"rows\": 4}, \"command\": \
+       \"demo --theme %s\"}\n\
+       [0.1, \"o\", \"%s\\r\\n\"]\n"
+      theme theme
+  in
+  with_files
+    [
+      ("dark.cast", 0o644, cast "dark");
+      ("light.cast", 0o644, cast "light");
+      ("demo.t", 0o644, "  $ true\n");
+    ]
+  @@ fun env path ->
+  let play inputs output =
+    captured path @@ fun () ->
+    Play_cmd.run env ~dry_run:false ~print:false ~settings:[] ~env:[]
+      ~outputs:[ path output ]
+      ~setup:[] ~dir:None ~wait_timeout:None (List.map path inputs)
+  in
+  let read file = In_channel.with_open_bin (path file) In_channel.input_all in
+  Alcotest.(check (pair int string))
+    "drawn" (0, "")
+    (play [ "dark.cast"; "light.cast" ] "both.svg");
+  let parse t = Result.get_ok (K7.cast_of_string (cast t)) in
+  expect "as K7.svg_of_casts"
+    (Result.get_ok (K7.svg_of_casts [ parse "dark"; parse "light" ]))
+    (read "both.svg");
+  let code, error = play [ "dark.cast"; "demo.t" ] "x.svg" in
+  Alcotest.(check int) "refused" 123 code;
+  Native_test.check_contains "several cram tests"
+    ~sub:"demo.t: several files play only as asciicast recordings (.cast)" error
+
 let suite =
   ( "cli",
     List.map
@@ -886,6 +926,7 @@ let suite =
          ("rec outputs", test_rec_outputs);
          ("engine", test_engine);
          ("asciicast recordings", test_cast);
+         ("several asciicast recordings", test_casts);
        ]
       @ readiness ~native:true
       @ if Option.is_some oracle then readiness ~native:false else []) )

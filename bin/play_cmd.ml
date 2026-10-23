@@ -44,8 +44,21 @@ let misplaced kind ~engine ~print ~vhs ~env ~setup ~dir ~wait_timeout ~show
       (Option.is_some delay, "--delay", [ Cast ]);
     ]
 
+let is_cast input = match kind input with Ok Cast -> true | _ -> false
+
+(* Several files play one after the other only as recordings. *)
+let kinds = function
+  | [ input ] -> kind input
+  | inputs -> (
+      match List.find_opt (Fun.negate is_cast) inputs with
+      | Some input ->
+          Fmt.error
+            "%s: several files play only as asciicast recordings (.cast)" input
+      | None -> Ok Cast)
+
 let run stdenv ?engine ~dry_run ~print ?vhs ~settings ~env ~outputs ~setup ~dir
-    ~wait_timeout ?show ?delay input =
+    ~wait_timeout ?show ?delay inputs =
+  let input = String.concat " " inputs in
   let play = function
     | Cram ->
         Play_cram.run stdenv ?engine ~dry_run ~print
@@ -56,9 +69,9 @@ let run stdenv ?engine ~dry_run ~print ?vhs ~settings ~env ~outputs ~setup ~dir
           ~vhs:(Option.value vhs ~default:"vhs")
           ~settings ~env ~outputs input
     | Cast ->
-        Play_cast.run stdenv ~dry_run ~settings ?show ?delay ~outputs input
+        Play_cast.run stdenv ~dry_run ~settings ?show ?delay ~outputs inputs
   in
-  match kind input with
+  match kinds inputs with
   | Error msg -> Flags.fail stdenv msg
   | Ok _ when dry_run && print ->
       Flags.fail stdenv
@@ -150,9 +163,10 @@ let settings =
 let input =
   let doc =
     "The file to play: a tape ($(b,.tape)), a cram test ($(b,.t)) or an \
-     asciicast recording ($(b,.cast))."
+     asciicast recording ($(b,.cast)). Several asciicast recordings play one \
+     after the other in one image."
   in
-  Arg.(required & pos 0 (some non_dir_file) None & info [] ~docv:"FILE" ~doc)
+  Arg.(non_empty & pos_all non_dir_file [] & info [] ~docv:"FILE" ~doc)
 
 let man =
   [
@@ -236,6 +250,12 @@ let man =
        empty, and $(b,--delay) sets the pause; both apply to asciicast \
        recordings only.";
     `P
+      "Several recordings play one after the other in one image, on one \
+       terminal, as commands typed in turn: each shows its command line, and \
+       the next starts once the last screen of the one before has held for a \
+       second. $(b,--show) then replaces the command of each, and the theme is \
+       that of the first.";
+    `P
       "asciinema writes such recordings, and so does $(b,k7 rec) $(b,-o) \
        $(i,FILE.cast). A program that uses console writes one at the times of \
        its virtual clock, with $(b,CONSOLE_DETERMINISTIC_CLOCK=1) and \
@@ -247,18 +267,19 @@ let man =
        $(cmd) -o demo.svg demo.t\n\
        $(cmd) -o demo.gif demo.t\n\
        $(cmd) --print -o demo.gif demo.t   # show the tape\n\
-       $(cmd) --show 'dune exec -- ./main.exe' -o main.svg main.cast";
+       $(cmd) --show 'dune exec -- ./main.exe' -o main.svg main.cast\n\
+       $(cmd) -o themes.svg dark.cast light.cast";
   ]
 
 let cmd =
-  let doc = "play a tape, a cram test or an asciicast recording" in
+  let doc = "play a tape, a cram test or asciicast recordings" in
   let run engine dry_run print vhs settings env outputs setup dir wait_timeout
-      show delay input =
+      show delay inputs =
     Eio_main.run @@ fun stdenv ->
     run stdenv ?engine ~dry_run ~print ?vhs ~settings ~env ~outputs ~setup ~dir
       ~wait_timeout ?show
       ?delay:(Option.map (fun ms -> K7.Ms ms) delay)
-      input
+      inputs
   in
   Cmd.make
     (Cmd.info "play" ~doc ~man ~exits:Flags.exits)

@@ -447,3 +447,28 @@ rec shows its command; --show "" hides it.
   $ k7 play --show '' -o v3.txt v3.cast
   $ cat v3.txt
   hi
+
+k7 play draws several recordings one after the other, in one image, as
+two commands typed in turn: each shows its command line and holds its
+last screen for a second before the next.
+
+  $ for theme in dark light; do
+  >   printf '{"version": 3, "term": {"cols": 24, "rows": 5}, "command": "demo --theme %s"}\n[0.1, "o", "%s\\r\\n"]\n' $theme $theme > $theme.cast
+  > done
+  $ k7 play -o both.svg -o both.txt dark.cast light.cast
+  $ tr '$' '%' < both.txt
+  % demo --theme dark
+  dark
+  % demo --theme light
+  light
+  $ grep -o 'animation:k[0-9a-f]*-s [0-9]*ms' both.svg | sed 's/k[0-9a-f]*-s/s/'
+  animation:s 3200ms
+  $ k7 play --show demo -o both.txt dark.cast light.cast
+  $ tr '$' '%' < both.txt
+  % demo
+  dark
+  % demo
+  light
+  $ k7 play -o both.svg dark.cast demo.t
+  k7: demo.t: several files play only as asciicast recordings (.cast)
+  [123]
