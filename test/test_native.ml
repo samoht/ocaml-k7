@@ -891,6 +891,33 @@ let test_upper_half_key_repeat () =
   | Ok () -> ()
   | Error e -> Alcotest.failf "valid VHS repeat count: %a" K7.pp_error e
 
+let test_unparsed_key_repeat () =
+  with_dir @@ fun env cwd ->
+  let t =
+    tape
+      K7.
+        [
+          type'
+            "stty -echo; echo READY; IFS= read -r line; stty echo; printf '%s' \
+             \"$line\" > keys; echo DONE\n";
+          wait (Screen "(?m)^READY$");
+          raw "Space@0ms 1.5";
+          type' "a";
+          raw "Space@0ms 99999999999999999999";
+          type' "b";
+          raw "Space@0ms 0";
+          type' "c";
+          key Enter;
+          wait Prompt;
+        ]
+  in
+  (match play env cwd t with
+  | Ok () -> ()
+  | Error e -> Alcotest.failf "%a" K7.pp_error e);
+  Alcotest.(check string)
+    "a count Go's Atoi rejects presses once" " a bc"
+    (Eio.Path.load Eio.Path.(cwd / "keys"))
+
 let test_large_key_repeat () =
   with_dir @@ fun _env cwd ->
   let t =
@@ -2530,6 +2557,7 @@ let suite =
            test_capture_closed_standard_fds );
          ("large key repeat counts validate", test_large_key_repeat);
          ("upper-half key repeat count", test_upper_half_key_repeat);
+         ("unparsed key repeat counts", test_unparsed_key_repeat);
          ("Require refuses non-executable files", test_require_non_executable);
          ("fractional sleeps retain their duration", test_fractional_sleeps);
          ("long sleeps retain their duration", test_long_sleep);

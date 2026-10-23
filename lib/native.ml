@@ -477,9 +477,12 @@ let rec read ~source ?file ~at line t =
             let count =
               match rest with
               | Num n :: _ -> (
-                  match int_of_string_opt n with
-                  | Some n when n >= 0 -> n
-                  | _ -> unsupported line "%s is not a repeat count" n)
+                  (* As in VHS, a count Go's strconv.Atoi rejects is 1. *)
+                  match Tape_syntax.atoi n with
+                  | Some n ->
+                      Int64.to_int
+                        (Int64.min (Int64.max n 0L) (Int64.of_int max_int))
+                  | None -> 1)
               | _ -> 1
             in
             Key { speed; count; key = k }
