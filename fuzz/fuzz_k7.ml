@@ -1551,6 +1551,31 @@ let test_capture_valid_roundtrip status glyph =
           check_eq ~pp:Fmt.Dump.string (image cast) (image restored);
           check_eq ~pp:Fmt.Dump.string (text cast) (text restored))
 
+let test_capture_signal_mask n =
+  Native_test.with_dir @@ fun env cwd ->
+  let signal, name =
+    List.nth
+      [ (Sys.sigusr1, "USR1"); (Sys.sigusr2, "USR2"); (Sys.sigpipe, "PIPE") ]
+      (n mod 3)
+  in
+  let previous = Unix.sigprocmask Unix.SIG_BLOCK [ signal ] in
+  Fun.protect ~finally:(fun () ->
+      ignore (Unix.sigprocmask Unix.SIG_SETMASK previous))
+  @@ fun () ->
+  match
+    K7.capture ~show:""
+      ~clock:(Eio_mock.Clock.Mono.make ())
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd
+      [ "/bin/sh"; "-c"; "kill -" ^ name ^ " $$; printf BLOCKED" ]
+  with
+  | Error e -> failf "%a" K7.pp_error e
+  | Ok (cast, status) ->
+      check (status = `Signaled signal);
+      check_eq ~pp:Fmt.Dump.string ""
+        (Result.get_ok (K7.text_of_casts [ cast ]));
+      check (List.mem signal (Unix.sigprocmask Unix.SIG_BLOCK []))
+
 let test_run_empty_path n =
   Native_test.with_dir @@ fun env cwd ->
   Native_test.executable
@@ -1600,6 +1625,8 @@ let test_capture_standard_fds mask =
 
 let with_programs =
   [
+    test_case "capture resets child signal masks and preserves the caller mask"
+      [ uint8 ] test_capture_signal_mask;
     test_case "empty PATH components search the supplied cwd" [ uint8 ]
       test_run_empty_path;
     test_case "capture gives the child all standard descriptors"
