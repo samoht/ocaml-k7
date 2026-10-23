@@ -2169,8 +2169,52 @@ let test_long_duration_range n surface =
   | Ok (), true -> fail "an impossible wait succeeded");
   check_eq ~pp:Fmt.int64 expected (List.fold_left Int64.max 0L sleeps)
 
+let test_typing_duration_units n surface =
+  let nanoseconds = n mod 1000 in
+  let duration =
+    match n mod 3 with
+    | 0 -> Fmt.str "0.%06dms" nanoseconds
+    | 1 -> Fmt.str "0.%09ds" nanoseconds
+    | _ -> Fmt.str "0.%06dms" nanoseconds
+  in
+  let text = "λ中🙂é" in
+  let rec scalars i count =
+    if i = String.length text then count
+    else
+      let d = String.get_utf_8_uchar text i in
+      scalars (i + Uchar.utf_decode_length d) (count + 1)
+  in
+  let actions, count =
+    match surface mod 3 with
+    | 0 -> (K7.[ raw ("Set TypingSpeed " ^ duration); type' text ], scalars 0 0)
+    | 1 -> ([ K7.raw (Fmt.str "Type@%s \"%s\"" duration text) ], scalars 0 0)
+    | _ -> ([ K7.raw ("Space@" ^ duration ^ " 3") ], 3)
+  in
+  Native_test.with_dir @@ fun env cwd ->
+  let actions = K7.raw (Fmt.str "Sleep 0.%09ds" nanoseconds) :: actions in
+  let tape =
+    match K7.tape ~outputs:[ "typing.svg" ] actions with
+    | Ok t -> t
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  let result, sleeps =
+    Native_test.with_sleep_log @@ fun clock ->
+    K7.record ~engine:Native ~env:Native_test.no_job_control ~clock
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd tape
+  in
+  (match result with Ok () -> () | Error e -> failf "%a" K7.pp_error e);
+  let total =
+    List.filter (fun ns -> ns >= 0L && ns < 1_000_000L) sleeps
+    |> List.fold_left Int64.add 0L
+  in
+  check_eq ~pp:Fmt.int64 (Int64.of_int (nanoseconds * (count + 1))) total
+
 let with_processes =
   [
+    test_case "tiny and zero typing durations count Unicode scalars and keys"
+      [ choose [ const 0; const 1; uint16 ]; uint8 ]
+      test_typing_duration_units;
     test_case "all native durations preserve the upper half of Go time.Duration"
       [ uint16; uint8 ] test_long_duration_range;
     test_case "fractional VHS sleeps preserve their sum in either unit"
