@@ -433,6 +433,16 @@ let test_cancelled_osc () =
   Alcotest.(check string)
     "SUB ends OSC before the next printable character" "AB\n" (text [ src ])
 
+let test_cancelled_dcs () =
+  let src =
+    {|{"version":3,"term":{"cols":20,"rows":3}}
+[0,"o","A\u001bPqpayload\u0018B"]
+|}
+  in
+  Alcotest.(check string)
+    "CAN cancels DCS before the following printable output" "AB\n"
+    (text [ src ])
+
 let test_text_conceal () =
   let src =
     header3 ^ "\n" ^ {|[0, "o", "a\u001b[8msecret\u001b[0mz"]|} ^ "\n"
@@ -450,6 +460,7 @@ let suite =
       [
         ("times", test_times);
         ("cancelled OSC preserves following text", test_cancelled_osc);
+        ("cancelled DCS preserves following text", test_cancelled_dcs);
         ("v3", test_v3);
         ("show", test_show);
         ("size", test_size);
