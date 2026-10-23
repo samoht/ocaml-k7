@@ -173,3 +173,24 @@ let last_screen txt =
   match List.rev (screens txt) with
   | s :: _ -> s
   | [] -> Alcotest.fail "no screen"
+
+(* Unix.fork refuses to run after this process has spawned a domain, even
+   one that has joined. Keep domain tests in their own process. *)
+let in_subprocess f =
+  match Unix.fork () with
+  | 0 ->
+      let status =
+        try
+          f ();
+          0
+        with exn ->
+          Fmt.epr "%s\n%!" (Printexc.to_string exn);
+          1
+      in
+      Unix._exit status
+  | pid ->
+      let rec wait () =
+        try snd (Unix.waitpid [] pid)
+        with Unix.Unix_error (EINTR, _, _) -> wait ()
+      in
+      wait ()

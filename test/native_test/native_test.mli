@@ -123,3 +123,8 @@ val screens : string -> string list
 
 val last_screen : string -> string
 (** [last_screen txt] is the last screen of the VHS text output [txt]. *)
+
+val in_subprocess : (unit -> unit) -> Unix.process_status
+(** [in_subprocess f] runs [f] in a child process, returning its exit status:
+    zero on success, one after printing a raised exception. It isolates domain
+    creation from tests that subsequently need [Unix.fork]. *)

@@ -2024,6 +2024,19 @@ let test_cram_output_is_data () =
         (actions header) (actions source))
     [ "$ echo injected"; "> echo injected" ]
 
+let test_capture_after_domain () =
+  let status =
+    in_subprocess (fun () ->
+        let worker = Domain.spawn (fun () -> ()) in
+        Domain.join worker;
+        with_dir @@ fun env cwd ->
+        let _, status = capture ~show:"" env cwd [ "true" ] in
+        exited "true" 0 status)
+  in
+  Alcotest.(check bool)
+    "capture still works after a domain has joined" true
+    (status = Unix.WEXITED 0)
+
 let suite =
   ( "native",
     List.map
@@ -2087,6 +2100,7 @@ let suite =
          ("run shows another line", test_run_show);
          ("run cancelled", test_run_cancel);
          ("capture", test_capture);
+         ("capture after an OCaml domain", test_capture_after_domain);
          ("capture keeps UTF-8 whole", test_capture_utf_8);
          ( "capture round-trips incomplete UTF-8",
            test_capture_incomplete_utf_8_round_trip );

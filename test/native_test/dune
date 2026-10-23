@@ -1,3 +1,13 @@
 (library
  (name native_test)
- (libraries k7 svg_check alcotest eio eio.unix eio.mock eio_main fmt mtime))
+ (libraries
+  k7
+  svg_check
+  alcotest
+  eio
+  eio.unix
+  eio.mock
+  eio_main
+  fmt
+  mtime
+  unix))
