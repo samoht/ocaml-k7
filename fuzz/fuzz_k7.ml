@@ -198,6 +198,16 @@ let check_reads t =
       if printed' <> printed then failf "%S read back as %S" printed printed'
   | Error e -> failf "%S not read back: %a" printed K7.pp_error e
 
+let test_final_hidden_roundtrip n comment =
+  let text = List.nth [ "secret"; "café"; "漢字"; "👍" ] (n mod 4) in
+  let action = if comment then K7.raw ("# " ^ text) else K7.type' text in
+  let actions = List.init (1 + (n mod 8)) (fun _ -> K7.hidden [ action ]) in
+  match
+    K7.tape ~outputs:[ "hidden.txt" ] K7.[ sleep (Ms 100); hidden actions ]
+  with
+  | Error e -> failf "%a" K7.pp_error e
+  | Ok t -> check_reads t
+
 let test_of_string s t n =
   (match K7.of_string s with Ok t -> check_reads t | Error _ -> ());
   let c = Char.chr (abs n mod 256) in
@@ -2310,6 +2320,8 @@ let decoding =
 
 let tapes =
   [
+    test_case "final hidden actions preserve tape serialization" [ uint8; bool ]
+      test_final_hidden_roundtrip;
     test_case "tape is total" [ bytes; bytes; int ] test_total;
     test_case "of_string reads to_string"
       [
