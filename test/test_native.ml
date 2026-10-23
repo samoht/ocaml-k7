@@ -919,6 +919,30 @@ let test_render_outputs () =
       );
     ]
 
+let test_source_wait_line () =
+  with_dir @@ fun env cwd ->
+  Eio.Path.save ~create:(`Or_truncate 0o644)
+    Eio.Path.(cwd / "inc.tape")
+    "# included tape\n\
+     Output \"ignored.txt\"\n\
+     Sleep 20ms\n\
+     Wait+Line /NEVER_MATCH/\n";
+  let t = tape K7.[ raw {|Source "inc.tape"|}; sleep (Ms 100) ] in
+  with_clock @@ fun clock ->
+  match
+    K7.record ~engine:Native ~env:no_job_control
+      ~stuck:(fun _ -> true)
+      ~clock
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd t
+  with
+  | Error (Stuck { line; wait; _ }) ->
+      Alcotest.(check string) "the included wait" "Wait+Line /NEVER_MATCH/" wait;
+      Alcotest.(check int)
+        "line in inc.tape, including comments and Output" 4 line
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+  | Ok () -> Alcotest.fail "an impossible wait succeeded"
+
 let test_source () =
   with_dir @@ fun env cwd ->
   let file name contents =
@@ -2298,6 +2322,7 @@ let suite =
          ("replies", test_replies);
          ("screenshot", test_screenshot);
          ("source", test_source);
+         ("sourced waits name their own line", test_source_wait_line);
          ("output paths", test_output_paths);
          ("render outputs", test_render_outputs);
          ("keys", test_keys);
