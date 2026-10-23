@@ -2460,8 +2460,23 @@ let test_reader output capacity closed size =
         (Bytes.create (1 + size)));
   check_eq ~pp:pp_string output (Buffer.contents fed)
 
+let test_native_repeat_preflight n =
+  Native_test.with_dir @@ fun _env cwd ->
+  let count = 100001 + n in
+  let source = Fmt.str "Output repeat.svg\nSpace@0ms %d\n" count in
+  let tape =
+    match K7.of_string source with
+    | Ok t -> t
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  match K7.check ~engine:Native ~cwd tape with
+  | Ok () -> ()
+  | Error e -> failf "repeat %d: %a" count K7.pp_error e
+
 let bounds =
   [
+    test_case "native repeat counts are not pixel sizes" [ uint16 ]
+      test_native_repeat_preflight;
     test_case "the reader drains what a program wrote before it exited"
       [ bytes; uint8; uint8; uint8 ]
       test_reader;
