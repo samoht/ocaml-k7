@@ -106,6 +106,20 @@ val tape : K7.action list -> K7.t
 val last : 'a list -> 'a
 (** [last l] is the last element of [l]. *)
 
+val shells : string list
+(** [shells] are those of [/bin/sh], [/bin/dash], [/bin/bash] and [/bin/zsh]
+    that exist. *)
+
+val cram_command : string -> string
+(** [cram_command t] is the first command of the cram test [t], as dune runs it:
+    its [  $ ] line and the [  > ] lines after it, without those prefixes,
+    joined by newlines. *)
+
+val shown_command : string -> string
+(** [shown_command screen] is the command line the screen [screen] shows: its
+    first line without [$ ], and the lines after it that start with [>], without
+    [> ], joined by newlines. *)
+
 val invalid : K7.error -> string
 (** [invalid e] is the message of [K7.Invalid msg], the error of {!K7.tape}; it
     fails the test on any other error. *)

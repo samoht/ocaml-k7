@@ -1364,6 +1364,7 @@ let payloads =
     "\"quoted\"";
     "$HOME";
     "a\nb";
+    "a\n";
     "caf\xc3\xa9";
     "世界";
     "😀";
@@ -1398,15 +1399,15 @@ let test_command_line_roundtrip n =
     | Ok [] -> fail "no command frame"
     | Error e -> fail e
   in
-  let line = List.hd (String.split_on_char '\n' first) in
-  check (String.starts_with ~prefix:"$ " line);
-  let command = String.sub line 2 (String.length line - 2) in
-  let output = Buffer.create 128 in
-  Eio.Process.run
-    ~stdout:(Eio.Flow.buffer_sink output)
-    proc
-    [ "/bin/bash"; "-c"; command ];
-  check_eq ~pp:Fmt.Dump.string payload (Buffer.contents output)
+  let command = Native_test.shown_command first in
+  List.iter
+    (fun shell ->
+      let output = Buffer.create 128 in
+      Eio.Process.run
+        ~stdout:(Eio.Flow.buffer_sink output)
+        proc [ shell; "-c"; command ];
+      check_eq ~pp:Fmt.Dump.string payload (Buffer.contents output))
+    Native_test.shells
 
 let test_capture_incomplete_roundtrip n tail =
   with_dir @@ fun env _ ->

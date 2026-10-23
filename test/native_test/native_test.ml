@@ -152,6 +152,37 @@ let tape actions =
 
 let last l = List.nth l (List.length l - 1)
 
+let shells =
+  List.filter Sys.file_exists
+    [ "/bin/sh"; "/bin/dash"; "/bin/bash"; "/bin/zsh" ]
+
+let after prefix l =
+  if String.starts_with ~prefix l then
+    Some
+      (String.sub l (String.length prefix)
+         (String.length l - String.length prefix))
+  else None
+
+let joined ~first ~more text =
+  match String.split_on_char '\n' text with
+  | line :: rest -> (
+      match after first line with
+      | None -> Alcotest.failf "no command in %S" text
+      | Some command ->
+          let rec go = function
+            | l :: rest -> (
+                match more l with Some l -> l :: go rest | None -> [])
+            | [] -> []
+          in
+          String.concat "\n" (command :: go rest))
+  | [] -> Alcotest.failf "no command in %S" text
+
+let cram_command =
+  joined ~first:"  $ " ~more:(function "  >" -> Some "" | l -> after "  > " l)
+
+let shown_command =
+  joined ~first:"$ " ~more:(function ">" -> Some "" | l -> after "> " l)
+
 let invalid = function
   | K7.Invalid msg -> msg
   | e -> Alcotest.failf "not Invalid: %a" K7.pp_error e

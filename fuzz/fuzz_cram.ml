@@ -221,26 +221,27 @@ let test_cram_argument_bytes scalars =
   let argument = Buffer.contents buffer in
   let proc = Eio.Stdenv.process_mgr env in
   let received = Eio.Path.(cwd / "received") in
-  match
-    K7.cram
-      ~clock:(Eio_mock.Clock.Mono.make ())
-      ~proc ~cwd
-      [ "/bin/sh"; "-c"; "printf '%s' \"$1\" > received"; "k7-argv"; argument ]
-  with
-  | Error (Invalid _) when String.ends_with ~suffix:"\n" argument ->
-      check (not (Eio.Path.is_file received))
-  | Error e -> failf "%a" K7.pp_error e
-  | Ok (source, status) ->
-      check (status = `Exited 0);
-      check_eq ~pp:Fmt.Dump.string argument (Eio.Path.load received);
-      let line = List.hd (String.split_on_char '\n' source) in
-      let line = String.sub line 4 (String.length line - 4) in
-      List.iter
-        (fun shell ->
-          Eio.Path.unlink received;
-          Eio.Process.run proc ~cwd [ shell; "-c"; line ];
-          check_eq ~pp:Fmt.Dump.string argument (Eio.Path.load received))
-        (List.filter Sys.file_exists [ "/bin/sh"; "/bin/dash"; "/bin/bash" ])
+  let source, status =
+    match
+      K7.cram
+        ~clock:(Eio_mock.Clock.Mono.make ())
+        ~proc ~cwd
+        [
+          "/bin/sh"; "-c"; "printf '%s' \"$1\" > received"; "k7-argv"; argument;
+        ]
+    with
+    | Ok result -> result
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  check (status = `Exited 0);
+  check_eq ~pp:Fmt.Dump.string argument (Eio.Path.load received);
+  let command = Native_test.cram_command source in
+  List.iter
+    (fun shell ->
+      Eio.Path.unlink received;
+      Eio.Process.run proc ~cwd [ shell; "-c"; command ];
+      check_eq ~pp:Fmt.Dump.string argument (Eio.Path.load received))
+    Native_test.shells
 
 let suite =
   ( "cram",

@@ -129,8 +129,9 @@ let test_show () =
     (svg ~settings K7.[ (Ms 2, "a"); (Ms 1002, "") ])
     (cast ~show:[ "" ] commanded);
   Alcotest.(check string)
-    "a command on several lines shows on one"
-    (svg ~settings K7.[ (Ms 0, line "a  b"); (Ms 502, "a"); (Ms 1502, "") ])
+    "a command on several lines continues after > "
+    (svg ~settings
+       K7.[ (Ms 0, line "a\r\n>  b"); (Ms 502, "a"); (Ms 1502, "") ])
     (cast
        ({|{"version": 3, "term": {"cols": 20, "rows": 3}, "command": "a\n\tb"}|}
       ^ "\n" ^ {|[0.002, "o", "a"]|}));
