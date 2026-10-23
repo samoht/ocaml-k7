@@ -990,6 +990,37 @@ let test_cast_text_style data n =
   in
   check_eq ~pp:pp_string (text fixed) (text (fixed @ styled))
 
+let test_fixed_cast_size_ignores_resizes n =
+  let header = {|{"version":2,"width":12,"height":4}|} ^ "\n" in
+  let first = "[0,\"o\"," ^ json_string "abc中🙂" ^ "]\n" in
+  let second = "[0.1,\"o\"," ^ json_string "\r\néZ" ^ "]\n" in
+  let last = "[0.2,\"x\",\"0\"]\n" in
+  let resize time columns rows =
+    Fmt.str "[%s,\"r\",\"%dx%d\"]\n" time columns rows
+  in
+  let reference = header ^ first ^ second ^ last in
+  let resized =
+    header ^ first
+    ^ resize "0.05" (1 + (n mod 5)) (1 + (n mod 2))
+    ^ second
+    ^ resize "0.15" (20 + (n mod 16)) (8 + (n mod 4))
+    ^ last
+  in
+  let parse src =
+    match K7.cast_of_string src with
+    | Ok c -> c
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  let get = function Ok s -> s | Error e -> failf "%a" K7.pp_error e in
+  let settings = K7.[ Columns 8; Rows 3 ] in
+  let a = parse reference and b = parse resized in
+  check_eq ~pp:pp_string
+    (get (K7.svg_of_casts ~settings [ a ]))
+    (get (K7.svg_of_casts ~settings [ b ]));
+  check_eq ~pp:pp_string
+    (get (K7.text_of_casts ~settings [ a ]))
+    (get (K7.text_of_casts ~settings [ b ]))
+
 let test_cast_ignored_metadata data n =
   let data = if String.is_valid_utf_8 data then data else String.escaped data in
   let header extra =
@@ -1146,6 +1177,8 @@ let casts =
 let suite =
   ( "svg",
     [
+      test_case "explicit cast dimensions make resize events harmless" [ uint8 ]
+        test_fixed_cast_size_ignores_resizes;
       test_case "pure SVG ignores shell, typing speed and wait timeout"
         [ bytes; uint16 ] test_svg_ignores_process_settings;
       test_case "distinct inline SVG images own their namespace"
