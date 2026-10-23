@@ -2369,6 +2369,28 @@ let test_long_sleep () =
     (Int64.mul (Int64.of_int milliseconds) 1_000_000L)
     (List.fold_left Int64.max 0L sleeps)
 
+let test_replace_fractional_typing_speed () =
+  with_dir @@ fun env cwd ->
+  let source = "Output typing.svg\nSet TypingSpeed 0.5ms\nType abc\n" in
+  let t =
+    Result.get_ok
+      (Result.bind (K7.of_string source)
+         (K7.with_settings K7.[ Typing_speed (Ms 7) ]))
+  in
+  let result, sleeps =
+    with_sleep_log @@ fun clock ->
+    K7.record ~engine:Native ~env:no_job_control ~clock
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd t
+  in
+  (match result with
+  | Ok () -> ()
+  | Error e -> Alcotest.failf "%a" K7.pp_error e);
+  Alcotest.(check (list int64))
+    "with_settings replaces the parsed speed for each character"
+    [ 7_000_000L; 7_000_000L; 7_000_000L ]
+    (List.filter (fun ns -> ns >= 0L && ns < 10_000_000L) sleeps)
+
 let suite =
   ( "native",
     List.map
@@ -2378,6 +2400,8 @@ let suite =
            test_capture_closed_standard_fds );
          ("fractional sleeps retain their duration", test_fractional_sleeps);
          ("long sleeps retain their duration", test_long_sleep);
+         ( "replace a fractional typing speed",
+           test_replace_fractional_typing_speed );
          ("record", test_record);
          ("stuck callback receives at most 64 KiB", test_stuck_output_bound);
          ("zero-speed prompt wait", test_zero_speed_prompt);
