@@ -686,9 +686,9 @@ let test_palette_roundtrip index colour reset_all =
 
 let test_cast columns rows events =
   let columns = columns + 1 and rows = rows + 1 in
-  let _, lines, output =
+  let _, last, lines, output =
     List.fold_left
-      (fun (us, lines, output) (gap, code, short, data) ->
+      (fun (us, last, lines, output) (gap, code, short, data) ->
         let us = us + gap in
         let code = codes.(code) in
         let data =
@@ -699,12 +699,13 @@ let test_cast columns rows events =
         let line =
           Fmt.str "[%s, %S, %s]" (seconds ~short us) code (json_string data)
         in
+        let ms = (us + 500) / 1000 in
+        let last = if code = "o" || code = "r" then ms else last in
         let output =
-          if code = "o" then (K7.Ms ((us + 500) / 1000), data) :: output
-          else output
+          if code = "o" then (K7.Ms ms, data) :: output else output
         in
-        (us, line :: lines, output))
-      (0, [], []) events
+        (us, last, line :: lines, output))
+      (0, 0, [], []) events
   in
   let cast =
     String.concat "\n"
@@ -712,7 +713,6 @@ let test_cast columns rows events =
          columns rows
       :: List.rev lines)
   in
-  let last = match output with (Ms ms, _) :: _ -> ms | [] -> 0 in
   let output = List.rev ((K7.Ms (last + 1000), "") :: output) in
   let settings = K7.[ Font_size 10 ] in
   let draw src =
