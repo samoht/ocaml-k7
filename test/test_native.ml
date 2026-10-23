@@ -1979,6 +1979,23 @@ let test_cram () =
     (String.starts_with ~prefix:"  $ sh -c 'kill -9 $$'\n" t
     && String.ends_with ~suffix:"\n  [137]\n" t)
 
+(* An exec argument cannot contain NUL. Going through sh must not turn an
+   impossible argv into a successful command with a truncated argument. *)
+let test_cram_nul_argument () =
+  with_dir @@ fun env cwd ->
+  match
+    K7.cram
+      ~clock:(Eio_mock.Clock.Mono.make ())
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd
+      [ "printf"; "%s"; "before\000after" ]
+  with
+  | Error (Invalid _ | Io _) -> ()
+  | Error e -> Alcotest.failf "unexpected error: %a" K7.pp_error e
+  | Ok (source, status) ->
+      Alcotest.failf "ran an argv containing NUL: %a\n%s" Eio.Process.pp_status
+        status source
+
 (* The background loop prints once the shell has gone, so it prints nothing
    if it stops with the shell. *)
 let test_cram_stop () =
@@ -2165,6 +2182,7 @@ let suite =
          ( "capture round-trips incomplete UTF-8",
            test_capture_incomplete_utf_8_round_trip );
          ("cram", test_cram);
+         ("cram refuses NUL in argv", test_cram_nul_argument);
          ("cram stops the command's process group", test_cram_stop);
          ("cram kills what ignores SIGTERM", test_cram_kill);
          ("cram ends the command's background jobs", test_cram_background);
