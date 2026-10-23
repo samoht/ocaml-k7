@@ -119,9 +119,37 @@ let test_setup scripts command =
       check (String.ends_with ~suffix:"; clear" prelude)
   | l -> failf "submitted %d lines" (List.length l)
 
+(* Output must not add a command or a continuation to a generated test. *)
+let test_recorded_output_is_data n continuation =
+  Native_test.with_dir @@ fun env cwd ->
+  let prefix = if continuation then "> " else "$ " in
+  let output = prefix ^ "echo " ^ String.make (1 + (n mod 32)) 'a' in
+  let source, _ =
+    match
+      K7.cram
+        ~clock:(Eio_mock.Clock.Mono.make ())
+        ~proc:(Eio.Stdenv.process_mgr env)
+        ~cwd
+        [ "printf"; "%s\n"; output ]
+    with
+    | Ok result -> result
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  let commands src =
+    match Cram.parse src with
+    | Error e -> failf "%s" e
+    | Ok t ->
+        printed t |> String.split_on_char '\n'
+        |> List.filter (String.starts_with ~prefix:"Type ")
+  in
+  let header = List.hd (String.split_on_char '\n' source) ^ "\n" in
+  check_eq ~pp:Fmt.(Dump.list string) (commands header) (commands source)
+
 let suite =
   ( "cram",
     [
+      test_case "recorded output stays out of cram commands" [ uint8; bool ]
+        test_recorded_output_is_data;
       test_case "parse"
         [ choose [ bytes; map [ bytes ] (fun s -> "  $ " ^ s) ] ]
         test_parse;
