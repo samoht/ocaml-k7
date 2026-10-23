@@ -1892,6 +1892,22 @@ let test_capture_utf_8 () =
         (Result.get_ok (K7.text_of_casts [ c ]))
   | Error e -> Alcotest.failf "%a" K7.pp_error e
 
+let test_capture_incomplete_utf_8_round_trip () =
+  with_dir @@ fun env cwd ->
+  let cast, status = capture ~show:"" env cwd [ "printf"; "%s"; "\xc3" ] in
+  exited "printf" 0 status;
+  let saved = K7.string_of_cast cast in
+  Alcotest.(check bool) "the cast is UTF-8" true (String.is_valid_utf_8 saved);
+  let restored =
+    match K7.cast_of_string saved with
+    | Ok c -> c
+    | Error e -> Alcotest.failf "%a" K7.pp_error e
+  in
+  Alcotest.(check string)
+    "saving the capture preserves its image"
+    (Result.get_ok (K7.svg_of_casts [ cast ]))
+    (Result.get_ok (K7.svg_of_casts [ restored ]))
+
 let cram ?env:vars ?stop ?(clock = Eio_mock.Clock.Mono.make ()) env cwd argv =
   match
     K7.cram ?env:vars ?stop ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd argv
@@ -2072,6 +2088,8 @@ let suite =
          ("run cancelled", test_run_cancel);
          ("capture", test_capture);
          ("capture keeps UTF-8 whole", test_capture_utf_8);
+         ( "capture round-trips incomplete UTF-8",
+           test_capture_incomplete_utf_8_round_trip );
          ("cram", test_cram);
          ("cram stops the command's process group", test_cram_stop);
          ("cram kills what ignores SIGTERM", test_cram_kill);
