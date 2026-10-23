@@ -5,6 +5,7 @@
  (name test)
  (deps
   asciinema.cast
+  asciinema-v3.cast
   regexp_cases.txt
   tape_cases.txt
   number_cases.txt

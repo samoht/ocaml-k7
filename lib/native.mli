@@ -94,9 +94,15 @@ val resolve : cwd:string -> Eio.Process.Env.t -> string -> string option
     is executable, so that running it reports why. A relative path is relative
     to [cwd]. It is [None] if there is no such file. *)
 
-val replay : t -> (int * string) list -> string
-(** [replay t output] is the SVG image of a terminal with the settings of [t]
-    that receives each string of [output] at its time, in milliseconds. *)
+val size : t -> int * int
+(** [size t] is the number of columns and rows of the terminal of [t]. *)
+
+val replay : t -> (int * Asciicast.event) list -> string * Screen.t
+(** [replay t events] is the SVG image of a terminal with the settings of [t]
+    that receives each event of [events] at its time, in milliseconds, and the
+    last screen it shows. An output is fed to the terminal, a resize gives it
+    the new size, at most {!size}, and an exit does nothing; the image lasts
+    until the last event. *)
 
 val run :
   ?interrupt:unit Eio.Promise.t ->

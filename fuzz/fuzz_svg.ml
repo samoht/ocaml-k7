@@ -592,7 +592,9 @@ let test_cast columns rows events =
         let us = us + gap in
         let code = codes.(code) in
         let data =
-          if String.is_valid_utf_8 data then data else String.escaped data
+          if code = "r" then Fmt.str "%dx%d" columns rows
+          else if String.is_valid_utf_8 data then data
+          else String.escaped data
         in
         let line =
           Fmt.str "[%s, %S, %s]" (seconds ~short us) code (json_string data)
@@ -613,9 +615,13 @@ let test_cast columns rows events =
   let last = match output with (Ms ms, _) :: _ -> ms | [] -> 0 in
   let output = List.rev ((K7.Ms (last + 1000), "") :: output) in
   let settings = K7.[ Font_size 10 ] in
+  let draw src =
+    Result.bind (K7.cast_of_string src) (fun c ->
+        K7.svg_of_casts ~settings [ c ])
+  in
   match
-    ( K7.svg_of_cast ~settings cast,
-      K7.svg_of_cast ~settings cast,
+    ( draw cast,
+      draw cast,
       K7.svg ~settings:(K7.Columns columns :: Rows rows :: settings) output )
   with
   | Ok a, Ok b, Ok expected ->
@@ -624,7 +630,9 @@ let test_cast columns rows events =
   | Error e, _, _ | _, Error e, _ | _, _, Error e -> failf "%a" K7.pp_error e
 
 let test_cast_total src =
-  match K7.svg_of_cast src with
+  match
+    Result.bind (K7.cast_of_string src) (fun c -> K7.svg_of_casts [ c ])
+  with
   | Ok _ | Error (Invalid _ | Unsupported _) -> ()
   | Error e -> failf "%a" K7.pp_error e
 
@@ -673,7 +681,7 @@ let casts =
              (fun gap code short data -> (gap, code, short, data)));
       ]
       test_cast;
-    test_case "svg_of_cast is total"
+    test_case "svg_of_casts is total"
       [
         choose
           [

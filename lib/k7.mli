@@ -8,7 +8,7 @@
     [K7] draws a terminal session as an SVG image animated with CSS alone,
     without a browser. {!record} plays a tape in a shell on a pseudo-terminal,
     {!run} runs a program there, {!svg} draws output given with its times and
-    {!svg_of_cast} draws an asciicast recording.
+    {!svg_of_casts} draws asciicast recordings.
 
     A tape is the script of {{:https://github.com/charmbracelet/vhs}VHS}, by
     {{:https://charm.land/}Charm}, which records a terminal session as a GIF or
@@ -158,7 +158,7 @@ type error =
           rather than when the wait times out. *)
   | Invalid of string
       (** A tape, a setting or a time that VHS rejects or partly ignores, or
-          that {!record}, {!svg} or {!svg_of_cast} refuses as their
+          that {!record}, {!svg} or {!svg_of_casts} refuses as their
           documentation states, naming the first offending item, and why. *)
 
 val pp_error : error Fmt.t
@@ -325,8 +325,8 @@ val pp : t Fmt.t
 
     {!svg} draws the image the {!constructor-Native} engine would from output
     given with its times, such as bytes a test captured, with no tape, no shell
-    and no file written: it returns the image. {!svg_of_cast} draws the output
-    of an asciicast recording the same way.
+    and no file written: it returns the image. {!svg_of_casts} draws the output
+    of asciicast recordings the same way.
 
     {[
     let image =
@@ -450,43 +450,87 @@ val svg :
     the {!constructor-Theme} colours and the sizes that the
     {{!native_details}native recorder} refuses. *)
 
-val svg_of_cast :
+(** {1:casts Asciicast recordings}
+
+    An asciicast recording is what a program printed, with its times, in the
+    format of {{:https://asciinema.org/}asciinema}. {!capture} records one,
+    {!svg_of_casts} draws recordings as an image and {!text_of_casts} gives the
+    last screen they show, so a recording can be drawn later with other
+    settings. *)
+
+type cast
+(** The type for asciicast recordings. *)
+
+val cast_of_string : string -> (cast, error) result
+(** [cast_of_string s] is the recording [s], in
+    {{:https://docs.asciinema.org/manual/asciicast/v2/}asciicast v2} or
+    {{:https://docs.asciinema.org/manual/asciicast/v3/}asciicast v3}, as
+    asciinema 2 and 3 write it. It keeps the size of the terminal, the
+    [command], the [theme] and, after the [idle_time_limit] of the header, the
+    output, resize and exit events at their times, each rounded to the
+    microsecond, then to the nearest millisecond, half up, so the same [s] gives
+    the same image, byte for byte. It ignores the other members of the header,
+    input events, markers and events of other codes.
+
+    It is [Error (Invalid msg)] if [s] is not such a recording, with [msg]
+    naming the line, from [1], and why: a header that is not a JSON object with
+    [version] [2] and a positive integer [width] and [height], or [version] [3]
+    and a [term] object with a positive integer [cols] and [rows]; a theme whose
+    colours are not [#rrggbb] or whose palette does not have eight or sixteen of
+    them; a line that is not an event [[time, code, data]] of a number and two
+    strings; a negative time or interval, or in version 2 a time before the one
+    ahead of it; a resize whose data is not [COLSxROWS], or an exit whose data
+    is not an integer. *)
+
+val string_of_cast : cast -> string
+(** [string_of_cast c] is [c] in asciicast v3, its times as intervals in
+    milliseconds and without an [idle_time_limit]: {!cast_of_string} reads it
+    back as [c]. *)
+
+val svg_of_casts :
   ?settings:setting list ->
   ?show:string ->
   ?delay:duration ->
-  string ->
+  cast list ->
   (string, error) result
-(** [svg_of_cast ~settings ~show ~delay cast] is the SVG image of the
-    {{:https://docs.asciinema.org/manual/asciicast/v2/}asciicast v2} recording
-    [cast], as {!svg} draws the data of its output events, those with the code
-    [o], at their times. Each time, in seconds, is rounded to the microsecond,
-    then to the nearest millisecond, half up, so the same [cast] gives the same
-    image, byte for byte. The terminal has the [width] and [height] of the
-    header as its {!constructor-Columns} and {!constructor-Rows}, unless
-    [settings] (defaults to [[]]) size it in that direction; [settings] apply
-    after them. The other members of the header are ignored, and so are input
-    events, markers, resizes and events of other codes. The last screen holds
-    for a second, as for {!run}. With [show] (defaults to [""]) not empty, the
-    image's first line is [$ ] then [show], as for {!run}, and the output shows
-    [delay] (defaults to [Ms 500]) later. So, for a [cast] whose header has the
-    [width] [w] and the [height] [h], whose output events give [output], their
-    data at their milliseconds, the last at [last], and for [settings] that do
-    not size the terminal:
+(** [svg_of_casts ~settings ~show ~delay casts] is the SVG image of the
+    recordings [casts], one after the other on one terminal, as {!svg} draws the
+    data of their output events at their times. A recording's first line is [$ ]
+    then its command, as for {!run}, and its output shows [delay] (defaults to
+    [Ms 500]) later; its command is [show] if given, or the [command] of its
+    header, if any, its control characters shown as spaces. An empty command
+    shows no line and no delay. The last screen of each recording holds for a
+    second after its last event, an exit included, and the next recording starts
+    then.
+
+    The terminal has the size of the header of each recording from its start,
+    and of each resize, on an image of the largest of them, unless [settings]
+    (defaults to [[]]) size the terminal in that direction: it then keeps that
+    size. Its colours are the theme of the first recording's header, if any,
+    with each colour of an eight-colour palette as its bright colour too, unless
+    [settings] give a {!constructor-Theme}. [settings] apply after them. So, for
+    a recording [c] without a command, a theme or a resize, whose header has the
+    size [w] and [h], whose output events give [output], their data at their
+    milliseconds, whose last event is at [last], and for [settings] that do not
+    size the terminal:
 
     {@ocaml skip[
-    svg_of_cast ~settings cast
+    svg_of_casts ~settings [ c ]
     = svg
         ~settings:(Columns w :: Rows h :: settings)
         (output @ [ (Ms (last + 1000), "") ])
     ]}
 
-    It is [Error (Invalid msg)] if [cast] is not asciicast v2, with [msg] naming
-    the line, from [1], and why: a header that is not a JSON object with
-    [version] [2] and a positive integer [width] and [height], a line that is
-    not an event [[time, code, data]] of a number and two strings, a negative
-    time, or a time before the one ahead of it. It is also [Error (Invalid _)]
-    on what {!run} refuses in [show] and [delay], and the error of {!svg} on
-    [settings] that it refuses. *)
+    It is [Error (Invalid _)] on an empty [casts], on what {!run} refuses in
+    [show] and [delay], and the error of {!svg} on [settings] that it refuses.
+*)
+
+val text_of_casts :
+  ?settings:setting list -> ?show:string -> cast list -> (string, error) result
+(** [text_of_casts ~settings ~show casts] is the text of the last screen of
+    [svg_of_casts ~settings ~show casts]: each row without its trailing white
+    space, as {!svg} reads it, followed by a newline, up to the last row that is
+    not blank. It is the error of {!svg_of_casts} otherwise. *)
 
 val run :
   ?settings:setting list ->

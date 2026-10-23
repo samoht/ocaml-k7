@@ -158,3 +158,44 @@ let equal t0 t1 =
   t0.cursor = t1.cursor
   && Array.length t0.rows = Array.length t1.rows
   && Array.for_all2 row_equal t0.rows t1.rows
+
+let sgr b (c : cell) =
+  let codes =
+    (0 :: Ansi.Attr.to_sgr_codes c.attrs)
+    @ (match c.fg with
+      | Default -> []
+      | Indexed i -> [ 38; 5; i ]
+      | Rgb x -> [ 38; 2; x lsr 16; (x lsr 8) land 0xff; x land 0xff ])
+    @
+    match c.bg with
+    | Default -> []
+    | Indexed i -> [ 48; 5; i ]
+    | Rgb x -> [ 48; 2; x lsr 16; (x lsr 8) land 0xff; x land 0xff ]
+  in
+  Buffer.add_string b "\027[";
+  Buffer.add_string b (String.concat ";" (List.map string_of_int codes));
+  Buffer.add_char b 'm'
+
+(* [Vte.resize] clears the screen; a terminal keeps what fits. DECSC and DECRC
+   keep the cursor, the pen and the character sets around the repaint. *)
+let resize term ~rows ~cols =
+  if Vte.rows term <> rows || Vte.cols term <> cols then (
+    let before = of_terminal term in
+    Vte.resize term ~rows ~cols;
+    let b = Buffer.create 4096 in
+    Buffer.add_string b "\0277\027(B";
+    Array.iteri
+      (fun r row ->
+        if r < rows then (
+          Fmt.kstr (Buffer.add_string b) "\027[%d;1H" (r + 1);
+          let x = ref 0 in
+          Array.iter
+            (fun (c : cell) ->
+              if c.width > 0 && !x + c.width <= cols then (
+                sgr b c;
+                Buffer.add_string b c.text);
+              x := !x + c.width)
+            row.cells))
+      before.rows;
+    Buffer.add_string b "\0278";
+    feed term (Buffer.contents b))

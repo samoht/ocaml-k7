@@ -14,10 +14,12 @@ val run :
   outputs:string list ->
   string ->
   int
-(** [run stdenv ~dry_run ~settings ~show ~delay ~outputs input] draws the
-    asciicast recording in the file [input] with {!K7.svg_of_cast}, with
-    [settings], [show] and [delay], writes the image to each of [outputs], or to
-    none if [dry_run] is [true], and is [0]. It is [123] after printing an error
-    on standard error, if standard error can be written, if [outputs] is empty
-    or one of them does not end with [.svg], if [input] cannot be read, if
-    {!K7.svg_of_cast} fails, or if the image cannot be written. *)
+(** [run stdenv ~dry_run ~settings ~show ~delay ~outputs input] reads the
+    asciicast recording in the file [input] with {!K7.cast_of_string}, draws it
+    with {!K7.svg_of_casts} for each [.svg] output and gives its last screen
+    with {!K7.text_of_casts} for each [.txt] output, extensions in any case,
+    with [settings], [show] and [delay], writes them to [outputs], or to none if
+    [dry_run] is [true], and is [0]. It is [123] after printing an error on
+    standard error, if standard error can be written, if [outputs] is empty or
+    one of them is neither [.svg] nor [.txt], if [input] cannot be read, if
+    reading or drawing it fails, or if an output cannot be written. *)

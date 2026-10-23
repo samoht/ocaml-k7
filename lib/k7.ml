@@ -1467,7 +1467,10 @@ let terminal settings =
 let svg ?(settings = []) output =
   let* tape = terminal settings in
   let* () = check_times output in
-  Ok (Native.replay tape (List.map (fun (Ms ms, s) -> (ms, s)) output))
+  Ok
+    (fst
+       (Native.replay tape
+          (List.map (fun (Ms ms, s) -> (ms, Asciicast.Output s)) output)))
 
 let is_control c = c < 0x20 || (c >= 0x7f && c <= 0x9f)
 
@@ -1545,27 +1548,134 @@ let command_line_of ?show ~delay argv =
   in
   shown ~show ~delay
 
-let cast_size (c : Asciicast.t) settings =
-  let given f = List.exists f settings in
-  (if given (function Columns _ | Width _ -> true | _ -> false) then []
-   else [ Columns c.columns ])
-  @
-  if given (function Rows _ | Height _ -> true | _ -> false) then []
-  else [ Rows c.rows ]
+type cast = Asciicast.t
 
+let cast_of_string s =
+  Result.map_error (fun msg -> Invalid msg) (Asciicast.of_string s)
+
+let string_of_cast = Asciicast.to_string
 let hold = 1000
 
-let svg_of_cast ?(settings = []) ?(show = "") ?(delay = Ms 500) cast =
-  let* line, delay = shown ~show ~delay in
-  let* c =
-    Result.map_error (fun msg -> Invalid msg) (Asciicast.of_string cast)
+(* A header's command on one line. *)
+let one_line s =
+  let b = Buffer.create (String.length s) in
+  let rec go i =
+    if i < String.length s then (
+      let d = String.get_utf_8_uchar s i in
+      let n = Uchar.utf_decode_length d in
+      if is_control (Uchar.to_int (Uchar.utf_decode_uchar d)) then
+        Buffer.add_char b ' '
+      else Buffer.add_substring b s i n;
+      go (i + n))
   in
-  let output = List.map (fun (ms, s) -> (Ms (ms + delay), s)) c.output in
-  let last = List.fold_left (fun _ (Ms ms, _) -> ms) delay output in
-  let output = output @ [ (Ms (last + hold), "") ] in
-  svg
-    ~settings:(cast_size c settings @ settings)
-    (if line = "" then output else (Ms 0, line) :: output)
+  go 0;
+  Buffer.contents b
+
+let ansi_names =
+  [ "black"; "red"; "green"; "yellow"; "blue"; "magenta"; "cyan"; "white" ]
+
+let bright name = "bright" ^ String.capitalize_ascii name
+
+(* As a VHS JSON theme; the colours are #rrggbb. *)
+let theme (t : Asciicast.theme) =
+  let palette =
+    if List.length t.palette = 8 then t.palette @ t.palette else t.palette
+  in
+  let names = ansi_names @ List.map bright ansi_names in
+  let field (k, v) = Fmt.str "%S: %S" k v in
+  Theme
+    ("{"
+    ^ String.concat ", "
+        (List.map field
+           ([
+              ("background", t.background);
+              ("foreground", t.foreground);
+              ("cursor", t.foreground);
+            ]
+           @ List.combine names palette))
+    ^ "}")
+
+let sizes settings =
+  let given f = List.exists f settings in
+  ( given (function Columns _ | Width _ -> true | _ -> false),
+    given (function Rows _ | Height _ -> true | _ -> false) )
+
+(* The events of [casts] one after the other, the end of the last, and the
+   largest size of the terminal. *)
+let sequence ~show ~delay casts =
+  let rec go start ~size acc = function
+    | [] -> Ok (List.rev acc, start, size)
+    | (c : cast) :: rest ->
+        let command =
+          match show with
+          | Some s -> s
+          | None -> Option.fold ~none:"" ~some:one_line c.command
+        in
+        let* line, d = shown ~show:command ~delay in
+        let acc = (start, Asciicast.Resize (c.columns, c.rows)) :: acc in
+        let acc =
+          if line = "" then acc else (start, Asciicast.Output line) :: acc
+        in
+        let last, acc, size =
+          List.fold_left
+            (fun (_, acc, (w, h)) (ms, e) ->
+              let ms = start + d + ms in
+              let size =
+                match e with
+                | Asciicast.Resize (c, r) -> (max w c, max h r)
+                | _ -> (w, h)
+              in
+              (ms, (ms, e) :: acc, size))
+            (start + d, acc, size)
+            c.events
+        in
+        let size = (max (fst size) c.columns, max (snd size) c.rows) in
+        go (last + hold) ~size acc rest
+  in
+  go 0 ~size:(0, 0) [] casts
+
+let replay ~settings ?show ~delay casts =
+  let* events, last, (w, h) =
+    match casts with
+    | [] -> Error (Invalid "no recording to draw")
+    | casts -> sequence ~show ~delay casts
+  in
+  let sized_columns, sized_rows = sizes settings in
+  let events =
+    List.map
+      (function
+        | ms, Asciicast.Resize (c, r) ->
+            ( ms,
+              Asciicast.Resize
+                ( (if sized_columns then max_int else c),
+                  if sized_rows then max_int else r ) )
+        | e -> e)
+      events
+  in
+  let themed = List.exists (function Theme _ -> true | _ -> false) settings in
+  let settings =
+    (if sized_columns then [] else [ Columns w ])
+    @ (if sized_rows then [] else [ Rows h ])
+    @ (match casts with
+      | { theme = Some t; _ } :: _ when not themed -> [ theme t ]
+      | _ -> [])
+    @ settings
+  in
+  let* tape = terminal settings in
+  let events = events @ [ (last, Asciicast.Output "") ] in
+  let* () = check_times (List.map (fun (ms, _) -> (Ms ms, "")) events) in
+  Ok (Native.replay tape events)
+
+let svg_of_casts ?(settings = []) ?show ?(delay = Ms 500) casts =
+  Result.map fst (replay ~settings ?show ~delay casts)
+
+let text_of_casts ?(settings = []) ?show casts =
+  let* _, screen = replay ~settings ?show ~delay:(Ms 500) casts in
+  let lines = Array.to_list (Array.map Screen.row_text (Screen.rows screen)) in
+  let rec drop_blank = function "" :: rest -> drop_blank rest | l -> l in
+  Ok
+    (String.concat ""
+       (List.map (fun l -> l ^ "\n") (List.rev (drop_blank (List.rev lines)))))
 
 let run ?(settings = []) ?(env = []) ?show ?(delay = Ms 500) ?stop ~clock ~proc
     ~cwd argv =

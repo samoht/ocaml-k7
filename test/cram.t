@@ -310,9 +310,9 @@ outputs as a recording would, without recording anything.
   $ test -e dry.svg || test -e outless.txt || test -e played || echo nothing written
   nothing written
 
-k7 play draws an asciicast v2 recording (.cast), at the times of its
-output events, on a terminal of the size of its header. It runs nothing,
-so it writes the same image each time.
+k7 play draws an asciicast v2 or v3 recording (.cast), at the times of
+its output events, on a terminal of the size of its header. It runs
+nothing, so it writes the same image each time.
 
   $ cat > hello.cast <<'EOF'
   > {"version": 2, "width": 20, "height": 3, "title": "hello"}
@@ -336,17 +336,21 @@ so it writes the same image each time.
   $ grep -o 'animation:k[0-9a-f]*-s [0-9]*ms' show.svg | sed 's/k[0-9a-f]*-s/s/'
   animation:s 1500ms
 
-A recording takes one or more .svg outputs, and refuses the options of
-a tape or a cram test. --show and --delay apply to a recording only.
+A recording takes one or more .svg outputs, and .txt outputs for its
+last screen, and refuses the options of a tape or a cram test. --show
+and --delay apply to a recording only.
 
   $ k7 play hello.cast
   k7: hello.cast: no output; give it -o FILE.svg
   [123]
   $ k7 play -o hello.gif hello.cast
-  k7: hello.cast: "hello.gif": not .svg, the only output of an asciicast recording
+  k7: hello.cast: "hello.gif": not .svg or .txt, the outputs of an asciicast recording
   [123]
-  $ k7 play -o one.svg -o two.svg hello.cast
+  $ k7 play -o one.svg -o two.svg -o hello.txt hello.cast
   $ cmp hello.svg one.svg && cmp hello.svg two.svg
+  $ cat hello.txt
+  hello
+  world
   $ k7 play --engine native -o e.svg hello.cast
   k7: hello.cast: --engine applies to a tape or a cram test, not to an asciicast recording
   [123]
@@ -383,18 +387,36 @@ a tape or a cram test. --show and --delay apply to a recording only.
   $ test -e dry-cast.svg || echo nothing written
   nothing written
   $ k7 play --dry-run -o dry-cast.gif hello.cast
-  k7: hello.cast: "dry-cast.gif": not .svg, the only output of an asciicast recording
+  k7: hello.cast: "dry-cast.gif": not .svg or .txt, the outputs of an asciicast recording
   [123]
-  $ printf '{"version": 3, "term": {"cols": 80, "rows": 24}}\n' > v3.cast
-  $ k7 play --dry-run -o v3.svg v3.cast
-  k7: v3.cast: line 1: asciicast version 3, not 2
+  $ printf '{"version": 4, "term": {"cols": 80, "rows": 24}}\n' > v4.cast
+  $ k7 play --dry-run -o v4.svg v4.cast
+  k7: v4.cast: line 1: asciicast version 4, not 2 or 3
   [123]
-  $ k7 play -o v3.svg v3.cast
-  k7: v3.cast: line 1: asciicast version 3, not 2
+  $ k7 play -o v4.svg v4.cast
+  k7: v4.cast: line 1: asciicast version 4, not 2 or 3
   [123]
   $ printf '{"version": 2, "width": 20, "height": 3}\n[1, "o", "a"]\n[0.5, "o", "b"]\n' > late.cast
   $ k7 play -o late.svg late.cast
   k7: late.cast: line 3: time 0.5s is before 1s
   [123]
-  $ test -e v3.svg || test -e late.svg || echo nothing written
+  $ test -e v4.svg || test -e late.svg || echo nothing written
   nothing written
+
+asciinema 3 records asciicast v3: a terminal object in the header, times
+as intervals, and an exit event. The header's command shows first, as k7
+rec shows its command; --show "" hides it.
+
+  $ cat > v3.cast <<'EOF'
+  > {"version": 3, "term": {"cols": 20, "rows": 3}, "command": "echo hi"}
+  > # a comment
+  > [0.1, "o", "hi\r\n"]
+  > [0.1, "x", "0"]
+  > EOF
+  $ k7 play -o v3.txt v3.cast
+  $ tr '$' '%' < v3.txt
+  % echo hi
+  hi
+  $ k7 play --show '' -o v3.txt v3.cast
+  $ cat v3.txt
+  hi

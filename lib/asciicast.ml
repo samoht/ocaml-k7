@@ -3,15 +3,30 @@
   SPDX-License-Identifier: ISC
   ---------------------------------------------------------------------------*)
 
-type t = { columns : int; rows : int; output : (int * string) list }
+type theme = { foreground : string; background : string; palette : string list }
+type event = Output of string | Resize of int * int | Exit of int
+
+type t = {
+  columns : int;
+  rows : int;
+  command : string option;
+  theme : theme option;
+  events : (int * event) list;
+}
 
 let ( let* ) = Result.bind
 
+let pp_event ppf = function
+  | Output s -> Fmt.Dump.string ppf s
+  | Resize (c, r) -> Fmt.pf ppf "resize %dx%d" c r
+  | Exit n -> Fmt.pf ppf "exit %d" n
+
 let pp ppf t =
-  Fmt.pf ppf "@[<v>%dx%d%a@]" t.columns t.rows
-    Fmt.(
-      list ~sep:nop (cut ++ pair ~sep:(any " ") (int ++ any "ms") Dump.string))
-    t.output
+  Fmt.pf ppf "@[<v>%dx%d%a%a@]" t.columns t.rows
+    Fmt.(option (any " $ " ++ string))
+    t.command
+    Fmt.(list ~sep:nop (cut ++ pair ~sep:(any " ") (int ++ any "ms") pp_event))
+    t.events
 
 type value = Number of float | String of string
 
@@ -26,11 +41,51 @@ let version =
   |> Jsont.Object.mem "version" value ~enc:Fun.id
   |> Jsont.Object.finish
 
-let header =
-  Jsont.Object.map ~kind:"asciicast header" (fun w h -> (w, h))
-  |> Jsont.Object.mem "width" value ~enc:fst
-  |> Jsont.Object.mem "height" value ~enc:snd
+type raw_theme = { fg : string; bg : string; colours : string }
+
+let theme =
+  Jsont.Object.map ~kind:"asciicast theme" (fun fg bg colours ->
+      { fg; bg; colours })
+  |> Jsont.Object.mem "fg" Jsont.string ~enc:(fun t -> t.fg)
+  |> Jsont.Object.mem "bg" Jsont.string ~enc:(fun t -> t.bg)
+  |> Jsont.Object.mem "palette" Jsont.string ~enc:(fun t -> t.colours)
   |> Jsont.Object.finish
+
+type header = {
+  width : value;
+  height : value;
+  theme : raw_theme option;
+  idle : float option;
+  command : string option;
+}
+
+let common map =
+  map
+  |> Jsont.Object.opt_mem "idle_time_limit" Jsont.number ~enc:(fun h -> h.idle)
+  |> Jsont.Object.opt_mem "command" Jsont.string ~enc:(fun h -> h.command)
+
+let header_v2 =
+  Jsont.Object.map ~kind:"asciicast header"
+    (fun width height theme idle command ->
+      { width; height; theme; idle; command })
+  |> Jsont.Object.mem "width" value ~enc:(fun h -> h.width)
+  |> Jsont.Object.mem "height" value ~enc:(fun h -> h.height)
+  |> Jsont.Object.opt_mem "theme" theme ~enc:(fun h -> h.theme)
+  |> common |> Jsont.Object.finish
+
+let term =
+  Jsont.Object.map ~kind:"asciicast term" (fun w h t -> (w, h, t))
+  |> Jsont.Object.mem "cols" value ~enc:(fun (w, _, _) -> w)
+  |> Jsont.Object.mem "rows" value ~enc:(fun (_, h, _) -> h)
+  |> Jsont.Object.opt_mem "theme" theme ~enc:(fun (_, _, t) -> t)
+  |> Jsont.Object.finish
+
+let header_v3 =
+  Jsont.Object.map ~kind:"asciicast header"
+    (fun (width, height, theme) idle command ->
+      { width; height; theme; idle; command })
+  |> Jsont.Object.mem "term" term ~enc:(fun h -> (h.width, h.height, h.theme))
+  |> common |> Jsont.Object.finish
 
 let event = Jsont.t3 ~kind:"asciicast event" ~dec:(fun t c d -> (t, c, d)) value
 
@@ -55,34 +110,99 @@ let size name = function
   | Number x -> Fmt.error "%s %a is not a positive integer" name pp_number x
   | String s -> Fmt.error "%s %S is not a number" name s
 
+let is_colour s =
+  String.length s = 7
+  && s.[0] = '#'
+  && String.for_all Char.Ascii.is_hex_digit (String.sub s 1 6)
+
+let read_theme { fg; bg; colours } =
+  let palette = String.split_on_char ':' colours in
+  match List.find_opt (Fun.negate is_colour) (fg :: bg :: palette) with
+  | Some c -> Fmt.error "theme: %S is not a colour #rrggbb" c
+  | None ->
+      let n = List.length palette in
+      if n <> 8 && n <> 16 then
+        Fmt.error "theme: a palette of %d colours, not 8 or 16" n
+      else Ok { foreground = fg; background = bg; palette }
+
+type format = V2 | V3
+
 let read_header line =
   let* v = decode version line in
-  let* () =
+  let* format, (w, h), codec =
     match v with
-    | Number 2. -> Ok ()
-    | Number x -> Fmt.error "asciicast version %a, not 2" pp_number x
-    | String s -> Fmt.error "asciicast version %S, not 2" s
+    | Number 2. -> Ok (V2, ("width", "height"), header_v2)
+    | Number 3. -> Ok (V3, ("cols", "rows"), header_v3)
+    | Number x -> Fmt.error "asciicast version %a, not 2 or 3" pp_number x
+    | String s -> Fmt.error "asciicast version %S, not 2 or 3" s
   in
-  let* w, h = decode header line in
-  let* columns = size "width" w in
-  let* rows = size "height" h in
-  Ok (columns, rows)
+  let* hd = decode codec line in
+  let* columns = size w hd.width in
+  let* rows = size h hd.height in
+  let* theme =
+    match hd.theme with
+    | None -> Ok None
+    | Some t -> Result.map Option.some (read_theme t)
+  in
+  Ok
+    ( format,
+      hd.idle,
+      { columns; rows; command = hd.command; theme; events = [] } )
 
-let ms seconds =
-  let us = Float.round (seconds *. 1e6) in
-  if us < 0x1p62 then (Float.to_int us + 500) / 1000
-  else Float.to_int (Float.round (seconds *. 1e3))
+(* Microseconds. *)
+let us seconds = Float.round (seconds *. 1e6)
+let ms us = (Float.to_int us + 500) / 1000
+let max_us = float max_ms *. 1e3
+let digits s = s <> "" && String.for_all Char.Ascii.is_digit s
 
-let read_event ~prev line =
+let positive s =
+  match int_of_string_opt s with
+  | Some n when digits s && n > 0 -> Some n
+  | _ -> None
+
+let read_data code data =
+  match code with
+  | "o" -> Ok (Some (Output data))
+  | "r" -> (
+      match String.split_on_char 'x' data with
+      | [ c; r ] -> (
+          match (positive c, positive r) with
+          | Some c, Some r -> Ok (Some (Resize (c, r)))
+          | _ -> Fmt.error "resize %S is not COLSxROWS" data)
+      | _ -> Fmt.error "resize %S is not COLSxROWS" data)
+  | "x" -> (
+      match int_of_string_opt data with
+      | Some n when string_of_int n = data -> Ok (Some (Exit n))
+      | _ -> Fmt.error "exit status %S is not an integer" data)
+  | _ -> Ok None
+
+(* [prev] is the time of the event ahead, as written, and [at] its time once
+   idle intervals are cut, both in microseconds. *)
+let read_event format ~idle ~prev ~at line =
   let* time, code, data = decode event line in
   match (time, code, data) with
   | Number t, String code, String data ->
-      if t < 0. then Fmt.error "time %as is negative" pp_number t
-      else if t < prev then
-        Fmt.error "time %as is before %as" pp_number t pp_number prev
-      else if t *. 1e3 > float max_ms || ms t > max_ms then
+      let* written, interval =
+        match format with
+        | V2 ->
+            if t < 0. then Fmt.error "time %as is negative" pp_number t
+            else if us t < prev then
+              Fmt.error "time %as is before %as" pp_number t pp_number
+                (prev /. 1e6)
+            else Ok (us t, us t -. prev)
+        | V3 ->
+            if t < 0. then Fmt.error "interval %as is negative" pp_number t
+            else Ok (prev +. us t, us t)
+      in
+      let interval =
+        Option.fold ~none:interval ~some:(Float.min interval) idle
+      in
+      let at = at +. interval in
+      if at > max_us || written > max_us then
         Fmt.error "time %as is beyond %dms" pp_number t max_ms
-      else Ok (t, if code = "o" then Some (ms t, data) else None)
+      else
+        let* e = read_data code data in
+        Ok (written, at, Option.map (fun e -> (ms at, e)) e)
   | String _, _, _ -> Error "the time is not a number"
   | _, Number _, _ -> Error "the code is not a string"
   | _, _, Number _ -> Error "the data is not a string"
@@ -92,15 +212,6 @@ let is_blank s =
 
 let of_string s =
   let at n r = Result.map_error (Fmt.str "line %d: %s" n) r in
-  let rec events n ~prev acc = function
-    | [] -> Ok (List.rev acc)
-    | line :: rest when is_blank line -> events (n + 1) ~prev acc rest
-    | line :: rest -> (
-        let* t, out = at n (read_event ~prev line) in
-        match out with
-        | Some o -> events (n + 1) ~prev:t (o :: acc) rest
-        | None -> events (n + 1) ~prev:t acc rest)
-  in
   let first, rest =
     match String.index_opt s '\n' with
     | Some i ->
@@ -109,6 +220,104 @@ let of_string s =
   in
   if is_blank first then Error "line 1: no asciicast header"
   else
-    let* columns, rows = at 1 (read_header first) in
-    let* output = events 2 ~prev:0. [] (String.split_on_char '\n' rest) in
-    Ok { columns; rows; output }
+    let* format, idle, t = at 1 (read_header first) in
+    let idle = Option.map (fun s -> us (Float.max 0. s)) idle in
+    let rec events n ~prev ~at:time acc = function
+      | [] -> Ok (List.rev acc)
+      | line :: rest when is_blank line ->
+          events (n + 1) ~prev ~at:time acc rest
+      | line :: rest when format = V3 && line.[0] = '#' ->
+          events (n + 1) ~prev ~at:time acc rest
+      | line :: rest ->
+          let* prev, time, e =
+            at n (read_event format ~idle ~prev ~at:time line)
+          in
+          let acc = match e with Some e -> e :: acc | None -> acc in
+          events (n + 1) ~prev ~at:time acc rest
+    in
+    let* events =
+      events 2 ~prev:0. ~at:0. [] (String.split_on_char '\n' rest)
+    in
+    Ok { t with events }
+
+(* An incomplete UTF-8 sequence at the end of [s], which the next output may
+   complete: [s] splits before it. *)
+let incomplete s =
+  let n = String.length s in
+  let rec go i =
+    if i >= n then n
+    else
+      let d = String.get_utf_8_uchar s i in
+      let len = Uchar.utf_decode_length d in
+      if (not (Uchar.utf_decode_is_valid d)) && i + len = n then i
+      else go (i + len)
+  in
+  go 0
+
+let valid_utf_8 s =
+  if String.is_valid_utf_8 s then s
+  else
+    let b = Buffer.create (String.length s) in
+    let rec go i =
+      if i < String.length s then (
+        let d = String.get_utf_8_uchar s i in
+        Buffer.add_utf_8_uchar b (Uchar.utf_decode_uchar d);
+        go (i + Uchar.utf_decode_length d))
+    in
+    go 0;
+    Buffer.contents b
+
+let json codec v =
+  match Jsont_bytesrw.encode_string codec v with
+  | Ok s -> s
+  | Error e -> invalid_arg e
+
+let string = json Jsont.string
+
+let header t =
+  let b = Buffer.create 256 in
+  Fmt.kstr (Buffer.add_string b)
+    {|{"version":3,"term":{"cols":%d,"rows":%d,"type":"xterm-256color"|}
+    t.columns t.rows;
+  Option.iter
+    (fun th ->
+      Fmt.kstr (Buffer.add_string b) {|,"theme":{"fg":%s,"bg":%s,"palette":%s}|}
+        (string th.foreground) (string th.background)
+        (string (String.concat ":" th.palette)))
+    t.theme;
+  Buffer.add_char b '}';
+  Option.iter
+    (fun c -> Fmt.kstr (Buffer.add_string b) {|,"command":%s|} (string c))
+    t.command;
+  Buffer.add_string b "}\n";
+  b
+
+let to_string t =
+  let b = header t in
+  let line ~prev ms code data =
+    let d = ms - prev in
+    Fmt.kstr (Buffer.add_string b) "[%d.%03d,%s,%s]\n" (d / 1000) (d mod 1000)
+      (string code) (string data)
+  in
+  let rec go ~prev ~pending = function
+    | [] -> ()
+    | (ms, Output s) :: rest ->
+        let s = pending ^ s in
+        let i =
+          match rest with
+          | (_, Output _) :: _ -> incomplete s
+          | _ -> String.length s
+        in
+        if i = 0 then go ~prev ~pending:s rest
+        else (
+          line ~prev ms "o" (valid_utf_8 (String.sub s 0 i));
+          go ~prev:ms ~pending:(String.sub s i (String.length s - i)) rest)
+    | (ms, Resize (c, r)) :: rest ->
+        line ~prev ms "r" (Fmt.str "%dx%d" c r);
+        go ~prev:ms ~pending rest
+    | (ms, Exit n) :: rest ->
+        line ~prev ms "x" (string_of_int n);
+        go ~prev:ms ~pending rest
+  in
+  go ~prev:0 ~pending:"" t.events;
+  Buffer.contents b

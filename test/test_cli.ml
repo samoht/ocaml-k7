@@ -765,8 +765,9 @@ let test_engine () =
            ~outputs:[ path "out.gif" ]
            ~setup:[] ~dir:None ~wait_timeout:None (path "pwsh.tape") ))
 
-(* k7 play draws a .cast, in any case, as K7.svg_of_cast does, byte for
-   byte; --dry-run writes nothing and the options of a shell are refused. *)
+(* k7 play draws a .cast, in any case, as K7.svg_of_casts does, byte for
+   byte, and writes its last screen as K7.text_of_casts does; --dry-run writes
+   nothing and the options of a shell are refused. *)
 let test_cast () =
   let cast =
     "{\"version\": 2, \"width\": 20, \"height\": 3}\n\
@@ -787,12 +788,17 @@ let test_cast () =
   Alcotest.(check (pair int string))
     "drawn with a command line" (0, "")
     (play ~show:"make" ~delay:(Ms 250) "b.svg");
-  expect "as K7.svg_of_cast"
-    (Result.get_ok (K7.svg_of_cast cast))
+  let c = Result.get_ok (K7.cast_of_string cast) in
+  expect "as K7.svg_of_casts"
+    (Result.get_ok (K7.svg_of_casts [ c ]))
     (read "a.svg");
   expect "with --show and --delay"
-    (Result.get_ok (K7.svg_of_cast ~show:"make" ~delay:(Ms 250) cast))
+    (Result.get_ok (K7.svg_of_casts ~show:"make" ~delay:(Ms 250) [ c ]))
     (read "b.svg");
+  Alcotest.(check (pair int string)) "the last screen" (0, "") (play "a.TXT");
+  expect "as K7.text_of_casts"
+    (Result.get_ok (K7.text_of_casts [ c ]))
+    (read "a.TXT");
   Alcotest.(check (pair int string))
     "dry run" (0, "")
     (play ~dry_run:true "c.svg");
@@ -809,7 +815,7 @@ let test_cast () =
     (play ~env_vars:[ ("A", "1") ] "d.svg");
   refused "--setup" ~sub:"--setup applies to a cram test (.t)"
     (play ~setup:[ path "err" ] "d.svg");
-  refused "a GIF" ~sub:"not .svg, the only output of an asciicast recording"
+  refused "a GIF" ~sub:"not .svg or .txt, the outputs of an asciicast recording"
     (play "d.gif");
   Alcotest.(check bool)
     "refused, nothing written" false

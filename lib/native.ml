@@ -540,7 +540,9 @@ let text_output (t : t) = t.text
 let stills t =
   List.filter_map (function Screenshot p -> Some p | _ -> None) t.actions
 
-let replay t output =
+let size t = (t.look.cols, t.look.rows)
+
+let replay t events =
   let s = t.look in
   let term = Screen.terminal ~rows:s.rows ~cols:s.cols in
   let tl = timeline t.config in
@@ -548,16 +550,21 @@ let replay t output =
   let screen = ref (Screen.of_terminal term) in
   let end_ms =
     List.fold_left
-      (fun _ (ms, bytes) ->
-        Screen.feed term bytes;
-        ignore (Screen.take_replies term);
+      (fun _ (ms, event) ->
+        (match (event : Asciicast.event) with
+        | Output bytes ->
+            Screen.feed term bytes;
+            ignore (Screen.take_replies term)
+        | Resize (cols, rows) ->
+            Screen.resize term ~rows:(min rows s.rows) ~cols:(min cols s.cols)
+        | Exit _ -> ());
         screen := Screen.of_terminal ~previous:!screen term;
         Screen.clear_dirty term;
         add tl ms !screen;
         ms)
-      0 output
+      0 events
   in
-  svg t tl ~end_ms
+  (svg t tl ~end_ms, !screen)
 
 (* The bytes xterm.js sends. *)
 

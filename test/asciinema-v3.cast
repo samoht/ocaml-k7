@@ -1,0 +1,4 @@
+{"version":3,"term":{"cols":40,"rows":6},"timestamp":1792750713,"idle_time_limit":0.5,"command":"printf '\\033[1;32mgreen\\033[0m and \\033[34mblue\\033[0m\\n'; sleep 1; seq 3; exit 2","env":{"SHELL":"/bin/zsh"}}
+[0.255, "o", "\u001b[1;32mgreen\u001b[0m and \u001b[34mblue\u001b[0m\r\n"]
+[1.086, "o", "1\r\n2\r\n3\r\n"]
+[0.003, "x", "2"]

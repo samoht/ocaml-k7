@@ -26,9 +26,9 @@ let man =
        as VHS does, and runs $(b,vhs) for the other extensions.";
     `P
       "$(b,k7 play) $(b,-o) $(i,FILE.svg) $(i,FILE.cast) draws a recording in \
-       asciinema's asciicast v2 format, such as console writes under its \
-       virtual clock, without running anything: the same recording gives the \
-       same image, byte for byte.";
+       asciinema's asciicast v2 or v3 format, such as asciinema or console \
+       writes, without running anything: the same recording gives the same \
+       image, byte for byte.";
     `S "RECORDING A PROGRAM";
     `P
       "$(b,k7 rec) $(b,-o) $(i,FILE.svg) $(b,--) $(i,COMMAND) runs \

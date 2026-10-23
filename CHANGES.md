@@ -25,13 +25,20 @@
   its command line, timed as they arrived, with how the program exited.
   `?show` (`--show`) replaces the command line, or hides it, and the line
   shows alone for `?delay` (`--delay`, 500ms by default), as if typed.
-- `K7.svg_of_cast` (`k7 play FILE.cast`) draws a recording in asciicast
-  v2, such as asciinema or console's `CONSOLE_CAST` writes, as `K7.svg`
-  draws its output events, each at its time rounded to the millisecond,
-  so the same recording gives the same image, byte for byte. The
-  header's width and height size the terminal unless `--columns` and
-  `--rows` do, and `?show` and `?delay` (`--show`, `--delay`) add a
-  command line as for `K7.run`.
+- `K7.cast_of_string` reads a recording in asciicast v2 or v3, as
+  asciinema 2 and 3 and console's `CONSOLE_CAST` write it, and
+  `K7.svg_of_casts` (`k7 play FILE.cast`) draws it as `K7.svg` draws its
+  output events, each at its time rounded to the millisecond, so the same
+  recording gives the same image, byte for byte. The terminal has the size
+  of the header and follows the resize events, on an image of the largest
+  size, unless `--columns` and `--rows` size it; the header's theme gives
+  its colours unless `--theme` does; a pause longer than the header's
+  `idle_time_limit` lasts that limit; and the last screen holds for a
+  second after the last event, the exit included. The header's command
+  shows first, as `k7 rec` shows its own, and `?show` and `?delay`
+  (`--show`, `--delay`) replace it and set the pause before the output.
+  `K7.text_of_casts` (`k7 play -o FILE.txt FILE.cast`) is the text of the
+  last screen.
 - `K7.check` returns the error `K7.record` would before it records,
   without starting a shell or `vhs`.
 - `K7.run` and `K7.record` take `?env`, variables for the environment of

@@ -17,6 +17,10 @@ val terminal : rows:int -> cols:int -> terminal
 val feed : terminal -> string -> unit
 (** [feed term s] makes [term] read [s], the next bytes after those it read. *)
 
+val resize : terminal -> rows:int -> cols:int -> unit
+(** [resize term ~rows ~cols] gives [term] [rows] rows and [cols] columns,
+    keeping the part of its screen that fits, as a terminal does. *)
+
 val take_replies : terminal -> string
 (** [take_replies term] is what [term] answers to the queries it read since the
     last [take_replies], such as its device attributes, its status and its

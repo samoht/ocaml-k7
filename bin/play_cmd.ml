@@ -82,7 +82,7 @@ let outputs =
      of the $(b,Output) lines of a tape. Repeatable. $(cmd) itself records an \
      $(b,.svg) image and the text outputs $(b,.txt), $(b,.ascii) and \
      $(b,.test), and $(b,vhs) records the others. An asciicast recording takes \
-     $(b,.svg) images only."
+     $(b,.svg) images and $(b,.txt) for its last screen."
   in
   Arg.(value & opt_all string [] & info [ "o"; "output" ] ~docv:"FILE" ~doc)
 
@@ -122,7 +122,8 @@ let dir =
 let show =
   let doc =
     "Show a first line with $(b,\\$) and $(docv), as $(b,k7 rec) does, before \
-     an asciicast recording."
+     an asciicast recording, in place of the $(b,command) of its header; an \
+     empty $(docv) shows no line."
   in
   Arg.(value & opt (some string) None & info [ "show" ] ~docv:"TEXT" ~doc)
 
@@ -140,13 +141,11 @@ let delay =
 let settings =
   Flags.settings_for
     ~columns:
-      "the $(b,width) of the header of an asciicast recording, and otherwise \
-       as many as a frame of 1200 pixels holds, as in VHS: 75 at the default \
-       font size"
+      "the size of the header of an asciicast recording, and otherwise as many \
+       as a frame of 1200 pixels holds, as in VHS: 75 at the default font size"
     ~rows:
-      "the $(b,height) of the header of an asciicast recording, and otherwise \
-       as many as a frame of 600 pixels holds, as in VHS: 16 at the default \
-       font size"
+      "the size of the header of an asciicast recording, and otherwise as many \
+       as a frame of 600 pixels holds, as in VHS: 16 at the default font size"
 
 let input =
   let doc =
@@ -163,9 +162,10 @@ let man =
        tape ($(b,.tape)), in VHS's syntax, plays in a shell and is recorded; \
        so does a cram test ($(b,.t)), the format that dune runs, whose \
        commands $(cmd) types into bash. An asciicast recording ($(b,.cast)), \
-       in asciinema's v2 format, is output already recorded: $(cmd) runs \
-       nothing and draws it as an $(b,.svg) image. An option that does not \
-       apply to the kind of $(i,FILE) is an error.";
+       in asciinema's v2 or v3 format, is output already recorded: $(cmd) runs \
+       nothing and draws it as an $(b,.svg) image, or writes its last screen \
+       as $(b,.txt). An option that does not apply to the kind of $(i,FILE) is \
+       an error.";
     `P
       "When every output of a tape or a cram test is an $(b,.svg) image or a \
        text output ($(b,.txt), $(b,.ascii) or $(b,.test)), $(cmd) plays \
@@ -221,14 +221,23 @@ let man =
     `P
       "Each output event of an asciicast recording shows at its time, rounded \
        to the millisecond, so the same recording gives the same image, byte \
-       for byte, and the last screen holds for a second. The terminal has the \
-       $(b,width) and $(b,height) of the header, which $(b,--columns) and \
-       $(b,--rows) replace. $(cmd) ignores the input events, the markers and \
-       the resizes, and the other members of the header. A recording needs \
-       $(b,-o) and an $(b,.svg) output; $(b,--show) and $(b,--delay) add a \
-       command line, and apply to asciicast recordings only.";
+       for byte, and the last screen holds for a second after the last event, \
+       its exit included. A pause longer than the $(b,idle_time_limit) of the \
+       header lasts that limit. The terminal has the size of the header and of \
+       each resize, on an image of the largest, and $(b,--columns) and \
+       $(b,--rows) fix it instead; the theme of the header gives its colours \
+       unless $(b,--theme) does. $(cmd) ignores the input events, the markers \
+       and the other members of the header. A recording needs $(b,-o), an \
+       $(b,.svg) image or a $(b,.txt) text of its last screen.";
     `P
-      "A program that uses console writes such a recording, at the times of \
+      "The first line of the image is $(b,\\$) and the $(b,command) of the \
+       header, if any, as $(b,k7 rec) shows its command, and the output starts \
+       half a second later. $(b,--show) replaces the command, or hides it when \
+       empty, and $(b,--delay) sets the pause; both apply to asciicast \
+       recordings only.";
+    `P
+      "asciinema writes such recordings, and so does $(b,k7 rec) $(b,-o) \
+       $(i,FILE.cast). A program that uses console writes one at the times of \
        its virtual clock, with $(b,CONSOLE_DETERMINISTIC_CLOCK=1) and \
        $(b,CONSOLE_CAST=)$(i,FILE).";
     `S Manpage.s_examples;
