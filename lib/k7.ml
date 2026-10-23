@@ -1558,7 +1558,9 @@ let reserved =
     "case coproc do done elif else end esac fi for foreach function if in \
      nocorrect repeat select then time until while"
 
-let program p = shell_word ~quote:(List.mem p reserved) p
+(* A bare first word with a [=] is an assignment to sh, or [=cmd] to zsh. *)
+let program p =
+  shell_word ~quote:(List.mem p reserved || String.contains p '=') p
 
 let quoted = function
   | [] -> ""
