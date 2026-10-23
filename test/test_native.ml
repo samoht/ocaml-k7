@@ -2091,15 +2091,16 @@ let test_cram_output_is_data () =
         (actions header) (actions source))
     [ "$ echo injected"; "> echo injected" ]
 
+let capture_after_domain =
+  subprocess "capture after a domain" @@ fun _ ->
+  let worker = Domain.spawn (fun () -> ()) in
+  Domain.join worker;
+  with_dir @@ fun env cwd ->
+  let _, status = capture ~show:"" env cwd [ "true" ] in
+  exited "true" 0 status
+
 let test_capture_after_domain () =
-  let status =
-    in_subprocess (fun () ->
-        let worker = Domain.spawn (fun () -> ()) in
-        Domain.join worker;
-        with_dir @@ fun env cwd ->
-        let _, status = capture ~show:"" env cwd [ "true" ] in
-        exited "true" 0 status)
-  in
+  let status = capture_after_domain [] in
   Alcotest.(check bool)
     "capture still works after a domain has joined" true
     (status = Unix.WEXITED 0)

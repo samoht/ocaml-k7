@@ -19,6 +19,7 @@ let guard (name, cases) =
       cases )
 
 let () =
+  Native_test.serve_subprocess ();
   Sys.set_signal Sys.sigalrm Sys.Signal_default;
   Alcotest.run "k7"
   @@ List.map guard

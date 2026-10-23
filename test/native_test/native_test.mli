@@ -124,7 +124,15 @@ val screens : string -> string list
 val last_screen : string -> string
 (** [last_screen txt] is the last screen of the VHS text output [txt]. *)
 
-val in_subprocess : (unit -> unit) -> Unix.process_status
-(** [in_subprocess f] runs [f] in a child process, returning its exit status:
-    zero on success, one after printing a raised exception. It isolates domain
-    creation from tests that subsequently need [Unix.fork]. *)
+val subprocess :
+  string -> (string list -> unit) -> string list -> Unix.process_status
+(** [subprocess name f args] runs [f args] in a new process of this executable,
+    started afresh rather than forked, and is how that process ended: exited
+    with [0] once [f] returns, or with [1] after printing what it raised. That
+    process finds [f] by [name], so [subprocess name f] is applied as the
+    program starts, before {!serve_subprocess}. *)
+
+val serve_subprocess : unit -> unit
+(** [serve_subprocess ()] does nothing in a process that {!subprocess} did not
+    start, and otherwise runs the function it names with the program's
+    arguments, then exits. A test program calls it before its tests. *)

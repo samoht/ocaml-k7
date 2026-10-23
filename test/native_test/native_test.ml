@@ -174,23 +174,46 @@ let last_screen txt =
   | s :: _ -> s
   | [] -> Alcotest.fail "no screen"
 
-(* Unix.fork refuses to run after this process has spawned a domain, even
-   one that has joined. Keep domain tests in their own process. *)
-let in_subprocess f =
-  match Unix.fork () with
-  | 0 ->
+let subprocesses = Hashtbl.create 8
+let subprocess_var = "K7_TEST_SUBPROCESS"
+
+(* Unix.fork refuses to run once a domain has been spawned, and on macOS a
+   Unix.fork child can crash in the OCaml runtime while it records. *)
+let subprocess name f =
+  Hashtbl.replace subprocesses name f;
+  fun args ->
+    let env =
+      Unix.environment () |> Array.to_list
+      |> List.filter (fun v ->
+          not (String.starts_with ~prefix:(subprocess_var ^ "=") v))
+    in
+    let pid =
+      Unix.create_process_env Sys.executable_name
+        (Array.of_list (Sys.executable_name :: args))
+        (Array.of_list ((subprocess_var ^ "=" ^ name) :: env))
+        Unix.stdin Unix.stdout Unix.stderr
+    in
+    let rec wait () =
+      try snd (Unix.waitpid [] pid)
+      with Unix.Unix_error (EINTR, _, _) -> wait ()
+    in
+    wait ()
+
+let serve_subprocess () =
+  match Sys.getenv_opt subprocess_var with
+  | None -> ()
+  | Some name ->
+      let f =
+        match Hashtbl.find_opt subprocesses name with
+        | Some f -> f
+        | None -> failwith ("no subprocess " ^ name)
+      in
       let status =
         try
-          f ();
+          f (List.tl (Array.to_list Sys.argv));
           0
         with exn ->
           Fmt.epr "%s\n%!" (Printexc.to_string exn);
           1
       in
-      Unix._exit status
-  | pid ->
-      let rec wait () =
-        try snd (Unix.waitpid [] pid)
-        with Unix.Unix_error (EINTR, _, _) -> wait ()
-      in
-      wait ()
+      exit status
