@@ -79,8 +79,10 @@ static void child(int fd, int out, const char *path, char **argv, char **sh,
   r.step++;
   if (ioctl(fd, TIOCSCTTY, 0) == -1) goto fail;
   r.step++;
+  if (out <= 2 && (out = fcntl(out, F_DUPFD_CLOEXEC, 3)) == -1) goto fail;
+  /* dup2 onto itself keeps close-on-exec. */
   for (int i = 0; i <= 2; i++)
-    if (dup2(fd, i) == -1) goto fail;
+    if (i == fd ? fcntl(i, F_SETFD, 0) == -1 : dup2(fd, i) == -1) goto fail;
   close_from_3(out);
   r.step++;
   if (chdir(cwd) == -1) goto fail;
