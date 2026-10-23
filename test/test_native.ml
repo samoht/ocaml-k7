@@ -2114,6 +2114,7 @@ let check_cram_executable name =
 
 let test_cram_reserved_executable () = check_cram_executable "if"
 let test_cram_assignment_executable () = check_cram_executable "FOO=bar"
+let test_cram_option_executable () = check_cram_executable "-"
 
 (* The background loop prints once the shell has gone, so it prints nothing
    if it stops with the shell. *)
@@ -2309,6 +2310,7 @@ let suite =
            test_cram_reserved_executable );
          ( "cram quotes an assignment executable name",
            test_cram_assignment_executable );
+         ("cram records an executable named dash", test_cram_option_executable);
          ( "cram quotes control characters for any sh",
            test_cram_control_argument );
          ("cram stops the command's process group", test_cram_stop);
