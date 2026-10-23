@@ -2097,6 +2097,7 @@ let test_cram_control_argument () =
       "\n";
       "a \n\n b\r\n";
       "-\x1b%s\\'\"$`\xc2\x9b\xff caf\xc3\xa9";
+      "=ls";
     ]
 
 (* A shell word in executable position must still name a program. *)
