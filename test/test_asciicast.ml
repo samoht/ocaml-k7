@@ -453,12 +453,26 @@ let test_text_conceal () =
   Alcotest.(check string)
     "text is the visible last screen" "a      z\n" (text [ src ])
 
+let test_submicrosecond_time_order () =
+  let src =
+    {|{"version":2,"width":8,"height":2}
+[0.0000004,"o","a"]
+[0.0000001,"o","b"]
+|}
+  in
+  match K7.cast_of_string src with
+  | Error (K7.Invalid _) -> ()
+  | Error e -> Alcotest.failf "expected Invalid: %a" K7.pp_error e
+  | Ok _ -> Alcotest.fail "decreasing v2 timestamps must fail before rounding"
+
 let suite =
   ( "asciicast",
     List.map
       (fun (name, fn) -> Alcotest.test_case name `Quick fn)
       [
         ("times", test_times);
+        ( "submicrosecond timestamps remain ordered",
+          test_submicrosecond_time_order );
         ("cancelled OSC preserves following text", test_cancelled_osc);
         ("cancelled DCS preserves following text", test_cancelled_dcs);
         ("v3", test_v3);
