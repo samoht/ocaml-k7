@@ -1822,6 +1822,10 @@ let exited name n = function
   | `Exited m -> Alcotest.(check int) name n m
   | `Signaled s -> Alcotest.failf "%s: signal %d" name s
 
+let signaled name n = function
+  | `Signaled s when Int.equal s n -> ()
+  | status -> Alcotest.failf "%s: %a" name Eio.Process.pp_status status
+
 (* The recording holds the size, the command, the output at its times and the
    exit; drawn, it is the image of K7.run. *)
 let test_capture () =
@@ -1888,8 +1892,10 @@ let test_capture_utf_8 () =
         (Result.get_ok (K7.text_of_casts [ c ]))
   | Error e -> Alcotest.failf "%a" K7.pp_error e
 
-let cram ?env:vars env cwd argv =
-  match K7.cram ?env:vars ~proc:(Eio.Stdenv.process_mgr env) ~cwd argv with
+let cram ?env:vars ?stop env cwd argv =
+  match
+    K7.cram ?env:vars ?stop ~proc:(Eio.Stdenv.process_mgr env) ~cwd argv
+  with
   | Ok r -> r
   | Error e -> Alcotest.failf "%a" K7.pp_error e
 
@@ -1933,6 +1939,28 @@ let test_cram () =
   Alcotest.(check string)
     "killed" "  $ sh -c 'kill -9 $$'\n  [137]\n"
     (fst (cram env cwd [ "sh"; "-c"; "kill -9 $$" ]))
+
+(* The background loop prints once the shell has gone, so it prints nothing
+   if it stops with the shell. *)
+let test_cram_stop () =
+  with_dir @@ fun env cwd ->
+  let script =
+    "(while kill -0 $$ 2>/dev/null; do sleep 0.01; done; echo late) & : > \
+     started; wait"
+  in
+  let stop, set = Eio.Promise.create () in
+  let (t, status), () =
+    Eio.Fiber.pair
+      (fun () -> cram ~stop env cwd [ "sh"; "-c"; script ])
+      (fun () ->
+        until (fun () -> Eio.Path.is_file Eio.Path.(cwd / "started"));
+        Eio.Promise.resolve set ())
+  in
+  signaled "terminated" Sys.sigterm status;
+  Alcotest.(check string)
+    "the background loop is stopped too"
+    (Fmt.str "  $ sh -c '%s'\n  [143]\n" script)
+    t
 
 let suite =
   ( "native",
@@ -1999,6 +2027,7 @@ let suite =
          ("capture", test_capture);
          ("capture keeps UTF-8 whole", test_capture_utf_8);
          ("cram", test_cram);
+         ("cram stops the command's process group", test_cram_stop);
          ( "run cancellation reaps resistant descendants",
            test_run_cancel_descendant );
          ("record refuses Env names", test_record_env_names);
