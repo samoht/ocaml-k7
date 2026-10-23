@@ -353,12 +353,32 @@ let add_frame t d b shown i screen =
   Option.iter (add_cursor t b screen) (Screen.cursor screen);
   Buffer.add_string b "</g>"
 
-(* In integers, so that the output does not depend on float printing. *)
+(* [digit ~duration r] is [(d, r')] with [10 * r = d * duration + r'], for
+   [0 <= r < duration], without computing [10 * r], which may overflow. *)
+let digit ~duration r =
+  let rec go k d acc =
+    if k = 0 then (d, acc)
+    else if acc >= duration - r then go (k - 1) (d + 1) (acc - (duration - r))
+    else go (k - 1) d (acc + r)
+  in
+  go 10 0 0
+
+(* [percent ~duration ms] is [100 * ms / duration] truncated, in integers so
+   that it does not depend on float printing, with at least four decimals and
+   enough that distinct times below [duration] stay distinct. *)
 let percent ~duration ms =
-  (* In two steps, so that neither product overflows. *)
-  let q = ms * 1000 / duration and r = ms * 1000 mod duration in
-  let v = (q * 1000) + (r * 1000 / duration) in
-  Fmt.str "%d.%04d%%" (v / 10_000) (v mod 10_000)
+  let digits = max 6 (String.length (Int.to_string (duration - 1))) in
+  let b = Buffer.create (digits + 2) in
+  let rec go i r =
+    if i < digits then (
+      let d, r = digit ~duration r in
+      if i = 2 then Buffer.add_char b '.';
+      if i > 0 || d > 0 then Buffer.add_char b (Char.chr (48 + d));
+      go (i + 1) r)
+  in
+  go 0 ms;
+  Buffer.add_char b '%';
+  Buffer.contents b
 
 (* One class each, with no combinator: a rule must also match inside the shadow
    tree of a [use], which holds no ancestor of the referenced row. *)

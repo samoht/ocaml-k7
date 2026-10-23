@@ -798,7 +798,7 @@ let test_bounds () =
   | Ok s ->
       Alcotest.(check bool) "valid delay" false (contains ~sub:"delay:--" s)
   | Error e -> Alcotest.failf "%a" K7.pp_error e);
-  check_contains "late frame" ~sub:"99.9999%"
+  check_contains "late frame" ~sub:"99.99999999977%{"
     (svg [ (Ms 0, "a"); (Ms 9_000_000_000_000, "b") ])
 
 let test_unsupported () =
