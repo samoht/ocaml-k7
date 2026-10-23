@@ -2,6 +2,7 @@
  (name k7)
  (public_name k7)
  (private_modules
+  asciicast
   casefold
   casefold_data
   native

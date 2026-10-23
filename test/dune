@@ -4,6 +4,7 @@
 (test
  (name test)
  (deps
+  asciinema.cast
   regexp_cases.txt
   tape_cases.txt
   number_cases.txt

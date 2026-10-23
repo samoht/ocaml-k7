@@ -40,5 +40,9 @@ val of_json :
     [#RRGGBBAA], [rgb()] or [rgba()], the forms xterm.js reads without a
     browser. *)
 
+val plain : string -> string
+(** [plain msg] is [msg] without the SGR sequences that jsont styles its
+    messages with. *)
+
 val pp : t Fmt.t
 (** [pp] formats a theme's colours for humans. *)

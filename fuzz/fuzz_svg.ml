@@ -569,6 +569,63 @@ let test_regional_splits n =
             check_eq ~pp:pp_string expected (List.hd (List.rev frames)))
   done
 
+let json_string s =
+  match Jsont_bytesrw.encode_string Jsont.string s with
+  | Ok j -> j
+  | Error e -> failf "%s" e
+
+(* As console writes a time, rounded to the microsecond, or with all six
+   digits. *)
+let seconds ~short us =
+  if short then Fmt.str "%.15g" (Float.of_int us /. 1e6)
+  else Fmt.str "%d.%06d" (us / 1_000_000) (us mod 1_000_000)
+
+let codes = [| "o"; "o"; "i"; "m"; "r" |]
+
+let test_cast columns rows events =
+  let columns = columns + 1 and rows = rows + 1 in
+  let _, lines, output =
+    List.fold_left
+      (fun (us, lines, output) (gap, code, short, data) ->
+        let us = us + gap in
+        let code = codes.(code) in
+        let data =
+          if String.is_valid_utf_8 data then data else String.escaped data
+        in
+        let line =
+          Fmt.str "[%s, %S, %s]" (seconds ~short us) code (json_string data)
+        in
+        let output =
+          if code = "o" then (K7.Ms ((us + 500) / 1000), data) :: output
+          else output
+        in
+        (us, line :: lines, output))
+      (0, [], []) events
+  in
+  let cast =
+    String.concat "\n"
+      (Fmt.str {|{"version": 2, "width": %d, "height": %d, "title": "t"}|}
+         columns rows
+      :: List.rev lines)
+  in
+  let last = match output with (Ms ms, _) :: _ -> ms | [] -> 0 in
+  let output = List.rev ((K7.Ms (last + 1000), "") :: output) in
+  let settings = K7.[ Font_size 10 ] in
+  match
+    ( K7.svg_of_cast ~settings cast,
+      K7.svg_of_cast ~settings cast,
+      K7.svg ~settings:(K7.Columns columns :: Rows rows :: settings) output )
+  with
+  | Ok a, Ok b, Ok expected ->
+      check_eq ~pp:pp_string a b;
+      check_eq ~pp:pp_string expected a
+  | Error e, _, _ | _, Error e, _ | _, _, Error e -> failf "%a" K7.pp_error e
+
+let test_cast_total src =
+  match K7.svg_of_cast src with
+  | Ok _ | Error (Invalid _ | Unsupported _) -> ()
+  | Error e -> failf "%a" K7.pp_error e
+
 let terminal =
   [
     test_case "scroll regions preserve header and footer" [ uint8 ]
@@ -600,6 +657,33 @@ let terminal =
     test_case "zero width"
       [ list (map [ uint8; uint8; bool ] (fun b m a -> (b, m, a))) ]
       test_zero_width;
+  ]
+
+let casts =
+  [
+    test_case "a cast draws its output events at their milliseconds"
+      [
+        range 80;
+        range 24;
+        list
+          (map
+             [ range 2_000_000; range 5; bool; chunk ]
+             (fun gap code short data -> (gap, code, short, data)));
+      ]
+      test_cast;
+    test_case "svg_of_cast is total"
+      [
+        choose
+          [
+            bytes;
+            map [ bytes ] (fun s ->
+                {|{"version": 2, "width": 8, "height": 2}|} ^ "\n" ^ s);
+            map [ bytes ] (fun s ->
+                {|{"version": 2, "width": 8, "height": 2}|} ^ "\n[1, \"o\", "
+                ^ s);
+          ];
+      ]
+      test_cast_total;
   ]
 
 let suite =
@@ -638,4 +722,4 @@ let suite =
       test_case "svg refuses the settings tape refuses" [ setting ]
         test_setting_errors;
     ]
-    @ terminal )
+    @ terminal @ casts )

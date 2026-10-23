@@ -12,6 +12,8 @@
   native_test
   matrix_backport
   fmt
+  jsont
+  jsont.bytesrw
   alcobar
   eio
   eio.unix

@@ -7,7 +7,8 @@
 
     [K7] draws a terminal session as an SVG image animated with CSS alone,
     without a browser. {!record} plays a tape in a shell on a pseudo-terminal,
-    {!run} runs a program there and {!svg} draws output given with its times.
+    {!run} runs a program there, {!svg} draws output given with its times and
+    {!svg_of_cast} draws an asciicast recording.
 
     A tape is the script of {{:https://github.com/charmbracelet/vhs}VHS}, by
     {{:https://charm.land/}Charm}, which records a terminal session as a GIF or
@@ -157,8 +158,8 @@ type error =
           rather than when the wait times out. *)
   | Invalid of string
       (** A tape, a setting or a time that VHS rejects or partly ignores, or
-          that {!record} or {!svg} refuses as their documentation states, naming
-          the first offending item, and why. *)
+          that {!record}, {!svg} or {!svg_of_cast} refuses as their
+          documentation states, naming the first offending item, and why. *)
 
 val pp_error : error Fmt.t
 (** [pp_error] formats an error for humans, on one line. For
@@ -324,7 +325,8 @@ val pp : t Fmt.t
 
     {!svg} draws the image the {!constructor-Native} engine would from output
     given with its times, such as bytes a test captured, with no tape, no shell
-    and no file written: it returns the image.
+    and no file written: it returns the image. {!svg_of_cast} draws the output
+    of an asciicast recording the same way.
 
     {[
     let image =
@@ -447,6 +449,44 @@ val svg :
     {!duration} or before the one ahead of it. It is [Error (Unsupported _)] on
     the {!constructor-Theme} colours and the sizes that the
     {{!native_details}native recorder} refuses. *)
+
+val svg_of_cast :
+  ?settings:setting list ->
+  ?show:string ->
+  ?delay:duration ->
+  string ->
+  (string, error) result
+(** [svg_of_cast ~settings ~show ~delay cast] is the SVG image of the
+    {{:https://docs.asciinema.org/manual/asciicast/v2/}asciicast v2} recording
+    [cast], as {!svg} draws the data of its output events, those with the code
+    [o], at their times. Each time, in seconds, is rounded to the microsecond,
+    then to the nearest millisecond, half up, so the same [cast] gives the same
+    image, byte for byte. The terminal has the [width] and [height] of the
+    header as its {!constructor-Columns} and {!constructor-Rows}, unless
+    [settings] (defaults to [[]]) size it in that direction; [settings] apply
+    after them. The other members of the header are ignored, and so are input
+    events, markers, resizes and events of other codes. The last screen holds
+    for a second, as for {!run}. With [show] (defaults to [""]) not empty, the
+    image's first line is [$ ] then [show], as for {!run}, and the output shows
+    [delay] (defaults to [Ms 500]) later. So, for a [cast] whose header has the
+    [width] [w] and the [height] [h], whose output events give [output], their
+    data at their milliseconds, the last at [last], and for [settings] that do
+    not size the terminal:
+
+    {@ocaml skip[
+    svg_of_cast ~settings cast
+    = svg
+        ~settings:(Columns w :: Rows h :: settings)
+        (output @ [ (Ms (last + 1000), "") ])
+    ]}
+
+    It is [Error (Invalid msg)] if [cast] is not asciicast v2, with [msg] naming
+    the line, from [1], and why: a header that is not a JSON object with
+    [version] [2] and a positive integer [width] and [height], a line that is
+    not an event [[time, code, data]] of a number and two strings, a negative
+    time, or a time before the one ahead of it. It is also [Error (Invalid _)]
+    on what {!run} refuses in [show] and [delay], and the error of {!svg} on
+    [settings] that it refuses. *)
 
 val run :
   ?settings:setting list ->

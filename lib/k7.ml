@@ -1530,17 +1530,42 @@ let command_line = function
   | "" -> ""
   | show -> "\027[38;2;90;86;224m$ \027[0m" ^ show ^ "\r\n"
 
-let command_line_of ?show ~delay:(Ms delay) argv =
-  let* () = if argv = [] then Error (Invalid "no command to run") else Ok () in
+let shown ~show ~delay:(Ms delay) =
   let* () =
     Result.map_error (fun msg -> Invalid msg) (check_ms "delay " delay)
-  in
-  let show =
-    Option.value show ~default:(String.concat " " (List.map shell_word argv))
   in
   if has_control show then
     err_invalid "show %a: holds a control character" Quote.pp show
   else Ok (command_line show, if show = "" then 0 else delay)
+
+let command_line_of ?show ~delay argv =
+  let* () = if argv = [] then Error (Invalid "no command to run") else Ok () in
+  let show =
+    Option.value show ~default:(String.concat " " (List.map shell_word argv))
+  in
+  shown ~show ~delay
+
+let cast_size (c : Asciicast.t) settings =
+  let given f = List.exists f settings in
+  (if given (function Columns _ | Width _ -> true | _ -> false) then []
+   else [ Columns c.columns ])
+  @
+  if given (function Rows _ | Height _ -> true | _ -> false) then []
+  else [ Rows c.rows ]
+
+let hold = 1000
+
+let svg_of_cast ?(settings = []) ?(show = "") ?(delay = Ms 500) cast =
+  let* line, delay = shown ~show ~delay in
+  let* c =
+    Result.map_error (fun msg -> Invalid msg) (Asciicast.of_string cast)
+  in
+  let output = List.map (fun (ms, s) -> (Ms (ms + delay), s)) c.output in
+  let last = List.fold_left (fun _ (Ms ms, _) -> ms) delay output in
+  let output = output @ [ (Ms (last + hold), "") ] in
+  svg
+    ~settings:(cast_size c settings @ settings)
+    (if line = "" then output else (Ms 0, line) :: output)
 
 let run ?(settings = []) ?(env = []) ?show ?(delay = Ms 500) ?stop ~clock ~proc
     ~cwd argv =

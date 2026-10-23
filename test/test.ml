@@ -31,6 +31,7 @@ let () =
          Test_eio.suite;
          Test_cli.suite;
          Test_svg.suite;
+         Test_asciicast.suite;
          Test_screen.suite;
          Test_palette.suite;
          Test_regexp_match.suite;
