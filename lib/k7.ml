@@ -710,7 +710,7 @@ let add_ms b n =
   Buffer.add_string b (Int.to_string n);
   Buffer.add_string b "ms"
 
-let rec add_action ~hidden b = function
+let rec add_action ?(last = false) ~hidden b = function
   | Type s -> add_type b s
   | Key k -> add_line b (key_name k)
   | Sleep (Ms n) ->
@@ -735,7 +735,8 @@ let rec add_action ~hidden b = function
   | Hidden actions ->
       Buffer.add_string b "Hide\n";
       List.iter (add_action ~hidden:true b) actions;
-      Buffer.add_string b "Show\n"
+      (* As VHS, a tape that ends hidden records nothing more. *)
+      if not last then Buffer.add_string b "Show\n"
   | Raw line -> add_line b line
 
 let setting_line = function
@@ -771,7 +772,13 @@ let to_string t =
       Buffer.add_char b '\n')
     (List.filter (Fun.negate is_svg) t.outputs);
   List.iter (add_setting b) t.settings;
-  List.iter (add_action ~hidden:false b) t.actions;
+  let rec actions = function
+    | [] -> ()
+    | a :: rest ->
+        add_action ~last:(List.for_all is_empty rest) ~hidden:false b a;
+        actions rest
+  in
+  actions t.actions;
   Buffer.contents b
 
 let pp ppf t = Fmt.string ppf (to_string t)

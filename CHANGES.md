@@ -72,7 +72,10 @@
   `K7.hidden`, and `K7.with_settings` and `K7.with_outputs` replace a
   tape's settings and outputs, which `K7.settings` and `K7.outputs`
   return. A tape may have no output until it plays, so a tape without an
-  `Output` line reads, and `k7 play -o` gives it one.
+  `Output` line reads, and `k7 play -o` gives it one. A tape that ends
+  hidden ends on its last shown screen, as with VHS, not on the screen
+  its hidden actions leave, such as the shell's prompt after a program
+  quits.
 - The native recorder plays bash, zsh and fish as VHS starts them, VHS's
   window bar, named and JSON themes, margin colours and images, `Screenshot`
   of an `.svg` path (a still SVG image), `Source` and the `.txt`, `.ascii`

@@ -291,8 +291,10 @@ val to_string : t -> string
 (** [to_string t] is [t] in the [.tape] syntax. The [Output] lines come first,
     without those of the [.svg] outputs, then the [Set] lines and the actions.
     An action is one or more lines, except [type' ""] and a {!hidden} of such
-    actions, which are none. A {!type'} with all three quote characters is
-    several [Type] lines. *)
+    actions, which are none. A {!hidden} is [Hide], its actions and [Show], with
+    no [Show] when it is the last action, as VHS records nothing after a last
+    [Hide]. A {!type'} with all three quote characters is several [Type] lines.
+*)
 
 val pp : t Fmt.t
 (** [pp ppf t] is [Fmt.string ppf (to_string t)]. *)

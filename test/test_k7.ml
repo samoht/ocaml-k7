@@ -150,7 +150,16 @@ let test_hidden () =
   let open K7 in
   expect "hidden" "Hide\nType \"a\"\nEnter\nShow\nType \"b\"\n"
     (body [ hidden [ type' "a"; hidden [ key Enter ]; hidden [] ]; type' "b" ]);
-  expect "empty" "" (body [ hidden [] ])
+  expect "empty" "" (body [ hidden [] ]);
+  (* VHS records nothing after a last Hide, so no Show ends it. *)
+  match
+    K7.tape ~outputs:[ "demo.gif" ]
+      [ type' "a"; hidden [ type' "q"; hidden [] ] ]
+  with
+  | Ok t ->
+      expect "last" "Output \"demo.gif\"\nType \"a\"\nHide\nType \"q\"\n"
+        (K7.to_string t)
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
 
 let test_durations () =
   let open K7 in

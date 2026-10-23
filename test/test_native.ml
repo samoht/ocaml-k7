@@ -273,6 +273,28 @@ let test_hidden () =
         (screen [ "> echo shown"; "shown"; ">" ])
         (last (frames s))
 
+(* As VHS, a tape that ends hidden ends on its last shown frame. *)
+let test_hidden_end () =
+  with_dir @@ fun env cwd ->
+  let t =
+    tape
+      K7.
+        [
+          type' "echo shown\n";
+          wait Prompt;
+          hidden [ type' "echo bye\n"; wait Prompt ];
+        ]
+  in
+  match record env cwd t with
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+  | Ok s ->
+      Alcotest.(check bool)
+        "hidden output not shown" false (contains ~sub:"bye" s);
+      Alcotest.(check string)
+        "final"
+        (screen [ "> echo shown"; "shown"; ">" ])
+        (last (frames s))
+
 let test_scroll () =
   with_dir @@ fun env cwd ->
   let t =
@@ -1905,6 +1927,7 @@ let suite =
          ("first prompt", test_first_prompt);
          ("no job control", test_no_job_control);
          ("hidden", test_hidden);
+         ("hidden end", test_hidden_end);
          ("scroll", test_scroll);
          ("scroll far", test_scroll_far);
          ("buffer", test_buffer);
