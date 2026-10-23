@@ -189,15 +189,38 @@ let load env path =
       Fmt.error "%s: permission denied" path
   | exception Eio.Io (err, _) -> Fmt.error "%s: %a" path Eio.Exn.pp_err err
 
+let check_save output =
+  let rec nearest d =
+    let up = Filename.dirname d in
+    if Sys.file_exists d || up = d then d else nearest up
+  in
+  let dir = nearest (Filename.dirname output) in
+  let access path perms msg =
+    match Unix.access path perms with
+    | () -> Ok ()
+    | exception Unix.Unix_error _ -> Fmt.error "%a: %s" Quote.pp output msg
+  in
+  match Unix.stat output with
+  | { st_kind = S_DIR; _ } -> Fmt.error "%a: is a directory" Quote.pp output
+  | _ -> access output [ W_OK ] "permission denied"
+  | exception Unix.Unix_error _ -> (
+      match Unix.stat dir with
+      | { st_kind = S_DIR; _ } ->
+          access dir [ W_OK; X_OK ] (Fmt.str "cannot write in %a" Quote.pp dir)
+      | _ -> Fmt.error "%a: %a is not a directory" Quote.pp output Quote.pp dir
+      | exception Unix.Unix_error (e, _, _) ->
+          Fmt.error "%a: %s" Quote.pp output (Unix.error_message e))
+
 let save env output svg =
   let file = Eio.Path.(Eio.Stdenv.fs env / output) in
   match
+    Result.bind (check_save output) @@ fun () ->
     Option.iter
       (fun (dir, _) -> Eio.Path.mkdirs ~exists_ok:true ~perm:0o755 dir)
       (Eio.Path.split file);
-    Eio.Path.save ~create:(`Or_truncate 0o644) file svg
+    Ok (Eio.Path.save ~create:(`Or_truncate 0o644) file svg)
   with
-  | () -> Ok ()
+  | r -> r
   | exception Eio.Io (Eio.Fs.E (Already_exists _ | Not_found _), _) ->
       Fmt.error "%a: %a is not a directory" Quote.pp output Quote.pp
         (Filename.dirname output)

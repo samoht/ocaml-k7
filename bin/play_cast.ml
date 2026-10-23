@@ -47,6 +47,11 @@ let draw stdenv ~dry_run ~settings ~show ?delay ~outputs inputs =
   let input = String.concat " " inputs in
   let* outputs = check_outputs input outputs in
   let* () = check_shows input ~show inputs in
+  let* () =
+    List.fold_left
+      (fun acc (o, _) -> Result.bind acc (fun () -> Flags.check_save o))
+      (Ok ()) outputs
+  in
   let* casts =
     List.fold_left
       (fun acc i ->

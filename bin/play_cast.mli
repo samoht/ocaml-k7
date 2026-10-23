@@ -23,4 +23,5 @@ val run :
     printing an error on standard error, if standard error can be written, if
     [outputs] is empty or one of them is neither [.svg] nor [.txt], if [show]
     has several strings but not one per input, if an input cannot be read, if
-    reading or drawing them fails, or if an output cannot be written. *)
+    reading or drawing them fails, or if an output cannot be written, which it
+    checks first, [dry_run] or not. *)

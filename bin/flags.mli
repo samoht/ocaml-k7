@@ -41,9 +41,14 @@ val load : Eio_unix.Stdenv.base -> string -> (string, string) result
 (** [load env path] is the contents of the file [path], of at most 10 MiB, or
     [Error msg]. *)
 
+val check_save : string -> (unit, string) result
+(** [check_save path] is [Error msg] if {!save} cannot write the file [path]: it
+    is a directory or cannot be written, or the nearest of its directories that
+    exists is not a directory or cannot be written. It writes nothing. *)
+
 val save : Eio_unix.Stdenv.base -> string -> string -> (unit, string) result
 (** [save env path svg] writes [svg] to the file [path], creating its missing
-    directories, or is [Error msg]. *)
+    directories, or is [Error msg], that of {!check_save} first. *)
 
 val print_tape : Eio_unix.Stdenv.base -> K7.t -> (unit, string) result
 (** [print_tape env t] writes [K7.to_string t] on standard output. A reader that
