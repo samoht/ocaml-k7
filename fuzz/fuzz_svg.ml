@@ -719,6 +719,39 @@ let test_cast_versions events =
       check_eq ~pp:pp_string expected (image (parse (K7.string_of_cast c))))
     [ a; b ]
 
+let test_cast_palette_resize_roundtrip n =
+  let colours = if n mod 2 = 0 then 8 else 16 in
+  let palette =
+    List.init colours (fun i -> Fmt.str "#%06x" (((n + 1) * 257) + (i * 4096)))
+    |> String.concat ":"
+  in
+  let source =
+    Fmt.str
+      {|{"version":3,"term":{"cols":8,"rows":3,"theme":{"fg":"#abcdef","bg":"#123456","palette":"%s"}},"command":"echo café"}
+[0.0005,"o","\u001b[31mé中\u001b[0m"]
+[0.0015,"r","12x4"]
+[0.001,"o","\r\né👍"]
+[0.002,"x","7"]
+|}
+      palette
+  in
+  let parse source =
+    match K7.cast_of_string source with
+    | Ok c -> c
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  let original = parse source in
+  let serialized = K7.string_of_cast original in
+  let restored = parse serialized in
+  check_eq ~pp:Fmt.Dump.string serialized (K7.string_of_cast restored);
+  let get = function Ok s -> s | Error e -> failf "%a" K7.pp_error e in
+  check_eq ~pp:Fmt.Dump.string
+    (get (K7.svg_of_casts [ original ]))
+    (get (K7.svg_of_casts [ restored ]));
+  check_eq ~pp:Fmt.Dump.string
+    (get (K7.text_of_casts [ original ]))
+    (get (K7.text_of_casts [ restored ]))
+
 let terminal =
   [
     test_case "scroll regions preserve header and footer" [ uint8 ]
@@ -754,6 +787,8 @@ let terminal =
 
 let casts =
   [
+    test_case "cast serialization preserves palettes, resizes and Unicode"
+      [ uint8 ] test_cast_palette_resize_roundtrip;
     test_case "v2 and v3 timings survive serialization and CRLF"
       [
         list
