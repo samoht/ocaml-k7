@@ -1558,9 +1558,17 @@ let reserved =
     "case coproc do done elif else end esac fi for foreach function if in \
      nocorrect repeat select then time until while"
 
-(* A bare first word with a [=] is an assignment to sh, or [=cmd] to zsh. *)
-let program p =
-  shell_word ~quote:(List.mem p reserved || String.contains p '=') p
+(* A bare first word with a [=] is an assignment to sh, or [=cmd] to zsh;
+   one that starts with [-] is an option of [sh -c]. zsh reads [-] and
+   [noglob] as precommand modifiers even quoted. *)
+let program = function
+  | ("-" | "noglob") as p -> "command -- " ^ p
+  | p ->
+      shell_word
+        ~quote:
+          (List.mem p reserved || String.contains p '='
+          || String.starts_with ~prefix:"-" p)
+        p
 
 let quoted = function
   | [] -> ""
