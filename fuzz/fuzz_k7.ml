@@ -1902,8 +1902,48 @@ let test_check_valid_is_pure n =
   | Error e -> failf "%a" K7.pp_error e);
   check (Eio.Path.read_dir cwd = [])
 
+let test_stuck_output_bound n =
+  Native_test.with_dir @@ fun env cwd ->
+  let complete = ref false and largest = ref 0 in
+  let stuck output =
+    largest := max !largest (String.length output);
+    if Native_test.contains ~sub:"OUTPUT_COMPLETE\r\n" output then
+      complete := true;
+    !complete
+  in
+  let command =
+    Fmt.str
+      "head -c %d /dev/zero | tr '\\000' x; printf \"\\nOUTPUT_COMPLETE\\n\"; \
+       read ignored\n"
+      (65537 + (n * 128))
+  in
+  let tape =
+    match
+      K7.tape
+        ~settings:K7.[ Columns 20; Rows 2; Typing_speed (Ms 0) ]
+        ~outputs:[ "output.svg" ]
+        K7.[ type' command; wait (Line "NEVER_READY") ]
+    with
+    | Ok t -> t
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  Native_test.with_clock ~release:(fun () -> !complete) @@ fun clock ->
+  (match
+     K7.record ~engine:Native ~env:Native_test.no_job_control ~stuck ~clock
+       ~proc:(Eio.Stdenv.process_mgr env)
+       ~cwd tape
+   with
+  | Error (Stuck _) -> ()
+  | Error e -> failf "%a" K7.pp_error e
+  | Ok () -> fail "the callback did not stop the wait");
+  check !complete;
+  if !largest > 65536 then
+    failf "stuck callback received %d bytes, more than the last 64 KiB" !largest
+
 let with_processes =
   [
+    test_case "stuck callbacks receive only the last 64 KiB" [ uint8 ]
+      test_stuck_output_bound;
     test_case "CLI dry-run and recording refuse the same preflight failures"
       [ uint8 ] test_cli_dry_run_preflight;
     test_case "successful CLI dry-run is silent and creates no output directory"
