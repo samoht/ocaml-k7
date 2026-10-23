@@ -2139,8 +2139,40 @@ let test_fractional_sleep_units n seconds =
   in
   check_eq ~pp:Fmt.int64 (Int64.of_int (count * microseconds * 1000)) total
 
+let test_long_duration_range n surface =
+  let milliseconds = 4_611_686_018_428 + n in
+  let expected = Int64.mul (Int64.of_int milliseconds) 1_000_000L in
+  let setting, action, times_out =
+    match surface mod 5 with
+    | 0 -> ([], K7.sleep (Ms milliseconds), false)
+    | 1 -> (K7.[ Typing_speed (Ms milliseconds) ], K7.type' "x", false)
+    | 2 -> ([], K7.raw (Fmt.str "Type@%dms x" milliseconds), false)
+    | 3 -> ([], K7.raw (Fmt.str "Enter@%dms" milliseconds), false)
+    | _ -> ([], K7.wait ~timeout:(Ms milliseconds) (Screen "NEVER_MATCH"), true)
+  in
+  Native_test.with_dir @@ fun env cwd ->
+  let tape =
+    match K7.tape ~settings:setting ~outputs:[ "long.svg" ] [ action ] with
+    | Ok t -> t
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  let result, sleeps =
+    Native_test.with_sleep_log ~release:(fun ns -> ns > 1_000_000_000_000L)
+    @@ fun clock ->
+    K7.record ~engine:Native ~env:Native_test.no_job_control ~clock
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd tape
+  in
+  (match (result, times_out) with
+  | Ok (), false | Error (K7.Timeout _), true -> ()
+  | Error e, _ -> failf "%a" K7.pp_error e
+  | Ok (), true -> fail "an impossible wait succeeded");
+  check_eq ~pp:Fmt.int64 expected (List.fold_left Int64.max 0L sleeps)
+
 let with_processes =
   [
+    test_case "all native durations preserve the upper half of Go time.Duration"
+      [ uint16; uint8 ] test_long_duration_range;
     test_case "fractional VHS sleeps preserve their sum in either unit"
       [ uint8; bool ] test_fractional_sleep_units;
     test_case "sourced waits name their file and count its lines" [ uint8 ]
