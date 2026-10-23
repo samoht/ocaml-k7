@@ -172,9 +172,27 @@ let test_cleanup_output n =
           check_eq ~pp:Fmt.(Dump.list string) [ "  " ^ token; "" ] output
       | [] -> fail "no recorded command")
 
+let test_cram_nul_argument prefix suffix =
+  Native_test.with_dir @@ fun env cwd ->
+  let argument = prefix ^ "\000" ^ suffix in
+  let result =
+    K7.cram
+      ~clock:(Eio_mock.Clock.Mono.make ())
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd
+      [ "/bin/sh"; "-c"; ": > launched"; "k7-argv"; argument ]
+  in
+  check (not (Eio.Path.is_file Eio.Path.(cwd / "launched")));
+  match result with
+  | Error (Invalid _ | Io _) -> ()
+  | Error e -> failf "unexpected error: %a" K7.pp_error e
+  | Ok _ -> failf "executed an argv containing NUL: %S" argument
+
 let suite =
   ( "cram",
     [
+      test_case "cram rejects NUL anywhere in an argument before execution"
+        [ bytes; bytes ] test_cram_nul_argument;
       test_case "cram drains output from descendants during group cleanup"
         [ uint8 ] test_cleanup_output;
       test_case "recorded output stays out of cram commands" [ uint8; bool ]
