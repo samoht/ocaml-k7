@@ -946,12 +946,39 @@ let test_cast_dry_run_destinations () =
       Native_test.check_contains "names the destination" ~sub:destination error)
     [ "occupied.svg"; "parent/out.svg" ]
 
+(* k7 rec in a terminal gives the program that terminal's size, unless
+   --columns or --rows say otherwise. *)
+let test_rec_window_size () =
+  let check name expected settings =
+    Alcotest.(check bool) name true (expected = settings)
+  in
+  let winsize = { Pty.rows = 31; cols = 123; xpixel = 0; ypixel = 0 } in
+  let master, slave = Pty.open_pty ~winsize () in
+  Fun.protect ~finally:(fun () ->
+      Pty.close master;
+      Pty.close slave)
+  @@ fun () ->
+  let fd = Pty.file_descr slave in
+  check "the window's size" K7.[ Columns 123; Rows 31 ] (Rec_cmd.sized fd []);
+  check "--columns wins"
+    K7.[ Columns 80; Theme "Dracula"; Rows 31 ]
+    (Rec_cmd.sized fd K7.[ Columns 80; Theme "Dracula" ]);
+  check "both given"
+    K7.[ Rows 5; Columns 7 ]
+    (Rec_cmd.sized fd K7.[ Rows 5; Columns 7 ]);
+  let r, w = Unix.pipe () in
+  Fun.protect ~finally:(fun () ->
+      Unix.close r;
+      Unix.close w)
+  @@ fun () -> check "not a terminal" [] (Rec_cmd.sized r [])
+
 let suite =
   ( "cli",
     List.map
       (fun (name, fn) -> Alcotest.test_case name `Quick fn)
       ([
          ("tape", test_tape);
+         ("rec takes the window's size", test_rec_window_size);
          ("run", test_run);
          ("run reports exec failure", test_run_exec_failure);
          ("write errors", test_write_errors);

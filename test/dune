@@ -18,6 +18,7 @@
   k7_cli
   svg_check
   matrix_backport
+  matrix.pty
   native_test
   fmt
   alcotest

@@ -25,5 +25,10 @@ val run :
     written, before it runs anything if an output has another extension, and if
     the program cannot run or an output cannot be written. *)
 
+val sized : Unix.file_descr -> K7.setting list -> K7.setting list
+(** [sized fd settings] is [settings] with the columns and the rows of the
+    terminal [fd] where [settings] give none, or [settings] if [fd] is not a
+    terminal. *)
+
 val cmd : int Cmdliner.Cmd.t
 (** [cmd] is the [k7 rec] subcommand. *)

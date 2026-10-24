@@ -31,6 +31,21 @@ let exit_code = function
   | `Exited n -> n
   | `Signaled s -> 128 + Sys.signal_to_int s
 
+external window_size : Unix.file_descr -> (int * int) option = "k7_window_size"
+
+let sized fd settings =
+  match window_size fd with
+  | None -> settings
+  | Some (columns, rows) ->
+      let lacks p = not (List.exists p settings) in
+      settings
+      @ (if lacks (function K7.Columns _ -> true | _ -> false) then
+           [ K7.Columns columns ]
+         else [])
+      @
+      if lacks (function K7.Rows _ -> true | _ -> false) then [ K7.Rows rows ]
+      else []
+
 let raw saved =
   Unix.
     {
@@ -53,28 +68,27 @@ let raw saved =
 
 (* The terminal that runs k7 shows the program and sends it each key as typed,
    Ctrl-C included, until it exits. *)
-let attached f =
-  if Unix.isatty Unix.stdin && Unix.isatty Unix.stdout then (
+let attached tty f =
+  if tty then (
     let saved = Unix.tcgetattr Unix.stdin in
     Unix.tcsetattr Unix.stdin TCSAFLUSH (raw saved);
-    Fun.protect
-      ~finally:(fun () -> Unix.tcsetattr Unix.stdin TCSADRAIN saved)
-      (fun () -> f true))
-  else f false
+    Fun.protect ~finally:(fun () -> Unix.tcsetattr Unix.stdin TCSADRAIN saved) f)
+  else f ()
 
 let record ?show ?delay ?stop stdenv ~settings ~env ~outputs argv =
   let* outputs = kinds outputs in
   let error r = Result.map_error (Fmt.to_to_string Flags.pp_error) r in
   let proc = Eio.Stdenv.process_mgr stdenv and cwd = Eio.Stdenv.cwd stdenv in
   let clock = Eio.Stdenv.mono_clock stdenv in
+  let tty = Unix.isatty Unix.stdin && Unix.isatty Unix.stdout in
+  let settings = if tty then sized Unix.stdout settings else settings in
+  let input, echo =
+    if tty then (Some (Eio.Stdenv.stdin stdenv), Some (Eio.Stdenv.stdout stdenv))
+    else (None, None)
+  in
   let cast =
     lazy
-      ( attached @@ fun tty ->
-        let input, echo =
-          if tty then
-            (Some (Eio.Stdenv.stdin stdenv), Some (Eio.Stdenv.stdout stdenv))
-          else (None, None)
-        in
+      ( attached tty @@ fun () ->
         K7.capture ~settings ~env ?show ?stop ?input ?echo ~clock ~proc ~cwd
           argv
         |> error )
@@ -183,18 +197,21 @@ let man =
        twice: once on the terminal, whose exit code $(cmd) exits with, and \
        once on pipes.";
     `P
-      "Without $(b,--columns) and $(b,--rows), the terminal has as many \
-       columns and rows as a frame of 1200 by 600 pixels holds, as in VHS, \
-       with characters $(b,--font-size) pixels high: 75 columns and 16 rows at \
-       the default 22 pixels, and 150 columns and 33 rows at 11. With them, \
-       the image is as wide and as high as they need at that font size.";
+      "Without $(b,--columns) and $(b,--rows), the terminal has the size of \
+       the terminal $(cmd) runs in. When it runs in none, the terminal has as \
+       many columns and rows as a frame of 1200 by 600 pixels holds, as in \
+       VHS, with characters $(b,--font-size) pixels high: 75 columns and 16 \
+       rows at the default 22 pixels, and 150 columns and 33 rows at 11. In \
+       the other cases, the image is as wide and as high as the terminal needs \
+       at that font size.";
     `P
       "The program is looked up in the $(b,PATH) it gets unless its name holds \
        a slash. It gets the environment of $(cmd) without $(b,COLUMNS) and \
        $(b,LINES), so that it reads the size of the terminal, with \
        $(b,TERM=xterm-256color), then the $(b,--env) variables. Its standard \
-       input is the terminal, where nothing is typed, so a program that waits \
-       for input waits until $(cmd) is interrupted.";
+       input is the terminal, where what is typed in the terminal $(cmd) runs \
+       in arrives. When it runs in none, nothing is typed, so a program that \
+       waits for input waits until $(cmd) is interrupted.";
     `P
       "On SIGINT or SIGTERM, $(cmd) sends the program and its descendants \
        SIGTERM, then SIGKILL a second later, writes the image of what the \
