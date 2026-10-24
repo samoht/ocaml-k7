@@ -582,7 +582,8 @@ val run :
     second after the program exits. The image's first line is [$ ] in the colour
     of VHS's prompt, then [show] (defaults to [argv], each argument shell-quoted
     where needed, for POSIX sh), and the program's output starts on the next
-    line; an empty [show] shows no line. A line that shows stays alone for
+    line; an empty [show] shows no line. A newline in [show] continues it on a
+    line that starts with [> ], as in a shell. A line that shows stays alone for
     [delay] (defaults to [Ms 500]), as if typed, and the program's output shows
     that much later. The first element of [argv] is the executable, looked up in
     the [PATH] the program gets unless it holds a slash, and relative to [cwd]
@@ -603,9 +604,9 @@ val run :
     {!capture}'s recording as {!svg_of_casts} draws it, with [settings] and
     [delay]. It is:
     - [Error (Invalid _)] if [argv] is empty, if a setting is one {!svg}
-      refuses, if [show] holds a control character, if [delay] is out of the
-      range of a {!duration}, or if a name of [env] is empty or holds [=], or a
-      name or a value holds a NUL byte;
+      refuses, if [show] holds a control character other than a newline, if
+      [delay] is out of the range of a {!duration}, or if a name of [env] is
+      empty or holds [=], or a name or a value holds a NUL byte;
     - [Error (Unsupported _)] on what {!svg} refuses;
     - [Error (Executable_not_found _)] if the executable is not found;
     - [Error (Io _)] if an argument of [argv] holds a NUL byte, which [execve]

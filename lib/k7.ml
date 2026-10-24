@@ -1657,8 +1657,9 @@ let quoted = function
   | p :: args -> String.concat " " (program p :: List.map shell_word args)
 
 let check_show = function
-  | Some show when has_control show ->
-      err_invalid "show %a: holds a control character" Quote.pp show
+  | Some show when has_control ~except:"\n" show ->
+      err_invalid "show %a: holds a control character other than a newline"
+        Quote.pp show
   | _ -> Ok ()
 
 let command_of ?show argv =
