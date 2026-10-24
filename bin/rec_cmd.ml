@@ -75,7 +75,8 @@ let attached tty f =
     Fun.protect ~finally:(fun () -> Unix.tcsetattr Unix.stdin TCSADRAIN saved) f)
   else f ()
 
-let record ?show ?delay ?stop stdenv ~settings ~env ~outputs argv =
+let record ?show ?delay ?idle_time_limit ?stop stdenv ~settings ~env ~outputs
+    argv =
   let* outputs = kinds outputs in
   let error r = Result.map_error (Fmt.to_to_string Flags.pp_error) r in
   let proc = Eio.Stdenv.process_mgr stdenv and cwd = Eio.Stdenv.cwd stdenv in
@@ -97,10 +98,10 @@ let record ?show ?delay ?stop stdenv ~settings ~env ~outputs argv =
   let draw = function
     | Svg ->
         let* c, _ = Lazy.force cast in
-        K7.svg_of_casts ~settings ?delay [ c ] |> error
+        K7.svg_of_casts ~settings ?delay ?idle_time_limit [ c ] |> error
     | Cast ->
         let* c, _ = Lazy.force cast in
-        Ok (K7.string_of_cast c)
+        Ok (K7.string_of_cast ?idle_time_limit c)
     | Txt ->
         let* c, _ = Lazy.force cast in
         K7.text_of_casts ~settings [ c ] |> error
@@ -125,9 +126,13 @@ let record ?show ?delay ?stop stdenv ~settings ~env ~outputs argv =
   if Lazy.is_val cast then Result.map snd (Lazy.force cast)
   else Result.map snd (Lazy.force cram)
 
-let run ?show ?delay stdenv ~settings ~env ~outputs argv =
+let idle_time_limit idle =
+  Option.map (fun ms -> K7.Ms ms) (Option.value idle ~default:(Some 2000))
+
+let run ?show ?delay ?idle_time_limit stdenv ~settings ~env ~outputs argv =
   Flags.interruptible (fun stop ->
-      record ?show ?delay ~stop stdenv ~settings ~env ~outputs argv)
+      record ?show ?delay ?idle_time_limit ~stop stdenv ~settings ~env ~outputs
+        argv)
   |> Flags.exit stdenv ~ok:exit_code
 
 open Cmdliner
@@ -169,10 +174,12 @@ let man =
        extension, in any case. An $(b,.svg) output is an animated SVG image, \
        which plays in an HTML $(i,img) element: each screen shows at the time \
        it arrived since the program started, and the last one holds for a \
-       second after the program exits. The first line of the image shows \
-       $(b,\\$) and $(i,COMMAND), each argument shell-quoted where needed, and \
-       the program's output starts on the next line. Output beyond the last \
-       row of the terminal scrolls its first rows away.";
+       second after the program exits. A pause longer than \
+       $(b,--idle-time-limit) seconds, 2 unless given, such as a build that \
+       prints nothing for a while, lasts that long. The first line of the \
+       image shows $(b,\\$) and $(i,COMMAND), each argument shell-quoted where \
+       needed, and the program's output starts on the next line. Output beyond \
+       the last row of the terminal scrolls its first rows away.";
     `P
       "When $(cmd) runs in a terminal, the program shows there as it runs, and \
        each key typed goes to it as typed, Ctrl-C included, so a program that \
@@ -182,12 +189,15 @@ let man =
     `P
       "A $(b,.cast) output is the recording itself, in asciinema's asciicast \
        v3 format: the size of the terminal, the command, what the program \
-       printed at the millisecond it arrived, and its exit. $(b,k7 play) \
-       $(b,-o) $(i,FILE.svg) $(i,FILE.cast) draws the same image later, with \
-       other options if need be, and asciinema plays it. With $(b,--theme), \
-       its header holds the theme, and its cursor colours in $(i,cursor) and \
-       $(i,cursor_accent), two members that k7 adds to asciicast v3. A \
-       $(b,.txt) output is the text of the last screen.";
+       printed at the millisecond it arrived, and its exit, with every pause \
+       as it was and the limit in the $(b,idle_time_limit) of its header, \
+       which asciinema's player applies too. $(b,k7 play) $(b,-o) \
+       $(i,FILE.svg) $(i,FILE.cast) draws the same image later, with other \
+       options if need be, given the same $(b,--idle-time-limit) when it is \
+       above 2 or $(b,none). With $(b,--theme), its header holds the theme, \
+       and its cursor colours in $(i,cursor) and $(i,cursor_accent), two \
+       members that k7 adds to asciicast v3. A $(b,.txt) output is the text of \
+       the last screen.";
     `P
       "A $(b,.t) output is a cram test of $(i,COMMAND), as dune runs it: \
        $(cmd) runs the command line with $(b,sh -c) on pipes, with an empty \
@@ -245,11 +255,15 @@ let exits =
 
 let cmd =
   let doc = "run a program on a pseudo-terminal and record its screens" in
-  let run settings env show delay outputs argv =
+  let run settings env show delay idle outputs argv =
+    let idle_time_limit = idle_time_limit idle in
     Eio_main.run @@ fun stdenv ->
-    run ?show ~delay:(Ms delay) stdenv ~settings ~env ~outputs argv
+    run ?show ~delay:(Ms delay) ?idle_time_limit stdenv ~settings ~env ~outputs
+      argv
   in
   Cmd.make
     (Cmd.info "rec" ~doc ~man ~exits)
     Term.(
-      const run $ Flags.settings $ Flags.env $ show $ delay $ outputs $ command)
+      const run $ Flags.settings $ Flags.env $ show $ delay
+      $ Flags.idle_time_limit ~default:"2"
+      $ outputs $ command)

@@ -972,6 +972,23 @@ let test_rec_window_size () =
       Unix.close w)
   @@ fun () -> check "not a terminal" [] (Rec_cmd.sized r [])
 
+let test_idle_defaults () =
+  let check name expected limit =
+    Alcotest.(check bool) name true (expected = limit)
+  in
+  check "rec: two seconds" (Some (K7.Ms 2000)) (Rec_cmd.idle_time_limit None);
+  check "rec: none" None (Rec_cmd.idle_time_limit (Some None));
+  check "rec: given" (Some (K7.Ms 500))
+    (Rec_cmd.idle_time_limit (Some (Some 500)));
+  check "a recording: two seconds" (Some (K7.Ms 2000))
+    (Play_cmd.idle_time_limit "a.cast" None);
+  check "a cram test: two seconds" (Some (K7.Ms 2000))
+    (Play_cmd.idle_time_limit "a.t" None);
+  check "a tape: no limit" None (Play_cmd.idle_time_limit "a.TAPE" None);
+  check "a tape: given" (Some (K7.Ms 1000))
+    (Play_cmd.idle_time_limit "a.tape" (Some (Some 1000)));
+  check "a cram test: none" None (Play_cmd.idle_time_limit "a.t" (Some None))
+
 let suite =
   ( "cli",
     List.map
@@ -979,6 +996,7 @@ let suite =
       ([
          ("tape", test_tape);
          ("rec takes the window's size", test_rec_window_size);
+         ("idle time limit defaults", test_idle_defaults);
          ("run", test_run);
          ("run reports exec failure", test_run_exec_failure);
          ("write errors", test_write_errors);

@@ -56,20 +56,31 @@ let kinds = function
             "%s: several files play only as asciicast recordings (.cast)" input
       | None -> Ok Cast)
 
+(* Two seconds but for a tape, whose sleeps are what its author wrote. *)
+let idle_limit kind idle =
+  let default = match kind with Tape -> None | Cram | Cast -> Some 2000 in
+  Option.map (fun ms -> K7.Ms ms) (Option.value idle ~default)
+
+let idle_time_limit input idle =
+  idle_limit (Result.value (kind input) ~default:Cast) idle
+
 let run stdenv ?engine ~dry_run ~print ?vhs ~settings ~env ~outputs ~setup ~dir
-    ~wait_timeout ?(show = []) ?delay inputs =
+    ~wait_timeout ?(show = []) ?delay ?idle inputs =
   let input = String.concat " " inputs in
-  let play = function
+  let play kind =
+    let idle_time_limit = idle_limit kind idle in
+    match kind with
     | Cram ->
-        Play_cram.run stdenv ?engine ~dry_run ~print
+        Play_cram.run stdenv ?engine ?idle_time_limit ~dry_run ~print
           ~vhs:(Option.value vhs ~default:"vhs")
           ~setup ?dir ~settings ~env ?wait_timeout_s:wait_timeout ~outputs input
     | Tape ->
-        Play_tape.run stdenv ?engine ~dry_run ~print
+        Play_tape.run stdenv ?engine ?idle_time_limit ~dry_run ~print
           ~vhs:(Option.value vhs ~default:"vhs")
           ~settings ~env ~outputs input
     | Cast ->
-        Play_cast.run stdenv ~dry_run ~settings ~show ?delay ~outputs inputs
+        Play_cast.run stdenv ~dry_run ~settings ~show ?delay ?idle_time_limit
+          ~outputs inputs
   in
   match kinds inputs with
   | Error msg -> Flags.fail stdenv msg
@@ -207,7 +218,9 @@ let man =
        $(b,Set) lines of a tape before its first action are its settings, \
        which $(b,--columns), $(b,--rows), $(b,--font-size), $(b,--theme) and \
        $(b,--framerate) replace. $(b,--setup), $(b,--dir) and \
-       $(b,--wait-timeout) apply to cram tests only.";
+       $(b,--wait-timeout) apply to cram tests only. An $(b,.svg) image of a \
+       tape keeps every pause, its $(b,Sleep) lines included, unless \
+       $(b,--idle-time-limit) is given; $(b,vhs) ignores the option.";
     `S "CRAM TESTS";
     `P
       "$(cmd) types each $(b,\\$) command of a cram test into a terminal \
@@ -215,7 +228,9 @@ let man =
        ignores the expected output and exit codes. As dune does, it runs the \
        commands in a new empty temporary directory, which it removes \
        afterwards, unless $(b,--dir) names another one. A cram test needs \
-       $(b,-o).";
+       $(b,-o). In its $(b,.svg) image, a pause longer than \
+       $(b,--idle-time-limit) seconds, 2 unless given, such as a build that \
+       prints nothing for a while, lasts that long.";
     `P
       "The prompt hooks of the setup scripts still run first, and a command \
        that replaces $(b,PROMPT_COMMAND) makes the next wait time out. So does \
@@ -238,12 +253,14 @@ let man =
        to the millisecond, so the same recording gives the same image, byte \
        for byte, and the last screen holds for a second after the last event, \
        its exit included. A pause longer than the $(b,idle_time_limit) of the \
-       header lasts that limit. The terminal has the size of the header and of \
-       each resize, on an image of the largest, and $(b,--columns) and \
-       $(b,--rows) fix it instead; the theme of the header gives its colours \
-       unless $(b,--theme) does. $(cmd) ignores the input events, the markers \
-       and the other members of the header. A recording needs $(b,-o), an \
-       $(b,.svg) image or a $(b,.txt) text of its last screen.";
+       header lasts that limit, and then one longer than \
+       $(b,--idle-time-limit) seconds, 2 unless given, lasts that long. The \
+       terminal has the size of the header and of each resize, on an image of \
+       the largest, and $(b,--columns) and $(b,--rows) fix it instead; the \
+       theme of the header gives its colours unless $(b,--theme) does. $(cmd) \
+       ignores the input events, the markers and the other members of the \
+       header. A recording needs $(b,-o), an $(b,.svg) image or a $(b,.txt) \
+       text of its last screen.";
     `P
       "The first line of the image is $(b,\\$) and the $(b,command) of the \
        header, if any, as $(b,k7 rec) shows its command, and the output starts \
@@ -278,16 +295,19 @@ let man =
 let cmd =
   let doc = "play a tape, a cram test or asciicast recordings" in
   let run engine dry_run print vhs settings env outputs setup dir wait_timeout
-      show delay inputs =
+      show delay idle inputs =
     Eio_main.run @@ fun stdenv ->
     run stdenv ?engine ~dry_run ~print ?vhs ~settings ~env ~outputs ~setup ~dir
       ~wait_timeout ~show
       ?delay:(Option.map (fun ms -> K7.Ms ms) delay)
-      inputs
+      ?idle inputs
   in
   Cmd.make
     (Cmd.info "play" ~doc ~man ~exits:Flags.exits)
     Term.(
       const run $ engine $ dry_run $ Flags.print $ Flags.vhs $ settings
       $ Flags.env $ outputs $ setup $ dir $ Flags.wait_timeout $ show $ delay
+      $ Flags.idle_time_limit
+          ~default:
+            "2 for a cram test or an asciicast recording, and none for a tape"
       $ input)

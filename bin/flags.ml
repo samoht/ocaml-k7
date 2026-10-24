@@ -133,6 +133,41 @@ let wait_timeout =
 (* Go's longest duration, in milliseconds. *)
 let max_ms = 9_223_372_036_854
 
+(* Seconds as asciinema's [--idle-time-limit] takes them, such as [2] or
+   [0.5], in milliseconds; [none] is no limit. *)
+let idle_seconds s =
+  let number =
+    s <> ""
+    && String.for_all (fun c -> Char.Ascii.is_digit c || c = '.') s
+    && List.length (String.split_on_char '.' s) <= 2
+  in
+  match if number then float_of_string_opt s else None with
+  | _ when s = "none" -> Ok None
+  | Some x when x > 0. && x *. 1000. <= float max_ms ->
+      Ok (Some (max 1 (Float.to_int (Float.round (x *. 1000.)))))
+  | _ -> Fmt.error "%a is not a positive number of seconds, or none" Quote.pp s
+
+let pp_idle ppf = function
+  | None -> Fmt.string ppf "none"
+  | Some ms -> Fmt.pf ppf "%g" (float ms /. 1000.)
+
+let idle_time_limit ~default =
+  let doc =
+    Fmt.str
+      "Shorten each pause of the image longer than $(docv) seconds, such as a \
+       build that prints nothing for a while, to $(docv) seconds, as \
+       asciinema's $(b,idle_time_limit) does (defaults to %s). $(b,none) keeps \
+       every pause."
+      default
+  in
+  Arg.(
+    value
+    & opt
+        (some
+           (Arg.Conv.make ~docv:"SECONDS" ~parser:idle_seconds ~pp:pp_idle ()))
+        None
+    & info [ "idle-time-limit" ] ~docv:"SECONDS" ~doc)
+
 let milliseconds =
   let parser s =
     match decimal s with

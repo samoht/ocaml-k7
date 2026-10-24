@@ -1475,13 +1475,25 @@ let prepare_native ~cwd t =
   in
   Ok (dir, tape, svgs, texts)
 
-let record_native ?stop ?stuck ~vars ~clock ~proc ~cwd t =
+let idle_ms = function
+  | None -> Ok None
+  | Some (Ms ms) when ms = 0 ->
+      Error (Invalid "idle time limit 0ms: not positive")
+  | Some (Ms ms) ->
+      let* () =
+        Result.map_error
+          (fun msg -> Invalid msg)
+          (check_ms "idle time limit " ms)
+      in
+      Ok (Some ms)
+
+let record_native ?stop ?stuck ?idle ~vars ~clock ~proc ~cwd t =
   let* dir, tape, svgs, texts = prepare_native ~cwd t in
   let* { svg; text; stills } =
     Result.map_error
       (native_error ~verb:"recorded" ~tape:t)
-      (Native.play ?interrupt:stop ?stuck ~clock ~env:(environment proc) ~vars
-         ~cwd:dir tape)
+      (Native.play ?interrupt:stop ?stuck ?idle ~clock ~env:(environment proc)
+         ~vars ~cwd:dir tape)
   in
   let save ?(create = false) contents path =
     match if create then mkdirs dir path with
@@ -1513,13 +1525,15 @@ let check ?engine ?(env = []) ~cwd t =
   | Vhs -> prepare_vhs ~cwd t
   | Native -> Result.map ignore (prepare_native ~cwd t)
 
-let record ?engine ?(vhs = "vhs") ?(env = []) ?stop ?stuck ~clock ~proc ~cwd t =
+let record ?engine ?(vhs = "vhs") ?(env = []) ?stop ?stuck ?idle_time_limit
+    ~clock ~proc ~cwd t =
   let* () = check_env env in
+  let* idle = idle_ms idle_time_limit in
   match engine_of engine t with
   | Vhs ->
       let* () = prepare_vhs ~cwd t in
       render_vhs ?stop ~vhs ~vars:env ~clock ~proc ~cwd t
-  | Native -> record_native ?stop ?stuck ~vars:env ~clock ~proc ~cwd t
+  | Native -> record_native ?stop ?stuck ?idle ~vars:env ~clock ~proc ~cwd t
 
 let check_times output =
   let rec go prev = function
@@ -1690,7 +1704,14 @@ type cast = Asciicast.t
 let cast_of_string s =
   Result.map_error (fun msg -> Invalid msg) (Asciicast.of_string s)
 
-let string_of_cast = Asciicast.to_string
+let string_of_cast ?idle_time_limit c =
+  let idle =
+    match idle_time_limit with
+    | Some (Ms ms) when ms > 0 && ms <= max_ms -> Some ms
+    | _ -> None
+  in
+  Asciicast.to_string ?idle c
+
 let hold = 1000
 
 (* A header's command, a space for each control character but a newline. *)
@@ -1834,7 +1855,14 @@ let replay ~settings ?(show = []) ~delay casts =
   let* () = check_times (List.map (fun (ms, _) -> (Ms ms, "")) events) in
   Ok (Native.replay tape events)
 
-let svg_of_casts ?(settings = []) ?show ?(delay = Ms 500) casts =
+let svg_of_casts ?(settings = []) ?show ?(delay = Ms 500) ?idle_time_limit casts
+    =
+  let* idle = idle_ms idle_time_limit in
+  let casts =
+    match idle with
+    | None -> casts
+    | Some ms -> List.map (Asciicast.limit_idle ms) casts
+  in
   Result.map fst (replay ~settings ?show ~delay casts)
 
 let text_of_casts ?(settings = []) ?show casts =
@@ -1883,13 +1911,14 @@ let capture ?(settings = []) ?(env = []) ?show ?stop ?input ?echo ~clock ~proc
   let command = if command = "" then None else Some command in
   Ok ({ Asciicast.columns; rows; command; theme; events }, status)
 
-let run ?(settings = []) ?env ?show ?(delay = Ms 500) ?stop ~clock ~proc ~cwd
-    argv =
+let run ?(settings = []) ?env ?show ?(delay = Ms 500) ?idle_time_limit ?stop
+    ~clock ~proc ~cwd argv =
   let* _ = command_line_of ?show ~delay argv in
+  let* _ = idle_ms idle_time_limit in
   let* cast, status =
     capture ~settings ?env ?show ?stop ~clock ~proc ~cwd argv
   in
-  let* svg = svg_of_casts ~settings ~delay [ cast ] in
+  let* svg = svg_of_casts ~settings ~delay ?idle_time_limit [ cast ] in
   Ok (svg, status)
 
 (* As dune's [Ansi_color.strip]: from ESC up to the next [m]. *)

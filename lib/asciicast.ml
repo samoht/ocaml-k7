@@ -271,6 +271,16 @@ let of_string s =
     in
     Ok { t with events }
 
+let limit_idle limit t =
+  let _, _, events =
+    List.fold_left
+      (fun (prev, at, acc) (ms, e) ->
+        let at = at + min (ms - prev) limit in
+        (ms, at, (at, e) :: acc))
+      (0, 0, []) t.events
+  in
+  { t with events = List.rev events }
+
 (* An incomplete UTF-8 sequence at the end of [s], which the next output may
    complete: [s] splits before it. *)
 let incomplete s =
@@ -323,7 +333,7 @@ let json codec v =
 
 let string = json Jsont.string
 
-let header t =
+let header ?idle t =
   let b = Buffer.create 256 in
   Fmt.kstr (Buffer.add_string b)
     {|{"version":3,"term":{"cols":%d,"rows":%d,"type":"xterm-256color"|}
@@ -343,13 +353,18 @@ let header t =
     t.theme;
   Buffer.add_char b '}';
   Option.iter
+    (fun ms ->
+      Fmt.kstr (Buffer.add_string b) {|,"idle_time_limit":%d.%03d|} (ms / 1000)
+        (ms mod 1000))
+    idle;
+  Option.iter
     (fun c -> Fmt.kstr (Buffer.add_string b) {|,"command":%s|} (string c))
     t.command;
   Buffer.add_string b "}\n";
   b
 
-let to_string t =
-  let b = header t in
+let to_string ?idle t =
+  let b = header ?idle t in
   let line ~prev ms code data =
     let d = ms - prev in
     Fmt.kstr (Buffer.add_string b) "[%d.%03d,%s,%s]\n" (d / 1000) (d mod 1000)

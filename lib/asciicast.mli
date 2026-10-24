@@ -61,12 +61,19 @@ val of_string : string -> (t, string) result
     of other codes, such as input and markers, are skipped. It is [Error msg]
     otherwise, with [msg] naming the line by its number from [1], and why. *)
 
+val limit_idle : int -> t -> t
+(** [limit_idle ms t] is [t] with each interval between two of its events, and
+    before the first, that lasts more than [ms] milliseconds lasting [ms].
+    Unlike an [idle_time_limit] in the header, it does not see the events
+    {!of_string} skips, such as input and markers. *)
+
 val utf_8 : (int * event) list -> (int * event) list
 (** [utf_8 events] are [events] with the data of each [o] event in valid UTF-8:
     an incomplete UTF-8 sequence at its end is held until the next [o] event,
     which then starts with it, and a byte that is not UTF-8, the end of the last
     [o] event included, is U+FFFD. An [o] event left without data goes. *)
 
-val to_string : t -> string
-(** [to_string t] is [t] in asciicast v3, without an [idle_time_limit], with the
-    events [utf_8 t.events], which {!of_string} reads back. *)
+val to_string : ?idle:int -> t -> string
+(** [to_string ~idle t] is [t] in asciicast v3, with the events [utf_8 t.events]
+    and, if given, an [idle_time_limit] of [idle] milliseconds. {!of_string}
+    reads it back, with each interval longer than [idle] shortened to it. *)

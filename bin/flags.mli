@@ -22,6 +22,11 @@ val env : (string * string) list Cmdliner.Term.t
 val wait_timeout : int option Cmdliner.Term.t
 (** [wait_timeout] is the number of seconds of [--wait-timeout], if given. *)
 
+val idle_time_limit : default:string -> int option option Cmdliner.Term.t
+(** [idle_time_limit ~default] is the limit of [--idle-time-limit] in
+    milliseconds, [Some None] for [none], if given; its documentation says it
+    defaults to [default] seconds. *)
+
 val milliseconds : int Cmdliner.Arg.conv
 (** [milliseconds] reads a decimal number of milliseconds from [0] to Go's
     longest duration. *)

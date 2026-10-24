@@ -186,6 +186,22 @@ let test_timeout_precedence () =
   times_out ~within:15.
     (tape (Ms 300) K7.[ type' "echo hi\n"; wait (Screen "never") ])
 
+(* The length of the animation of [svg], in milliseconds. *)
+let animation_ms svg =
+  let suffix = "ms steps(1,end) infinite" in
+  let n = String.length suffix in
+  let rec find i =
+    if i + n > String.length svg then Alcotest.fail "no animation"
+    else if String.sub svg i n = suffix then i
+    else find (i + 1)
+  in
+  let j = find 0 in
+  let k = ref j in
+  while Char.Ascii.is_digit svg.[!k - 1] do
+    decr k
+  done;
+  int_of_string (String.sub svg !k (j - !k))
+
 (* The waits never time out, so the frames are the prompt at 0ms and the
    command at 500ms, in a recording of a second, however late the shell's
    output arrives. A frame lasts at least 10ms at 50 frames a second, so a
@@ -214,26 +230,46 @@ let test_playback_speed () =
         ~cwd t
     with
     | Error e -> Alcotest.failf "%a" K7.pp_error e
-    | Ok () ->
-        let svg = Eio.Path.load Eio.Path.(cwd / "demo.svg") in
-        let suffix = "ms steps(1,end) infinite" in
-        let n = String.length suffix in
-        let rec find i =
-          if i + n > String.length svg then Alcotest.fail "no animation"
-          else if String.sub svg i n = suffix then i
-          else find (i + 1)
-        in
-        let j = find 0 in
-        let k = ref j in
-        while Char.Ascii.is_digit svg.[!k - 1] do
-          decr k
-        done;
-        int_of_string (String.sub svg !k (j - !k))
+    | Ok () -> animation_ms (Eio.Path.load Eio.Path.(cwd / "demo.svg"))
   in
   Alcotest.(check int) "real time" 1000 (loop "1");
   Alcotest.(check int) "twice as fast" 500 (loop "2");
   Alcotest.(check int) "clamped" 500 (loop "100000");
   Alcotest.(check int) "slower" 4000 (loop "0.25")
+
+(* A pause between two screens lasts at most the limit; the last screen
+   holds as long as the tape says. *)
+let test_idle_time_limit () =
+  with_dir @@ fun env cwd ->
+  let length idle_time_limit =
+    with_clock ~hold:3. @@ fun clock ->
+    let t =
+      Result.get_ok
+        (K7.tape
+           ~settings:(Typing_speed (Ms 0) :: settings)
+           ~outputs:[ "demo.svg" ]
+           K7.
+             [
+               type' "echo a\n";
+               wait Prompt;
+               sleep (Ms 3000);
+               type' "echo b\n";
+               wait Prompt;
+               sleep (Ms 500);
+             ])
+    in
+    match
+      K7.record ~engine:Native ~env:no_job_control ?idle_time_limit ~clock
+        ~proc:(Eio.Stdenv.process_mgr env)
+        ~cwd t
+    with
+    | Error e -> Alcotest.failf "%a" K7.pp_error e
+    | Ok () -> animation_ms (Eio.Path.load Eio.Path.(cwd / "demo.svg"))
+  in
+  Alcotest.(check int) "real time" 3500 (length None);
+  Alcotest.(check int) "limited" 1500 (length (Some (Ms 1000)));
+  Alcotest.(check int) "between two frames" 1520 (length (Some (Ms 1010)));
+  Alcotest.(check int) "above the pause" 3500 (length (Some (Ms 5000)))
 
 (* A shell that shows no prompt fails the recording within the tape's wait
    timeout, by the clock of record. *)
@@ -2665,6 +2701,7 @@ let suite =
          ("shell exit", test_shell_exit);
          ("timeout precedence", test_timeout_precedence);
          ("playback speed", test_playback_speed);
+         ("idle time limit", test_idle_time_limit);
          ("first prompt", test_first_prompt);
          ("no job control", test_no_job_control);
          ("hidden", test_hidden);

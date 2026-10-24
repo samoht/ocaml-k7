@@ -542,10 +542,27 @@ let add tl ms screen =
   | (_, s) :: _ when Screen.equal s screen -> ()
   | frames -> tl.frames <- (q, screen) :: frames
 
-let svg t tl ~end_ms =
+(* Each pause between two frames that lasts more than [idle] lasts that
+   long; the later frames come that much earlier. *)
+let shorten idle frames =
+  let _, shift, frames =
+    List.fold_left
+      (fun (prev, shift, acc) (t, s) ->
+        let shift = shift + max 0 (t - prev - idle) in
+        (t, shift, (t - shift, s) :: acc))
+      (0, 0, []) frames
+  in
+  (List.rev frames, shift)
+
+let svg ?idle t tl ~end_ms =
   let c = t.config and s = t.look in
-  let frames = List.rev tl.frames in
-  let last = match tl.frames with (t, _) :: _ -> t | [] -> 0 in
+  let frames, shift =
+    match idle with
+    | None -> (List.rev tl.frames, 0)
+    | Some idle -> shorten (max 1 idle) (List.rev tl.frames)
+  in
+  let end_ms = end_ms - shift in
+  let last = match tl.frames with (t, _) :: _ -> t - shift | [] -> 0 in
   let duration = max (last + tl.quantum) end_ms in
   let duration = (duration + tl.quantum - 1) / tl.quantum * tl.quantum in
   let loop_offset = round (c.loop_offset *. float duration) mod duration in
@@ -1299,7 +1316,7 @@ let state ?(stuck = fun _ -> false) t ~clock ({ pty; pid; _ } : terminal) =
     answers = true;
   }
 
-let recording t st =
+let recording ?idle t st =
   let still (path, screen) =
     ( path,
       Svg.image
@@ -1308,7 +1325,7 @@ let recording t st =
         [ (0, screen) ] )
   in
   {
-    svg = svg t st.tl ~end_ms:(ms_of_span st.logical);
+    svg = svg ?idle t st.tl ~end_ms:(ms_of_span st.logical);
     text = Buffer.contents st.text;
     stills = List.rev_map still st.stills;
   }
@@ -1327,7 +1344,7 @@ let until interrupt f =
   | None -> f ()
   | Some p -> Eio.Fiber.first f (fun () -> Eio.Promise.await p)
 
-let play ?interrupt ?stuck ~clock ~env ~vars ~cwd t =
+let play ?interrupt ?stuck ?idle ~clock ~env ~vars ~cwd t =
   let clock = (clock :> Eio.Time.Mono.ty Eio.Resource.t) in
   match
     with_terminal ?stuck ~clock t (spawn ~env ~vars ~cwd t) @@ fun st ->
@@ -1343,7 +1360,7 @@ let play ?interrupt ?stuck ~clock ~env ~vars ~cwd t =
         record st;
         List.iter (run st t.config) t.actions;
         expire st);
-    recording t st
+    recording ?idle t st
   with
   | r -> Ok r
   | exception Stop e -> Error e

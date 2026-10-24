@@ -363,17 +363,20 @@ val record :
   ?env:(string * string) list ->
   ?stop:unit Eio.Promise.t ->
   ?stuck:(string -> bool) ->
+  ?idle_time_limit:duration ->
   clock:_ Eio.Time.Mono.t ->
   proc:_ Eio_unix.Process.mgr ->
   cwd:_ Eio.Path.t ->
   t ->
   (unit, error) result
-(** [record ~engine ~vhs ~env ~stop ~stuck ~clock ~proc ~cwd t] writes the
-    outputs of [t] with [engine], which defaults to {!constructor-Vhs} if [t]
-    has an output or a [Screenshot] that only {!constructor-Vhs} writes, and to
-    {!constructor-Native} otherwise, which needs no [vhs]. It is
-    [Error (Invalid _)], before it runs anything, if a name of [env] is empty or
-    holds [=], or a name or a value holds a NUL byte.
+(** [record ~engine ~vhs ~env ~stop ~stuck ~idle_time_limit ~clock ~proc ~cwd t]
+    writes the outputs of [t] with [engine], which defaults to
+    {!constructor-Vhs} if [t] has an output or a [Screenshot] that only
+    {!constructor-Vhs} writes, and to {!constructor-Native} otherwise, which
+    needs no [vhs]. It is [Error (Invalid _)], before it runs anything, if a
+    name of [env] is empty or holds [=], or a name or a value holds a NUL byte,
+    or if [idle_time_limit] is not positive or out of the range of a
+    {!duration}.
 
     The environment of the shell is, in this order, each variable replacing one
     of the same name before it:
@@ -414,16 +417,19 @@ val record :
     With {!constructor-Native}, [record] plays [t] in its shell in the directory
     [cwd]. The [.svg] output is the SVG image of what the terminal showed, the
     [.txt], [.ascii] or [.test] output is the {{!native_details}text output},
-    and the {{!native_details}screenshots} are written too. Once [stop]
-    resolves, [record] runs no more actions and writes the outputs of what it
-    recorded so far. The waits of [t] time out by [clock]. While a wait does not
-    hold, [stuck out] (defaults to [false]), with [out] the last 64 KiB the
-    shell wrote since the previous wait held, escape sequences included, fails
-    the recording at once with {!constructor-Stuck}; {!constructor-Vhs} ignores
-    [stuck]. When the recording ends or fails, or the calling fiber is
-    cancelled, [record] sends the shell and its process group [SIGTERM], hangs
-    up its terminal, sends them [SIGKILL] if one still runs a second later by
-    [clock], and waits for the shell to exit. It is:
+    and the {{!native_details}screenshots} are written too. In the [.svg] image,
+    a pause between two screens that lasts more than [idle_time_limit] (defaults
+    to no limit) lasts that long, so that a command that runs long without
+    printing does not hold the image; {!constructor-Vhs} ignores
+    [idle_time_limit]. Once [stop] resolves, [record] runs no more actions and
+    writes the outputs of what it recorded so far. The waits of [t] time out by
+    [clock]. While a wait does not hold, [stuck out] (defaults to [false]), with
+    [out] the last 64 KiB the shell wrote since the previous wait held, escape
+    sequences included, fails the recording at once with {!constructor-Stuck};
+    {!constructor-Vhs} ignores [stuck]. When the recording ends or fails, or the
+    calling fiber is cancelled, [record] sends the shell and its process group
+    [SIGTERM], hangs up its terminal, sends them [SIGKILL] if one still runs a
+    second later by [clock], and waits for the shell to exit. It is:
     - [Error (Unsupported _)] on a [.gif], [.mp4], [.webm] or PNG frames output,
       or a [Screenshot] of a [.png] image, which {!constructor-Vhs} writes, and
       on what the {{!native_details}native recorder} does not play, before it
@@ -505,32 +511,41 @@ val cast_of_string : string -> (cast, error) result
     interval, or in version 2 a time before the one ahead of it; a resize whose
     data is not [COLSxROWS], or an exit whose data is not an integer. *)
 
-val string_of_cast : cast -> string
-(** [string_of_cast c] is [c] in asciicast v3, its times as intervals in
-    milliseconds and without an [idle_time_limit]: {!cast_of_string} reads it
-    back as [c]. Beyond asciicast v3, its theme holds the [cursor] colour if it
-    is not the foreground and the [cursor_accent] colour if it is not the one
-    {!svg} derives, so that a recording {!capture} made with a
-    {!constructor-Theme} draws with that theme's colours. *)
+val string_of_cast : ?idle_time_limit:duration -> cast -> string
+(** [string_of_cast ~idle_time_limit c] is [c] in asciicast v3, its times as
+    intervals in milliseconds, with an [idle_time_limit] in its header if
+    [idle_time_limit] is given and positive, as [asciinema rec -i] writes it, so
+    that asciinema's player shortens the pauses too. {!cast_of_string} reads it
+    back as [c], with each interval longer than that limit shortened to it.
+    Beyond asciicast v3, its theme holds the [cursor] colour if it is not the
+    foreground and the [cursor_accent] colour if it is not the one {!svg}
+    derives, so that a recording {!capture} made with a {!constructor-Theme}
+    draws with that theme's colours. *)
 
 val svg_of_casts :
   ?settings:setting list ->
   ?show:string list ->
   ?delay:duration ->
+  ?idle_time_limit:duration ->
   cast list ->
   (string, error) result
-(** [svg_of_casts ~settings ~show ~delay casts] is the SVG image of the
-    recordings [casts], one after the other on one terminal, as {!svg} draws the
-    data of their output events at their times. A recording's first line is [$ ]
-    then its command, as for {!run}, and its output shows [delay] (defaults to
-    [Ms 500]) later. If [show] (defaults to [[]]) holds one string, that string
-    is the command of every recording; if it holds one string per recording, its
-    [n]th string is the command of the [n]th recording. Otherwise a recording's
-    command is the [command] of its header, if any, its control characters but
-    newlines shown as spaces. A newline in a command continues it on a line that
-    starts with [> ], as in a shell. An empty command shows no line and no
-    delay. The last screen of each recording holds for a second after its last
-    event, an exit included, and the next recording starts then.
+(** [svg_of_casts ~settings ~show ~delay ~idle_time_limit casts] is the SVG
+    image of the recordings [casts], one after the other on one terminal, as
+    {!svg} draws the data of their output events at their times. Each interval
+    between two output, resize or exit events of a recording, and before its
+    first, that lasts more than [idle_time_limit] (defaults to no limit) lasts
+    that long. It applies after the [idle_time_limit] of a header, which
+    {!cast_of_string} applies, and which also counts the events it skips. A
+    recording's first line is [$ ] then its command, as for {!run}, and its
+    output shows [delay] (defaults to [Ms 500]) later. If [show] (defaults to
+    [[]]) holds one string, that string is the command of every recording; if it
+    holds one string per recording, its [n]th string is the command of the [n]th
+    recording. Otherwise a recording's command is the [command] of its header,
+    if any, its control characters but newlines shown as spaces. A newline in a
+    command continues it on a line that starts with [> ], as in a shell. An
+    empty command shows no line and no delay. The last screen of each recording
+    holds for a second after its last event, an exit included, and the next
+    recording starts then.
 
     The terminal has the size of the header of each recording from its start,
     and of each resize, on an image of the largest of them, unless [settings]
@@ -552,7 +567,8 @@ val svg_of_casts :
 
     It is [Error (Invalid _)] on an empty [casts], on a [show] of several
     strings but not one per recording, on what {!run} refuses in [show] and
-    [delay], and the error of {!svg} on [settings] that it refuses. *)
+    [delay], on an [idle_time_limit] that is not positive or out of the range of
+    a {!duration}, and the error of {!svg} on [settings] that it refuses. *)
 
 val text_of_casts :
   ?settings:setting list ->
@@ -570,29 +586,30 @@ val run :
   ?env:(string * string) list ->
   ?show:string ->
   ?delay:duration ->
+  ?idle_time_limit:duration ->
   ?stop:unit Eio.Promise.t ->
   clock:_ Eio.Time.Mono.t ->
   proc:_ Eio_unix.Process.mgr ->
   cwd:_ Eio.Path.t ->
   string list ->
   (string * Eio.Process.exit_status, error) result
-(** [run ~settings ~env ~show ~delay ~stop ~clock ~proc ~cwd argv] runs the
-    program [argv] in the directory [cwd] on a pseudo-terminal, with no shell
-    and nothing typed. It is the SVG image of what the terminal showed, as
-    {!svg} draws a terminal with [settings] (defaults to [[]]), paired with how
-    the program exited. Each output shows at the time it arrived since the
-    program started, rounded down to a frame, and the last screen holds for a
-    second after the program exits. The image's first line is [$ ] in the colour
-    of VHS's prompt, then [show] (defaults to [argv], each argument shell-quoted
-    where needed, for POSIX sh), and the program's output starts on the next
-    line; an empty [show] shows no line. A newline in [show] continues it on a
-    line that starts with [> ], as in a shell. A line that shows stays alone for
-    [delay] (defaults to [Ms 500]), as if typed, and the program's output shows
-    that much later. The first element of [argv] is the executable, looked up in
-    the [PATH] the program gets unless it holds a slash, and relative to [cwd]
-    if it does. The program gets the environment {!record} gives a shell up to
-    the variables of [env] (defaults to [[]]), without the prompt and the [Env]
-    lines.
+(** [run ~settings ~env ~show ~delay ~idle_time_limit ~stop ~clock ~proc ~cwd
+     argv] runs the program [argv] in the directory [cwd] on a pseudo-terminal,
+    with no shell and nothing typed. It is the SVG image of what the terminal
+    showed, as {!svg} draws a terminal with [settings] (defaults to [[]]),
+    paired with how the program exited. Each output shows at the time it arrived
+    since the program started, rounded down to a frame, and the last screen
+    holds for a second after the program exits. The image's first line is [$ ]
+    in the colour of VHS's prompt, then [show] (defaults to [argv], each
+    argument shell-quoted where needed, for POSIX sh), and the program's output
+    starts on the next line; an empty [show] shows no line. A newline in [show]
+    continues it on a line that starts with [> ], as in a shell. A line that
+    shows stays alone for [delay] (defaults to [Ms 500]), as if typed, and the
+    program's output shows that much later. The first element of [argv] is the
+    executable, looked up in the [PATH] the program gets unless it holds a
+    slash, and relative to [cwd] if it does. The program gets the environment
+    {!record} gives a shell up to the variables of [env] (defaults to [[]]),
+    without the prompt and the [Env] lines.
 
     A program that exits with another status than [0], or is killed, still gives
     its image: the status says how it exited. [run] returns once the program has
@@ -604,12 +621,13 @@ val run :
     or if the calling fiber is cancelled, [run] sends the group [SIGTERM], hangs
     up its terminal, sends the group [SIGKILL] if one of it still runs a second
     later by [clock], and waits for the program to exit. The image is that of
-    {!capture}'s recording as {!svg_of_casts} draws it, with [settings] and
-    [delay]. It is:
+    {!capture}'s recording as {!svg_of_casts} draws it, with [settings], [delay]
+    and [idle_time_limit]. It is:
     - [Error (Invalid _)] if [argv] is empty, if a setting is one {!svg}
       refuses, if [show] holds a control character other than a newline, if
-      [delay] is out of the range of a {!duration}, or if a name of [env] is
-      empty or holds [=], or a name or a value holds a NUL byte;
+      [delay] is out of the range of a {!duration}, if [idle_time_limit] is not
+      positive or out of that range, or if a name of [env] is empty or holds
+      [=], or a name or a value holds a NUL byte;
     - [Error (Unsupported _)] on what {!svg} refuses;
     - [Error (Executable_not_found _)] if the executable is not found;
     - [Error (Io _)] if an argument of [argv] holds a NUL byte, which [execve]

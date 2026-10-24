@@ -128,8 +128,8 @@ let in_dir env dir f =
               try Eio.Path.rmtree ~missing_ok:true dir with Eio.Io _ -> ())
             (fun () -> f dir))
 
-let record ?stop ?engine env ~dry_run ~print ~vhs ~setup ?dir ?settings
-    ?env:vars ?wait_timeout_s ~outputs input =
+let record ?stop ?engine ?idle_time_limit env ~dry_run ~print ~vhs ~setup ?dir
+    ?settings ?env:vars ?wait_timeout_s ~outputs input =
   let* src = Flags.load env input in
   let tape ~setup ~outputs =
     tape ~setup ?settings ~outputs ?wait_timeout_s ~name:input src
@@ -166,7 +166,7 @@ let record ?stop ?engine env ~dry_run ~print ~vhs ~setup ?dir ?settings
       Option.is_some !unfinished
     in
     in_dir env dir @@ fun cwd ->
-    K7.record ?engine ?stop ~stuck ~vhs:run_vhs ?env:vars
+    K7.record ?engine ?stop ~stuck ?idle_time_limit ~vhs:run_vhs ?env:vars
       ~clock:(Eio.Stdenv.mono_clock env)
       ~proc:(Eio.Stdenv.process_mgr env)
       ~cwd tape
@@ -178,9 +178,9 @@ let record ?stop ?engine env ~dry_run ~print ~vhs ~setup ?dir ?settings
               ~wait:(Option.value wait_timeout_s ~default:15)
               ~name:input ~tape:given src (named e))
 
-let run env ?engine ~dry_run ~print ~vhs ~setup ?dir ?settings ?env:vars
-    ?wait_timeout_s ~outputs input =
+let run env ?engine ?idle_time_limit ~dry_run ~print ~vhs ~setup ?dir ?settings
+    ?env:vars ?wait_timeout_s ~outputs input =
   Flags.interruptible (fun stop ->
-      record ~stop ?engine env ~dry_run ~print ~vhs ~setup ?dir ?settings
-        ?env:vars ?wait_timeout_s ~outputs input)
+      record ~stop ?engine ?idle_time_limit env ~dry_run ~print ~vhs ~setup ?dir
+        ?settings ?env:vars ?wait_timeout_s ~outputs input)
   |> Flags.exit env ~ok:(fun () -> 0)

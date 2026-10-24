@@ -255,7 +255,7 @@ a cram test of the command run on pipes, as dune runs it.
   $ k7 rec -o out/rec.svg -o out/rec.CAST -o out/rec.txt -o out/rec.t --columns 80 --rows 4 -- sh -c 'printf "\033[1mhi\033[0m\n"; [ -t 1 ] && echo tty; exit 4'
   [4]
   $ head -1 out/rec.CAST
-  {"version":3,"term":{"cols":80,"rows":4,"type":"xterm-256color"},"command":"sh -c 'printf \"\\033[1mhi\\033[0m\\n\"; [ -t 1 ] && echo tty; exit 4'"}
+  {"version":3,"term":{"cols":80,"rows":4,"type":"xterm-256color"},"idle_time_limit":2.000,"command":"sh -c 'printf \"\\033[1mhi\\033[0m\\n\"; [ -t 1 ] && echo tty; exit 4'"}
   $ k7 play -o out/play.svg out/rec.CAST
   $ cmp out/rec.svg out/play.svg
   $ tr '$' '%' < out/rec.txt
@@ -362,6 +362,34 @@ nothing, so it writes the same image each time.
   <desc>$ make hello
   $ grep -o 'animation:k[0-9a-f]*-s [0-9]*ms' show.svg | sed 's/k[0-9a-f]*-s/s/'
   animation:s 1500ms
+
+A pause longer than --idle-time-limit seconds, 2 unless given, lasts
+that long, and none keeps every pause.
+
+  $ cat > build.cast <<'EOF'
+  > {"version": 2, "width": 20, "height": 3}
+  > [0.1, "o", "building\r\n"]
+  > [10.1, "o", "done"]
+  > EOF
+  $ k7 play -o build.svg build.cast
+  $ grep -o 'animation:k[0-9a-f]*-s [0-9]*ms' build.svg | sed 's/k[0-9a-f]*-s/s/'
+  animation:s 3100ms
+  $ k7 play --idle-time-limit 0.5 -o half.svg build.cast
+  $ grep -o 'animation:k[0-9a-f]*-s [0-9]*ms' half.svg | sed 's/k[0-9a-f]*-s/s/'
+  animation:s 1600ms
+  $ k7 play --idle-time-limit none -o all.svg build.cast
+  $ grep -o 'animation:k[0-9a-f]*-s [0-9]*ms' all.svg | sed 's/k[0-9a-f]*-s/s/'
+  animation:s 11100ms
+  $ k7 play --idle-time-limit 0 -o zero.svg build.cast 2> zero.err
+  [124]
+  $ k7 play --idle-time-limit 1e3 -o exp.svg build.cast 2> exp.err
+  [124]
+  $ k7 rec --idle-time-limit soon -o soon.svg -- true 2> soon.err
+  [124]
+  $ grep -oh '"[^"]*" is not a positive number' zero.err exp.err soon.err
+  "0" is not a positive number
+  "1e3" is not a positive number
+  "soon" is not a positive number
 
 A recording takes one or more .svg outputs, and .txt outputs for its
 last screen, and refuses the options of a tape or a cram test. --show

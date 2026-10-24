@@ -5,8 +5,8 @@
 
 let ( let* ) = Result.bind
 
-let record ?stop ?engine stdenv ~dry_run ~print ~vhs ~settings ~env ~outputs
-    input =
+let record ?stop ?engine ?idle_time_limit stdenv ~dry_run ~print ~vhs ~settings
+    ~env ~outputs input =
   let* src = Flags.load stdenv input in
   let error e = Fmt.str "%s: %a" input (Flags.pp_play_error ~vhs) e in
   let* t = Result.map_error error (K7.of_string src) in
@@ -25,14 +25,15 @@ let record ?stop ?engine stdenv ~dry_run ~print ~vhs ~settings ~env ~outputs
     |> Result.map_error error
   else if print then Flags.print_tape stdenv t
   else
-    K7.record ?engine ?stop ~vhs ~env
+    K7.record ?engine ?stop ?idle_time_limit ~vhs ~env
       ~clock:(Eio.Stdenv.mono_clock stdenv)
       ~proc:(Eio.Stdenv.process_mgr stdenv)
       ~cwd:(Eio.Stdenv.cwd stdenv) t
     |> Result.map_error error
 
-let run stdenv ?engine ~dry_run ~print ~vhs ~settings ~env ~outputs input =
+let run stdenv ?engine ?idle_time_limit ~dry_run ~print ~vhs ~settings ~env
+    ~outputs input =
   Flags.interruptible (fun stop ->
-      record ~stop ?engine stdenv ~dry_run ~print ~vhs ~settings ~env ~outputs
-        input)
+      record ~stop ?engine ?idle_time_limit stdenv ~dry_run ~print ~vhs
+        ~settings ~env ~outputs input)
   |> Flags.exit stdenv ~ok:(fun () -> 0)

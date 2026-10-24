@@ -10,12 +10,16 @@ let parse src =
   | Ok c -> c
   | Error e -> Alcotest.failf "%a" K7.pp_error e
 
-let casts ?settings ?show ?delay srcs =
-  match K7.svg_of_casts ?settings ?show ?delay (List.map parse srcs) with
+let casts ?settings ?show ?delay ?idle_time_limit srcs =
+  match
+    K7.svg_of_casts ?settings ?show ?delay ?idle_time_limit
+      (List.map parse srcs)
+  with
   | Ok s -> unprefixed s
   | Error e -> Alcotest.failf "%a" K7.pp_error e
 
-let cast ?settings ?show ?delay src = casts ?settings ?show ?delay [ src ]
+let cast ?settings ?show ?delay ?idle_time_limit src =
+  casts ?settings ?show ?delay ?idle_time_limit [ src ]
 
 let text ?settings ?show srcs =
   match K7.text_of_casts ?settings ?show (List.map parse srcs) with
@@ -236,6 +240,53 @@ let test_idle () =
   in
   Alcotest.(check string) "v2" expected (cast v2);
   Alcotest.(check string) "v3" expected (cast v3)
+
+let test_idle_option () =
+  let events =
+    {|[4.1, "o", "a"]
+[7, "o", "b"]
+[7.25, "o", "c"]
+[13, "o", "d"]
+|}
+  in
+  let header idle =
+    Fmt.str {|{"version": 2, "width": 8, "height": 2%s}|} idle ^ "\n" ^ events
+  in
+  Alcotest.(check string)
+    "as the header's limit"
+    (cast (header {|, "idle_time_limit": 0.5|}))
+    (cast ~idle_time_limit:(Ms 500) (header ""));
+  Alcotest.(check string)
+    "after the header's limit"
+    (cast (header {|, "idle_time_limit": 0.5|}))
+    (cast ~idle_time_limit:(Ms 2000) (header {|, "idle_time_limit": 0.5|}));
+  List.iter
+    (fun ms ->
+      match K7.svg_of_casts ~idle_time_limit:(Ms ms) [ parse (header "") ] with
+      | Error (Invalid _) -> ()
+      | Ok _ -> Alcotest.failf "a limit of %dms draws" ms
+      | Error e -> Alcotest.failf "%a" K7.pp_error e)
+    [ -1; 0 ]
+
+(* The limit k7 rec draws with goes in the header, where k7 play and
+   asciinema's player find it. *)
+let test_idle_header () =
+  let c =
+    parse
+      {|{"version": 2, "width": 8, "height": 2}
+[0.1, "o", "a"]
+[3, "o", "b"]
+|}
+  in
+  let saved = K7.string_of_cast ~idle_time_limit:(Ms 500) c in
+  Alcotest.(check string)
+    "the header holds the limit"
+    {|{"version":3,"term":{"cols":8,"rows":2,"type":"xterm-256color"},"idle_time_limit":0.500}|}
+    (List.hd (String.split_on_char '\n' saved));
+  Alcotest.(check string)
+    "the limit applies when read back"
+    (cast ~idle_time_limit:(Ms 500) (K7.string_of_cast c))
+    (cast saved)
 
 let test_theme () =
   let palette =
@@ -499,6 +550,8 @@ let suite =
         ("exit", test_exit);
         ("a resize that ends a recording", test_resize_last);
         ("idle time limit", test_idle);
+        ("idle time limit option", test_idle_option);
+        ("idle time limit header", test_idle_header);
         ("theme", test_theme);
         ("errors", test_errors);
         ("asciinema v2", test_asciinema_v2);
