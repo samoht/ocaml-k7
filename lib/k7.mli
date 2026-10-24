@@ -489,18 +489,19 @@ val cast_of_string : string -> (cast, error) result
     {!string_of_cast}, and, after the [idle_time_limit] of the header, the
     output, resize and exit events at their times, each rounded to the
     microsecond, then to the nearest millisecond, half up, so the same [s] gives
-    the same image, byte for byte. It ignores the other members of the header,
-    input events, markers and events of other codes.
+    the same image, byte for byte. It ignores the other members of the header, a
+    [cursor] or [cursor_accent] that is not a [#rrggbb] string, input events,
+    markers and events of other codes.
 
     It is [Error (Invalid msg)] if [s] is not such a recording, with [msg]
     naming the line, from [1], and why: a header that is not a JSON object with
     [version] [2] and a positive integer [width] and [height], or [version] [3]
     and a [term] object with a positive integer [cols] and [rows]; a theme whose
-    colours are not [#rrggbb] or whose palette does not have eight or sixteen of
-    them; a line that is not an event [[time, code, data]] of a number and two
-    strings; a negative time or interval, or in version 2 a time before the one
-    ahead of it; a resize whose data is not [COLSxROWS], or an exit whose data
-    is not an integer. *)
+    [fg], [bg] or palette colours are not [#rrggbb] or whose palette does not
+    have eight or sixteen of them; a line that is not an event
+    [[time, code, data]] of a number and two strings; a negative time or
+    interval, or in version 2 a time before the one ahead of it; a resize whose
+    data is not [COLSxROWS], or an exit whose data is not an integer. *)
 
 val string_of_cast : cast -> string
 (** [string_of_cast c] is [c] in asciicast v3, its times as intervals in

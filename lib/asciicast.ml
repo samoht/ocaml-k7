@@ -56,14 +56,28 @@ type raw_theme = {
   accent : string option;
 }
 
+let is_colour s =
+  String.length s = 7
+  && s.[0] = '#'
+  && String.for_all Char.Ascii.is_hex_digit (String.sub s 1 6)
+
+(* A member asciicast v3 does not define: one that is not a colour is
+   ignored, as an unknown member is. *)
+let extension =
+  Jsont.map ~kind:"colour"
+    ~dec:(function Jsont.String (s, _) when is_colour s -> Some s | _ -> None)
+    Jsont.json
+
 let theme =
   Jsont.Object.map ~kind:"asciicast theme" (fun fg bg colours cursor accent ->
       { fg; bg; colours; cursor; accent })
   |> Jsont.Object.mem "fg" Jsont.string ~enc:(fun t -> t.fg)
   |> Jsont.Object.mem "bg" Jsont.string ~enc:(fun t -> t.bg)
   |> Jsont.Object.mem "palette" Jsont.string ~enc:(fun t -> t.colours)
-  |> Jsont.Object.opt_mem "cursor" Jsont.string ~enc:(fun t -> t.cursor)
-  |> Jsont.Object.opt_mem "cursor_accent" Jsont.string ~enc:(fun t -> t.accent)
+  |> Jsont.Object.mem "cursor" extension ~dec_absent:None ~enc:(fun t ->
+      t.cursor)
+  |> Jsont.Object.mem "cursor_accent" extension ~dec_absent:None ~enc:(fun t ->
+      t.accent)
   |> Jsont.Object.finish
 
 type header = {
@@ -125,17 +139,9 @@ let size name = function
   | Number x -> Fmt.error "%s %a is not a positive integer" name pp_number x
   | String s -> Fmt.error "%s %S is not a number" name s
 
-let is_colour s =
-  String.length s = 7
-  && s.[0] = '#'
-  && String.for_all Char.Ascii.is_hex_digit (String.sub s 1 6)
-
 let read_theme { fg; bg; colours; cursor; accent } =
   let palette = String.split_on_char ':' colours in
-  let colours =
-    (fg :: bg :: palette) @ Option.to_list cursor @ Option.to_list accent
-  in
-  match List.find_opt (Fun.negate is_colour) colours with
+  match List.find_opt (Fun.negate is_colour) (fg :: bg :: palette) with
   | Some c -> Fmt.error "theme: %S is not a colour #rrggbb" c
   | None ->
       let n = List.length palette in

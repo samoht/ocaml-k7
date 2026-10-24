@@ -124,8 +124,10 @@ let man =
        v3 format: the size of the terminal, the command, what the program \
        printed at the millisecond it arrived, and its exit. $(b,k7 play) \
        $(b,-o) $(i,FILE.svg) $(i,FILE.cast) draws the same image later, with \
-       other options if need be, and asciinema plays it. A $(b,.txt) output is \
-       the text of the last screen.";
+       other options if need be, and asciinema plays it. With $(b,--theme), \
+       its header holds the theme, and its cursor colours in $(i,cursor) and \
+       $(i,cursor_accent), two members that k7 adds to asciicast v3. A \
+       $(b,.txt) output is the text of the last screen.";
     `P
       "A $(b,.t) output is a cram test of $(i,COMMAND), as dune runs it: \
        $(cmd) runs the command line with $(b,sh -c) on pipes, with an empty \
