@@ -488,11 +488,12 @@ val cast_of_string : string -> (cast, error) result
     asciinema 2 and 3 write it. It keeps the size of the terminal, the
     [command], the [theme], with the [cursor] and [cursor_accent] colours of
     {!string_of_cast}, and, after the [idle_time_limit] of the header, the
-    output, resize and exit events at their times, each rounded to the
-    microsecond, then to the nearest millisecond, half up, so the same [s] gives
-    the same image, byte for byte. It ignores the other members of the header, a
-    [cursor] or [cursor_accent] that is not a [#rrggbb] string, input events,
-    markers and events of other codes.
+    output, resize and exit events at their times, each read as a
+    double-precision number, rounded to the microsecond, then to the nearest
+    millisecond, half up, so the same [s] gives the same image, byte for byte.
+    It ignores the other members of the header, a [cursor] or [cursor_accent]
+    that is not a [#rrggbb] string, input events, markers and events of other
+    codes.
 
     It is [Error (Invalid msg)] if [s] is not such a recording, with [msg]
     naming the line, from [1], and why: a header that is not a JSON object with
