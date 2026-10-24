@@ -1,0 +1,25 @@
+handle: gazagnaire.org
+mono_url: https://github.com/samoht/ocaml-k7.git
+
+storage:
+  bucket: homebrew-bottles
+  region: fr-par
+  profile: homebrew-monopam
+
+tap:
+  clone_url: https://github.com/samoht/homebrew-monopam.git
+  push_url: git@github.com:samoht/homebrew-monopam
+
+build:
+  linux: static
+  switch: lto-5.4.1
+
+packages:
+  - name: k7
+    target: bin/main.exe
+    description: "Record terminal programs, cram tests and VHS tapes as animated SVG"
+    homepage: https://github.com/samoht/ocaml-k7
+    requires: {}
+    head_deps:
+      - name: vhs
+        type: recommended
