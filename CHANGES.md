@@ -28,16 +28,16 @@
 - `k7 rec -o FILE` writes each output by its extension: `.svg` for the
   image, `.cast` for the recording in asciicast v3, with the colours of
   `--theme` in its header, which `k7 play` draws as the same image byte
-  for byte, with other options if need be, `.txt`
-  for the text of the last screen, and `.t` for a cram test of the command,
-  run with `sh -c` on pipes as dune runs it, with its output and its exit
-  code as dune writes them, but for an output line dune would read as a
-  command, which gets one more space of indentation. `K7.capture` records a program as an asciicast
-  recording, and `K7.run` draws it with `K7.svg_of_casts`; `K7.cram` runs a
-  command and gives its cram test. Each starts the program in a process
-  group of its own, which gets SIGTERM when the program exits, when
-  `?stop` resolves or when the calling fiber is cancelled, then SIGKILL a
-  second later by the `~clock` it takes.
+  for byte, with other options if need be, `.txt` for the text of the last
+  screen, and `.t` for a cram test of the command, run with `sh -c` on
+  pipes as dune runs it, with its output and its exit code as dune writes
+  them, but for an output line dune would read as a command, which gets
+  one more space of indentation. `K7.capture` records a program as an
+  asciicast recording, and `K7.run` draws it with `K7.svg_of_casts`;
+  `K7.cram` runs a command and gives its cram test. Each starts the
+  program in a process group of its own, which gets SIGTERM when the
+  program exits, when `?stop` resolves or when the calling fiber is
+  cancelled, then SIGKILL a second later by the `~clock` it takes.
 - `K7.cast_of_string` reads a recording in asciicast v2 or v3, as
   asciinema 2 and 3 and console's `CONSOLE_CAST` write it, and
   `K7.svg_of_casts` (`k7 play FILE.cast`) draws it as `K7.svg` draws its
@@ -58,8 +58,9 @@
   in turn.
 - `K7.check` returns the error `K7.record` would before it records,
   without starting a shell or `vhs`.
-- `K7.run` and `K7.record` take `?env`, variables for the environment of
-  the program or the shell, which `--env` sets for each subcommand. Both
+- `K7.record`, `K7.check`, `K7.run`, `K7.capture` and `K7.cram` take
+  `?env`, variables for the environment of the program or the shell, which
+  `--env` sets for each subcommand. `K7.record`, `K7.run` and `K7.capture`
   clear an inherited `COLUMNS` and `LINES`, so that the program reads the
   size of its terminal.
 - `K7.run`, `K7.capture`, `K7.cram` and `K7.record` take `?stop`, which
@@ -94,15 +95,9 @@
   read the lines VHS reads, never the prompt a command was typed at. A wait
   that times out is `K7.Timeout`, naming its line, and a shell that exits
   while a wait waits is `K7.Exited`, at once.
-- The native terminal is matrix's emulator, read as VHS's xterm.js reads
-  bytes where it departs from xterm: each screen has its own scroll region
-  and tab stops, a restore returns to the line of the buffer and leaves the
-  designations of the character sets, `ESC % G` selects ASCII, an erasure at
-  the right margin keeps the wrap pending, the cursor reports count the
-  column beyond the last, and `CSI S` keeps no scrollback. A frame drawn
-  in synchronized output (DEC private mode 2026) shows once complete,
-  when the program resets the mode or 150ms after it set it, even when it
-  reaches the terminal in several reads.
+- The native terminal is matrix's emulator, made to read bytes as VHS's
+  xterm.js does. A frame drawn in synchronized output (DEC private mode
+  2026) shows once complete.
 - `K7.Columns` and `K7.Rows` size the terminal in cells, as VHS's
   `Set Columns` and `Set Rows` do, in place of `K7.Width` and
   `K7.Height`.
@@ -119,12 +114,4 @@
   emulator, and matrix 0.1.0. The emulator is a private copy of matrix's
   terminal core at mosaic 858724d6, whose fixes matrix's main has since
   made in its own way and not released yet.
-- The README lists the known limitations of this release: the private copy
-  of matrix's terminal core, the queries and cursor shapes the native
-  terminal does not handle yet, a rare `setpgid` error from macOS's bash 3.2
-  under load, the timed-out wait the `Vhs` engine reports as
-  `Vhs_failed`, and the JSON themes with invalid UTF-8 or unpaired
-  surrogates that jsont refuses and Go reads, the input and background
-  output `k7 rec` does not record, the cram test of a command killed by a
-  signal, whose line from dune's shell changes on each run, and the normal
-  screen that a resize clears behind the alternate screen.
+- The README lists the known limitations of this release.
