@@ -653,7 +653,9 @@ val cram :
     (defaults to [[]]). [sh] leads a process group. Once [sh] exits, or once
     [stop] resolves, [cram] sends the group [SIGTERM], then [SIGKILL] a second
     later by [clock], and returns once [sh] has exited and what the group
-    printed is read.
+    printed is read. If the calling fiber is cancelled, [cram] sends the group
+    [SIGTERM], then [SIGKILL] a second later by [clock], and waits until [sh]
+    has exited and what the group printed is read.
 
     The cram test is the line [  $ ] and the command line, which continues on a
     line [  > ] after each newline of an argument, then each line of what the

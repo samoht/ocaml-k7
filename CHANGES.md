@@ -35,8 +35,9 @@
   command, which gets one more space of indentation. `K7.capture` records a program as an asciicast
   recording, and `K7.run` draws it with `K7.svg_of_casts`; `K7.cram` runs a
   command and gives its cram test. Each starts the program in a process
-  group of its own, which gets SIGTERM when the program exits or `?stop`
-  resolves, then SIGKILL a second later by the `~clock` it takes.
+  group of its own, which gets SIGTERM when the program exits, when
+  `?stop` resolves or when the calling fiber is cancelled, then SIGKILL a
+  second later by the `~clock` it takes.
 - `K7.cast_of_string` reads a recording in asciicast v2 or v3, as
   asciinema 2 and 3 and console's `CONSOLE_CAST` write it, and
   `K7.svg_of_casts` (`k7 play FILE.cast`) draws it as `K7.svg` draws its

@@ -1961,24 +1961,38 @@ let cram ?(env = []) ?stop ~clock ~proc ~cwd argv =
       try Unix.kill (-Eio.Process.pid child) s with Unix.Unix_error _ -> ()
     in
     let exited () = ignore (Eio.Process.await child) in
+    let terminate () =
+      group Sys.sigterm;
+      Eio.Time.Mono.sleep clock 1.;
+      group Sys.sigkill;
+      Eio.Fiber.await_cancel ()
+    in
     let read, finish = Eio.Promise.create () in
-    Eio.Fiber.both
-      (fun () ->
-        Eio.Flow.copy r (Eio.Flow.buffer_sink out);
-        Eio.Promise.resolve finish ())
-      (fun () ->
-        Eio.Fiber.first
-          (fun () ->
-            Eio.Promise.await read;
-            exited ())
-          (fun () ->
-            (match stop with
-            | None -> exited ()
-            | Some p -> Eio.Fiber.first (fun () -> Eio.Promise.await p) exited);
-            group Sys.sigterm;
-            Eio.Time.Mono.sleep clock 1.;
-            group Sys.sigkill;
-            Eio.Fiber.await_cancel ()));
+    (match
+       Eio.Fiber.both
+         (fun () ->
+           Eio.Flow.copy r (Eio.Flow.buffer_sink out);
+           Eio.Promise.resolve finish ())
+         (fun () ->
+           Eio.Fiber.first
+             (fun () ->
+               Eio.Promise.await read;
+               exited ())
+             (fun () ->
+               (match stop with
+               | None -> exited ()
+               | Some p ->
+                   Eio.Fiber.first (fun () -> Eio.Promise.await p) exited);
+               terminate ()))
+     with
+    | () -> ()
+    | exception (Eio.Cancel.Cancelled _ as e) ->
+        let bt = Printexc.get_raw_backtrace () in
+        Eio.Cancel.protect (fun () ->
+            Eio.Fiber.first
+              (fun () -> Eio.Flow.copy r (Eio.Flow.buffer_sink out))
+              terminate);
+        Printexc.raise_with_backtrace e bt);
     Eio.Process.await child
   with
   | status ->
