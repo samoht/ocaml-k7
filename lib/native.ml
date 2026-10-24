@@ -776,6 +776,9 @@ type state = {
   stuck : string -> bool;
   since : Buffer.t;
   mutable captured : (int * string) list option;  (** Latest first. *)
+  mutable echo : string -> unit;
+  mutable answers : bool;
+      (** The emulator answers the program's queries: no other terminal does. *)
 }
 
 let now st = Eio.Time.Mono.now st.clock
@@ -890,10 +893,12 @@ let feed st buf n =
     (fun c -> st.captured <- Some ((ms_of_span (stamp st), output) :: c))
     st.captured;
   since st output;
+  st.echo output;
   expire st;
   Screen.feed ~sync:(synchronize st) st.term output;
   settle st output;
-  send st (Screen.take_replies st.term);
+  let replies = Screen.take_replies st.term in
+  if st.answers then send st replies;
   refresh st
 
 (* In real time: [st.clock] gives the recording's times, and a clock that
@@ -1290,6 +1295,8 @@ let state ?(stuck = fun _ -> false) t ~clock ({ pty; pid; _ } : terminal) =
     stuck;
     since = Buffer.create 4096;
     captured = None;
+    echo = ignore;
+    answers = true;
   }
 
 let recording t st =
@@ -1350,7 +1357,18 @@ let terminate clock (t : terminal) =
   signal Sys.sigkill;
   Eio.Fiber.await_cancel ()
 
-let capture ?interrupt ~clock ~env ~vars ~cwd ~line t argv =
+let forward st input =
+  let buf = Cstruct.create 4096 in
+  let rec loop () =
+    match Eio.Flow.single_read input buf with
+    | n ->
+        send st (Cstruct.to_string ~len:n buf);
+        loop ()
+    | exception End_of_file -> Eio.Fiber.await_cancel ()
+  in
+  loop ()
+
+let capture ?interrupt ?input ?echo ~clock ~env ~vars ~cwd ~line t argv =
   let clock = (clock :> Eio.Time.Mono.ty Eio.Resource.t) in
   match
     let prog, args =
@@ -1368,14 +1386,21 @@ let capture ?interrupt ~clock ~env ~vars ~cwd ~line t argv =
     Screen.feed st.term line;
     refresh st;
     st.captured <- Some [];
+    Option.iter
+      (fun echo -> st.echo <- (fun s -> Eio.Flow.copy_string s echo))
+      echo;
+    st.answers <- Option.is_none input;
     Eio.Fiber.first
       (fun () -> reader st (Bytes.create 65536))
       (fun () ->
-        match interrupt with
-        | None -> Eio.Fiber.await_cancel ()
-        | Some p ->
-            Eio.Promise.await p;
-            terminate clock terminal);
+        Eio.Fiber.both
+          (fun () -> Option.iter (forward st) input)
+          (fun () ->
+            match interrupt with
+            | None -> Eio.Fiber.await_cancel ()
+            | Some p ->
+                Eio.Promise.await p;
+                terminate clock terminal));
     let output = List.rev (Option.value st.captured ~default:[]) in
     match st.exited with
     | Some status -> (output, ms_of_span (stamp st), status)

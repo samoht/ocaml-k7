@@ -622,23 +622,32 @@ val capture :
   ?env:(string * string) list ->
   ?show:string ->
   ?stop:unit Eio.Promise.t ->
+  ?input:_ Eio.Flow.source ->
+  ?echo:_ Eio.Flow.sink ->
   clock:_ Eio.Time.Mono.t ->
   proc:_ Eio_unix.Process.mgr ->
   cwd:_ Eio.Path.t ->
   string list ->
   (cast * Eio.Process.exit_status, error) result
-(** [capture ~settings ~env ~show ~stop ~clock ~proc ~cwd argv] runs the program
-    [argv] as {!run} does and is the recording of what it printed, paired with
-    how it exited. The recording has the size of the terminal of [settings], the
-    colours of their {!constructor-Theme}, if any, as its theme, [show] as its
-    [command] (defaults to [argv], each argument shell-quoted where needed; none
-    if empty), each output at the millisecond it arrived since the program
-    started, in valid UTF-8 (a character split across two outputs goes in the
-    second, and a byte that is not UTF-8, an incomplete character at the end
-    included, is U+FFFD), and the exit, with the exit code or [128] plus the
-    number of the signal that killed the program. The terminal reads the command
-    line first, as in the image of {!run}, so the program's queries get the
-    answers they would there. It is the error of {!run} otherwise. *)
+(** [capture ~settings ~env ~show ~stop ~input ~echo ~clock ~proc ~cwd argv]
+    runs the program [argv] as {!run} does and is the recording of what it
+    printed, paired with how it exited. The recording has the size of the
+    terminal of [settings], the colours of their {!constructor-Theme}, if any,
+    as its theme, [show] as its [command] (defaults to [argv], each argument
+    shell-quoted where needed; none if empty), each output at the millisecond it
+    arrived since the program started, in valid UTF-8 (a character split across
+    two outputs goes in the second, and a byte that is not UTF-8, an incomplete
+    character at the end included, is U+FFFD), and the exit, with the exit code
+    or [128] plus the number of the signal that killed the program. The terminal
+    reads the command line first, as in the image of {!run}, so the program's
+    queries get the answers they would there.
+
+    With [input], such as the standard input of a terminal in raw mode, the
+    program gets what [input] gives as typed, and k7 answers none of its
+    queries: the terminal that gives [input] answers them, and two answers would
+    reach the program as typed text. What the program prints is also written to
+    [echo], as it arrives, so that the person typing sees it. It is the error of
+    {!run} otherwise. *)
 
 val cram :
   ?env:(string * string) list ->

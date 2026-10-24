@@ -1859,7 +1859,8 @@ let check_argv = function
   | [] -> Error (Invalid "no command to run")
   | argv -> Result.map_error native_error (Native.check_argv argv)
 
-let capture ?(settings = []) ?(env = []) ?show ?stop ~clock ~proc ~cwd argv =
+let capture ?(settings = []) ?(env = []) ?show ?stop ?input ?echo ~clock ~proc
+    ~cwd argv =
   let* () = check_argv argv in
   let* command = command_of ?show argv in
   let* line, _ = shown ~show:command ~delay:(Ms 0) in
@@ -1868,8 +1869,8 @@ let capture ?(settings = []) ?(env = []) ?show ?stop ~clock ~proc ~cwd argv =
   let* dir = native_dir cwd in
   let* output, exited, status =
     Result.map_error native_error
-      (Native.capture ?interrupt:stop ~clock ~env:(environment proc) ~vars:env
-         ~cwd:dir ~line tape argv)
+      (Native.capture ?interrupt:stop ?input ?echo ~clock
+         ~env:(environment proc) ~vars:env ~cwd:dir ~line tape argv)
   in
   let columns, rows = Native.size tape in
   let theme =

@@ -2206,6 +2206,66 @@ let test_capture_theme_cursor () =
     (Result.get_ok (K7.svg_of_casts ~settings [ cast ]))
     (Result.get_ok (K7.svg_of_casts [ restored ]))
 
+module Keys = struct
+  type t = string Eio.Stream.t
+
+  let read_methods = []
+
+  let single_read t dst =
+    let s = Eio.Stream.take t in
+    Cstruct.blit_from_string s 0 dst 0 (String.length s);
+    String.length s
+end
+
+module Shown = struct
+  type t = { shown : Buffer.t; on_write : string -> unit }
+
+  let single_write t bufs =
+    let s = Cstruct.to_string (Cstruct.concat bufs) in
+    Buffer.add_string t.shown s;
+    t.on_write (Buffer.contents t.shown);
+    String.length s
+
+  let copy t ~src = Eio.Flow.Pi.simple_copy ~single_write t ~src
+end
+
+(* The terminal that runs k7 answers the program's queries, so k7's emulator
+   does not: a second answer would reach the program as typed text. *)
+let test_capture_attached () =
+  with_dir @@ fun env cwd ->
+  let keys = Eio.Stream.create 1 in
+  let asked = ref false in
+  let on_write s =
+    if (not !asked) && String.ends_with ~suffix:"\027[c" s then (
+      asked := true;
+      Eio.Stream.add keys "hello\r")
+  in
+  let shown = Buffer.create 256 in
+  let input = Eio.Resource.T (keys, Eio.Flow.Pi.source (module Keys)) in
+  let echo =
+    Eio.Resource.T ({ Shown.shown; on_write }, Eio.Flow.Pi.sink (module Shown))
+  in
+  match
+    K7.capture ~settings ~show:"" ~input ~echo
+      ~clock:(Eio_mock.Clock.Mono.make ())
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd
+      [ "sh"; "-c"; {|printf '\033[c'; read x; echo "got:$x"|} ]
+  with
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+  | Ok (cast, status) ->
+      exited "status" 0 status;
+      let has sub s = contains ~sub s in
+      Alcotest.(check bool)
+        "the keys reach the program" true
+        (has "got:hello" (K7.string_of_cast cast));
+      Alcotest.(check bool)
+        "the program's output reaches the terminal" true
+        (has "got:hello" (Buffer.contents shown));
+      Alcotest.(check bool)
+        "k7 does not answer the query" false
+        (has "got:\\u001b" (K7.string_of_cast cast))
+
 let cram ?env:vars ?stop ?(clock = Eio_mock.Clock.Mono.make ()) env cwd argv =
   match
     K7.cram ?env:vars ?stop ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd argv
@@ -2667,6 +2727,7 @@ let suite =
          ( "capture round-trips incomplete UTF-8",
            test_capture_incomplete_utf_8_round_trip );
          ("capture keeps a theme's cursor colours", test_capture_theme_cursor);
+         ("capture attached to a terminal", test_capture_attached);
          ("cram", test_cram);
          ("cram refuses NUL in argv", test_cram_nul_argument);
          ( "cram quotes a reserved executable name",

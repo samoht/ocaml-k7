@@ -31,13 +31,53 @@ let exit_code = function
   | `Exited n -> n
   | `Signaled s -> 128 + Sys.signal_to_int s
 
+let raw saved =
+  Unix.
+    {
+      saved with
+      c_brkint = false;
+      c_icrnl = false;
+      c_inpck = false;
+      c_istrip = false;
+      c_ixon = false;
+      c_opost = false;
+      c_csize = 8;
+      c_parenb = false;
+      c_echo = false;
+      c_echonl = false;
+      c_icanon = false;
+      c_isig = false;
+      c_vmin = 1;
+      c_vtime = 0;
+    }
+
+(* The terminal that runs k7 shows the program and sends it each key as typed,
+   Ctrl-C included, until it exits. *)
+let attached f =
+  if Unix.isatty Unix.stdin && Unix.isatty Unix.stdout then (
+    let saved = Unix.tcgetattr Unix.stdin in
+    Unix.tcsetattr Unix.stdin TCSAFLUSH (raw saved);
+    Fun.protect
+      ~finally:(fun () -> Unix.tcsetattr Unix.stdin TCSADRAIN saved)
+      (fun () -> f true))
+  else f false
+
 let record ?show ?delay ?stop stdenv ~settings ~env ~outputs argv =
   let* outputs = kinds outputs in
   let error r = Result.map_error (Fmt.to_to_string Flags.pp_error) r in
   let proc = Eio.Stdenv.process_mgr stdenv and cwd = Eio.Stdenv.cwd stdenv in
   let clock = Eio.Stdenv.mono_clock stdenv in
   let cast =
-    lazy (K7.capture ~settings ~env ?show ?stop ~clock ~proc ~cwd argv |> error)
+    lazy
+      ( attached @@ fun tty ->
+        let input, echo =
+          if tty then
+            (Some (Eio.Stdenv.stdin stdenv), Some (Eio.Stdenv.stdout stdenv))
+          else (None, None)
+        in
+        K7.capture ~settings ~env ?show ?stop ?input ?echo ~clock ~proc ~cwd
+          argv
+        |> error )
   in
   let cram = lazy (K7.cram ~env ?stop ~clock ~proc ~cwd argv |> error) in
   let draw = function
@@ -110,15 +150,21 @@ let man =
   [
     `S Manpage.s_description;
     `P
-      "$(cmd) runs $(i,COMMAND) on a pseudo-terminal, with no shell and \
-       nothing typed, and writes what the terminal showed to each output, in \
-       the format of its extension, in any case. An $(b,.svg) output is an \
-       animated SVG image, which plays in an HTML $(i,img) element: each \
-       screen shows at the time it arrived since the program started, and the \
-       last one holds for a second after the program exits. The first line of \
-       the image shows $(b,\\$) and $(i,COMMAND), each argument shell-quoted \
-       where needed, and the program's output starts on the next line. Output \
-       beyond the last row of the terminal scrolls its first rows away.";
+      "$(cmd) runs $(i,COMMAND) on a pseudo-terminal, with no shell, and \
+       writes what the terminal showed to each output, in the format of its \
+       extension, in any case. An $(b,.svg) output is an animated SVG image, \
+       which plays in an HTML $(i,img) element: each screen shows at the time \
+       it arrived since the program started, and the last one holds for a \
+       second after the program exits. The first line of the image shows \
+       $(b,\\$) and $(i,COMMAND), each argument shell-quoted where needed, and \
+       the program's output starts on the next line. Output beyond the last \
+       row of the terminal scrolls its first rows away.";
+    `P
+      "When $(cmd) runs in a terminal, the program shows there as it runs, and \
+       each key typed goes to it as typed, Ctrl-C included, so a program that \
+       asks questions can be answered. That terminal answers the program's \
+       queries, such as its colours, and the image shows what it would show. \
+       Otherwise the program gets nothing typed.";
     `P
       "A $(b,.cast) output is the recording itself, in asciinema's asciicast \
        v3 format: the size of the terminal, the command, what the program \

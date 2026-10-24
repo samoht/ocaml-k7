@@ -122,6 +122,8 @@ val replay : t -> (int * Asciicast.event) list -> string * Screen.t
 
 val capture :
   ?interrupt:unit Eio.Promise.t ->
+  ?input:_ Eio.Flow.source ->
+  ?echo:_ Eio.Flow.sink ->
   clock:_ Eio.Time.Mono.t ->
   env:Eio.Process.Env.t ->
   vars:(string * string) list ->
@@ -130,11 +132,14 @@ val capture :
   t ->
   string list ->
   ((int * string) list * int * Eio.Process.exit_status, error) result
-(** [capture ~interrupt ~clock ~env ~vars ~cwd ~line t argv] runs the program
-    [argv] in the directory [cwd] on a terminal with the settings of [t], until
-    it exits, after [line], which the terminal reads first, and is what the
-    program printed, at the times it arrived since the program started, in
-    milliseconds, the time it exited and how. The program gets [env] with
-    [TERM=xterm-256color], then [vars]. Once [interrupt] resolves, its process
-    group gets [SIGTERM], then [SIGKILL] a second later by [clock]. It is
-    [Error (Invalid _)] if [argv] is empty. *)
+(** [capture ~interrupt ~input ~echo ~clock ~env ~vars ~cwd ~line t argv] runs
+    the program [argv] in the directory [cwd] on a terminal with the settings of
+    [t], until it exits, after [line], which the terminal reads first, and is
+    what the program printed, at the times it arrived since the program started,
+    in milliseconds, the time it exited and how. The program gets [env] with
+    [TERM=xterm-256color], then [vars]. What [input] gives goes to the program
+    as typed, and the terminal answers none of its queries, which the terminal
+    that gives [input] answers instead. What the program prints is also written
+    to [echo]. Once [interrupt] resolves, its process group gets [SIGTERM], then
+    [SIGKILL] a second later by [clock]. It is [Error (Invalid _)] if [argv] is
+    empty. *)
