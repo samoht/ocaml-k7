@@ -9,6 +9,7 @@ storage:
 tap:
   clone_url: https://github.com/samoht/homebrew-monopam.git
   push_url: git@github.com:samoht/homebrew-monopam
+  local_path: "../homebrew-monopam-k7"
 
 build:
   linux: static
