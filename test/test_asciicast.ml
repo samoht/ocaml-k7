@@ -135,10 +135,17 @@ let test_show () =
     (cast
        ({|{"version": 3, "term": {"cols": 20, "rows": 3}, "command": "a\n\tb"}|}
       ^ "\n" ^ {|[0.002, "o", "a"]|}));
-  match K7.svg_of_casts ~show:[ "a\nb" ] [ parse timed ] with
+  Alcotest.(check string)
+    "a shown command on several lines continues after > "
+    (svg ~settings K7.[ (Ms 0, line "a\r\n> b"); (Ms 502, "a"); (Ms 1502, "") ])
+    (cast ~show:[ "a\nb" ]
+       ({|{"version": 3, "term": {"cols": 20, "rows": 3}}|} ^ "\n"
+      ^ {|[0.002, "o", "a"]|}));
+  match K7.svg_of_casts ~show:[ "a\tb" ] [ parse timed ] with
   | Error (Invalid msg) ->
       Alcotest.(check string)
-        "control" {|show "a\nb": holds a control character|} msg
+        "control"
+        {|show "a\tb": holds a control character other than a newline|} msg
   | _ -> Alcotest.fail "a control character shown"
 
 let test_size () =

@@ -1816,6 +1816,10 @@ let test_run_show () =
     "a newline that ends an argument"
     (screen [ {|$ printf '%s|' 'a|}; "> '"; "a"; "|" ])
     (image [ "printf"; "%s|"; "a\n" ]);
+  Alcotest.(check string)
+    "a shown newline, as in the default"
+    (image [ "printf"; "a\nb" ])
+    (image ~show:"printf 'a\nb'" [ "printf"; "a\nb" ]);
   match run ~show:"a\027[2Jb" env cwd [ "true" ] with
   | Error (Invalid _) -> ()
   | Error e -> Alcotest.failf "control: %a" K7.pp_error e
