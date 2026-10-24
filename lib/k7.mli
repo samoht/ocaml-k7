@@ -667,13 +667,13 @@ val cram :
     return before a line feed, and with a last line that does not end with a
     line feed; then [  [N]] if the exit code [N], or [128] plus the number of
     the signal that killed the command, is not [0]. dune then reads the test
-    back unchanged, but for a line dune would read as a command: one that starts
-    with [$ ], or a first line that is [>] or starts with [> ]. dune writes it
-    as it is, and runs it; [cram] indents it by one more space, so that it stays
-    output, which dune reports as a difference. It is [Error (Invalid _)] if
-    [argv] is empty or a name of [env] is one {!run} refuses, and [Error (Io _)]
-    if an argument of [argv] holds a NUL byte, as for {!run}, before anything
-    runs, or on an I/O failure. *)
+    back unchanged, with one exception. An output line that dune would read as a
+    command, one that starts with [$ ] or a first line that is [>] or starts
+    with [> ], gets one more space of indentation, so that dune keeps it as
+    output and reports that line as a difference. It is [Error (Invalid _)] if
+    [argv] is empty, or a name of [env] is one {!run} refuses or a value of
+    [env] holds a NUL byte, and [Error (Io _)] if an argument of [argv] holds a
+    NUL byte, as for {!run}, before anything runs, or on an I/O failure. *)
 
 (** {1:checks Checks}
 
