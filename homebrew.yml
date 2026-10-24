@@ -1,15 +1,15 @@
-handle: gazagnaire.org
+handle: samoht
 mono_url: https://github.com/samoht/ocaml-k7.git
 
 storage:
   bucket: homebrew-bottles
   region: fr-par
-  profile: homebrew-monopam
+  profile: homebrew-samoht
 
 tap:
-  clone_url: https://github.com/samoht/homebrew-monopam.git
-  push_url: git@github.com:samoht/homebrew-monopam
-  local_path: "../homebrew-monopam-k7"
+  clone_url: https://github.com/samoht/homebrew-tap.git
+  push_url: git@github.com:samoht/homebrew-tap
+  local_path: "../homebrew-tap"
 
 build:
   linux: static
