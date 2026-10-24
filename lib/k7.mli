@@ -33,7 +33,8 @@
 (** {1:actions Actions} *)
 
 (** The type for durations, in milliseconds. A tape accepts [Ms 0] to
-    [Ms 9_223_372_036_854], the range of Go's [time.Duration]. *)
+    [Ms 9_223_372_036_854], the range of Go's [time.Duration]. Constructors may
+    be added. *)
 type duration = Ms of int
 
 (** The type for keys. A key without an argument is the VHS key of the same name
