@@ -1025,8 +1025,16 @@ let test_native_literal n =
     | Error e -> failf "%a" K7.pp_error e
   in
   let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "received")) in
-  (* In the C locale, readline reads each byte above 0x7f as a Meta key. *)
-  let utf_8 = ("LC_ALL", "C.UTF-8") :: Native_test.no_job_control in
+  (* In the C locale, readline reads each byte above 0x7f as a Meta key;
+     the inputrc keeps it 8-bit clean where C.UTF-8 is missing too. *)
+  Eio.Path.save ~create:(`Or_truncate 0o644)
+    Eio.Path.(cwd / "inputrc")
+    "set input-meta on\nset output-meta on\nset convert-meta off\n";
+  let utf_8 =
+    ("LC_ALL", "C.UTF-8")
+    :: ("INPUTRC", path "inputrc")
+    :: Native_test.no_job_control
+  in
   (match
      K7.record ~engine:Native ~env:utf_8
        ~clock:(Eio.Stdenv.mono_clock env)
