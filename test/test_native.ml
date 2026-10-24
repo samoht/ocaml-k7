@@ -237,8 +237,9 @@ let test_playback_speed () =
   Alcotest.(check int) "clamped" 500 (loop "100000");
   Alcotest.(check int) "slower" 4000 (loop "0.25")
 
-(* A pause between two screens lasts at most the limit; the last screen
-   holds as long as the tape says. *)
+(* A pause between two screens lasts at most the limit, to the
+   millisecond; the last screen holds as long as the tape says, 510ms, so
+   that a frame moved by a few milliseconds changes the length. *)
 let test_idle_time_limit () =
   with_dir @@ fun env cwd ->
   let length idle_time_limit =
@@ -255,7 +256,7 @@ let test_idle_time_limit () =
                sleep (Ms 3000);
                type' "echo b\n";
                wait Prompt;
-               sleep (Ms 500);
+               sleep (Ms 510);
              ])
     in
     match
@@ -266,10 +267,10 @@ let test_idle_time_limit () =
     | Error e -> Alcotest.failf "%a" K7.pp_error e
     | Ok () -> animation_ms (Eio.Path.load Eio.Path.(cwd / "demo.svg"))
   in
-  Alcotest.(check int) "real time" 3500 (length None);
-  Alcotest.(check int) "limited" 1500 (length (Some (Ms 1000)));
-  Alcotest.(check int) "between two frames" 1520 (length (Some (Ms 1010)));
-  Alcotest.(check int) "above the pause" 3500 (length (Some (Ms 5000)))
+  Alcotest.(check int) "real time" 3520 (length None);
+  Alcotest.(check int) "limited" 1520 (length (Some (Ms 1000)));
+  Alcotest.(check int) "not rounded to a frame" 1520 (length (Some (Ms 1010)));
+  Alcotest.(check int) "above the pause" 3520 (length (Some (Ms 5000)))
 
 (* A shell that shows no prompt fails the recording within the tape's wait
    timeout, by the clock of record. *)

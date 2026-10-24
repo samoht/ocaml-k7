@@ -514,13 +514,13 @@ val cast_of_string : string -> (cast, error) result
 val string_of_cast : ?idle_time_limit:duration -> cast -> string
 (** [string_of_cast ~idle_time_limit c] is [c] in asciicast v3, its times as
     intervals in milliseconds, with an [idle_time_limit] in its header if
-    [idle_time_limit] is given and positive, as [asciinema rec -i] writes it, so
-    that asciinema's player shortens the pauses too. {!cast_of_string} reads it
-    back as [c], with each interval longer than that limit shortened to it.
-    Beyond asciicast v3, its theme holds the [cursor] colour if it is not the
-    foreground and the [cursor_accent] colour if it is not the one {!svg}
-    derives, so that a recording {!capture} made with a {!constructor-Theme}
-    draws with that theme's colours. *)
+    [idle_time_limit] is given, positive and in the range of a {!duration}, as
+    [asciinema rec -i] writes it, so that asciinema's player shortens the pauses
+    too. {!cast_of_string} reads it back as [c], with each interval longer than
+    that limit shortened to it. Beyond asciicast v3, its theme holds the
+    [cursor] colour if it is not the foreground and the [cursor_accent] colour
+    if it is not the one {!svg} derives, so that a recording {!capture} made
+    with a {!constructor-Theme} draws with that theme's colours. *)
 
 val svg_of_casts :
   ?settings:setting list ->

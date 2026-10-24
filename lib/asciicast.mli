@@ -63,9 +63,10 @@ val of_string : string -> (t, string) result
 
 val limit_idle : int -> t -> t
 (** [limit_idle ms t] is [t] with each interval between two of its events, and
-    before the first, that lasts more than [ms] milliseconds lasting [ms].
-    Unlike an [idle_time_limit] in the header, it does not see the events
-    {!of_string} skips, such as input and markers. *)
+    before the first, that lasts more than [ms] milliseconds lasting [ms]. An
+    [idle_time_limit] in the header differs in two ways: it counts the events
+    {!of_string} skips, such as input and markers, and it cuts the intervals as
+    written, to the microsecond, before the times are rounded. *)
 
 val utf_8 : (int * event) list -> (int * event) list
 (** [utf_8 events] are [events] with the data of each [o] event in valid UTF-8:
