@@ -1012,7 +1012,8 @@ let test_native_literal n =
     Buffer.add_char b ' '
   done;
   let payload = Buffer.contents b in
-  let command = "printf '%s' " ^ Filename.quote payload ^ " > received\n" in
+  (* Without [>], no line of the echo can end like the prompt. *)
+  let command = "printf '%s' " ^ Filename.quote payload ^ " | tee received\n" in
   let tape =
     match
       K7.tape
@@ -1024,8 +1025,10 @@ let test_native_literal n =
     | Error e -> failf "%a" K7.pp_error e
   in
   let cwd = Eio.Path.(Eio.Stdenv.fs env / Filename.dirname (path "received")) in
+  (* In the C locale, readline reads each byte above 0x7f as a Meta key. *)
+  let utf_8 = ("LC_ALL", "C.UTF-8") :: Native_test.no_job_control in
   (match
-     K7.record ~engine:Native ~env:Native_test.no_job_control
+     K7.record ~engine:Native ~env:utf_8
        ~clock:(Eio.Stdenv.mono_clock env)
        ~proc:(Eio.Stdenv.process_mgr env)
        ~cwd tape
