@@ -63,5 +63,5 @@ let exits =
 let cmd =
   let doc = "record terminal sessions and draw them as animated SVG images" in
   Cmd.group
-    (Cmd.info "k7" ~version:"%%VERSION%%" ~doc ~man ~exits)
+    (Cmd.info "k7" ~version:Version.string ~doc ~man ~exits)
     [ Play_cmd.cmd; Rec_cmd.cmd ]

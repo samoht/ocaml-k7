@@ -12,7 +12,7 @@
   rec_cmd
   cli
   quote)
- (libraries k7 cmdliner eio eio.unix eio_main fmt unix))
+ (libraries k7 cmdliner eio eio.unix eio_main fmt unix version))
 
 (executable
  (name main)

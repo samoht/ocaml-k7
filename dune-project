@@ -29,6 +29,7 @@
   (eio_main (>= 1.6))
   (fmt (>= 0.8.7))
   (cmdliner (>= 2.0.0))
+  dune-build-info
   (alcotest :with-test)
   (mtime (>= 2.0.0))
   (cstruct (>= 6.0.1))
