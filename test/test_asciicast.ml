@@ -241,14 +241,24 @@ let test_theme () =
   let palette =
     "#000001:#000002:#000003:#000004:#000005:#000006:#000007:#000008"
   in
-  let src =
+  let themed extra =
     Fmt.str
-      {|{"version": 3, "term": {"cols": 8, "rows": 2, "theme": {"fg": "#abcdef", "bg": "#123456", "palette": "%s"}}}
+      {|{"version": 3, "term": {"cols": 8, "rows": 2, "theme": {"fg": "#abcdef", "bg": "#123456", "palette": "%s"%s}}}
 [0.1, "o", "\u001b[31ma\u001b[91mb"]
 |}
-      palette
+      palette extra
   in
+  let src = themed "" in
   let image = cast src in
+  List.iter
+    (fun extra ->
+      Alcotest.(check string) ("ignored: " ^ extra) image (cast (themed extra)))
+    [
+      {|, "cursor": {"color": "#ff0000"}|};
+      {|, "cursor": "red"|};
+      {|, "cursor_accent": 1|};
+      {|, "cursor_accent": null|};
+    ];
   check_contains "background" ~sub:"fill=\"#123456\"" image;
   check_contains "foreground" ~sub:"fill=\"#abcdef\"" image;
   check_contains "red" ~sub:"fill:#000002" image;
