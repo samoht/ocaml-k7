@@ -431,7 +431,9 @@ let test_scroll_far () =
         (String.concat "\n" (List.init 9 (fun i -> Int.to_string (i + 11))))
         (last (frames s))
 
-(* As VHS, scrollback first, at most a thousand lines as in xterm.js. *)
+(* As VHS, scrollback first, at most a thousand lines as in xterm.js. The
+   tests clear with ED 3 themselves: busybox's clear keeps the scrollback, which
+   a Screen wait reads from its top. *)
 let test_buffer () =
   with_dir @@ fun env cwd ->
   let shows re = K7.wait ~timeout:(Ms 5000) (Screen re) in
@@ -443,7 +445,7 @@ let test_buffer () =
           shows {|^> seq 1 30\n1\n2\n|};
           type' "seq 1 1100\n";
           shows {|^93\n94\n|};
-          type' "seq 1 30; clear\n";
+          type' "seq 1 30; printf '\\033[H\\033[2J\\033[3J'\n";
           shows {|^>\n\n|};
           type' "echo x\n";
           shows {|^> echo x\nx\n>|};
@@ -466,7 +468,7 @@ let test_full_scrollback () =
     tape
       K7.
         [
-          type' "seq 1 9995; clear\n";
+          type' "seq 1 9995; printf '\\033[H\\033[2J\\033[3J'\n";
           shows {|^>\n\n|};
           type' "seq 1 1000\n";
           shows {|^> seq 1 1000\n1\n2\n|};
@@ -1720,7 +1722,7 @@ let test_run_exec_errors () =
         (cwd, [ "./not-executable" ]);
         (cwd, [ "." ]);
         (cwd, [ "/bin/echo"; "a\000b" ]);
-        (Eio.Path.(cwd / "missing-directory"), [ "/usr/bin/true" ]);
+        (Eio.Path.(cwd / "missing-directory"), [ "/bin/sh" ]);
       ]
   in
   Alcotest.(check (list string))

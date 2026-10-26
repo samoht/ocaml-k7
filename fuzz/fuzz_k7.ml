@@ -1336,8 +1336,7 @@ let test_run_fd_cleanup n cancelled =
   with_dir @@ fun env _ ->
   let record () =
     let argv =
-      if cancelled then [ "/bin/sh"; "-c"; "read value" ]
-      else [ "/usr/bin/true" ]
+      if cancelled then [ "/bin/sh"; "-c"; "read value" ] else [ "true" ]
     in
     let play () =
       match
