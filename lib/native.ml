@@ -1173,10 +1173,10 @@ let child_error ~cwd ~path ~prog e f =
   match (e, f) with
   | Unix.ENOENT, "execve" -> Executable_not_found prog
   | EACCES, "execve" when try Sys.is_directory path with Sys_error _ -> false ->
-      Io (Fmt.str "%s: is a directory" prog)
-  | e, "chdir" -> Io (Fmt.str "%s: %s" cwd (lower e))
-  | e, "execve" -> Io (Fmt.str "%s: %s" prog (lower e))
-  | e, f -> Io (Fmt.str "%s: %s" f (lower e))
+      Fmt.kstr (fun s -> Io s) "%s: is a directory" prog
+  | e, "chdir" -> Fmt.kstr (fun s -> Io s) "%s: %s" cwd (lower e)
+  | e, "execve" -> Fmt.kstr (fun s -> Io s) "%s: %s" prog (lower e)
+  | e, f -> Fmt.kstr (fun s -> Io s) "%s: %s" f (lower e)
 
 let open_terminal ~env ~cwd ~winsize ~path prog args =
   let argv = Array.of_list (prog :: args)

@@ -29,15 +29,14 @@ val run :
     the directory [dir] and the [wait_timeout] seconds of a cram test, and
     {!Play_cast.run} on one or more [.cast] files, with [show] (defaults to
     [[]]), [delay] and the [typing_speed] {!Flags.typing} [typing]; the
-    extension is read in any case. Each gets [idle], in milliseconds, as its
-    [idle_time_limit], [None] for no limit; it defaults to two seconds but for a
-    tape, which has no limit. [vhs] defaults to ["vhs"]. It is [123] after
-    printing an error on standard error for another extension, for several
-    [inputs] that are not all [.cast] files, for [dry_run] and [print] together,
-    and for an option given that does not apply to the kind of [inputs]:
-    [engine], [print], [vhs] and a non-empty [env] apply to a tape or a cram
-    test, [setup], [dir] and [wait_timeout] to a cram test, a non-empty [show],
-    [delay] and [typing] to asciicast recordings. *)
+    extension is read in any case. Each gets the limit {!val-idle_time_limit}
+    gives for [idle]. [vhs] defaults to ["vhs"]. It is [123] after printing an
+    error on standard error for another extension, for several [inputs] that are
+    not all [.cast] files, for [dry_run] and [print] together, and for an option
+    given that does not apply to the kind of [inputs]: [engine], [print], [vhs]
+    and a non-empty [env] apply to a tape or a cram test, [setup], [dir] and
+    [wait_timeout] to a cram test, a non-empty [show], [delay] and [typing] to
+    asciicast recordings. *)
 
 val idle_time_limit : string -> int option option -> K7.duration option
 (** [idle_time_limit input idle] is the limit of [--idle-time-limit] [idle] for

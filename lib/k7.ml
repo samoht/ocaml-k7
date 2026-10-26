@@ -1588,6 +1588,20 @@ let octal b c =
   digit 3;
   digit 0
 
+(* A character sh reads as itself in a bare word. *)
+let bare c =
+  c >= 0xa0
+  || c < 0x80
+     && (Char.Ascii.is_alphanum (Char.chr c)
+        || String.contains "_@%+=:,./-" (Char.chr c))
+
+(* A character that shows as itself: no control character but a newline, no
+   format character, and a selector or a joiner only after a [base]. *)
+let shows c ~base =
+  (not (is_control c && c <> 0x0a))
+  && (not (Unicode.is_format c))
+  && (base || not (Unicode.is_selector c || c = 0x200c || c = 0x200d))
+
 (* [shell_word s] is a POSIX sh word for [s]: a newline stays raw inside
    quotes; what does not show as itself (another control character, a byte
    that is not UTF-8, a format character, a selector or a joiner after no
@@ -1596,18 +1610,12 @@ let octal b c =
    to a path. *)
 let shell_word ?(quote = false) s =
   let quote = quote || String.starts_with ~prefix:"=" s in
-  let safe c =
-    c >= 0xa0
-    || c < 0x80
-       && (Char.Ascii.is_alphanum (Char.chr c)
-          || String.contains "_@%+=:,./-" (Char.chr c))
-  in
   let b = Buffer.create (String.length s + 2) in
   let text = Buffer.create 16 and escapes = Buffer.create 16 in
   let add_text () =
     let t = Buffer.contents text in
     if t <> "" then
-      if (not quote) && for_all_uchars safe t then Buffer.add_string b t
+      if (not quote) && for_all_uchars bare t then Buffer.add_string b t
       else (
         Buffer.add_char b '\'';
         Buffer.add_string b
@@ -1621,11 +1629,6 @@ let shell_word ?(quote = false) s =
       Buffer.add_buffer b escapes;
       Buffer.add_string b {|')"|});
     Buffer.clear escapes
-  in
-  let shows c ~base =
-    (not (is_control c && c <> 0x0a))
-    && (not (Unicode.is_format c))
-    && (base || not (Unicode.is_selector c || c = 0x200c || c = 0x200d))
   in
   let rec go i ~base =
     if i < String.length s then
@@ -1985,6 +1988,27 @@ let transcript ~line output code =
      :: List.mapi output lines
     @ if code = 0 then [] else [ Fmt.str "  [%d]\n" code ])
 
+(* [sh -c line] leading a process group, with an empty standard input and
+   both its outputs on the pipe it returns. *)
+let spawn_sh ~sw ~env ~proc ~cwd line =
+  let stdin, eof = Eio_unix.pipe sw in
+  Eio.Flow.close eof;
+  let r, w = Eio_unix.pipe sw in
+  let fd = Eio_unix.Resource.fd in
+  let child =
+    Eio_unix.Process.spawn_unix ~sw proc ~pgid:0
+      ~env:
+        (Eio.Process.environment proc
+        |> Eio.Process.Env.override (List.map (fun (k, v) -> (k, Some v)) env))
+      ~cwd:(cwd :> Eio.Fs.dir_ty Eio.Path.t)
+      ~fds:
+        [ (0, fd stdin, `Blocking); (1, fd w, `Blocking); (2, fd w, `Blocking) ]
+      [ "sh"; "-c"; line ]
+  in
+  Eio.Flow.close stdin;
+  Eio.Flow.close w;
+  (child, r)
+
 let cram ?(env = []) ?stop ~clock ~proc ~cwd argv =
   let* () = check_argv argv in
   let* () = check_env env in
@@ -1992,25 +2016,7 @@ let cram ?(env = []) ?stop ~clock ~proc ~cwd argv =
   let out = Buffer.create 4096 in
   match
     Eio.Switch.run @@ fun sw ->
-    let stdin, eof = Eio_unix.pipe sw in
-    Eio.Flow.close eof;
-    let r, w = Eio_unix.pipe sw in
-    let fd = Eio_unix.Resource.fd in
-    let child =
-      Eio_unix.Process.spawn_unix ~sw proc ~pgid:0
-        ~env:
-          (Eio.Process.environment proc
-          |> Eio.Process.Env.override (List.map (fun (k, v) -> (k, Some v)) env)
-          )
-        ~cwd:(cwd :> Eio.Fs.dir_ty Eio.Path.t)
-        ~fds:
-          [
-            (0, fd stdin, `Blocking); (1, fd w, `Blocking); (2, fd w, `Blocking);
-          ]
-        [ "sh"; "-c"; line ]
-    in
-    Eio.Flow.close stdin;
-    Eio.Flow.close w;
+    let child, r = spawn_sh ~sw ~env ~proc ~cwd line in
     let group s =
       try Unix.kill (-Eio.Process.pid child) s with Unix.Unix_error _ -> ()
     in

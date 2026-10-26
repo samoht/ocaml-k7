@@ -991,8 +991,8 @@ let test_json_depth n =
     failf "JSON array depth %d: Go accepts=%b, tape accepts=%b" depth expected
       accepted
 
-let test_native_literal n =
-  with_dir @@ fun env path ->
+(* Shell quotes and one cluster of each script, rotated by [n]. *)
+let native_payload n =
   let scripts =
     [|
       [ 0x0915; 0x093e ];
@@ -1011,7 +1011,11 @@ let test_native_literal n =
       scripts.((n + i) mod Array.length scripts);
     Buffer.add_char b ' '
   done;
-  let payload = Buffer.contents b in
+  Buffer.contents b
+
+let test_native_literal n =
+  with_dir @@ fun env path ->
+  let payload = native_payload n in
   (* Without [>], no line of the echo can end like the prompt. *)
   let command = "printf '%s' " ^ Filename.quote payload ^ " | tee received\n" in
   let tape =
@@ -1576,21 +1580,31 @@ let test_capture_incomplete_roundtrip n tail =
           in
           check_eq ~pp:Fmt.Dump.string (image cast) (image restored))
 
-let test_cast_dryrun_destination n directory text =
+(* What makes a destination unwritable: it is a directory, or its parent is a
+   file. *)
+type blocker = Directory | File_parent
+type export = Text | Svg
+
+let blocker = map [ bool ] (fun dir -> if dir then Directory else File_parent)
+let export = map [ bool ] (fun text -> if text then Text else Svg)
+
+let test_cast_dryrun_destination n blocker export =
   with_dir @@ fun env path ->
   save env (path "input.cast")
     ({|{"version":3,"term":{"cols":8,"rows":2}}|} ^ "\n");
-  let extension = if text then ".txt" else ".svg" in
-  let occupied = path (Fmt.str "occupied %d%s" n extension) in
+  let extension = match export with Text -> ".txt" | Svg -> ".svg" in
+  let occupied = Fmt.kstr path "occupied %d%s" n extension in
   let destination =
-    if directory then (
-      Unix.mkdir occupied 0o755;
-      occupied)
-    else (
-      save env (path "parent") "not a directory";
-      path ("parent/out" ^ extension))
+    match blocker with
+    | Directory ->
+        Unix.mkdir occupied 0o755;
+        occupied
+    | File_parent ->
+        save env (path "parent") "not a directory";
+        path ("parent/out" ^ extension)
   in
-  Fun.protect ~finally:(fun () -> if directory then Unix.rmdir occupied)
+  Fun.protect ~finally:(fun () ->
+      if blocker = Directory then Unix.rmdir occupied)
   @@ fun () ->
   let cli = Option.value ~default:"k7" (Sys.getenv_opt "K7_TEST_EXE") in
   let run dry_run =
@@ -1848,7 +1862,7 @@ let with_programs =
     test_case "native recorders work with live or joined OCaml domains"
       [ uint8; bool ] test_native_domains;
     test_case "asciicast dry-run refuses unwritable output paths"
-      [ uint8; bool; bool ] test_cast_dryrun_destination;
+      [ uint8; blocker; export ] test_cast_dryrun_destination;
     test_case "saved captures preserve incomplete UTF-8 tails" [ uint8; uint8 ]
       test_capture_incomplete_roundtrip;
     test_case "the command read from SVG runs the same arguments" [ uint8 ]
@@ -2102,7 +2116,7 @@ let test_source_wait_line n =
     match
       K7.tape
         ~outputs:[ path "out.svg" ]
-        K7.[ raw (Fmt.str {|Source "%s"|} source); sleep (Ms 100) ]
+        K7.[ Fmt.kstr raw {|Source "%s"|} source; sleep (Ms 100) ]
     with
     | Ok t -> t
     | Error e -> failf "%a" K7.pp_error e
@@ -2162,8 +2176,8 @@ let test_long_duration_range n surface =
     match surface mod 5 with
     | 0 -> ([], K7.sleep (Ms milliseconds), false)
     | 1 -> (K7.[ Typing_speed (Ms milliseconds) ], K7.type' "x", false)
-    | 2 -> ([], K7.raw (Fmt.str "Type@%dms x" milliseconds), false)
-    | 3 -> ([], K7.raw (Fmt.str "Enter@%dms" milliseconds), false)
+    | 2 -> ([], Fmt.kstr K7.raw "Type@%dms x" milliseconds, false)
+    | 3 -> ([], Fmt.kstr K7.raw "Enter@%dms" milliseconds, false)
     | _ -> ([], K7.wait ~timeout:(Ms milliseconds) (Screen "NEVER_MATCH"), true)
   in
   Native_test.with_dir @@ fun env cwd ->
@@ -2203,11 +2217,11 @@ let test_typing_duration_units n surface =
   let actions, count =
     match surface mod 3 with
     | 0 -> (K7.[ raw ("Set TypingSpeed " ^ duration); type' text ], scalars 0 0)
-    | 1 -> ([ K7.raw (Fmt.str "Type@%s \"%s\"" duration text) ], scalars 0 0)
+    | 1 -> ([ Fmt.kstr K7.raw "Type@%s \"%s\"" duration text ], scalars 0 0)
     | _ -> ([ K7.raw ("Space@" ^ duration ^ " 3") ], 3)
   in
   Native_test.with_dir @@ fun env cwd ->
-  let actions = K7.raw (Fmt.str "Sleep 0.%09ds" nanoseconds) :: actions in
+  let actions = Fmt.kstr K7.raw "Sleep 0.%09ds" nanoseconds :: actions in
   let tape =
     match K7.tape ~outputs:[ "typing.svg" ] actions with
     | Ok t -> t
@@ -2343,7 +2357,7 @@ let test_unmapped_modifier_keys n alt =
   | Error e -> failf "%a" K7.pp_error e);
   check_eq ~pp:pp_string "X" (Eio.Path.load Eio.Path.(cwd / "keys"))
 
-let with_processes =
+let with_recordings =
   [
     test_case "an observed new prompt holds after echo-disabled input" [ uint8 ]
       test_noecho_prompt;
@@ -2368,48 +2382,55 @@ let with_processes =
       [ uint8 ] test_cli_dry_run_preflight;
     test_case "successful CLI dry-run is silent and creates no output directory"
       [ uint8 ] test_cli_dry_run_pure;
-    test_case "check rejects directory destinations for outputs and screenshots"
-      [ uint8 ] test_check_directory_destination;
-    test_case "record respects the explicit terminal environment" [ uint8 ]
-      test_record_term;
-    test_case "vhs is found on the supplied environment PATH" [ uint8 ]
-      test_vhs_path;
-    test_case "check and record agree on preflight errors without side effects"
-      [ uint8 ] test_check_preflight_parity;
-    test_case "successful check creates no directory and runs no tape" [ uint8 ]
-      test_check_valid_is_pure;
-    test_case "native output paths and positive frame-rate boundaries" [ uint8 ]
-      test_native_paths;
-    test_case "mixed outputs are refused before playing or writing" [ uint8 ]
-      test_output_preflight;
-    test_case "zero-delay typing waits for the submitted command" [ uint8 ]
-      test_zero_speed_prompt;
-    test_case "native typing preserves mixed scripts and shell quotes" [ uint8 ]
-      test_native_literal;
-    test_case "CLI wait timeout bounds and diagnostics"
-      [
-        choose
-          [
-            int;
-            const 0;
-            const (-1);
-            const 1;
-            const 9_223_372_036;
-            const 9_223_372_037;
-            const 99_999_999_999;
-          ];
-      ]
-      test_cli_wait_timeout;
-    test_case "record cancellation and callback exceptions reap shells"
-      [ int8; bool ] test_record_reaps;
-    test_case "recording environment isolation" [ int ]
-      test_environment_isolation;
-    test_case "documented executable exit codes" [ int16 ] test_exit_codes;
-    test_case "cancelled render reaps the child" [ int8 ] test_cancel_reaps;
-    test_case "never publish implicitly"
-      [ choose [ const "dumb"; const "xterm-256color"; const "" ] ]
-      test_no_publication;
   ]
+
+let with_processes =
+  with_recordings
+  @ [
+      test_case
+        "check rejects directory destinations for outputs and screenshots"
+        [ uint8 ] test_check_directory_destination;
+      test_case "record respects the explicit terminal environment" [ uint8 ]
+        test_record_term;
+      test_case "vhs is found on the supplied environment PATH" [ uint8 ]
+        test_vhs_path;
+      test_case
+        "check and record agree on preflight errors without side effects"
+        [ uint8 ] test_check_preflight_parity;
+      test_case "successful check creates no directory and runs no tape"
+        [ uint8 ] test_check_valid_is_pure;
+      test_case "native output paths and positive frame-rate boundaries"
+        [ uint8 ] test_native_paths;
+      test_case "mixed outputs are refused before playing or writing" [ uint8 ]
+        test_output_preflight;
+      test_case "zero-delay typing waits for the submitted command" [ uint8 ]
+        test_zero_speed_prompt;
+      test_case "native typing preserves mixed scripts and shell quotes"
+        [ uint8 ] test_native_literal;
+      test_case "CLI wait timeout bounds and diagnostics"
+        [
+          choose
+            [
+              int;
+              const 0;
+              const (-1);
+              const 1;
+              const 9_223_372_036;
+              const 9_223_372_037;
+              const 99_999_999_999;
+            ];
+        ]
+        test_cli_wait_timeout;
+      test_case "record cancellation and callback exceptions reap shells"
+        [ int8; bool ] test_record_reaps;
+      test_case "recording environment isolation" [ int ]
+        test_environment_isolation;
+      test_case "documented executable exit codes" [ int16 ] test_exit_codes;
+      test_case "cancelled render reaps the child" [ int8 ] test_cancel_reaps;
+      test_case "never publish implicitly"
+        [ choose [ const "dumb"; const "xterm-256color"; const "" ] ]
+        test_no_publication;
+    ]
 
 let test_public_update_idempotence n =
   let get = function Ok t -> t | Error e -> failf "%a" K7.pp_error e in
@@ -2682,7 +2703,7 @@ let decoding =
       test_strip_format;
   ]
 
-let tapes =
+let tape_roundtrips =
   [
     test_case "equivalent screenshot paths cannot overwrite another image"
       [ uint8; bool ] test_screenshot_alias;
@@ -2696,44 +2717,50 @@ let tapes =
         int;
       ]
       test_of_string;
-    test_case "JSON themes obey Go nesting limits" [ uint8 ] test_json_depth;
-    test_case "JSON themes"
-      [
-        choose
-          [
-            bytes;
-            const {|"background": "#123"}|};
-            const {|"red": "\ud83d\ude00", "RED": null}|};
-          ];
-      ]
-      test_json_theme;
-    test_case "durations"
-      [ choose [ int; const max_ms; const (max_ms + 1); const 0 ] ]
-      test_durations;
-    test_case "screen tokens"
-      [ choose [ bytes; const {|\Q/\E|}; const {|\Qa\|} ] ]
-      test_screen;
-    test_case "raw lines"
-      [
-        choose
-          [ bytes; const "Set Width 300"; const "Require x"; const " Hide" ];
-      ]
-      test_raw;
-    test_case "hidden" [ list bytes; int ] test_hidden;
-    test_case "sizes" [ int16; int16; int8 ] test_sizes;
-    test_case "outputs"
-      [
-        bytes;
-        choose [ const ""; const ".gif"; const ".png"; const "/"; const ".gfi" ];
-      ]
-      test_output;
-    test_case "pp_error" [ bytes; int ] test_pp_error;
-    test_case "unified errors are printable single lines" [ bytes; bytes ]
-      test_unified_errors;
-    test_case "keys" [ char ] test_keys;
-    test_case "settings" [ int; bytes ] test_settings;
-    test_case "order" [ bytes; bytes ] test_order;
   ]
+
+let tapes =
+  tape_roundtrips
+  @ [
+      test_case "JSON themes obey Go nesting limits" [ uint8 ] test_json_depth;
+      test_case "JSON themes"
+        [
+          choose
+            [
+              bytes;
+              const {|"background": "#123"}|};
+              const {|"red": "\ud83d\ude00", "RED": null}|};
+            ];
+        ]
+        test_json_theme;
+      test_case "durations"
+        [ choose [ int; const max_ms; const (max_ms + 1); const 0 ] ]
+        test_durations;
+      test_case "screen tokens"
+        [ choose [ bytes; const {|\Q/\E|}; const {|\Qa\|} ] ]
+        test_screen;
+      test_case "raw lines"
+        [
+          choose
+            [ bytes; const "Set Width 300"; const "Require x"; const " Hide" ];
+        ]
+        test_raw;
+      test_case "hidden" [ list bytes; int ] test_hidden;
+      test_case "sizes" [ int16; int16; int8 ] test_sizes;
+      test_case "outputs"
+        [
+          bytes;
+          choose
+            [ const ""; const ".gif"; const ".png"; const "/"; const ".gfi" ];
+        ]
+        test_output;
+      test_case "pp_error" [ bytes; int ] test_pp_error;
+      test_case "unified errors are printable single lines" [ bytes; bytes ]
+        test_unified_errors;
+      test_case "keys" [ char ] test_keys;
+      test_case "settings" [ int; bytes ] test_settings;
+      test_case "order" [ bytes; bytes ] test_order;
+    ]
 
 let suite =
   ( "k7",

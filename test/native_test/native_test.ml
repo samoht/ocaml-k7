@@ -265,17 +265,8 @@ let serve_subprocess () =
   match Sys.getenv_opt subprocess_var with
   | None -> ()
   | Some name ->
-      let f =
-        match Hashtbl.find_opt subprocesses name with
-        | Some f -> f
-        | None -> failwith ("no subprocess " ^ name)
-      in
-      let status =
-        try
-          f (List.tl (Array.to_list Sys.argv));
-          0
-        with exn ->
-          Fmt.epr "%s\n%!" (Printexc.to_string exn);
-          1
-      in
-      exit status
+      (* An exception exits with the runtime's message and status 2. *)
+      (match Hashtbl.find_opt subprocesses name with
+      | Some f -> f (List.tl (Array.to_list Sys.argv))
+      | None -> failwith ("no subprocess " ^ name));
+      exit 0

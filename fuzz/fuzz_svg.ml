@@ -486,9 +486,16 @@ let test_c1_palette index colour reset split =
            (Ms 0, String.sub c1 cut (String.length c1 - cut));
          ])
 
-let test_cancelled_osc palette sub glyph =
-  let cancel = if sub then "\026" else "\024" in
-  let body = if palette then "4;1;#123456" else "0;title" in
+type cancel = Can | Sub
+type osc = Palette | Title
+
+let cancel = map [ bool ] (fun sub -> if sub then Sub else Can)
+let osc = map [ bool ] (fun palette -> if palette then Palette else Title)
+let cancel_byte = function Sub -> "\026" | Can -> "\024"
+
+let test_cancelled_osc osc code glyph =
+  let cancel = cancel_byte code in
+  let body = match osc with Palette -> "4;1;#123456" | Title -> "0;title" in
   let suffix = [| "B"; "é"; "中"; "👍" |].(glyph mod 4) in
   let image data =
     match K7.svg ~settings K7.[ (Ms 0, data ^ "\027[?25l") ] with
@@ -499,7 +506,7 @@ let test_cancelled_osc palette sub glyph =
     (image ("A" ^ suffix))
     (image ("A\027]" ^ body ^ cancel ^ suffix))
 
-let test_cancelled_string_control kind sub glyph split =
+let test_cancelled_string_control kind code glyph split =
   let prefix =
     [|
       "\027Pq";
@@ -512,7 +519,7 @@ let test_cancelled_string_control kind sub glyph split =
       "\xc2\x98";
     |].(kind mod 8)
   in
-  let cancel = if sub then "\026" else "\024" in
+  let cancel = cancel_byte code in
   let suffix = [| "B"; "é"; "中"; "🙂"; "é" |].(glyph mod 5) in
   let draw chunks =
     let output = List.map (fun s -> (K7.Ms 0, s)) chunks in
@@ -851,31 +858,32 @@ let test_cast_text_conceal n glyph =
         ("a" ^ String.make (count * width) ' ' ^ "z\n")
         text
 
+(* The end time in microseconds, the v2 and v3 event lines and the drawn
+   output, each in reverse order. *)
+let cast_events events =
+  List.fold_left
+    (fun (us, v2, v3, output) (gap, ignored, data) ->
+      let gap = gap * 37 in
+      let us = us + gap in
+      let data =
+        if String.is_valid_utf_8 data then data else String.escaped data
+      in
+      let code = if ignored then "i" else "o" in
+      let event time =
+        Fmt.str "[%s,\"%s\",%s]"
+          (seconds ~short:false time)
+          code (json_string data)
+      in
+      let output =
+        if ignored then output else (K7.Ms ((us + 500) / 1000), data) :: output
+      in
+      (us, event us :: v2, event gap :: v3, output))
+    (0, [], [], []) events
+
 (* Absolute v2 times and relative v3 intervals describe the same stream.
    The exit anchors the last event even when all preceding events are ignored. *)
 let test_cast_versions events =
-  let events = List.take 32 events in
-  let total, v2, v3, output =
-    List.fold_left
-      (fun (us, v2, v3, output) (gap, ignored, data) ->
-        let gap = gap * 37 in
-        let us = us + gap in
-        let data =
-          if String.is_valid_utf_8 data then data else String.escaped data
-        in
-        let code = if ignored then "i" else "o" in
-        let event time =
-          Fmt.str "[%s,\"%s\",%s]"
-            (seconds ~short:false time)
-            code (json_string data)
-        in
-        let output =
-          if ignored then output
-          else (K7.Ms ((us + 500) / 1000), data) :: output
-        in
-        (us, event us :: v2, event gap :: v3, output))
-      (0, [], [], []) events
-  in
+  let total, v2, v3, output = cast_events (List.take 32 events) in
   let source header lines exit eol =
     String.concat eol ((header :: List.rev lines) @ [ exit; "" ])
   in
@@ -980,6 +988,40 @@ let test_cast_palette_resize_roundtrip n =
     (get (K7.text_of_casts [ original ]))
     (get (K7.text_of_casts [ restored ]))
 
+let xterm_names =
+  [
+    "black";
+    "red";
+    "green";
+    "yellow";
+    "blue";
+    "magenta";
+    "cyan";
+    "white";
+    "brightBlack";
+    "brightRed";
+    "brightGreen";
+    "brightYellow";
+    "brightBlue";
+    "brightMagenta";
+    "brightCyan";
+    "brightWhite";
+  ]
+
+(* The xterm.js JSON theme for a cast theme; 8 colours repeat as the bright
+   ones. *)
+let json_theme ~fg ~bg ~cursor ~accent colours =
+  let expanded =
+    if List.length colours = 8 then colours @ colours else colours
+  in
+  let fields =
+    List.map2
+      (fun name colour -> Fmt.str "%S:%S" name colour)
+      xterm_names expanded
+  in
+  Fmt.str {|{"foreground":%S,"background":%S,"cursor":%S,"cursorAccent":%S,%s}|}
+    fg bg cursor accent (String.concat "," fields)
+
 let test_cast_cursor_theme n =
   let count = if n mod 2 = 0 then 8 else 16 in
   let colours =
@@ -1012,35 +1054,7 @@ let test_cast_cursor_theme n =
   check_eq ~pp:pp_string serialized (K7.string_of_cast restored);
   let draw ?(settings = []) c = get (K7.svg_of_casts ~settings [ c ]) in
   check_eq ~pp:pp_string (draw original) (draw restored);
-  let names =
-    [
-      "black";
-      "red";
-      "green";
-      "yellow";
-      "blue";
-      "magenta";
-      "cyan";
-      "white";
-      "brightBlack";
-      "brightRed";
-      "brightGreen";
-      "brightYellow";
-      "brightBlue";
-      "brightMagenta";
-      "brightCyan";
-      "brightWhite";
-    ]
-  in
-  let expanded = if count = 8 then colours @ colours else colours in
-  let fields =
-    List.map2 (fun name colour -> Fmt.str "%S:%S" name colour) names expanded
-  in
-  let theme =
-    Fmt.str
-      {|{"foreground":%S,"background":%S,"cursor":%S,"cursorAccent":%S,%s}|} fg
-      bg cursor accent (String.concat "," fields)
-  in
+  let theme = json_theme ~fg ~bg ~cursor ~accent colours in
   let expected =
     get
       (K7.svg
@@ -1075,7 +1089,7 @@ let test_cast_text_style data n =
   in
   check_eq ~pp:pp_string (text fixed) (text (fixed @ styled))
 
-let test_fixed_cast_size_ignores_resizes n =
+let test_fixed_size_ignores_resizes n =
   let header = {|{"version":2,"width":12,"height":4}|} ^ "\n" in
   let first = "[0,\"o\"," ^ json_string "abc中🙂" ^ "]\n" in
   let second = "[0.1,\"o\"," ^ json_string "\r\néZ" ^ "]\n" in
@@ -1315,14 +1329,14 @@ let test_submicrosecond_time_order microsecond ignored =
   | Error e -> failf "expected Invalid: %a" K7.pp_error e
   | Ok _ -> failf "accepted decreasing timestamps: %s" source
 
-let casts =
+let cast_files =
   [
     test_case "v2 timestamps are ordered before microsecond rounding"
       [ uint16; bool ] test_submicrosecond_time_order;
     test_case "malformed UTF-8 prefixes use Stdlib replacement grouping"
       [ uint8; uint8; uint8 ] test_invalid_utf_8_prefix;
     test_case "CAN and SUB cancel string controls before following text"
-      [ uint8; bool; uint8; bool ]
+      [ uint8; cancel; uint8; bool ]
       test_cancelled_string_control;
     test_case "drawing settings preserve cast text at fixed cell dimensions"
       [ bytes; uint8 ] test_cast_text_style;
@@ -1339,113 +1353,119 @@ let casts =
                (gap, ignored, data)));
       ]
       test_cast_versions;
-    test_case "typing at a steady pace keeps the events in order"
-      [
-        range 200;
-        list
-          (map
-             [ range 150; bool; range 5 ]
-             (fun gap input i -> (gap, input, i)));
-      ]
-      test_cast_typing;
-    test_case "asciicast text exports conceal hidden cells" [ uint8; uint8 ]
-      test_cast_text_conceal;
-    test_case "a cast draws its output events at their milliseconds"
-      [
-        range 80;
-        range 24;
-        list
-          (map
-             [ range 2_000_000; range 5; bool; chunk ]
-             (fun gap code short data -> (gap, code, short, data)));
-      ]
-      test_cast;
-    test_case "svg_of_casts is total"
-      [
-        choose
-          [
-            bytes;
-            map [ bytes ] (fun s ->
-                {|{"version": 2, "width": 8, "height": 2}|} ^ "\n" ^ s);
-            map [ bytes ] (fun s ->
-                {|{"version": 2, "width": 8, "height": 2}|} ^ "\n[1, \"o\", "
-                ^ s);
-          ];
-      ]
-      test_cast_total;
   ]
 
-let suite =
-  ( "svg",
-    [
-      test_case "arbitrary PTY byte splits preserve the public SVG"
-        [ bytes; uint16 ] test_arbitrary_byte_split;
-      test_case "hiding a cast command removes its line and any delay"
-        [ uint16 ] test_hidden_cast_delay;
-      test_case
-        "joining casts preserves cursor, colour and deterministic timing"
-        [ uint8; uint8 ] test_cast_join_state;
-      test_case "explicit cast dimensions make resize events harmless" [ uint8 ]
-        test_fixed_cast_size_ignores_resizes;
-      test_case "pure SVG ignores shell, typing speed and wait timeout"
-        [ bytes; uint16 ] test_svg_ignores_process_settings;
-      test_case "distinct inline SVG images own their namespace"
+let casts =
+  cast_files
+  @ [
+      test_case "typing at a steady pace keeps the events in order"
+        [
+          range 200;
+          list
+            (map
+               [ range 150; bool; range 5 ]
+               (fun gap input i -> (gap, input, i)));
+        ]
+        test_cast_typing;
+      test_case "asciicast text exports conceal hidden cells" [ uint8; uint8 ]
+        test_cast_text_conceal;
+      test_case "a cast draws its output events at their milliseconds"
+        [
+          range 80;
+          range 24;
+          list
+            (map
+               [ range 2_000_000; range 5; bool; chunk ]
+               (fun gap code short data -> (gap, code, short, data)));
+        ]
+        test_cast;
+      test_case "svg_of_casts is total"
         [
           choose
             [
-              const ("screen-2623", "screen-3903");
-              map [ uint16; uint16 ] (fun a b ->
-                  (Fmt.str "screen-%d" a, Fmt.str "screen-%d" b));
+              bytes;
+              map [ bytes ] (fun s ->
+                  {|{"version": 2, "width": 8, "height": 2}|} ^ "\n" ^ s);
+              map [ bytes ] (fun s ->
+                  {|{"version": 2, "width": 8, "height": 2}|} ^ "\n[1, \"o\", "
+                  ^ s);
             ];
         ]
-        test_namespace_collision;
-      test_case "long SVG recordings preserve distinct frame offsets" [ uint16 ]
-        test_long_recording_offsets;
-      test_case "simultaneous Unicode scalar chunks preserve the public SVG"
-        [ list chunk ]
-        test_simultaneous_scalar_chunks;
-      test_case "frames" [ list chunk ] test_frames;
-      test_case "regional indicators retain cells at every PTY split" [ uint8 ]
-        test_regional_splits;
-      test_case "format exceptions survive errors and all SVG text paths"
-        [ uint8 ] test_visible_format;
-      test_case "cursor redraw leaves invisible format characters out" [ uint8 ]
-        test_cursor_format;
-      test_case "text symbols keep xterm cell widths across PTY splits"
-        [ uint8; uint8; uint8 ] test_narrow_symbols;
-      test_case "positive SVG frame rates are not pixel sizes"
-        [
-          choose
-            [ uint16; map [ uint16 ] (fun n -> 100_001 + n); const max_int ];
-        ]
-        test_positive_framerate;
-      test_case "SVG and tape return identical setting-list errors"
-        [ list setting ]
-        test_setting_list_errors;
-      test_case "SVG times obey duration bounds and ordering"
-        [
-          choose [ int; const (-1); const 0; const 9_223_372_036_854 ];
-          choose
-            [ int; const 0; const 9_223_372_036_854; const 9_223_372_036_855 ];
-        ]
-        test_time_bounds;
-      test_case
-        "C1 OSC sets and resets all palette entries across scalar boundaries"
-        [ uint8; uint16; bool; uint8 ]
-        test_c1_palette;
-      test_case
-        "CAN and SUB cancel OSC without consuming following Unicode text"
-        [ bool; bool; uint8 ] test_cancelled_osc;
-      test_case "all palette indices recolour, reset and survive cast replay"
-        [ uint8; uint16; bool ] test_palette_roundtrip;
-      test_case "OSC palette changes survive output boundaries"
-        [ uint8; uint8; bool ] test_osc_palette;
-      test_case "arbitrary output and themes produce XML" [ bytes; theme ]
-        test_theme_xml;
-      test_case "text alternatives respect SGR conceal" [ uint8 ]
-        test_concealed_description;
-      test_case "cursor respects SGR conceal" [ uint8 ] test_concealed_cursor;
-      test_case "svg refuses the settings tape refuses" [ setting ]
-        test_setting_errors;
+        test_cast_total;
     ]
-    @ terminal @ casts )
+
+let outputs =
+  [
+    test_case "arbitrary PTY byte splits preserve the public SVG"
+      [ bytes; uint16 ] test_arbitrary_byte_split;
+    test_case "hiding a cast command removes its line and any delay" [ uint16 ]
+      test_hidden_cast_delay;
+    test_case "joining casts preserves cursor, colour and deterministic timing"
+      [ uint8; uint8 ] test_cast_join_state;
+    test_case "explicit cast dimensions make resize events harmless" [ uint8 ]
+      test_fixed_size_ignores_resizes;
+    test_case "pure SVG ignores shell, typing speed and wait timeout"
+      [ bytes; uint16 ] test_svg_ignores_process_settings;
+    test_case "distinct inline SVG images own their namespace"
+      [
+        choose
+          [
+            const ("screen-2623", "screen-3903");
+            map [ uint16; uint16 ] (fun a b ->
+                (Fmt.str "screen-%d" a, Fmt.str "screen-%d" b));
+          ];
+      ]
+      test_namespace_collision;
+    test_case "long SVG recordings preserve distinct frame offsets" [ uint16 ]
+      test_long_recording_offsets;
+    test_case "simultaneous Unicode scalar chunks preserve the public SVG"
+      [ list chunk ]
+      test_simultaneous_scalar_chunks;
+    test_case "frames" [ list chunk ] test_frames;
+    test_case "regional indicators retain cells at every PTY split" [ uint8 ]
+      test_regional_splits;
+    test_case "format exceptions survive errors and all SVG text paths"
+      [ uint8 ] test_visible_format;
+    test_case "cursor redraw leaves invisible format characters out" [ uint8 ]
+      test_cursor_format;
+    test_case "text symbols keep xterm cell widths across PTY splits"
+      [ uint8; uint8; uint8 ] test_narrow_symbols;
+  ]
+
+let controls =
+  [
+    test_case "positive SVG frame rates are not pixel sizes"
+      [
+        choose [ uint16; map [ uint16 ] (fun n -> 100_001 + n); const max_int ];
+      ]
+      test_positive_framerate;
+    test_case "SVG and tape return identical setting-list errors"
+      [ list setting ]
+      test_setting_list_errors;
+    test_case "SVG times obey duration bounds and ordering"
+      [
+        choose [ int; const (-1); const 0; const 9_223_372_036_854 ];
+        choose
+          [ int; const 0; const 9_223_372_036_854; const 9_223_372_036_855 ];
+      ]
+      test_time_bounds;
+    test_case
+      "C1 OSC sets and resets all palette entries across scalar boundaries"
+      [ uint8; uint16; bool; uint8 ]
+      test_c1_palette;
+    test_case "CAN and SUB cancel OSC without consuming following Unicode text"
+      [ osc; cancel; uint8 ] test_cancelled_osc;
+    test_case "all palette indices recolour, reset and survive cast replay"
+      [ uint8; uint16; bool ] test_palette_roundtrip;
+    test_case "OSC palette changes survive output boundaries"
+      [ uint8; uint8; bool ] test_osc_palette;
+    test_case "arbitrary output and themes produce XML" [ bytes; theme ]
+      test_theme_xml;
+    test_case "text alternatives respect SGR conceal" [ uint8 ]
+      test_concealed_description;
+    test_case "cursor respects SGR conceal" [ uint8 ] test_concealed_cursor;
+    test_case "svg refuses the settings tape refuses" [ setting ]
+      test_setting_errors;
+  ]
+
+let suite = ("svg", outputs @ controls @ terminal @ casts)
