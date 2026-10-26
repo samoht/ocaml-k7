@@ -93,12 +93,11 @@ jobs:
       - run: opam install . --deps-only
       - run: opam exec -- dune build -p k7 @install
 
-  # merlint is not on opam-repository yet, only on an overlay.
+  # merlint is not on opam-repository; its tap has an arm64 macOS bottle.
   merlint:
     name: Lint (merlint)
     timeout-minutes: 30
-    runs-on: ubuntu-latest
-    continue-on-error: true
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -106,11 +105,6 @@ jobs:
         with:
           ocaml-compiler: '5.4'
 
-      - run: opam repo add samoht https://tangled.org/gazagnaire.org/opam-overlay.git
       - run: opam install . --deps-only --with-test
-      # The overlay can fail to build merlint; that skips the lint, not k7.
-      - id: merlint
-        continue-on-error: true
-        run: opam install merlint
-      - if: steps.merlint.outcome == 'success'
-        run: opam exec -- merlint --build
+      - run: brew install samoht/monopam/merlint
+      - run: opam exec -- merlint --build
