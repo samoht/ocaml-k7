@@ -120,8 +120,8 @@ val replay : t -> (int * Asciicast.event) list -> string * Screen.t
 (** [replay t events] is the SVG image of a terminal with the settings of [t]
     that receives each event of [events] at its time, in milliseconds, and the
     last screen it shows. An output is fed to the terminal, a resize gives it
-    the new size, at most {!size}, and an exit does nothing; the image lasts
-    until the last event. *)
+    the new size, at most {!size}, and an input or an exit does nothing; the
+    image lasts until the last event. *)
 
 val capture :
   ?interrupt:unit Eio.Promise.t ->
@@ -134,15 +134,15 @@ val capture :
   line:string ->
   t ->
   string list ->
-  ((int * string) list * int * Eio.Process.exit_status, error) result
+  ((int * Asciicast.event) list * int * Eio.Process.exit_status, error) result
 (** [capture ~interrupt ~input ~echo ~clock ~env ~vars ~cwd ~line t argv] runs
     the program [argv] in the directory [cwd] on a terminal with the settings of
     [t], until it exits, after [line], which the terminal reads first, and is
-    what the program printed, at the times it arrived since the program started,
-    in milliseconds, the time it exited and how. The program gets [env] with
-    [TERM=xterm-256color], then [vars]. What [input] gives goes to the program
-    as typed, and the terminal answers none of its queries, which the terminal
-    that gives [input] answers instead. What the program prints is also written
-    to [echo]. Once [interrupt] resolves, its process group gets [SIGTERM], then
-    [SIGKILL] a second later by [clock]. It is [Error (Invalid _)] if [argv] is
-    empty. *)
+    what the program printed and what [input] gave, as output and input events
+    at the times they arrived since the program started, in milliseconds, the
+    time it exited and how. The program gets [env] with [TERM=xterm-256color],
+    then [vars]. What [input] gives goes to the program as typed, and the
+    terminal answers none of its queries, which the terminal that gives [input]
+    answers instead. What the program prints is also written to [echo]. Once
+    [interrupt] resolves, its process group gets [SIGTERM], then [SIGKILL] a
+    second later by [clock]. It is [Error (Invalid _)] if [argv] is empty. *)

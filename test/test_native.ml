@@ -2303,6 +2303,58 @@ let test_capture_attached () =
         "k7 does not answer the query" false
         (has "got:\\u001b" (K7.string_of_cast cast))
 
+(* Each key goes once the screen ends with its [after]. *)
+let typed ~keys script =
+  with_dir @@ fun env cwd ->
+  let stream = Eio.Stream.create (List.length keys) in
+  let keys = ref keys in
+  let on_write s =
+    let rec go () =
+      match !keys with
+      | (after, key) :: rest when String.ends_with ~suffix:after s ->
+          keys := rest;
+          Eio.Stream.add stream key;
+          go ()
+      | _ -> ()
+    in
+    go ()
+  in
+  let input = Eio.Resource.T (stream, Eio.Flow.Pi.source (module Keys)) in
+  let echo =
+    Eio.Resource.T
+      ( { Shown.shown = Buffer.create 256; on_write },
+        Eio.Flow.Pi.sink (module Shown) )
+  in
+  match
+    K7.capture ~settings ~show:"" ~input ~echo
+      ~clock:(Eio_mock.Clock.Mono.make ())
+      ~proc:(Eio.Stdenv.process_mgr env)
+      ~cwd [ "sh"; "-c"; script ]
+  with
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+  | Ok (cast, status) ->
+      exited "status" 0 status;
+      K7.string_of_cast cast
+
+(* The recording keeps the keys the program echoes, and only those. *)
+let test_capture_keys () =
+  let script = {|printf '\033[c'; read x; echo "got:$x"|} in
+  let saved =
+    typed script ~keys:[ ("\027[c", "h"); ("h", "i"); ("hi", "\r") ]
+  in
+  check_contains "an echoed key" ~sub:{|,"i","h"]|} saved;
+  check_contains "the next" ~sub:{|,"i","i"]|} saved;
+  Alcotest.(check bool)
+    "Enter, whose echo differs" false
+    (contains ~sub:{|"i","\r"|} saved);
+  let saved =
+    typed ("stty -echo; " ^ script) ~keys:[ ("\027[c", "s"); ("\027[c", "\r") ]
+  in
+  check_contains "the program read it" ~sub:"got:s" saved;
+  Alcotest.(check bool)
+    "no key typed without echo" false
+    (contains ~sub:{|"i",|} saved)
+
 let cram ?env:vars ?stop ?(clock = Eio_mock.Clock.Mono.make ()) env cwd argv =
   match
     K7.cram ?env:vars ?stop ~clock ~proc:(Eio.Stdenv.process_mgr env) ~cwd argv
@@ -2766,6 +2818,7 @@ let suite =
            test_capture_incomplete_utf_8_round_trip );
          ("capture keeps a theme's cursor colours", test_capture_theme_cursor);
          ("capture attached to a terminal", test_capture_attached);
+         ("capture keeps the echoed keys", test_capture_keys);
          ("cram", test_cram);
          ("cram refuses NUL in argv", test_cram_nul_argument);
          ( "cram quotes a reserved executable name",

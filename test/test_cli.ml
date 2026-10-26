@@ -989,6 +989,51 @@ let test_idle_defaults () =
     (Play_cmd.idle_time_limit "a.tape" (Some (Some 1000)));
   check "a cram test: none" None (Play_cmd.idle_time_limit "a.t" (Some None))
 
+let test_typing_defaults () =
+  let check name expected speed =
+    Alcotest.(check bool) name true (expected = speed)
+  in
+  check "50ms" (Some (K7.Ms 50)) (Flags.typing None);
+  check "none" None (Flags.typing (Some None));
+  check "given" (Some (K7.Ms 0)) (Flags.typing (Some (Some 0)))
+
+(* k7 play types what a recording's keys echo at 50ms a key, unless told
+   otherwise; the option applies to recordings only. *)
+let test_cast_typing () =
+  let cast =
+    "{\"version\": 2, \"width\": 20, \"height\": 3}\n\
+     [1, \"i\", \"l\"]\n\
+     [1.01, \"o\", \"l\"]\n\
+     [1.5, \"i\", \"s\"]\n\
+     [1.51, \"o\", \"s\"]\n"
+  in
+  with_files
+    [
+      ("ls.cast", 0o644, cast); ("demo.t", 0o644, "  $ ls\n"); ("err", 0o644, "");
+    ]
+  @@ fun env path ->
+  let play ?typing input output =
+    captured path @@ fun () ->
+    Play_cmd.run env ~dry_run:false ~print:false ~settings:[] ~env:[]
+      ~outputs:[ path output ]
+      ~setup:[] ~dir:None ~wait_timeout:None ?typing
+      [ path input ]
+  in
+  let read file = In_channel.with_open_bin (path file) In_channel.input_all in
+  let c = Result.get_ok (K7.cast_of_string cast) in
+  Alcotest.(check (pair int string)) "default" (0, "") (play "ls.cast" "a.svg");
+  expect "50ms a key"
+    (Result.get_ok (K7.svg_of_casts ~typing_speed:(Ms 50) [ c ]))
+    (read "a.svg");
+  Alcotest.(check (pair int string))
+    "none" (0, "")
+    (play ~typing:None "ls.cast" "b.svg");
+  expect "as typed" (Result.get_ok (K7.svg_of_casts [ c ])) (read "b.svg");
+  let code, error = play ~typing:(Some 10) "demo.t" "c.svg" in
+  Alcotest.(check int) "a cram test" 123 code;
+  Native_test.check_contains "refused"
+    ~sub:"--typing-speed applies to an asciicast recording (.cast)" error
+
 let suite =
   ( "cli",
     List.map
@@ -997,6 +1042,8 @@ let suite =
          ("tape", test_tape);
          ("rec takes the window's size", test_rec_window_size);
          ("idle time limit defaults", test_idle_defaults);
+         ("typing speed defaults", test_typing_defaults);
+         ("typing speed of a recording", test_cast_typing);
          ("run", test_run);
          ("run reports exec failure", test_run_exec_failure);
          ("write errors", test_write_errors);

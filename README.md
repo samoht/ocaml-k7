@@ -37,17 +37,22 @@ GIF and video outputs also need [VHS](https://github.com/charmbracelet/vhs#insta
 
 ## Command line
 
-`k7 rec` runs a program on a pseudo-terminal, with no shell and nothing
-typed, and writes each output of `-o` in the format of its extension. An
+`k7 rec` runs a program on a pseudo-terminal, with no shell, and writes
+each output of `-o` in the format of its extension. An
 `.svg` output is the animated image. Its first line is `$ ` and the
 command, which `--show` replaces or, empty, hides; that line shows alone
 for half a second, as if typed, or for `--delay` milliseconds, and each
 screen then shows at the time the program printed it. A pause longer than
 two seconds, such as a build that prints nothing for a while, lasts two
 seconds, or `--idle-time-limit` seconds, as asciinema's `idle_time_limit`
-does; `--idle-time-limit none` keeps every pause. A `.cast` output is
+does; `--idle-time-limit none` keeps every pause. Run in a terminal, the
+program gets what is typed there, and a key it shows back at once, as a
+shell or a prompt does, shows in the image one character every 50
+milliseconds, as a tape types it, or every `--typing-speed` milliseconds;
+`--typing-speed none` keeps the times it was typed at. A `.cast` output is
 the recording in asciicast v3, with every pause as it was and the limit
-in its header, a `.txt` output the text of the last screen, and a `.t`
+in its header, and the keys the program showed back as input events (a
+key it did not show, such as a password, is not in it), a `.txt` output the text of the last screen, and a `.t`
 output a cram test of the command, run with `sh -c` on pipes as
 dune runs it, so that dune reads it back unchanged. With `--theme`, the
 header of a `.cast` output holds the theme, and its cursor colours in
@@ -77,7 +82,8 @@ millisecond, so the same recording gives the same image, byte for byte,
 and `k7 play` of the `.cast` that `k7 rec` wrote gives the image that
 `k7 rec` drew, given the same `--idle-time-limit` when that is above two
 seconds or `none`. The header's command shows first, as for `k7 rec`,
-and `--show`, `--delay` and `--idle-time-limit` apply as they do there.
+and `--show`, `--delay`, `--idle-time-limit` and `--typing-speed` apply
+as they do there.
 `--idle-time-limit` also shortens the pauses of a cram test, to two
 seconds unless given, and those of a tape only when given, since the
 `Sleep` lines of a tape are deliberate. A `.txt` output is the

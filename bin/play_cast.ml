@@ -43,8 +43,8 @@ let check_shows input ~show inputs =
         "%s: %d --show for %d recordings; give one, or one per recording" input
         n (List.length inputs)
 
-let draw stdenv ~dry_run ~settings ~show ?delay ?idle_time_limit ~outputs inputs
-    =
+let draw stdenv ~dry_run ~settings ~show ?delay ?idle_time_limit ?typing_speed
+    ~outputs inputs =
   let input = String.concat " " inputs in
   let* outputs = check_outputs input outputs in
   let* () = check_shows input ~show inputs in
@@ -64,7 +64,9 @@ let draw stdenv ~dry_run ~settings ~show ?delay ?idle_time_limit ~outputs inputs
   in
   let error e = Fmt.str "%s: %a" input K7.pp_error e in
   let render = function
-    | Svg -> K7.svg_of_casts ~settings ~show ?delay ?idle_time_limit casts
+    | Svg ->
+        K7.svg_of_casts ~settings ~show ?delay ?idle_time_limit ?typing_speed
+          casts
     | Txt -> K7.text_of_casts ~settings ~show casts
   in
   let* drawn =
@@ -85,10 +87,11 @@ let draw stdenv ~dry_run ~settings ~show ?delay ?idle_time_limit ~outputs inputs
         Flags.save stdenv output (List.assoc k drawn))
       (Ok ()) outputs
 
-let run stdenv ~dry_run ~settings ~show ?delay ?idle_time_limit ~outputs inputs
-    =
+let run stdenv ~dry_run ~settings ~show ?delay ?idle_time_limit ?typing_speed
+    ~outputs inputs =
   match
-    draw stdenv ~dry_run ~settings ~show ?delay ?idle_time_limit ~outputs inputs
+    draw stdenv ~dry_run ~settings ~show ?delay ?idle_time_limit ?typing_speed
+      ~outputs inputs
   with
   | Ok () -> 0
   | Error msg -> Flags.fail stdenv msg

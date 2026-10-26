@@ -623,7 +623,7 @@ let replay t events =
             ignore (Screen.take_replies term)
         | Resize (cols, rows) ->
             Screen.resize term ~rows:(min rows s.rows) ~cols:(min cols s.cols)
-        | Exit _ -> ());
+        | Input _ | Exit _ -> ());
         show ms;
         ms)
       0 events
@@ -792,7 +792,7 @@ type state = {
   mutable exited : Eio.Process.exit_status option;
   stuck : string -> bool;
   since : Buffer.t;
-  mutable captured : (int * string) list option;  (** Latest first. *)
+  mutable captured : (int * Asciicast.event) list option;  (** Latest first. *)
   mutable echo : string -> unit;
   mutable answers : bool;
       (** The emulator answers the program's queries: no other terminal does. *)
@@ -907,7 +907,8 @@ let last_output st =
 let feed st buf n =
   let output = Bytes.sub_string buf 0 n in
   Option.iter
-    (fun c -> st.captured <- Some ((ms_of_span (stamp st), output) :: c))
+    (fun c ->
+      st.captured <- Some ((ms_of_span (stamp st), Asciicast.Output output) :: c))
     st.captured;
   since st output;
   st.echo output;
@@ -1379,7 +1380,13 @@ let forward st input =
   let rec loop () =
     match Eio.Flow.single_read input buf with
     | n ->
-        send st (Cstruct.to_string ~len:n buf);
+        let keys = Cstruct.to_string ~len:n buf in
+        Option.iter
+          (fun c ->
+            st.captured <-
+              Some ((ms_of_span (stamp st), Asciicast.Input keys) :: c))
+          st.captured;
+        send st keys;
         loop ()
     | exception End_of_file -> Eio.Fiber.await_cancel ()
   in

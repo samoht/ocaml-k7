@@ -28,7 +28,7 @@ let names = function
   | _ -> "a tape or a cram test"
 
 let misplaced kind ~engine ~print ~vhs ~env ~setup ~dir ~wait_timeout ~show
-    ~delay =
+    ~delay ~typing =
   List.find_map
     (fun (given, flag, kinds) ->
       if given && not (List.mem kind kinds) then Some (flag, kinds) else None)
@@ -42,6 +42,7 @@ let misplaced kind ~engine ~print ~vhs ~env ~setup ~dir ~wait_timeout ~show
       (Option.is_some wait_timeout, "--wait-timeout", [ Cram ]);
       (show <> [], "--show", [ Cast ]);
       (Option.is_some delay, "--delay", [ Cast ]);
+      (Option.is_some typing, "--typing-speed", [ Cast ]);
     ]
 
 let is_cast input = match kind input with Ok Cast -> true | _ -> false
@@ -65,7 +66,7 @@ let idle_time_limit input idle =
   idle_limit (Result.value (kind input) ~default:Cast) idle
 
 let run stdenv ?engine ~dry_run ~print ?vhs ~settings ~env ~outputs ~setup ~dir
-    ~wait_timeout ?(show = []) ?delay ?idle inputs =
+    ~wait_timeout ?(show = []) ?delay ?idle ?typing inputs =
   let input = String.concat " " inputs in
   let play kind =
     let idle_time_limit = idle_limit kind idle in
@@ -80,7 +81,7 @@ let run stdenv ?engine ~dry_run ~print ?vhs ~settings ~env ~outputs ~setup ~dir
           ~settings ~env ~outputs input
     | Cast ->
         Play_cast.run stdenv ~dry_run ~settings ~show ?delay ?idle_time_limit
-          ~outputs inputs
+          ?typing_speed:(Flags.typing typing) ~outputs inputs
   in
   match kinds inputs with
   | Error msg -> Flags.fail stdenv msg
@@ -90,7 +91,7 @@ let run stdenv ?engine ~dry_run ~print ?vhs ~settings ~env ~outputs ~setup ~dir
   | Ok kind -> (
       match
         misplaced kind ~engine ~print ~vhs ~env ~setup ~dir ~wait_timeout ~show
-          ~delay
+          ~delay ~typing
       with
       | Some (flag, kinds) ->
           Flags.fail stdenv
@@ -258,9 +259,16 @@ let man =
        terminal has the size of the header and of each resize, on an image of \
        the largest, and $(b,--columns) and $(b,--rows) fix it instead; the \
        theme of the header gives its colours unless $(b,--theme) does. $(cmd) \
-       ignores the input events, the markers and the other members of the \
-       header. A recording needs $(b,-o), an $(b,.svg) image or a $(b,.txt) \
-       text of its last screen.";
+       ignores the markers and the other members of the header. A recording \
+       needs $(b,-o), an $(b,.svg) image or a $(b,.txt) text of its last \
+       screen.";
+    `P
+      "An input event that the next output echoes exactly, as a shell echoes a \
+       key, is typing: its echo shows one character every $(b,--typing-speed) \
+       milliseconds, 50 unless given, however fast or slow it was typed, and \
+       the rest of the recording keeps its pace. $(b,k7 rec) writes such input \
+       events, and $(b,asciinema rec) $(b,--capture-input) writes them too; \
+       $(b,--typing-speed) $(b,none) keeps the times as recorded.";
     `P
       "The first line of the image is $(b,\\$) and the $(b,command) of the \
        header, if any, as $(b,k7 rec) shows its command, and the output starts \
@@ -295,12 +303,12 @@ let man =
 let cmd =
   let doc = "play a tape, a cram test or asciicast recordings" in
   let run engine dry_run print vhs settings env outputs setup dir wait_timeout
-      show delay idle inputs =
+      show delay idle typing inputs =
     Eio_main.run @@ fun stdenv ->
     run stdenv ?engine ~dry_run ~print ?vhs ~settings ~env ~outputs ~setup ~dir
       ~wait_timeout ~show
       ?delay:(Option.map (fun ms -> K7.Ms ms) delay)
-      ?idle inputs
+      ?idle ?typing inputs
   in
   Cmd.make
     (Cmd.info "play" ~doc ~man ~exits:Flags.exits)
@@ -310,4 +318,4 @@ let cmd =
       $ Flags.idle_time_limit
           ~default:
             "2 for a cram test or an asciicast recording, and none for a tape"
-      $ input)
+      $ Flags.typing_speed $ input)

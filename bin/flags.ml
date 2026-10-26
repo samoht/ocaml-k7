@@ -168,6 +168,34 @@ let idle_time_limit ~default =
         None
     & info [ "idle-time-limit" ] ~docv:"SECONDS" ~doc)
 
+(* Milliseconds, or [none]: the keys show at the times they were typed. *)
+let typing_ms s =
+  match decimal s with
+  | _ when s = "none" -> Ok None
+  | Some n when n <= max_ms -> Ok (Some n)
+  | _ ->
+      Fmt.error "%a is not a number of milliseconds from 0 to %d, or none"
+        Quote.pp s max_ms
+
+let typing_speed =
+  let doc =
+    "Show what was typed one character every $(docv) milliseconds, as a tape \
+     types it (defaults to 50, as in VHS), however fast or slow it was typed. \
+     It applies to the keys the program echoes, as a shell does; $(b,none) \
+     shows them when they were typed."
+  in
+  let pp ppf = function
+    | None -> Fmt.string ppf "none"
+    | Some ms -> Fmt.int ppf ms
+  in
+  Arg.(
+    value
+    & opt (some (Arg.Conv.make ~docv:"MS" ~parser:typing_ms ~pp ())) None
+    & info [ "typing-speed" ] ~docv:"MS" ~doc)
+
+let typing typing =
+  Option.map (fun ms -> K7.Ms ms) (Option.value typing ~default:(Some 50))
+
 let milliseconds =
   let parser s =
     match decimal s with

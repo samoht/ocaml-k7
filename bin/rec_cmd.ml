@@ -75,21 +75,26 @@ let attached tty f =
     Fun.protect ~finally:(fun () -> Unix.tcsetattr Unix.stdin TCSADRAIN saved) f)
   else f ()
 
-let record ?show ?delay ?idle_time_limit ?stop stdenv ~settings ~env ~outputs
-    argv =
+(* The keys typed and the screen of the terminal k7 runs in, if any. *)
+let terminal stdenv =
+  if Unix.isatty Unix.stdin && Unix.isatty Unix.stdout then
+    Some (Eio.Stdenv.stdin stdenv, Eio.Stdenv.stdout stdenv)
+  else None
+
+let record ?show ?delay ?idle_time_limit ?typing_speed ?stop stdenv ~settings
+    ~env ~outputs argv =
   let* outputs = kinds outputs in
   let error r = Result.map_error (Fmt.to_to_string Flags.pp_error) r in
   let proc = Eio.Stdenv.process_mgr stdenv and cwd = Eio.Stdenv.cwd stdenv in
   let clock = Eio.Stdenv.mono_clock stdenv in
-  let tty = Unix.isatty Unix.stdin && Unix.isatty Unix.stdout in
-  let settings = if tty then sized Unix.stdout settings else settings in
-  let input, echo =
-    if tty then (Some (Eio.Stdenv.stdin stdenv), Some (Eio.Stdenv.stdout stdenv))
-    else (None, None)
+  let tty = terminal stdenv in
+  let settings =
+    if Option.is_some tty then sized Unix.stdout settings else settings
   in
+  let input = Option.map fst tty and echo = Option.map snd tty in
   let cast =
     lazy
-      ( attached tty @@ fun () ->
+      ( attached (Option.is_some tty) @@ fun () ->
         K7.capture ~settings ~env ?show ?stop ?input ?echo ~clock ~proc ~cwd
           argv
         |> error )
@@ -98,7 +103,8 @@ let record ?show ?delay ?idle_time_limit ?stop stdenv ~settings ~env ~outputs
   let draw = function
     | Svg ->
         let* c, _ = Lazy.force cast in
-        K7.svg_of_casts ~settings ?delay ?idle_time_limit [ c ] |> error
+        K7.svg_of_casts ~settings ?delay ?idle_time_limit ?typing_speed [ c ]
+        |> error
     | Cast ->
         let* c, _ = Lazy.force cast in
         Ok (K7.string_of_cast ?idle_time_limit c)
@@ -129,10 +135,11 @@ let record ?show ?delay ?idle_time_limit ?stop stdenv ~settings ~env ~outputs
 let idle_time_limit idle =
   Option.map (fun ms -> K7.Ms ms) (Option.value idle ~default:(Some 2000))
 
-let run ?show ?delay ?idle_time_limit stdenv ~settings ~env ~outputs argv =
+let run ?show ?delay ?idle_time_limit ?typing_speed stdenv ~settings ~env
+    ~outputs argv =
   Flags.interruptible (fun stop ->
-      record ?show ?delay ?idle_time_limit ~stop stdenv ~settings ~env ~outputs
-        argv)
+      record ?show ?delay ?idle_time_limit ?typing_speed ~stop stdenv ~settings
+        ~env ~outputs argv)
   |> Flags.exit stdenv ~ok:exit_code
 
 open Cmdliner
@@ -186,6 +193,14 @@ let man =
        asks questions can be answered. That terminal answers the program's \
        queries, such as its colours, and the image shows what it would show. \
        Otherwise the program gets nothing typed.";
+    `P
+      "A key that the program shows back at once and as typed, as a shell or a \
+       prompt does, is typing: the image shows it one character every \
+       $(b,--typing-speed) milliseconds, 50 unless given, as a tape types, and \
+       the rest keeps its pace, so a hesitation or a burst of keys reads as \
+       steady typing. The $(b,.cast) output holds these keys as input events \
+       at the times they were typed, and only these: a key the program does \
+       not show, such as a password, is not in it.";
     `P
       "A $(b,.cast) output is the recording itself, in asciinema's asciicast \
        v3 format: the size of the terminal, the command, what the program \
@@ -255,15 +270,16 @@ let exits =
 
 let cmd =
   let doc = "run a program on a pseudo-terminal and record its screens" in
-  let run settings env show delay idle outputs argv =
+  let run settings env show delay idle typing outputs argv =
     let idle_time_limit = idle_time_limit idle in
+    let typing_speed = Flags.typing typing in
     Eio_main.run @@ fun stdenv ->
-    run ?show ~delay:(Ms delay) ?idle_time_limit stdenv ~settings ~env ~outputs
-      argv
+    run ?show ~delay:(Ms delay) ?idle_time_limit ?typing_speed stdenv ~settings
+      ~env ~outputs argv
   in
   Cmd.make
     (Cmd.info "rec" ~doc ~man ~exits)
     Term.(
       const run $ Flags.settings $ Flags.env $ show $ delay
       $ Flags.idle_time_limit ~default:"2"
-      $ outputs $ command)
+      $ Flags.typing_speed $ outputs $ command)

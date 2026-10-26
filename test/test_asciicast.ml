@@ -10,16 +10,16 @@ let parse src =
   | Ok c -> c
   | Error e -> Alcotest.failf "%a" K7.pp_error e
 
-let casts ?settings ?show ?delay ?idle_time_limit srcs =
+let casts ?settings ?show ?delay ?idle_time_limit ?typing_speed srcs =
   match
-    K7.svg_of_casts ?settings ?show ?delay ?idle_time_limit
+    K7.svg_of_casts ?settings ?show ?delay ?idle_time_limit ?typing_speed
       (List.map parse srcs)
   with
   | Ok s -> unprefixed s
   | Error e -> Alcotest.failf "%a" K7.pp_error e
 
-let cast ?settings ?show ?delay ?idle_time_limit src =
-  casts ?settings ?show ?delay ?idle_time_limit [ src ]
+let cast ?settings ?show ?delay ?idle_time_limit ?typing_speed src =
+  casts ?settings ?show ?delay ?idle_time_limit ?typing_speed [ src ]
 
 let text ?settings ?show srcs =
   match K7.text_of_casts ?settings ?show (List.map parse srcs) with
@@ -469,6 +469,107 @@ let test_several () =
         "a show per recording or one" "3 commands to show for 2 recordings" msg
   | _ -> Alcotest.fail "three shows for two recordings"
 
+let typed events = {|{"version": 2, "width": 20, "height": 3}|} ^ "\n" ^ events
+
+let typing =
+  typed
+    {|[0.1, "o", "$ "]
+[1, "i", "l"]
+[1.01, "o", "l"]
+[1.5, "i", "s"]
+[1.51, "o", "s"]
+[3, "i", "\r"]
+[3.01, "o", "\r\n"]
+[3.2, "o", "a"]
+|}
+
+(* The echo of each key shows at the typing speed after the one before; the
+   rest keeps its pace. *)
+let test_typing () =
+  let settings = K7.[ Columns 20; Rows 3 ] in
+  let at events =
+    svg ~settings (List.map (fun (ms, s) -> (K7.Ms ms, s)) events)
+  in
+  Alcotest.(check string)
+    "steady"
+    (at
+       [
+         (100, "$ ");
+         (1010, "l");
+         (1060, "s");
+         (2560, "\r\n");
+         (2750, "a");
+         (3750, "");
+       ])
+    (cast ~typing_speed:(Ms 50) typing);
+  Alcotest.(check string)
+    "as typed without a typing speed"
+    (at
+       [
+         (100, "$ ");
+         (1010, "l");
+         (1510, "s");
+         (3010, "\r\n");
+         (3200, "a");
+         (4200, "");
+       ])
+    (cast typing);
+  let one events =
+    let last, _ = List.nth events (List.length events - 1) in
+    at (events @ [ (last + 1000, "") ])
+  in
+  Alcotest.(check string)
+    "keys echoed together"
+    (one [ (1010, "l"); (1060, "s") ])
+    (cast ~typing_speed:(Ms 50)
+       (typed {|[1, "i", "l"]
+[1.005, "i", "s"]
+[1.01, "o", "ls"]
+|}));
+  Alcotest.(check string)
+    "pasted, one character at a time"
+    (one [ (1010, "l"); (1060, "é") ])
+    (cast ~typing_speed:(Ms 50) (typed {|[1, "i", "lé"]
+[1.01, "o", "lé"]
+|}));
+  Alcotest.(check string)
+    "a key shown otherwise"
+    (one [ (1010, "*") ])
+    (cast ~typing_speed:(Ms 50) (typed {|[1, "i", "x"]
+[1.01, "o", "*"]
+|}));
+  Alcotest.(check string)
+    "an echo too late"
+    (one [ (1010, "x") ])
+    (cast ~typing_speed:(Ms 50) (typed {|[0.9, "i", "x"]
+[1.01, "o", "x"]
+|}));
+  Alcotest.(check string)
+    "an idle time limit applies after"
+    (at
+       [
+         (100, "$ ");
+         (600, "l");
+         (650, "s");
+         (1150, "\r\n");
+         (1340, "a");
+         (2340, "");
+       ])
+    (cast ~typing_speed:(Ms 50) ~idle_time_limit:(Ms 500) typing);
+  match K7.svg_of_casts ~typing_speed:(Ms (-1)) [ parse typing ] with
+  | Error (Invalid _) -> ()
+  | Ok _ -> Alcotest.fail "a negative typing speed draws"
+  | Error e -> Alcotest.failf "%a" K7.pp_error e
+
+(* What was typed stays in the recording k7 writes, so k7 play retypes it. *)
+let test_typing_saved () =
+  let saved = K7.string_of_cast (parse typing) in
+  check_contains "the keys" ~sub:{|[0.900,"i","l"]|} saved;
+  Alcotest.(check string)
+    "the same image"
+    (cast ~typing_speed:(Ms 50) typing)
+    (cast ~typing_speed:(Ms 50) saved)
+
 let test_round_trip () =
   let c = parse (read "asciinema-v3.cast") in
   let again = parse (K7.string_of_cast c) in
@@ -558,5 +659,7 @@ let suite =
         ("asciinema v3", test_asciinema_v3);
         ("several", test_several);
         ("round trip", test_round_trip);
+        ("typing speed", test_typing);
+        ("typing saved", test_typing_saved);
         ("text conceals hidden cells", test_text_conceal);
       ] )

@@ -1824,7 +1824,17 @@ let sequence ~show ~delay casts =
   let* shows = shows show casts in
   go 0 ~size:(0, 0) [] (List.combine casts shows)
 
+let without_input (c : cast) =
+  {
+    c with
+    events =
+      List.filter
+        (function _, Asciicast.Input _ -> false | _ -> true)
+        c.events;
+  }
+
 let replay ~settings ?(show = []) ~delay casts =
+  let casts = List.map without_input casts in
   let* events, last, (w, h) =
     match casts with
     | [] -> Error (Invalid "no recording to draw")
@@ -1855,9 +1865,21 @@ let replay ~settings ?(show = []) ~delay casts =
   let* () = check_times (List.map (fun (ms, _) -> (Ms ms, "")) events) in
   Ok (Native.replay tape events)
 
-let svg_of_casts ?(settings = []) ?show ?(delay = Ms 500) ?idle_time_limit casts
-    =
+let svg_of_casts ?(settings = []) ?show ?(delay = Ms 500) ?idle_time_limit
+    ?typing_speed casts =
   let* idle = idle_ms idle_time_limit in
+  let* () =
+    match typing_speed with
+    | None -> Ok ()
+    | Some (Ms ms) ->
+        Result.map_error (fun msg -> Invalid msg) (check_ms "typing speed " ms)
+  in
+  let casts =
+    match typing_speed with
+    | None -> casts
+    | Some (Ms ms) -> List.map (Asciicast.retype ms) casts
+  in
+  let casts = List.map without_input casts in
   let casts =
     match idle with
     | None -> casts
@@ -1895,7 +1917,7 @@ let capture ?(settings = []) ?(env = []) ?show ?stop ?input ?echo ~clock ~proc
   let* () = check_env env in
   let* tape = terminal settings in
   let* dir = native_dir cwd in
-  let* output, exited, status =
+  let* events, exited, status =
     Result.map_error native_error
       (Native.capture ?interrupt:stop ?input ?echo ~clock
          ~env:(environment proc) ~vars:env ~cwd:dir ~line tape argv)
@@ -1905,11 +1927,12 @@ let capture ?(settings = []) ?(env = []) ?show ?stop ?input ?echo ~clock ~proc
     if themed settings then Some (cast_theme (Native.palette tape)) else None
   in
   let events =
-    Asciicast.utf_8 (List.map (fun (ms, s) -> (ms, Asciicast.Output s)) output)
-    @ [ (exited, Asciicast.Exit (exit_code status)) ]
+    Asciicast.utf_8 events @ [ (exited, Asciicast.Exit (exit_code status)) ]
   in
   let command = if command = "" then None else Some command in
-  Ok ({ Asciicast.columns; rows; command; theme; events }, status)
+  Ok
+    ( Asciicast.echoed { Asciicast.columns; rows; command; theme; events },
+      status )
 
 let run ?(settings = []) ?env ?show ?(delay = Ms 500) ?idle_time_limit ?stop
     ~clock ~proc ~cwd argv =

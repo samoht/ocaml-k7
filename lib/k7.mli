@@ -494,12 +494,11 @@ val cast_of_string : string -> (cast, error) result
     asciinema 2 and 3 write it. It keeps the size of the terminal, the
     [command], the [theme], with the [cursor] and [cursor_accent] colours of
     {!string_of_cast}, and, after the [idle_time_limit] of the header, the
-    output, resize and exit events at their times, each read as a
+    output, input, resize and exit events at their times, each read as a
     double-precision number, rounded to the microsecond, then to the nearest
     millisecond, half up, so the same [s] gives the same image, byte for byte.
     It ignores the other members of the header, a [cursor] or [cursor_accent]
-    that is not a [#rrggbb] string, input events, markers and events of other
-    codes.
+    that is not a [#rrggbb] string, markers and events of other codes.
 
     It is [Error (Invalid msg)] if [s] is not such a recording, with [msg]
     naming the line, from [1], and why: a header that is not a JSON object with
@@ -527,25 +526,39 @@ val svg_of_casts :
   ?show:string list ->
   ?delay:duration ->
   ?idle_time_limit:duration ->
+  ?typing_speed:duration ->
   cast list ->
   (string, error) result
-(** [svg_of_casts ~settings ~show ~delay ~idle_time_limit casts] is the SVG
-    image of the recordings [casts], one after the other on one terminal, as
-    {!svg} draws the data of their output events at their times. Each interval
-    between two output, resize or exit events of a recording, and before its
-    first, that lasts more than [idle_time_limit] (defaults to no limit) lasts
-    that long. It applies after the [idle_time_limit] of a header, which
-    {!cast_of_string} applies, and which also counts the events it skips. A
-    recording's first line is [$ ] then its command, as for {!run}, and its
-    output shows [delay] (defaults to [Ms 500]) later. If [show] (defaults to
-    [[]]) holds one string, that string is the command of every recording; if it
-    holds one string per recording, its [n]th string is the command of the [n]th
-    recording. Otherwise a recording's command is the [command] of its header,
-    if any, its control characters but newlines shown as spaces. A newline in a
-    command continues it on a line that starts with [> ], as in a shell. An
-    empty command shows no line and no delay. The last screen of each recording
-    holds for a second after its last event, an exit included, and the next
-    recording starts then.
+(** [svg_of_casts ~settings ~show ~delay ~idle_time_limit ~typing_speed casts]
+    is the SVG image of the recordings [casts], one after the other on one
+    terminal, as {!svg} draws the data of their output events at their times.
+
+    With [typing_speed] (defaults to the times as recorded), what was typed
+    shows at a steady pace, as in a tape. An output event is the echo of the
+    input events since the event before them when its data is exactly what they
+    sent and it comes at most 100 milliseconds after the last of them, as a
+    shell echoes a key. Such an echo shows one character every [typing_speed].
+    The first echo after another event keeps its time, and an echo that follows
+    another one directly starts [typing_speed] after its last character, however
+    long the keys took to come. The other events keep their interval with the
+    event before them. A key the program does not echo, a password included, and
+    an echo that is not exact, such as that of Enter or of a line editor that
+    redraws, keep their times.
+
+    Each interval between two output, resize or exit events of a recording, and
+    before its first, that lasts more than [idle_time_limit] (defaults to no
+    limit) then lasts that long. It applies after the [idle_time_limit] of a
+    header, which {!cast_of_string} applies, and which also counts the input
+    events and the events it skips. A recording's first line is [$ ] then its
+    command, as for {!run}, and its output shows [delay] (defaults to [Ms 500])
+    later. If [show] (defaults to [[]]) holds one string, that string is the
+    command of every recording; if it holds one string per recording, its [n]th
+    string is the command of the [n]th recording. Otherwise a recording's
+    command is the [command] of its header, if any, its control characters but
+    newlines shown as spaces. A newline in a command continues it on a line that
+    starts with [> ], as in a shell. An empty command shows no line and no
+    delay. The last screen of each recording holds for a second after its last
+    event, an exit included, and the next recording starts then.
 
     The terminal has the size of the header of each recording from its start,
     and of each resize, on an image of the largest of them, unless [settings]
@@ -555,8 +568,8 @@ val svg_of_casts :
     [settings] give a {!constructor-Theme}. [settings] apply after them. So, for
     a recording [c] without a command, a theme or a resize, whose header has the
     size [w] and [h], whose output events give [output], their data at their
-    milliseconds, whose last event is at [last], and for [settings] that do not
-    size the terminal:
+    milliseconds, whose last output, resize or exit event is at [last], and for
+    [settings] that do not size the terminal:
 
     {@ocaml skip[
     svg_of_casts ~settings [ c ]
@@ -568,7 +581,8 @@ val svg_of_casts :
     It is [Error (Invalid _)] on an empty [casts], on a [show] of several
     strings but not one per recording, on what {!run} refuses in [show] and
     [delay], on an [idle_time_limit] that is not positive or out of the range of
-    a {!duration}, and the error of {!svg} on [settings] that it refuses. *)
+    a {!duration}, on a [typing_speed] out of that range, and the error of
+    {!svg} on [settings] that it refuses. *)
 
 val text_of_casts :
   ?settings:setting list ->
@@ -663,9 +677,12 @@ val capture :
     With [input], such as the standard input of a terminal in raw mode, the
     program gets what [input] gives as typed, and k7 answers none of its
     queries: the terminal that gives [input] answers them, and two answers would
-    reach the program as typed text. What the program prints is also written to
-    [echo], as it arrives, so that the person typing sees it. It is the error of
-    {!run} otherwise. *)
+    reach the program as typed text. The recording holds what [input] gave as
+    input events, each read at the millisecond it was read, but only the keys
+    that the program echoes, as {!svg_of_casts} reads an echo: a key typed while
+    the program shows nothing, such as a password, is not in the recording. What
+    the program prints is also written to [echo], as it arrives, so that the
+    person typing sees it. It is the error of {!run} otherwise. *)
 
 val cram :
   ?env:(string * string) list ->

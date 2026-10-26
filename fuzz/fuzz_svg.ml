@@ -913,6 +913,40 @@ let test_cast_versions events =
       check_eq ~pp:pp_string expected (image (parse (K7.string_of_cast c))))
     [ a; b ]
 
+(* Typing at a steady pace keeps the events in order, whatever the keys and
+   their echoes, and leaves a recording without keys as it is. *)
+let test_cast_typing speed events =
+  let events = List.take 64 events in
+  let data = [| "l"; "s"; "ls"; "\r\n"; "é" |] in
+  let lines keys =
+    List.filter_map
+      (fun (gap, input, i) ->
+        if input && not keys then None
+        else
+          Fmt.kstr Option.some "[%s,\"%s\",%s]"
+            (seconds ~short:false (gap * 1000))
+            (if input then "i" else "o")
+            (json_string data.(i)))
+      events
+  in
+  let parse keys =
+    let src =
+      String.concat "\n"
+        ({|{"version":3,"term":{"cols":20,"rows":3}}|} :: lines keys)
+    in
+    match K7.cast_of_string src with
+    | Ok c -> c
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  let image ?typing_speed c =
+    match K7.svg_of_casts ?typing_speed [ c ] with
+    | Ok s -> s
+    | Error e -> failf "%a" K7.pp_error e
+  in
+  ignore (image ~typing_speed:(Ms speed) (parse true));
+  let c = parse false in
+  check_eq ~pp:pp_string (image c) (image ~typing_speed:(Ms speed) c)
+
 let test_cast_palette_resize_roundtrip n =
   let colours = if n mod 2 = 0 then 8 else 16 in
   let palette =
@@ -1305,6 +1339,15 @@ let casts =
                (gap, ignored, data)));
       ]
       test_cast_versions;
+    test_case "typing at a steady pace keeps the events in order"
+      [
+        range 200;
+        list
+          (map
+             [ range 150; bool; range 5 ]
+             (fun gap input i -> (gap, input, i)));
+      ]
+      test_cast_typing;
     test_case "asciicast text exports conceal hidden cells" [ uint8; uint8 ]
       test_cast_text_conceal;
     test_case "a cast draws its output events at their milliseconds"

@@ -21,6 +21,7 @@ type theme = {
 (** The type for events. *)
 type event =
   | Output of string  (** An [o] event: what the program printed. *)
+  | Input of string  (** An [i] event: what was typed. *)
   | Resize of int * int  (** An [r] event: the new columns and rows. *)
   | Exit of int  (** An [x] event: the exit status of the program. *)
 
@@ -56,17 +57,31 @@ val of_string : string -> (t, string) result
     events lasts that many seconds. An interval is rounded to the microsecond
     and a time to the nearest millisecond, half up.
 
-    The [o], [r] and [x] events are kept, an [r] event with [COLSxROWS] data and
-    an [x] event with an integer; the other members of the header and the events
-    of other codes, such as input and markers, are skipped. It is [Error msg]
+    The [o], [i], [r] and [x] events are kept, an [r] event with [COLSxROWS]
+    data and an [x] event with an integer; the other members of the header and
+    the events of other codes, such as markers, are skipped. It is [Error msg]
     otherwise, with [msg] naming the line by its number from [1], and why. *)
 
 val limit_idle : int -> t -> t
 (** [limit_idle ms t] is [t] with each interval between two of its events, and
     before the first, that lasts more than [ms] milliseconds lasting [ms]. An
     [idle_time_limit] in the header differs in two ways: it counts the events
-    {!of_string} skips, such as input and markers, and it cuts the intervals as
-    written, to the microsecond, before the times are rounded. *)
+    {!of_string} skips, such as markers, and it cuts the intervals as written,
+    to the microsecond, before the times are rounded. *)
+
+val echoed : t -> t
+(** [echoed t] is [t] with only the input events that the next event echoes: an
+    output whose data is exactly what the input events since the event before
+    them sent, at most 100 milliseconds after the last of them. *)
+
+val retype : int -> t -> t
+(** [retype ms t] is [t] typed at a steady pace: each output that echoes input
+    events, as for {!echoed}, is one output per character, [ms] milliseconds
+    apart, and the input events go at the time of the first. The first echo
+    after another event keeps its time, and an echo that follows another one
+    directly starts [ms] milliseconds after its last character, however long the
+    keys took to come. Each other event keeps its interval with the event before
+    it. *)
 
 val utf_8 : (int * event) list -> (int * event) list
 (** [utf_8 events] are [events] with the data of each [o] event in valid UTF-8:

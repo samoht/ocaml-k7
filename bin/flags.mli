@@ -27,6 +27,14 @@ val idle_time_limit : default:string -> int option option Cmdliner.Term.t
     milliseconds, [Some None] for [none], if given; its documentation says it
     defaults to [default] seconds. *)
 
+val typing_speed : int option option Cmdliner.Term.t
+(** [typing_speed] is the pace of [--typing-speed] in milliseconds, [Some None]
+    for [none], if given. *)
+
+val typing : int option option -> K7.duration option
+(** [typing t] is the pace of [--typing-speed] [t], in milliseconds and
+    [Some None] for [none], or 50 milliseconds if [t] is [None]. *)
+
 val milliseconds : int Cmdliner.Arg.conv
 (** [milliseconds] reads a decimal number of milliseconds from [0] to Go's
     longest duration. *)

@@ -11,7 +11,11 @@ type theme = {
   cursor_accent : string option;
 }
 
-type event = Output of string | Resize of int * int | Exit of int
+type event =
+  | Output of string
+  | Input of string
+  | Resize of int * int
+  | Exit of int
 
 type t = {
   columns : int;
@@ -25,6 +29,7 @@ let ( let* ) = Result.bind
 
 let pp_event ppf = function
   | Output s -> Fmt.Dump.string ppf s
+  | Input s -> Fmt.pf ppf "input %a" Fmt.Dump.string s
   | Resize (c, r) -> Fmt.pf ppf "resize %dx%d" c r
   | Exit n -> Fmt.pf ppf "exit %d" n
 
@@ -195,6 +200,7 @@ let positive s =
 let read_data code data =
   match code with
   | "o" -> Ok (Some (Output data))
+  | "i" -> Ok (Some (Input data))
   | "r" -> (
       match String.split_on_char 'x' data with
       | [ c; r ] -> (
@@ -280,6 +286,87 @@ let limit_idle limit t =
       (0, 0, []) t.events
   in
   { t with events = List.rev events }
+
+let echo_ms = 100
+
+type step =
+  | Event of int * event
+  | Keys of (int * string) list * (int * string) option
+      (** Keys typed in a row, then the output that echoes them, if any. *)
+
+(* The output that follows keys echoes them when it is exactly what they sent
+   and comes at most [echo_ms] after the last. *)
+let steps events =
+  let keys ks echo = Keys (List.rev ks, echo) in
+  let flush ks acc = if ks = [] then acc else keys ks None :: acc in
+  let rec go ks acc = function
+    | [] -> List.rev (flush ks acc)
+    | (ms, Input k) :: rest -> go ((ms, k) :: ks) acc rest
+    | (ms, Output s) :: rest -> (
+        match ks with
+        | (last, _) :: _
+          when ms - last <= echo_ms
+               && s <> ""
+               && String.equal s (String.concat "" (List.rev_map snd ks)) ->
+            go [] (keys ks (Some (ms, s)) :: acc) rest
+        | _ -> go [] (Event (ms, Output s) :: flush ks acc) rest)
+    | (ms, e) :: rest -> go [] (Event (ms, e) :: flush ks acc) rest
+  in
+  go [] [] events
+
+let echoed t =
+  let events =
+    List.concat_map
+      (function
+        | Event (ms, e) -> [ (ms, e) ]
+        | Keys (_, None) -> []
+        | Keys (ks, Some (ms, s)) ->
+            List.map (fun (ms, k) -> (ms, Input k)) ks @ [ (ms, Output s) ])
+      (steps t.events)
+  in
+  { t with events }
+
+let chars s =
+  let rec go i acc =
+    if i >= String.length s then List.rev acc
+    else
+      let n = Uchar.utf_decode_length (String.get_utf_8_uchar s i) in
+      go (i + n) (String.sub s i n :: acc)
+  in
+  go 0 []
+
+(* [shift] is how much later than written the events now are, and [typing]
+   the new time of the last character echoed, while no other event came. *)
+let retype speed t =
+  let rec go ~shift ~typing acc = function
+    | [] -> List.rev acc
+    | Event (ms, e) :: rest ->
+        go ~shift ~typing:None ((ms + shift, e) :: acc) rest
+    | Keys (ks, None) :: rest ->
+        let acc =
+          List.fold_left
+            (fun acc (ms, k) -> (ms + shift, Input k) :: acc)
+            acc ks
+        in
+        go ~shift ~typing:None acc rest
+    | Keys (ks, Some (ms, s)) :: rest ->
+        let start =
+          match typing with Some last -> last + speed | None -> ms + shift
+        in
+        let acc =
+          List.fold_left (fun acc (_, k) -> (start, Input k) :: acc) acc ks
+        in
+        let last, acc =
+          List.fold_left
+            (fun (_, acc) (i, c) ->
+              let at = start + (i * speed) in
+              (at, (at, Output c) :: acc))
+            (start, acc)
+            (List.mapi (fun i c -> (i, c)) (chars s))
+        in
+        go ~shift:(last - ms) ~typing:(Some last) acc rest
+  in
+  { t with events = go ~shift:0 ~typing:None [] (steps t.events) }
 
 (* An incomplete UTF-8 sequence at the end of [s], which the next output may
    complete: [s] splits before it. *)
@@ -375,6 +462,7 @@ let to_string ?idle t =
        (fun prev (ms, e) ->
          (match e with
          | Output s -> line ~prev ms "o" s
+         | Input s -> line ~prev ms "i" (valid_utf_8 s)
          | Resize (c, r) -> line ~prev ms "r" (Fmt.str "%dx%d" c r)
          | Exit n -> line ~prev ms "x" (string_of_int n));
          ms)
