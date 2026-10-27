@@ -1348,13 +1348,26 @@ let until interrupt f =
   | None -> f ()
   | Some p -> Eio.Fiber.first f (fun () -> Eio.Promise.await p)
 
+(* What the program wrote before an interrupt that the reader has not read
+   yet, without waiting for a program that keeps writing. *)
+let rec drain st buf n =
+  if n > 0 then
+    match Pty.read st.pty buf 0 (Bytes.length buf) with
+    | 0 -> ()
+    | k ->
+        feed st buf k;
+        drain st buf (n - 1)
+    | exception Unix.Unix_error (EINTR, _, _) -> drain st buf n
+    | exception Unix.Unix_error _ -> ()
+
 let play ?interrupt ?stuck ?idle ~clock ~env ~vars ~cwd t =
   let clock = (clock :> Eio.Time.Mono.ty Eio.Resource.t) in
   match
     with_terminal ?stuck ~clock t (spawn ~env ~vars ~cwd t) @@ fun st ->
+    let buf = Bytes.create 65536 in
     Eio.Fiber.first
       (fun () ->
-        reader st (Bytes.create 65536);
+        reader st buf;
         closed st)
       (fun () ->
         until interrupt @@ fun () ->
@@ -1364,6 +1377,9 @@ let play ?interrupt ?stuck ?idle ~clock ~env ~vars ~cwd t =
         record st;
         List.iter (run st t.config) t.actions;
         expire st);
+    (match interrupt with
+    | Some p when Eio.Promise.is_resolved p -> drain st buf 16
+    | _ -> ());
     recording ?idle t st
   with
   | r -> Ok r
