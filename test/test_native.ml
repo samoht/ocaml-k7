@@ -1486,6 +1486,8 @@ let run ?clock ?vars ?show ?delay env cwd argv =
 let script cwd name src =
   executable (Eio.Path.native_exn Eio.Path.(cwd / name)) src
 
+let bash () = match bash with Some path -> path | None -> Alcotest.skip ()
+
 let times svg =
   let number s i =
     let j = ref i in
@@ -1741,7 +1743,8 @@ let test_run_inherited_fd () =
   Unix.clear_close_on_exec fd;
   Fun.protect ~finally:(fun () -> Unix.close fd) @@ fun () ->
   script cwd "inspect-fds.sh"
-    "#!/bin/bash\n\
+  @@ "#!" ^ bash ()
+  ^ "\n\
      n=3\n\
      while [ \"$n\" -lt 64 ]; do\n\
      value=\n\
@@ -2092,7 +2095,7 @@ let test_run_command_line_invalid_utf_8 () =
   Eio.Process.run
     ~stdout:(Eio.Flow.buffer_sink output)
     proc
-    [ "/bin/bash"; "-c"; command ];
+    [ bash (); "-c"; command ];
   Alcotest.(check string)
     (Fmt.str "%S runs the same argv" line)
     (String.escaped arg)
@@ -2104,7 +2107,7 @@ let test_run_concurrent_terminals () =
   script cwd "first.sh"
     "#!/bin/sh\n: > first\nwhile [ ! -e second ]; do sleep 0.01; done\n";
   script cwd "ttys.sh"
-    "#!/bin/bash\n\
+    "#!/bin/sh\n\
      for f in /dev/fd/*; do n=${f##*/}; if [ \"$n\" -gt 2 ] && [ -t \"$n\" ]; \
      then printf 'LEAK%s ' \"$n\"; fi; done\n\
      printf DONE\n\

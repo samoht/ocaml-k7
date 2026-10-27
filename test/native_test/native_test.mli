@@ -117,6 +117,10 @@ val shells : string list
 (** [shells] are those of [/bin/sh], [/bin/dash], [/bin/bash] and [/bin/zsh]
     that exist. *)
 
+val bash : string option
+(** [bash] is the path of [bash] on [PATH], if any: FreeBSD has no [/bin/bash].
+*)
+
 val cram_command : string -> string
 (** [cram_command t] is the first command of the cram test [t], as dune runs it:
     its [  $ ] line and the [  > ] lines after it, without those prefixes,

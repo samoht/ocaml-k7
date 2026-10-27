@@ -1308,29 +1308,31 @@ let test_run_cli_status n signaled =
   check (contains ~sub:"EXIT_MARKER" image)
 
 let test_run_inherited_fd n =
-  with_dir @@ fun env path ->
-  let token = Fmt.str "PRIVATE_%d" n in
-  save env (path "private-data") (token ^ "\n");
-  let fd = Unix.openfile (path "private-data") [ O_RDONLY ] 0 in
-  Unix.clear_close_on_exec fd;
-  Fun.protect ~finally:(fun () -> Unix.close fd) @@ fun () ->
-  let command =
-    Fmt.str
-      "n=3; while [ \"$n\" -lt 64 ]; do value=; IFS= read -r -t 1 -u \"$n\" \
-       value 2>/dev/null; if [ \"$value\" = %s ]; then printf FD_LEAKED; fi; \
-       n=$((n+1)); done; printf DONE"
-      token
-  in
-  match
-    K7.run ~show:""
-      ~clock:(Eio.Stdenv.mono_clock env)
-      ~proc:(Eio.Stdenv.process_mgr env)
-      ~cwd:(Eio.Stdenv.cwd env)
-      [ "/bin/bash"; "-c"; command ]
-  with
-  | Error e -> failf "%a" K7.pp_error e
-  | Ok (image, `Exited 0) -> check (not (contains ~sub:"FD_LEAKED" image))
-  | Ok _ -> fail "descriptor probe did not exit successfully"
+  match Native_test.bash with
+  | None -> ()
+  | Some bash -> (
+      with_dir @@ fun env path ->
+      let token = Fmt.str "PRIVATE_%d" n in
+      save env (path "private-data") (token ^ "\n");
+      let fd = Unix.openfile (path "private-data") [ O_RDONLY ] 0 in
+      Unix.clear_close_on_exec fd;
+      Fun.protect ~finally:(fun () -> Unix.close fd) @@ fun () ->
+      let command =
+        Fmt.str
+          "n=3; while [ \"$n\" -lt 64 ]; do value=; IFS= read -r -t 1 -u \
+           \"$n\" value 2>/dev/null; if [ \"$value\" = %s ]; then printf \
+           FD_LEAKED; fi; n=$((n+1)); done; printf DONE"
+          token
+      in
+      match
+        K7.run ~show:""
+          ~clock:(Eio.Stdenv.mono_clock env)
+          ~proc:(Eio.Stdenv.process_mgr env)
+          ~cwd:(Eio.Stdenv.cwd env) [ bash; "-c"; command ]
+      with
+      | Error e -> failf "%a" K7.pp_error e
+      | Ok (image, `Exited 0) -> check (not (contains ~sub:"FD_LEAKED" image))
+      | Ok _ -> fail "descriptor probe did not exit successfully")
 
 let test_run_fd_cleanup n cancelled =
   with_dir @@ fun env _ ->

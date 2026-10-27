@@ -187,6 +187,12 @@ let shells =
   List.filter Sys.file_exists
     [ "/bin/sh"; "/bin/dash"; "/bin/bash"; "/bin/zsh" ]
 
+let bash =
+  String.split_on_char ':' (Option.value (Sys.getenv_opt "PATH") ~default:"")
+  |> List.find_map (fun dir ->
+      let path = Filename.concat dir "bash" in
+      if dir <> "" && Sys.file_exists path then Some path else None)
+
 let after prefix l =
   if String.starts_with ~prefix l then
     Some

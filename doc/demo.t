@@ -4,7 +4,7 @@ cram test too.
 
   $ echo "Recorded without a browser"
   Recorded without a browser
-  $ printf '\e[1;32mbold green\e[0m, \e[34mblue\e[0m, \e[7minverse\e[0m\n'
+  $ printf '\033[1;32mbold green\033[0m, \033[34mblue\033[0m, \033[7minverse\033[0m\n'
   bold green, blue, inverse
   $ printf 'wide 中文, combining e\314\201, emoji \360\237\221\215\n'
   wide 中文, combining é, emoji 👍
