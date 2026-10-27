@@ -761,8 +761,10 @@ let modified m k =
       Buffer.contents b
 
 (* k7 keeps [slave] open: matrix 0.1.0's [Pty.spawn] closes it, so macOS loses
-   the output of a program that exits at once. *)
-type terminal = { pty : Pty.t; slave : Pty.t; pid : int }
+   the output of a program that exits at once. [pid] is the session's keeper,
+   which exits as the program does once its output is read; [group] is the
+   program's. *)
+type terminal = { pty : Pty.t; slave : Pty.t; pid : int; group : int }
 
 type state = {
   term : Screen.terminal;
@@ -1121,8 +1123,9 @@ let close_terminal (t : terminal) =
   Pty.close t.slave
 
 (* The program leads its own process group, so its descendants get the
-   signals too. Once the program is reaped its pid may be reused, but not
-   as the id of a group while the group has a member. *)
+   signals too; the keeper, which leads the session, is the one reaped. Once
+   the program is reaped its pid may be reused, but not as the id of a group
+   while the group has a member. *)
 let stop_terminal clock ~reaped (t : terminal) =
   let reaped = ref reaped in
   let rec reap flags =
@@ -1133,7 +1136,7 @@ let stop_terminal clock ~reaped (t : terminal) =
       | _ | (exception Unix.Unix_error _) -> reaped := true
   in
   let signal s =
-    match Unix.kill (-t.pid) s with
+    match Unix.kill (-t.group) s with
     | () -> true
     | exception Unix.Unix_error _ ->
         (if not !reaped then
@@ -1159,7 +1162,7 @@ external spawn :
   string array ->
   string array ->
   string ->
-  (int, Unix.error * string) result = "native_spawn"
+  (int * int, Unix.error * string) result = "native_spawn"
 
 let lower e = String.uncapitalize_ascii (Unix.error_message e)
 let unix_error e f = Fmt.kstr (fun s -> Io s) "%s: %s" f (Unix.error_message e)
@@ -1191,7 +1194,7 @@ let open_terminal ~env ~cwd ~winsize ~path prog args =
     Unix.set_close_on_exec (Pty.file_descr slave);
     spawn (Pty.file_descr slave) path argv env cwd
   with
-  | Ok pid -> { pty; slave; pid }
+  | Ok (pid, group) -> { pty; slave; pid; group }
   | Error (e, f) ->
       close_terminal ();
       stop (child_error ~cwd ~path ~prog e f)
@@ -1369,7 +1372,7 @@ let play ?interrupt ?stuck ?idle ~clock ~env ~vars ~cwd t =
 (* As [stop_terminal], without hanging up, so that the reader reads what the
    program prints until it exits. *)
 let terminate clock (t : terminal) =
-  let signal s = try Unix.kill (-t.pid) s with Unix.Unix_error _ -> () in
+  let signal s = try Unix.kill (-t.group) s with Unix.Unix_error _ -> () in
   signal Sys.sigterm;
   Eio.Time.Mono.sleep clock 1.;
   signal Sys.sigkill;
