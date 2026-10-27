@@ -87,12 +87,13 @@ written is an error.
   0
   $ k7 play --print --output demo.gif big.t >&- 2> err
   [123]
+  $ cat err
+  k7: standard output: Bad file descriptor
 
-The reason is the system's, such as "Bad file descriptor" on macOS and
-"Invalid argument" on Linux.
+A closed standard error loses the reason but not the status.
 
-  $ cut -d: -f1,2 err
-  k7: standard output
+  $ k7 play --print --output demo.gif big.t >&- 2>&-
+  [123]
 
 A command the tape cannot type is an error, not an exception.
 

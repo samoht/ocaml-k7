@@ -22,4 +22,4 @@
  (public_name k7)
  (package k7)
  (modules main)
- (libraries k7_cli cmdliner))
+ (libraries k7_cli cmdliner unix))
