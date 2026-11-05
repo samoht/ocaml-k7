@@ -359,6 +359,8 @@ let test_errors () =
         "line 1: width 0 is not a positive integer" );
       ( {|{"version": 2, "width": 80, "height": 2.5}|},
         "line 1: height 2.5 is not a positive integer" );
+      ( {|{"version": 2, "width": 4611686018427387904, "height": 24}|},
+        "line 1: width 4.6116860184273879e+18 is not a positive integer" );
       ( {|{"version": 2, "width": 80, "height": 24|},
         "line 1: Expected , or } after object member but found: end of text at \
          byte 40" );
