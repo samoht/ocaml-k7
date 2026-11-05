@@ -138,8 +138,12 @@ let pp_number ppf x =
   if Float.is_integer x && Float.abs x < 1e15 then Fmt.pf ppf "%.0f" x
   else Fmt.pf ppf "%.17g" x
 
+(* [max_int + 1] is a power of two, so exact as a float, whereas
+   [float max_int] rounds up to it on 64 bits. *)
+let int_limit = float max_int +. 1.
+
 let size name = function
-  | Number x when Float.is_integer x && x >= 1. && x <= float max_int ->
+  | Number x when Float.is_integer x && x >= 1. && x < int_limit ->
       Ok (Float.to_int x)
   | Number x -> Fmt.error "%s %a is not a positive integer" name pp_number x
   | String s -> Fmt.error "%s %S is not a number" name s
