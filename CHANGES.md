@@ -1,5 +1,9 @@
 ## unreleased
 
+- k7 installs on Windows, where `k7 play` draws asciicast recordings. Recording
+  a program, a tape or a cram test needs a Unix pseudo-terminal, and fails
+  there (#4).
+
 - A recording whose header gives a width or height too large for an `int`,
   such as 2^62, is now refused, instead of read as a negative size that
   `string_of_cast` writes and `cast_of_string` refuses (#2).
