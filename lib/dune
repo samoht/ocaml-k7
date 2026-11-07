@@ -17,9 +17,6 @@
   themes
   unicode
   unicode_data)
- (foreign_stubs
-  (language c)
-  (names terminal_stubs))
  (libraries
   cstruct
   eio
