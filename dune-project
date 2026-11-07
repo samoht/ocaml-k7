@@ -33,7 +33,7 @@
   (alcotest :with-test)
   (mtime (>= 2.0.0))
   (cstruct (>= 6.0.1))
-  (matrix (and (>= 0.1.0) (< 0.2.0)))
+  (matrix (>= 0.2.0))
   (re (>= 1.10.0))
   (jsont (>= 0.4.0))
   (bytesrw (>= 0.1.0))

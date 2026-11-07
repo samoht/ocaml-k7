@@ -11,14 +11,15 @@
   number_cases.txt
   theme_cases.txt
   match_cases.txt)
- (flags
-  (:standard -open Matrix_backport))
  (libraries
   k7
   k7_cli
   svg_check
-  matrix_backport
+  matrix.ansi
+  matrix.grid
+  matrix.input
   matrix.pty
+  matrix.vte
   native_test
   fmt
   alcotest

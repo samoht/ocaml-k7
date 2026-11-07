@@ -213,10 +213,6 @@ that only the other writes.
 
 ## Known limitations
 
-k7 0.9.0 carries a copy of matrix's unreleased terminal emulator in
-[lib/matrix_backport](lib/matrix_backport/README.md), with fixes that
-matrix 0.1.0 lacks. The copy goes once matrix 0.2.0 is released.
-
 k7 differs from VHS in these cases:
 
 - The native terminal answers the device attribute, status and cursor

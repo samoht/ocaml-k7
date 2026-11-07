@@ -1,5 +1,3 @@
 (library
  (name svg_check)
- (flags
-  (:standard -open Matrix_backport))
- (libraries fmt markup matrix_backport))
+ (libraries fmt markup matrix.text))

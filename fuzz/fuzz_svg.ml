@@ -284,7 +284,7 @@ let test_selective_erase n selective =
     String.concat "\n" (lines @ List.init (rows - 1) (fun _ -> ""))
   in
   let term = Vte.create ~rows ~cols () in
-  Vte.feed_string term output;
+  ignore (Vte.feed_string term output);
   check_eq ~pp:pp_string expected (Matrix_grid.to_text (Vte.grid term));
   check_output_rows output lines
 
@@ -301,7 +301,7 @@ let test_reverse_wrap n enabled =
     String.concat "\n" (lines @ List.init (rows - 2) (fun _ -> ""))
   in
   let term = Vte.create ~rows ~cols () in
-  Vte.feed_string term output;
+  ignore (Vte.feed_string term output);
   check_eq ~pp:pp_string expected (Matrix_grid.to_text (Vte.grid term));
   check_output_rows output lines
 
@@ -312,8 +312,8 @@ let test_prepend_boundaries n =
   Buffer.add_char b (Char.chr (Char.code 'a' + (n mod 26)));
   let output = Buffer.contents b in
   let whole = Vte.create ~rows ~cols () and split = Vte.create ~rows ~cols () in
-  Vte.feed_string whole output;
-  String.iter (fun c -> Vte.feed_string split (String.make 1 c)) output;
+  ignore (Vte.feed_string whole output);
+  String.iter (fun c -> ignore (Vte.feed_string split (String.make 1 c))) output;
   check_eq ~pp:pp_string
     (Matrix_grid.to_text (Vte.grid whole))
     (Matrix_grid.to_text (Vte.grid split));
@@ -346,7 +346,7 @@ let test_scroll_region_boundaries n =
   in
   let expected = String.concat "\n" lines in
   let term = Vte.create ~rows ~cols () in
-  Vte.feed_string term output;
+  ignore (Vte.feed_string term output);
   check_eq ~pp:pp_string expected (Matrix_grid.to_text (Vte.grid term));
   check_output_rows output lines
 
@@ -407,7 +407,7 @@ let concealed n =
   let column = n mod String.length secret in
   let output = Fmt.str "\027[8m%s\027[%dG" secret (column + 1) in
   let term = Vte.create ~rows ~cols () in
-  Vte.feed_string term output;
+  ignore (Vte.feed_string term output);
   check (Ansi.Attr.mem Hidden (Matrix_grid.get_style (Vte.grid term) 0).attrs);
   check_eq ~pp:pp_string "s" (Matrix_grid.get_text (Vte.grid term) 0);
   (secret, output)
@@ -611,14 +611,14 @@ let test_narrow_symbols n selector split_at =
   in
   let lines, cursor =
     if prefix_len = cols - 1 then ([ prefix ^ glyph; "X" ], (1, 1))
-    else ([ output ], (0, prefix_len + 2))
+    else ([ output ], (0, min (prefix_len + 2) (cols - 1)))
   in
   let expected =
     String.concat "\n"
       (lines @ List.init (rows - List.length lines) (fun _ -> ""))
   in
   let term = Vte.create ~width_method:`Wcwidth ~rows ~cols () in
-  List.iter (Vte.feed_string term) chunks;
+  List.iter (fun c -> ignore (Vte.feed_string term c)) chunks;
   let image =
     match
       K7.svg ~settings (List.mapi (fun i s -> (K7.Ms (20 * i), s)) chunks)
@@ -661,7 +661,7 @@ let test_cursor_format n =
   let mark = Buffer.contents b in
   let output = "a" ^ mark ^ "b\r" in
   let term = Vte.create ~width_method:`Wcwidth ~rows ~cols () in
-  Vte.feed_string term output;
+  ignore (Vte.feed_string term output);
   check_eq ~pp:pp_string ("a" ^ mark) (Matrix_grid.get_text (Vte.grid term) 0);
   check_eq ~pp:Fmt.(Dump.pair int int) (0, 0) (Vte.cursor_pos term);
   match K7.svg ~settings [ (Ms 0, output) ] with
@@ -735,8 +735,8 @@ let test_regional_splits n =
     let a = String.sub output 0 cut in
     let b = String.sub output cut (String.length output - cut) in
     let term = Vte.create ~width_method:`Wcwidth ~rows ~cols () in
-    Vte.feed_string term a;
-    Vte.feed_string term b;
+    ignore (Vte.feed_string term a);
+    ignore (Vte.feed_string term b);
     check_eq ~pp:pp_string expected (Matrix_grid.to_text (Vte.grid term));
     match K7.svg ~settings [ (Ms 0, a); (Ms 20, b) ] with
     | Error e -> failf "%a" K7.pp_error e
