@@ -213,10 +213,6 @@ that only the other writes.
 
 ## Known limitations
 
-k7 0.9.0 carries a copy of matrix's unreleased terminal emulator in
-[lib/matrix_backport](lib/matrix_backport/README.md), with fixes that
-matrix 0.1.0 lacks. The copy goes once matrix 0.2.0 is released.
-
 k7 differs from VHS in these cases:
 
 - The native terminal answers the device attribute, status and cursor
@@ -224,6 +220,9 @@ k7 differs from VHS in these cases:
   so the queries fish 4 sends as it starts go unanswered. CI tests fish 3.7
   only.
 - A cursor shape set with DECSCUSR is drawn as a block.
+- SUB shows a reversed question mark, where VHS shows nothing, and a
+  national character set applies only once the program selects national
+  mode, as on a VT220.
 - The `Vhs` engine reports a wait that times out as `K7.Vhs_failed`, with
   VHS's message in its output, where the `Native` engine returns
   `K7.Timeout`.

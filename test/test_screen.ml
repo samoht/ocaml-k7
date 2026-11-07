@@ -164,9 +164,18 @@ let test_charsets () =
   check_screens
     [
       ( "designations and shifts",
-        "\027(A#\027(B#\027*0\027nq\015q\027(0q\027(Aq#\027(4[",
-        [ "\xc2\xa3#\xe2\x94\x80q\xe2\x94\x80q\xc2\xa3\xc4\xb3" ] );
+        "\027(A#\027(B#\027*0\027nq\015q\027(0q\027(Aq#",
+        [ "\xc2\xa3#\xe2\x94\x80q\xe2\x94\x80q\xc2\xa3" ] );
       ("UTF-8", "\027(0\027%Gq", [ "\xe2\x94\x80" ]);
+    ]
+
+(* As a VT510: SUB shows the error character, and a national set applies only
+   in national mode. *)
+let test_vt510 () =
+  check_screens
+    [
+      ("SUB", "a\026b", [ "a\u{2E2E}b" ]);
+      ("national mode", "\027(4[\027[?42h[", [ "[\xc4\xb3" ]);
     ]
 
 let first_fg s =
@@ -436,6 +445,7 @@ let suite =
         ("restore", test_restore);
         ("screens", test_screens);
         ("character sets", test_charsets);
+        ("VT510", test_vt510);
         ("cleared tab stops", test_clear_tabs);
         ("tab stops", test_tab_stops);
         ("delete wide glyph cell", test_delete_wide);
