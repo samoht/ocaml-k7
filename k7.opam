@@ -45,3 +45,6 @@ build: [
     "@doc" {with-doc}
   ]
 ]
+pin-depends: [
+  ["matrix.0.2.0+keeper" "git+https://github.com/invariant-hq/mosaic.git#8a7a0b75cce9524d261b90561721698aa26c3ccf"]
+]

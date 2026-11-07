@@ -760,16 +760,9 @@ let modified m k =
       go 0;
       Buffer.contents b
 
-(* k7 keeps [slave] open: matrix's [Pty.spawn] closes it, so macOS loses
-   the output of a program that exits at once. [pid] is the session's keeper,
-   which exits as the program does once its output is read; [group] is the
-   program's. *)
-type terminal = { pty : Pty.t; slave : Pty.t; pid : int; group : int }
-
 type state = {
   term : Screen.terminal;
   pty : Pty.t;
-  pid : int;
   clock : Eio.Time.Mono.ty Eio.Resource.t;
   tl : timeline;
   changed : Eio.Condition.t;
@@ -879,12 +872,12 @@ let exit_status : Unix.process_status -> Eio.Process.exit_status = function
 let exited st =
   Option.is_some st.exited
   ||
-  match Unix.waitpid [ WNOHANG ] st.pid with
-  | 0, _ -> false
-  | _, s ->
+  match Pty.poll st.pty with
+  | None -> false
+  | Some s ->
       st.exited <- Some (exit_status s);
       true
-  | exception Unix.Unix_error _ -> true
+  | exception (Unix.Unix_error _ | Invalid_argument _) -> true
 
 let closed st =
   Eio.Condition.broadcast st.changed;
@@ -1118,52 +1111,6 @@ let resolve ~cwd env exe =
     | Some p -> Some p
     | None -> List.nth_opt candidates 0
 
-let close_terminal (t : terminal) =
-  Pty.close t.pty;
-  Pty.close t.slave
-
-(* The program leads its own process group, so its descendants get the
-   signals too; the keeper, which leads the session, is the one reaped. Once
-   the program is reaped its pid may be reused, but not as the id of a group
-   while the group has a member. *)
-let stop_terminal clock ~reaped (t : terminal) =
-  let reaped = ref reaped in
-  let rec reap flags =
-    if not !reaped then
-      match Unix.waitpid flags t.pid with
-      | 0, _ -> ()
-      | exception Unix.Unix_error (EINTR, _, _) -> reap flags
-      | _ | (exception Unix.Unix_error _) -> reaped := true
-  in
-  let signal s =
-    match Unix.kill (-t.group) s with
-    | () -> true
-    | exception Unix.Unix_error _ ->
-        (if not !reaped then
-           try Unix.kill t.pid s with Unix.Unix_error _ -> ());
-        false
-  in
-  let running = signal Sys.sigterm in
-  close_terminal t;
-  let rec wait n =
-    reap [ WNOHANG ];
-    if n > 0 && (signal 0 || not !reaped) then (
-      Eio.Time.Mono.sleep clock 0.01;
-      wait (n - 1))
-  in
-  if running || not !reaped then (
-    wait 100;
-    if signal Sys.sigkill then wait 100);
-  reap []
-
-external spawn :
-  Unix.file_descr ->
-  string ->
-  string array ->
-  string array ->
-  string ->
-  (int * int, Unix.error * string) result = "native_spawn"
-
 let lower e = String.uncapitalize_ascii (Unix.error_message e)
 let unix_error e f = Fmt.kstr (fun s -> Io s) "%s: %s" f (Unix.error_message e)
 
@@ -1174,33 +1121,12 @@ let check_argv argv =
 
 let child_error ~cwd ~path ~prog e f =
   match (e, f) with
-  | Unix.ENOENT, "execve" -> Executable_not_found prog
-  | EACCES, "execve" when try Sys.is_directory path with Sys_error _ -> false ->
+  | Unix.ENOENT, "execvp" -> Executable_not_found prog
+  | EACCES, "execvp" when try Sys.is_directory path with Sys_error _ -> false ->
       Fmt.kstr (fun s -> Io s) "%s: is a directory" prog
   | e, "chdir" -> Fmt.kstr (fun s -> Io s) "%s: %s" cwd (lower e)
-  | e, "execve" -> Fmt.kstr (fun s -> Io s) "%s: %s" prog (lower e)
+  | e, "execvp" -> Fmt.kstr (fun s -> Io s) "%s: %s" prog (lower e)
   | e, f -> Fmt.kstr (fun s -> Io s) "%s: %s" f (lower e)
-
-let open_terminal ~env ~cwd ~winsize ~path prog args =
-  let argv = Array.of_list (prog :: args)
-  and env = Eio.Process.Env.to_array env in
-  let pty, slave = Pty.open_pty ~winsize () in
-  let close_terminal () =
-    Pty.close pty;
-    Pty.close slave
-  in
-  match
-    Unix.set_close_on_exec (Pty.file_descr pty);
-    Unix.set_close_on_exec (Pty.file_descr slave);
-    spawn (Pty.file_descr slave) path argv env cwd
-  with
-  | Ok (pid, group) -> { pty; slave; pid; group }
-  | Error (e, f) ->
-      close_terminal ();
-      stop (child_error ~cwd ~path ~prog e f)
-  | exception e ->
-      close_terminal ();
-      raise e
 
 (* VHS's shell.go. *)
 let shell = function
@@ -1249,12 +1175,15 @@ let start ~env ~vars ~cwd t ~requires prog args =
     requires;
   let s = t.look in
   match
-    open_terminal ~env ~cwd
+    Pty.spawn
+      ~env:(Eio.Process.Env.to_array env)
+      ~cwd
       ~winsize:{ rows = s.Svg.rows; cols = s.cols; xpixel = 0; ypixel = 0 }
-      ~path prog args
+      ~prog ~args ()
   with
-  | terminal -> terminal
-  | exception Unix.Unix_error (e, f, _) -> stop (unix_error e f)
+  | pty -> pty
+  | exception Unix.Unix_error (e, f, _) ->
+      stop (child_error ~cwd ~path ~prog e f)
 
 let spawn ~env ~vars ~cwd t =
   let prog = t.config.shell in
@@ -1286,14 +1215,13 @@ let await_prompt st c =
     stop (Timeout { wait = first_prompt; line = 0; file = None; last = "" });
   Buffer.clear st.since
 
-let state ?(stuck = fun _ -> false) t ~clock ({ pty; pid; _ } : terminal) =
+let state ?(stuck = fun _ -> false) t ~clock pty =
   let s = t.look in
   let term = Screen.terminal ~rows:s.rows ~cols:s.cols in
   let screen = Screen.of_terminal term in
   {
     term;
     pty;
-    pid;
     clock;
     tl = timeline t.config;
     changed = Eio.Condition.create ();
@@ -1335,13 +1263,11 @@ let recording ?idle t st =
     stills = List.rev_map still st.stills;
   }
 
-let with_terminal ?stuck ~clock t (terminal : terminal) f =
-  let st = state ?stuck t ~clock terminal in
-  let finally () =
-    stop_terminal clock ~reaped:(Option.is_some st.exited) terminal
-  in
-  Fun.protect ~finally:(fun () -> Eio.Cancel.protect finally) @@ fun () ->
-  Pty.set_nonblock terminal.pty;
+let with_terminal ?stuck ~clock t pty f =
+  let st = state ?stuck t ~clock pty in
+  Fun.protect ~finally:(fun () -> Eio.Cancel.protect (fun () -> Pty.close pty))
+  @@ fun () ->
+  Pty.set_nonblock pty;
   f st
 
 let until interrupt f =
@@ -1386,13 +1312,12 @@ let play ?interrupt ?stuck ?idle ~clock ~env ~vars ~cwd t =
   | r -> Ok r
   | exception Stop e -> Error e
 
-(* As [stop_terminal], without hanging up, so that the reader reads what the
+(* As [Pty.close], without hanging up, so that the reader reads what the
    program prints until it exits. *)
-let terminate clock (t : terminal) =
-  let signal s = try Unix.kill (-t.group) s with Unix.Unix_error _ -> () in
-  signal Sys.sigterm;
+let terminate clock pty =
+  Pty.terminate pty;
   Eio.Time.Mono.sleep clock 1.;
-  signal Sys.sigkill;
+  Pty.kill pty;
   Eio.Fiber.await_cancel ()
 
 let forward st input =
