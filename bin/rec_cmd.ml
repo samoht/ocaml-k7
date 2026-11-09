@@ -75,9 +75,10 @@ let attached tty f =
     Fun.protect ~finally:(fun () -> Unix.tcsetattr Unix.stdin TCSADRAIN saved) f)
   else f ()
 
-(* The keys typed and the screen of the terminal k7 runs in, if any. *)
+(* The keys typed and the screen of the terminal k7 runs in, if any. Windows
+   has no termios to make it raw. *)
 let terminal stdenv =
-  if Unix.isatty Unix.stdin && Unix.isatty Unix.stdout then
+  if (not Sys.win32) && Unix.isatty Unix.stdin && Unix.isatty Unix.stdout then
     Some (Eio.Stdenv.stdin stdenv, Eio.Stdenv.stdout stdenv)
   else None
 

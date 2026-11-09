@@ -31,7 +31,6 @@ depends: [
 ]
 dev-repo: "git+https://github.com/samoht/ocaml-k7.git"
 x-maintenance-intent: ["(latest)"]
-available: os != "win32"
 build: [
   ["dune" "subst"] {dev}
   [
@@ -42,7 +41,7 @@ build: [
     "-j"
     jobs
     "@install"
-    "@runtest" {with-test & os != "macos"}
+    "@runtest" {with-test & os != "macos" & os != "win32"}
     "@doc" {with-doc}
   ]
 ]
