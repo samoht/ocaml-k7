@@ -232,6 +232,8 @@ k7 differs from VHS in these cases:
 
 Other limitations:
 
+- On Windows, k7 only plays `.cast` recordings: recording needs a Unix
+  pseudo-terminal.
 - Emoji take the cells that xterm.js, which VHS uses, gives them. Each
   regional indicator of a flag takes a cell, a family joined with U+200D
   shows as its separate emoji, and an emoji made wide by U+FE0F can overlap

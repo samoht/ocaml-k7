@@ -36,6 +36,30 @@ jobs:
       - run: opam exec -- dune build
       - run: opam exec -- dune test
 
+  # Windows has no Unix pseudo-terminal, so it only draws a recording.
+  windows:
+    name: Draw a recording on Windows
+    timeout-minutes: 45
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: '5.4'
+
+      # The runner's Strawberry Perl has a pkg-config of its own, which
+      # bytesrw's build finds before conf-pkg-config's and cannot run.
+      - run: Remove-Item C:\Strawberry\perl\bin\pkg-config*
+      - run: opam install . --deps-only
+      - run: opam exec -- dune build -p k7 @install
+      - run: opam exec -- dune exec -p k7 -- k7 play -o asciinema.svg -o asciinema.txt test/asciinema.cast
+      - shell: bash
+        run: |
+          grep -q '<svg' asciinema.svg
+          printf '%s\n' '$ ls "$DIR"' '漢字.txt        b.txt' 'a.txt           café.md' > expected.txt
+          diff expected.txt asciinema.txt
+
   lower-bounds:
     name: Lower bounds
     timeout-minutes: 45

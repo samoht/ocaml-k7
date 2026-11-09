@@ -1228,6 +1228,7 @@ let shell = function
 let term = ("TERM", "xterm-256color")
 
 let start ~env ~vars ~cwd t ~requires prog args =
+  if Sys.win32 then stop (Io "recording needs a Unix pseudo-terminal");
   let env =
     Eio.Process.Env.override (List.map (fun (k, v) -> (k, Some v)) vars) env
   in
