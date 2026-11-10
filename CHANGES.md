@@ -1,11 +1,10 @@
-## unreleased
+## 0.10.0 (10/11/2026)
 
 - k7 installs on Windows, where `k7 play` draws asciicast recordings.
   Recording a program, a tape or a cram test needs a Unix pseudo-terminal,
   and fails there (#4).
 
-- k7 now needs matrix 0.2.0, so it cannot share a switch with a package that
-  needs an older matrix (#5).
+- k7 now needs matrix 0.2.0 (#5).
 
 - A SUB byte in a recording now shows a reversed question mark, and the
   national character sets apply only once the program selects national mode,
