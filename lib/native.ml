@@ -760,7 +760,7 @@ let modified m k =
       go 0;
       Buffer.contents b
 
-(* k7 keeps [slave] open: matrix 0.1.0's [Pty.spawn] closes it, so macOS loses
+(* k7 keeps [slave] open: matrix's [Pty.spawn] closes it, so macOS loses
    the output of a program that exits at once. [pid] is the session's keeper,
    which exits as the program does once its output is read; [group] is the
    program's. *)

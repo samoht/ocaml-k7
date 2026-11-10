@@ -31,10 +31,8 @@ let exit_code = function
   | `Exited n -> n
   | `Signaled s -> 128 + Sys.signal_to_int s
 
-external window_size : Unix.file_descr -> (int * int) option = "k7_window_size"
-
 let sized fd settings =
-  match window_size fd with
+  match Tty.window fd with
   | None -> settings
   | Some (columns, rows) ->
       let lacks p = not (List.exists p settings) in

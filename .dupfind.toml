@@ -1,2 +1,0 @@
-# lib/matrix_backport is a verbatim copy of matrix upstream, kept as is.
-exclude = ["lib/matrix_backport"]

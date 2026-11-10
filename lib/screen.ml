@@ -21,6 +21,7 @@ type scan =
 
 type terminal = {
   vte : Vte.t;
+  mutable replies : Matrix_input.Reply.t list;
   mutable scan : scan;
   mutable partial : string;
   payload : Buffer.t;
@@ -33,9 +34,10 @@ type terminal = {
 let terminal ~rows ~cols =
   {
     vte =
-      Vte.create ~scrollback:1000 ~width_method:`Wcwidth
-        ~default_fg:Ansi.Color.default ~default_bg:Ansi.Color.default
-        ~da2:"\027[>0;276;0c" ~rows ~cols ();
+      Vte.create
+        ~identity:{ Vte.vt100 with secondary = [ 0; 276; 0 ] }
+        ~extensions:[] ~scrollback:1000 ~width_method:`Wcwidth ~rows ~cols ();
+    replies = [];
     scan = Ground;
     partial = "";
     payload = Buffer.create 64;
@@ -206,18 +208,18 @@ let truncated s i n =
   i + n = String.length s
   && (n > 1 || match s.[i] with '\xc2' .. '\xf4' -> true | _ -> false)
 
-(* matrix ignores DEC mode 2026 and the OSC 4 and 104 palette sequences, so the
-   characters are scanned here too. A character that [s] cuts is scanned and
-   fed with the next [s]. matrix also reads an OSC, DCS, SOS, PM or APC string
-   on through CAN and SUB, which cancel it in xterm.js, so ST ends it in their
-   place: matrix then applies at most a title or a hyperlink, which k7 does not
-   draw. And matrix draws a U+FFFD for each byte of an ill-formed sequence, so
-   it is fed one U+FFFD for each maximal subpart, as Stdlib decodes it. *)
+let keep t replies = t.replies <- List.rev_append replies t.replies
+
+(* k7 reads DEC mode 2026 and the OSC 4 and 104 palette sequences itself, so
+   the characters are scanned here too, as Stdlib decodes them. A character
+   that [s] cuts is scanned and fed with the next [s]. matrix ignores the
+   characters U+0080 to U+009F, which xterm.js reads as C1 controls, so each
+   is fed as its 7-bit form, ESC and a character. *)
 let feed ?(sync = ignore) t s =
   let s = t.partial ^ s in
   t.partial <- "";
   let feed_to start i =
-    Vte.feed t.vte (Bytes.unsafe_of_string s) start (i - start)
+    keep t (Vte.feed t.vte (Bytes.unsafe_of_string s) start (i - start))
   in
   let rec go start i =
     if i = String.length s then feed_to start i
@@ -229,11 +231,6 @@ let feed ?(sync = ignore) t s =
       if (not valid) && truncated s i n then (
         t.partial <- String.sub s i n;
         feed_to start i)
-      else if not valid then (
-        feed_to start i;
-        Vte.feed_string t.vte "\xef\xbf\xbd";
-        step t (latin_1 u) u;
-        go (i + n) (i + n))
       else
         match (t.scan, latin_1 u) with
         | Private p, (('h' | 'l') as c) when p.sync || p.n = 2026 ->
@@ -241,18 +238,33 @@ let feed ?(sync = ignore) t s =
             feed_to start (i + 1);
             sync (c = 'h');
             go (i + 1) (i + 1)
-        | (Osc _ | String), ('\x18' | '\x1a') ->
-            t.scan <- Ground;
+        | _, ('\x80' .. '\x9f' as c) ->
             feed_to start i;
-            Vte.feed_string t.vte "\027\\";
-            go (i + 1) (i + 1)
+            keep t
+              (Vte.feed_string t.vte
+                 (Fmt.str "\027%c" (Char.chr (Char.code c - 0x40))));
+            step t c u;
+            go (i + n) (i + n)
         | _, c ->
             step t c u;
             go start (i + n)
   in
   go 0 0
 
-let take_replies t = Vte.take_replies t.vte
+(* k7 passes on matrix's answers to the device attribute, operating status and
+   cursor position queries, and drops the others, such as mode and colour
+   reports. *)
+let take_replies t =
+  let answered : Matrix_input.Reply.t -> bool = function
+    | Primary_attributes _ | Secondary_attributes _ | Operating_status _
+    | Cursor _ ->
+        true
+    | _ -> false
+  in
+  let replies = List.rev t.replies in
+  t.replies <- [];
+  Matrix_input.Reply.encode (List.filter answered replies)
+
 let is_dirty t = t.recoloured || Vte.is_dirty t.vte
 
 let clear_dirty t =
@@ -260,7 +272,7 @@ let clear_dirty t =
   Vte.clear_dirty t.vte
 
 let history t = Vte.scrollback_size t.vte
-let cursor_keys t = Vte.cursor_key_mode t.vte
+let cursor_keys t = (Vte.modes t.vte).cursor_keys
 let cursor_row t = fst (Vte.cursor_pos t.vte)
 
 type colour = Default | Indexed of int | Rgb of int
@@ -367,7 +379,7 @@ let of_terminal ?previous ?(offset = 0) term =
     if offset = 0 then Vte.grid vte
     else
       let g = Matrix_grid.create ~width:cols ~height:rows () in
-      Vte.render_with_scrollback vte ~offset g;
+      Vte.blit_view vte ~offset g;
       g
   in
   let reuse =
@@ -387,7 +399,7 @@ let of_terminal ?previous ?(offset = 0) term =
   in
   let cursor =
     let r, c = Vte.cursor_pos vte in
-    if Vte.cursor_visible vte && r + offset < rows then
+    if (Vte.modes vte).cursor_visible && r + offset < rows then
       Some (r + offset, min c (cols - 1))
     else None
   in
@@ -406,7 +418,8 @@ let shown_text r =
     trim_end (Buffer.contents b)
 
 let buffer term t =
-  let older = List.map trim_end (Vte.scrollback_lines term.vte) in
+  let n = history term in
+  let older = List.init n (fun i -> trim_end (Vte.text term.vte (i - n))) in
   Array.append (Array.of_list older) (Array.map (fun r -> r.text) t.rows)
 
 let line t r = if r >= 0 && r < Array.length t.rows then t.rows.(r).text else ""
@@ -442,7 +455,7 @@ let resize term ~rows ~cols =
   let vte = term.vte in
   if Vte.rows vte <> rows || Vte.cols vte <> cols then (
     let before = of_terminal term in
-    Vte.resize vte ~rows ~cols;
+    keep term (Vte.resize vte ~rows ~cols);
     let b = Buffer.create 4096 in
     Buffer.add_string b "\0277\027(B";
     Array.iteri
@@ -459,4 +472,4 @@ let resize term ~rows ~cols =
             row.cells))
       before.rows;
     Buffer.add_string b "\0278";
-    Vte.feed_string vte (Buffer.contents b))
+    keep term (Vte.feed_string vte (Buffer.contents b)))

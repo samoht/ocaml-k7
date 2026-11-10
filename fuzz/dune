@@ -3,14 +3,15 @@
 
 (executable
  (name fuzz)
- (flags
-  (:standard -open Matrix_backport))
  (libraries
   k7
   k7_cli
   svg_check
   native_test
-  matrix_backport
+  matrix.ansi
+  matrix.grid
+  matrix.input
+  matrix.vte
   fmt
   jsont
   jsont.bytesrw

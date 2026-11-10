@@ -602,7 +602,7 @@ let test_cancelled_osc () =
 |}
   in
   Alcotest.(check string)
-    "SUB ends OSC before the next printable character" "AB\n" (text [ src ])
+    "SUB ends OSC and shows the error character" "A\u{2E2E}B\n" (text [ src ])
 
 let test_cancelled_dcs () =
   let src =

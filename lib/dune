@@ -17,8 +17,6 @@
   themes
   unicode
   unicode_data)
- (flags
-  (:standard -open Matrix_backport))
  (foreign_stubs
   (language c)
   (names terminal_stubs))
@@ -29,8 +27,11 @@
   fmt
   jsont
   jsont.bytesrw
-  matrix_backport
+  matrix.ansi
+  matrix.grid
+  matrix.input
   matrix.pty
+  matrix.vte
   mtime
   re
   unix))
@@ -61,5 +62,3 @@
  (package k7)
  (files k7.mli)
  (libraries k7))
-
-(vendored_dirs matrix_backport)
