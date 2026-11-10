@@ -1,4 +1,4 @@
-## unreleased
+## 0.10.0 (10/11/2026)
 
 - k7 installs on Windows, where `k7 play` draws asciicast recordings.
   Recording a program, a tape or a cram test needs a Unix pseudo-terminal,
